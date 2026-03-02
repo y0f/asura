@@ -1,17 +1,17 @@
 module github.com/y0f/asura
 
-go 1.24.0
+go 1.25.0
 
 require (
+	github.com/a-h/templ v0.3.977
 	github.com/coder/websocket v1.8.12
-	golang.org/x/net v0.50.0
+	golang.org/x/net v0.51.0
 	golang.org/x/time v0.9.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.46.1
 )
 
 require (
-	github.com/a-h/templ v0.3.977 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
