@@ -30,6 +30,19 @@
   --color-line-light: rgb(34 34 48);
 }
 
+/* Prevent page-level horizontal overflow */
+html {
+  overflow-x: clip;
+}
+
+.prose-docs {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
 .prose-docs h1 {
   @apply text-2xl font-semibold text-white mb-6;
 }
@@ -44,9 +57,13 @@
 }
 .prose-docs p {
   @apply text-[13px] leading-relaxed text-muted-light mb-4;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 .prose-docs a {
   @apply text-brand hover:underline;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 .prose-docs ul {
   @apply list-disc list-inside text-[13px] text-muted-light mb-4 space-y-1;
@@ -58,19 +75,42 @@
   @apply leading-relaxed;
 }
 .prose-docs code {
-  @apply font-mono text-[12px] bg-surface-200 px-1.5 py-0.5 rounded text-brand break-words;
+  @apply font-mono text-[12px] bg-surface-200 px-1.5 py-0.5 rounded text-brand;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 .prose-docs pre {
-  @apply bg-surface-100 border border-line rounded-lg p-4 mb-4 overflow-x-auto;
+  @apply bg-surface-100 border border-line rounded-lg mb-4;
+  padding: 1rem;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 .prose-docs pre code {
   @apply bg-transparent px-0 py-0 text-muted-light;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: pre;
 }
 .prose-docs table {
-  @apply w-full text-[13px] mb-6 border-collapse block overflow-x-auto;
+  @apply text-[13px] mb-6 border-collapse;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.prose-docs thead {
+  display: table-header-group;
+}
+.prose-docs tbody {
+  display: table-row-group;
+}
+.prose-docs tr {
+  display: table-row;
 }
 .prose-docs thead th {
   @apply text-left text-[10px] font-medium text-muted uppercase tracking-widest px-3 py-2 border-b border-line bg-surface-50;
+  white-space: nowrap;
 }
 .prose-docs tbody td {
   @apply px-3 py-2 border-b border-line text-muted-light;
@@ -86,6 +126,14 @@
 }
 .prose-docs strong {
   @apply text-white font-medium;
+}
+.prose-docs img {
+  max-width: 100%;
+  height: auto;
+}
+.prose-docs > div {
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 :root:not(.dark) .text-emerald-400 { color: rgb(4 120 87); }

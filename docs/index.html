@@ -19,11 +19,11 @@
   <script src="static/alpine.min.js" defer></script>
   <script src="static/htmx.min.js"></script>
 </head>
-<body class="bg-surface font-sans text-white min-h-screen antialiased">
+<body class="bg-surface font-sans text-white min-h-screen antialiased w-full max-w-full">
   <div class="noise-bg"></div>
   <div class="glow-bg"></div>
 
-  <div x-data="docsNav()" x-init="init()" class="relative z-10 flex min-h-screen">
+  <div x-data="docsNav()" x-init="init()" class="relative z-10 flex min-h-screen w-full max-w-full">
     <!-- Mobile header -->
     <div class="lg:hidden fixed top-0 left-0 right-0 z-50 bg-surface-50/95 backdrop-blur border-b border-line px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -81,8 +81,8 @@
     </aside>
 
     <!-- Main content -->
-    <main class="flex-1 lg:ml-64 pt-14 lg:pt-0">
-      <div class="max-w-4xl mx-auto px-6 py-10 lg:py-14">
+    <main class="flex-1 min-w-0 w-full max-w-full lg:ml-64 pt-14 lg:pt-0">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 lg:py-14 min-w-0">
         <div id="content" class="prose-docs">
           <div class="flex items-center justify-center py-20">
             <div class="text-muted text-sm">Loading...</div>
