@@ -13,17 +13,21 @@ type EscalationPolicyListParams struct {
 
 templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 	@Layout(p.LayoutParams) {
-		<div x-data={ escalationXData(p) } class="space-y-4">
-			<div class="flex items-center justify-between mb-2">
-				<h1 class="text-lg font-semibold text-white">Escalation Policies</h1>
+		<div x-data={ escalationXData(p) }>
+			<div class="flex items-center justify-between mb-5">
+				<h1 class="text-[15px] font-medium text-white">Escalation Policies</h1>
 				if p.Perms["escalation_policies.write"] {
-					<button type="button" @click="openCreate()" class="px-3 py-1.5 text-xs bg-brand hover:bg-brand/85 text-white rounded-lg transition-colors">New Policy</button>
+					<button type="button" @click="openCreate()"
+						class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
+						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
+						New Policy
+					</button>
 				}
 			</div>
 			if len(p.Policies) == 0 {
 				<div class="border border-line rounded-lg p-8 text-center">
-					<p class="text-muted text-sm">No escalation policies configured.</p>
-					<p class="text-muted text-xs mt-1">Create a policy to define time-based notification escalation chains.</p>
+					<p class="text-muted text-[13px]">No escalation policies configured.</p>
+					<p class="text-muted/60 text-[11px] mt-1">Create a policy to define time-based notification escalation chains.</p>
 				</div>
 			} else {
 				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -74,11 +78,10 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 					}
 				</div>
 			}
-			<!-- Modal -->
-			<div x-show="showForm" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-				<div @click.outside="showForm = false" class="bg-surface-100 border border-line rounded-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-					<form method="POST" :action="formAction" class="p-5 space-y-4">
-						<h2 class="text-sm font-semibold text-white" x-text="editId ? 'Edit Policy' : 'New Policy'"></h2>
+			<div x-show="showForm" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showForm = false">
+				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto" x-show="showForm" x-transition @click.stop>
+					<h3 class="text-[15px] font-medium text-white mb-4" x-text="editId ? 'Edit Policy' : 'New Policy'"></h3>
+					<form method="POST" :action="formAction" class="space-y-3">
 						<div>
 							<label class="form-label">Name</label>
 							<input type="text" name="name" x-model="formData.name" class="form-input" required/>
@@ -133,9 +136,9 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 							</div>
 							<button type="button" @click="addStep()" class="mt-2 px-3 py-1 text-[11px] border border-dashed border-line rounded-lg text-muted hover:text-white hover:border-line-light transition-colors">+ Add Step</button>
 						</div>
-						<div class="flex items-center justify-end gap-2 pt-2 border-t border-line">
-							<button type="button" @click="showForm = false" class="px-3 py-1.5 text-xs text-muted hover:text-white transition-colors">Cancel</button>
-							<button type="submit" class="px-3 py-1.5 text-xs bg-brand hover:bg-brand/85 text-white rounded-lg transition-colors" x-text="editId ? 'Save' : 'Create'"></button>
+						<div class="flex items-center gap-3 pt-3">
+							<button type="submit" class="btn-primary" x-text="editId ? 'Save' : 'Create'"></button>
+							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
 						</div>
 					</form>
 				</div>
