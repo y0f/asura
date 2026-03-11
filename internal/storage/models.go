@@ -23,6 +23,7 @@ type Monitor struct {
 	SuccessThreshold   int             `json:"success_threshold"`
 	UpsideDown         bool            `json:"upside_down"`
 	ResendInterval     int             `json:"resend_interval"`
+	SLATarget          float64         `json:"sla_target"`
 	GroupID            *int64          `json:"group_id,omitempty"`
 	ProxyID            *int64          `json:"proxy_id,omitempty"`
 	EscalationPolicyID *int64          `json:"escalation_policy_id,omitempty"`

@@ -228,7 +228,7 @@ func (s *SQLiteStore) ListStatusPageMonitorsWithStatus(ctx context.Context, page
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
 		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
-		        m.upside_down, m.resend_interval, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
+		        m.upside_down, m.resend_interval, m.sla_target, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
 		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0),
 		        spm.sort_order, spm.group_name
 		 FROM status_page_monitors spm
@@ -253,7 +253,7 @@ func (s *SQLiteStore) ListStatusPageMonitorsWithStatus(ctx context.Context, page
 		var spmGroupName string
 		err := rows.Scan(&m.ID, &m.Name, &m.Description, &m.Type, &m.Target, &m.Interval, &m.Timeout, &m.Enabled,
 			&tagsStr, &settingsStr, &assertionsStr, &m.TrackChanges, &m.FailureThreshold, &m.SuccessThreshold,
-			&m.UpsideDown, &m.ResendInterval, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
+			&m.UpsideDown, &m.ResendInterval, &m.SLATarget, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
 			&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses,
 			&spmSortOrder, &spmGroupName)
 		if err != nil {

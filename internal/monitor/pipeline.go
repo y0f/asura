@@ -15,6 +15,7 @@ import (
 	"github.com/y0f/asura/internal/diff"
 	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/incident"
+	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -33,6 +34,7 @@ type Pipeline struct {
 	adaptiveIntervals    bool
 	droppedNotifications atomic.Int64
 	lastNotified         sync.Map // map[int64]time.Time — tracks last resend per monitor
+	lastSLABreach        sync.Map // map[int64]time.Time — tracks last SLA breach alert per monitor
 }
 
 // NotificationEvent is emitted when something noteworthy happens.
@@ -259,6 +261,7 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mes
 		p.emitNotification("incident.created", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
 		escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
+		p.checkSLABreach(ctx, mon)
 	} else if p.shouldResend(mon) {
 		p.emitNotification("incident.reminder", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
@@ -289,6 +292,25 @@ func (p *Pipeline) shouldResend(mon *storage.Monitor) bool {
 		return true
 	}
 	return time.Since(v.(time.Time)) >= time.Duration(mon.ResendInterval)*time.Second
+}
+
+func (p *Pipeline) checkSLABreach(ctx context.Context, mon *storage.Monitor) {
+	if mon.SLATarget <= 0 {
+		return
+	}
+	if v, ok := p.lastSLABreach.Load(mon.ID); ok {
+		if time.Since(v.(time.Time)) < time.Hour {
+			return
+		}
+	}
+	status, err := sla.Compute(ctx, p.store, mon.ID, mon.SLATarget)
+	if err != nil {
+		return
+	}
+	if status.Breached || status.BudgetRemainPct <= 10 {
+		p.emitNotification("sla.breach", nil, mon, nil)
+		p.lastSLABreach.Store(mon.ID, time.Now())
+	}
 }
 
 func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor, oldHash, newHash, newBody string, status *storage.MonitorStatus) {

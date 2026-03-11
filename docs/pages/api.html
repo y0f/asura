@@ -232,6 +232,21 @@
 
 <p>Permissions: <code>escalation_policies.read</code>, <code>escalation_policies.write</code>. See <a href="#escalation-policies">Escalation Policies</a> for details.</p>
 
+<h2>SLA Reports</h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/monitors/{id}/sla</code></td><td>SLA status for a monitor (current month uptime, error budget)</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/reports/sla?period=2025-01</code></td><td>Monthly SLA report (all monitors with targets)</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/reports/sla/export?period=2025-01</code></td><td>Export SLA report as JSON download</td></tr>
+  </tbody>
+</table>
+
+<p>Set <code>sla_target</code> (e.g. <code>99.9</code>) on a monitor to enable SLA tracking. The response includes current month uptime, error budget in seconds, and breach status. The report endpoint returns all monitors that have an SLA target configured.</p>
+
 <h2>Maintenance Windows</h2>
 
 <table>

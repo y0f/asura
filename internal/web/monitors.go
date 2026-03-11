@@ -9,6 +9,7 @@ import (
 
 	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 	"github.com/y0f/asura/internal/web/views"
@@ -463,6 +464,21 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	openIncident, _ := h.store.GetOpenIncident(ctx, id)
 	monTags, _ := h.store.GetMonitorTags(ctx, id)
 
+	var slaData *views.SLAData
+	if mon.SLATarget > 0 {
+		s, err := sla.Compute(ctx, h.store, mon.ID, mon.SLATarget)
+		if err == nil {
+			slaData = &views.SLAData{
+				Target:            s.Target,
+				UptimeMonth:       s.UptimePctMonth,
+				BudgetTotalSecs:   s.BudgetTotalSecs,
+				BudgetRemainSecs:  s.BudgetRemainSecs,
+				BudgetRemainHuman: s.BudgetRemainHuman,
+				Breached:          s.Breached,
+			}
+		}
+	}
+
 	lp := h.newLayoutParams(r, mon.Name, "monitors")
 	h.renderComponent(w, r, views.MonitorDetailPage(views.MonitorDetailParams{
 		LayoutParams: lp,
@@ -483,6 +499,7 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		LatestCheck:  latestCheck,
 		OpenIncident: openIncident,
 		Tags:         monTags,
+		SLA:          slaData,
 	}))
 }
 
@@ -790,6 +807,7 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 		SuccessThreshold:   src.SuccessThreshold,
 		UpsideDown:         src.UpsideDown,
 		ResendInterval:     src.ResendInterval,
+		SLATarget:          src.SLATarget,
 		GroupID:            src.GroupID,
 		ProxyID:            src.ProxyID,
 		EscalationPolicyID: src.EscalationPolicyID,
@@ -934,6 +952,12 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 
 	if v := r.FormValue("resend_interval"); v != "" {
 		mon.ResendInterval, _ = strconv.Atoi(v)
+	}
+
+	if v := r.FormValue("sla_target"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 && f <= 100 {
+			mon.SLATarget = f
+		}
 	}
 
 	if v := r.FormValue("group_id"); v != "" {

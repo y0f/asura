@@ -25,24 +25,25 @@ type ExportData struct {
 }
 
 type ExportMonitor struct {
-	Name                     string          `json:"name"`
-	Description              string          `json:"description,omitempty"`
-	Type                     string          `json:"type"`
-	Target                   string          `json:"target"`
-	Interval                 int             `json:"interval"`
-	Timeout                  int             `json:"timeout"`
-	Enabled                  bool            `json:"enabled"`
+	Name                     string             `json:"name"`
+	Description              string             `json:"description,omitempty"`
+	Type                     string             `json:"type"`
+	Target                   string             `json:"target"`
+	Interval                 int                `json:"interval"`
+	Timeout                  int                `json:"timeout"`
+	Enabled                  bool               `json:"enabled"`
 	Tags                     []ExportMonitorTag `json:"tags,omitempty"`
-	Settings                 json.RawMessage `json:"settings,omitempty"`
-	Assertions               json.RawMessage `json:"assertions,omitempty"`
-	TrackChanges             bool            `json:"track_changes,omitempty"`
-	FailureThreshold         int             `json:"failure_threshold"`
-	SuccessThreshold         int             `json:"success_threshold"`
-	UpsideDown               bool            `json:"upside_down,omitempty"`
-	ResendInterval           int             `json:"resend_interval,omitempty"`
-	GroupName                string          `json:"group_name,omitempty"`
-	ProxyName                string          `json:"proxy_name,omitempty"`
-	NotificationChannelNames []string        `json:"notification_channel_names,omitempty"`
+	Settings                 json.RawMessage    `json:"settings,omitempty"`
+	Assertions               json.RawMessage    `json:"assertions,omitempty"`
+	TrackChanges             bool               `json:"track_changes,omitempty"`
+	FailureThreshold         int                `json:"failure_threshold"`
+	SuccessThreshold         int                `json:"success_threshold"`
+	UpsideDown               bool               `json:"upside_down,omitempty"`
+	ResendInterval           int                `json:"resend_interval,omitempty"`
+	SLATarget                float64            `json:"sla_target,omitempty"`
+	GroupName                string             `json:"group_name,omitempty"`
+	ProxyName                string             `json:"proxy_name,omitempty"`
+	NotificationChannelNames []string           `json:"notification_channel_names,omitempty"`
 }
 
 type ExportMonitorTag struct {
@@ -171,6 +172,7 @@ func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*s
 			SuccessThreshold: m.SuccessThreshold,
 			UpsideDown:       m.UpsideDown,
 			ResendInterval:   m.ResendInterval,
+			SLATarget:        m.SLATarget,
 		}
 		if m.GroupID != nil {
 			em.GroupName = groupMap[*m.GroupID]
@@ -441,7 +443,7 @@ func importSingleMonitor(ctx context.Context, ic *importCtx, em *ExportMonitor) 
 		Settings: em.Settings, Assertions: em.Assertions,
 		TrackChanges: em.TrackChanges, FailureThreshold: em.FailureThreshold,
 		SuccessThreshold: em.SuccessThreshold, UpsideDown: em.UpsideDown,
-		ResendInterval: em.ResendInterval,
+		ResendInterval: em.ResendInterval, SLATarget: em.SLATarget,
 	}
 	if em.GroupName != "" {
 		if gid, ok := ic.groupNameToID[em.GroupName]; ok {

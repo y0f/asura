@@ -1,0 +1,68 @@
+<h1>SLA Targets &amp; Reporting</h1>
+
+<p>Asura tracks Service Level Agreement (SLA) compliance per monitor. Set a target uptime percentage and Asura calculates your error budget, tracks usage, and alerts when the budget is at risk.</p>
+
+<h2>Setting an SLA Target</h2>
+
+<p>Edit any monitor and select an SLA target from the dropdown (99%, 99.5%, 99.9%, 99.95%, or 99.99%). Or set it via the API:</p>
+
+<pre><code>PUT /api/v1/monitors/{id}
+{ "sla_target": 99.9 }</code></pre>
+
+<p>Set to <code>0</code> to disable SLA tracking for a monitor.</p>
+
+<h2>Error Budget</h2>
+
+<p>The error budget is the maximum allowed downtime in a calendar month. For a 30-day month:</p>
+
+<table>
+  <thead>
+    <tr><th>Target</th><th>Monthly Budget</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>99%</td><td>~7h 12m</td></tr>
+    <tr><td>99.5%</td><td>~3h 36m</td></tr>
+    <tr><td>99.9%</td><td>~43m 12s</td></tr>
+    <tr><td>99.95%</td><td>~21m 36s</td></tr>
+    <tr><td>99.99%</td><td>~4m 19s</td></tr>
+  </tbody>
+</table>
+
+<h2>SLA Report</h2>
+
+<p>The SLA Report page shows all monitors with SLA targets for a given month. Navigate between months and see at a glance which monitors are meeting their targets and which are breached or at risk.</p>
+
+<p>The report is available in the sidebar under "SLA Report" and via the API:</p>
+
+<pre><code>GET /api/v1/reports/sla?period=2025-01</code></pre>
+
+<p>Export as a JSON download:</p>
+
+<pre><code>GET /api/v1/reports/sla/export?period=2025-01</code></pre>
+
+<h2>Breach Alerts</h2>
+
+<p>When a monitor's error budget is depleted or less than 10% remains, Asura emits an <code>sla.breach</code> notification event. This is sent at most once per hour per monitor to avoid flooding. Configure notification channels to receive these alerts.</p>
+
+<h2>Monitor Detail</h2>
+
+<p>When an SLA target is configured, the monitor detail page shows an SLA card with:</p>
+
+<ul>
+  <li>Current month uptime vs target</li>
+  <li>Error budget used and remaining</li>
+  <li>Status badge: Healthy, At Risk, or Breached</li>
+</ul>
+
+<h2>API Endpoints</h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/monitors/{id}/sla</code></td><td>Current SLA status and error budget</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/reports/sla?period=YYYY-MM</code></td><td>Monthly SLA report for all tracked monitors</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/reports/sla/export?period=YYYY-MM</code></td><td>JSON export of SLA report</td></tr>
+  </tbody>
+</table>

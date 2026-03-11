@@ -1,0 +1,164 @@
+package views
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/y0f/asura/internal/sla"
+)
+
+type SLAReportParams struct {
+	LayoutParams
+	Entries []*sla.ReportEntry
+	Period  time.Time
+}
+
+func (p SLAReportParams) prevPeriod() string {
+	return p.Period.AddDate(0, -1, 0).Format("2006-01")
+}
+
+func (p SLAReportParams) nextPeriod() string {
+	return p.Period.AddDate(0, 1, 0).Format("2006-01")
+}
+
+func (p SLAReportParams) isCurrentMonth() bool {
+	now := time.Now().UTC()
+	return p.Period.Year() == now.Year() && p.Period.Month() == now.Month()
+}
+
+func (p SLAReportParams) isFutureMonth() bool {
+	now := time.Now().UTC()
+	nextMonth := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+	return !p.Period.Before(nextMonth)
+}
+
+func slaBudgetColor(entry *sla.ReportEntry) string {
+	if entry.Breached {
+		return "text-red-400"
+	}
+	if entry.RemainSecs <= entry.BudgetSecs/4 {
+		return "text-yellow-400"
+	}
+	return "text-emerald-400"
+}
+
+func slaStatusBadge(entry *sla.ReportEntry) string {
+	if entry.Breached {
+		return "bg-red-500/10 text-red-400 border-red-500/20"
+	}
+	if entry.RemainSecs <= entry.BudgetSecs/10 {
+		return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+	}
+	return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+}
+
+func slaStatusText(entry *sla.ReportEntry) string {
+	if entry.Breached {
+		return "Breached"
+	}
+	if entry.RemainSecs <= entry.BudgetSecs/10 {
+		return "At Risk"
+	}
+	return "Healthy"
+}
+
+templ SLAReportPage(p SLAReportParams) {
+	@Layout(p.LayoutParams) {
+		<div class="flex items-center justify-between mb-5">
+			<h1 class="text-[15px] font-medium text-white">SLA Report</h1>
+			<a href={ templ.SafeURL(fmt.Sprintf("%s/api/v1/reports/sla/export?period=%s", p.BasePath, p.Period.Format("2006-01"))) }
+				class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line text-muted-light hover:text-white text-[12px] font-medium rounded transition-colors">
+				<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+				Export JSON
+			</a>
+		</div>
+		<div class="flex items-center gap-3 mb-5">
+			if !p.isFutureMonth() {
+				<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.prevPeriod())) }
+					class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors">&larr; Prev</a>
+			}
+			<span class="text-[13px] text-white font-medium">{ p.Period.Format("January 2006") }</span>
+			if !p.isCurrentMonth() && !p.isFutureMonth() {
+				<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.nextPeriod())) }
+					class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors">Next &rarr;</a>
+			}
+		</div>
+		if len(p.Entries) == 0 {
+			<div class="border border-line rounded-lg px-6 py-12 text-center">
+				<div class="text-muted text-[13px]">No monitors have SLA targets configured.</div>
+				<div class="text-muted/60 text-[11px] mt-1">Set an SLA target on a monitor's edit page to start tracking.</div>
+			</div>
+		} else {
+			<div class="grid grid-cols-3 gap-3 mb-5">
+				<div class="border border-line rounded-lg px-4 py-3">
+					<div class="stat-label">Monitors Tracked</div>
+					<div class="text-lg font-semibold text-white tabular-nums">{ fmt.Sprint(len(p.Entries)) }</div>
+				</div>
+				<div class="border border-line rounded-lg px-4 py-3">
+					<div class="stat-label">Meeting SLA</div>
+					<div class="text-lg font-semibold text-emerald-400 tabular-nums">{ fmt.Sprint(p.meetingSLA()) }</div>
+				</div>
+				<div class="border border-line rounded-lg px-4 py-3">
+					<div class="stat-label">Breached</div>
+					<div class={ "text-lg font-semibold tabular-nums", templ.KV("text-red-400", p.breachedCount() > 0), templ.KV("text-muted", p.breachedCount() == 0) }>{ fmt.Sprint(p.breachedCount()) }</div>
+				</div>
+			</div>
+			<div class="border border-line rounded-lg overflow-hidden">
+				<div class="overflow-x-auto">
+					<table class="w-full min-w-[800px]">
+						<thead>
+							<tr class="border-b border-line text-left">
+								<th class="th">Monitor</th>
+								<th class="th">Target</th>
+								<th class="th">Actual</th>
+								<th class="th">Status</th>
+								<th class="th">Error Budget</th>
+								<th class="th">Checks</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, entry := range p.Entries {
+								<tr class="border-b border-line last:border-0 hover:bg-white/[0.02] transition-colors">
+									<td class="td">
+										<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="text-white hover:text-brand transition-colors">{ entry.MonitorName }</a>
+									</td>
+									<td class="td text-muted-light font-mono text-[12px]">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
+									<td class="td">
+										<span class={ "font-mono text-[12px] font-medium", UptimeColor(entry.UptimePct) }>{ UptimeFmt(entry.UptimePct) }</span>
+									</td>
+									<td class="td">
+										<span class={ "inline-flex px-2 py-0.5 text-[10px] font-medium rounded border", slaStatusBadge(entry) }>{ slaStatusText(entry) }</span>
+									</td>
+									<td class="td">
+										<div class={ "text-[12px] font-mono", slaBudgetColor(entry) }>{ sla.FormatDuration(entry.RemainSecs) }</div>
+										<div class="text-[10px] text-muted">of { sla.FormatDuration(entry.BudgetSecs) }</div>
+									</td>
+									<td class="td text-[12px] text-muted-light tabular-nums">
+										{ fmt.Sprint(entry.TotalChecks) }
+										if entry.DownChecks > 0 {
+											<span class="text-red-400/70 ml-1">({ fmt.Sprint(entry.DownChecks) } down)</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		}
+	}
+}
+
+func (p SLAReportParams) breachedCount() int {
+	n := 0
+	for _, e := range p.Entries {
+		if e.Breached {
+			n++
+		}
+	}
+	return n
+}
+
+func (p SLAReportParams) meetingSLA() int {
+	return len(p.Entries) - p.breachedCount()
+}

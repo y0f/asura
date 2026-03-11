@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -41,6 +42,16 @@ type MonitorDetailParams struct {
 	LatestCheck  *storage.CheckResult
 	OpenIncident *storage.Incident
 	Tags         []storage.MonitorTag
+	SLA          *SLAData
+}
+
+type SLAData struct {
+	Target            float64
+	UptimeMonth       float64
+	BudgetTotalSecs   int64
+	BudgetRemainSecs  int64
+	BudgetRemainHuman string
+	Breached          bool
 }
 
 func (p MonitorListParams) monitors() []*storage.Monitor {
@@ -611,6 +622,38 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					}
 				</div>
 			</div>
+			if p.SLA != nil {
+				<div class="border border-line rounded-lg px-4 py-3 mb-5">
+					<div class="flex items-center justify-between mb-2">
+						<div class="stat-label">SLA Target: { fmt.Sprintf("%.2f%%", p.SLA.Target) }</div>
+						if p.SLA.Breached {
+							<span class="inline-flex px-2 py-0.5 text-[10px] font-medium rounded border bg-red-500/10 text-red-400 border-red-500/20">Breached</span>
+						} else if p.SLA.BudgetRemainSecs <= p.SLA.BudgetTotalSecs/10 {
+							<span class="inline-flex px-2 py-0.5 text-[10px] font-medium rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">At Risk</span>
+						} else {
+							<span class="inline-flex px-2 py-0.5 text-[10px] font-medium rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Healthy</span>
+						}
+					</div>
+					<div class="grid grid-cols-3 gap-4">
+						<div>
+							<div class="text-[10px] text-muted mb-0.5">Current Month</div>
+							<div class={ "text-[14px] font-semibold font-mono tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
+						</div>
+						<div>
+							<div class="text-[10px] text-muted mb-0.5">Error Budget Used</div>
+							<div class="text-[14px] font-semibold text-white font-mono tabular-nums">{ sla.FormatDuration(p.SLA.BudgetTotalSecs - p.SLA.BudgetRemainSecs) }</div>
+						</div>
+						<div>
+							<div class="text-[10px] text-muted mb-0.5">Budget Remaining</div>
+							if p.SLA.Breached {
+								<div class="text-[14px] font-semibold text-red-400 font-mono tabular-nums">{ p.SLA.BudgetRemainHuman }</div>
+							} else {
+								<div class="text-[14px] font-semibold text-emerald-400 font-mono tabular-nums">{ p.SLA.BudgetRemainHuman }</div>
+							}
+						</div>
+					</div>
+				</div>
+			}
 			if p.showPercentiles() {
 				<div class="grid grid-cols-3 gap-3 mb-5">
 					<div class="border border-line rounded-lg px-4 py-3">

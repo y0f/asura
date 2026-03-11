@@ -88,6 +88,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/escalation-policies/{id}"), webPerm("escalation_policies.write", s.web.EscalationPolicyUpdate))
 		mux.Handle("POST "+s.p("/escalation-policies/{id}/delete"), webPerm("escalation_policies.write", s.web.EscalationPolicyDelete))
 
+		mux.Handle("GET "+s.p("/sla"), webAuth(http.HandlerFunc(s.web.SLAReport)))
+
 		mux.Handle("GET "+s.p("/maintenance"), webAuth(http.HandlerFunc(s.web.Maintenance)))
 		mux.Handle("POST "+s.p("/maintenance"), webPerm("maintenance.write", s.web.MaintenanceCreate))
 		mux.Handle("POST "+s.p("/maintenance/{id}"), webPerm("maintenance.write", s.web.MaintenanceUpdate))
@@ -131,6 +133,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET "+s.p("/api/v1/monitors/{id}/metrics"), monRead(http.HandlerFunc(s.api.MonitorMetrics)))
 	mux.Handle("GET "+s.p("/api/v1/monitors/{id}/changes"), monRead(http.HandlerFunc(s.api.ListChanges)))
 	mux.Handle("GET "+s.p("/api/v1/monitors/{id}/chart"), monRead(http.HandlerFunc(s.api.MonitorChart)))
+	mux.Handle("GET "+s.p("/api/v1/monitors/{id}/sla"), monRead(http.HandlerFunc(s.api.MonitorSLA)))
+	mux.Handle("GET "+s.p("/api/v1/reports/sla"), monRead(http.HandlerFunc(s.api.SLAReport)))
+	mux.Handle("GET "+s.p("/api/v1/reports/sla/export"), monRead(http.HandlerFunc(s.api.SLAReportExport)))
 
 	mux.Handle("GET "+s.p("/api/v1/incidents"), incRead(http.HandlerFunc(s.api.ListIncidents)))
 	mux.Handle("GET "+s.p("/api/v1/incidents/{id}"), incRead(http.HandlerFunc(s.api.GetIncident)))

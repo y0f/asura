@@ -281,6 +281,10 @@ func FormatMessage(p *Payload) string {
 		if p.Change != nil {
 			return fmt.Sprintf("[CHANGE] Content changed for monitor #%d", p.Change.MonitorID)
 		}
+	case "sla.breach":
+		if p.Monitor != nil {
+			return fmt.Sprintf("[SLA] SLA target at risk for %s (target: %.2f%%)", p.Monitor.Name, p.Monitor.SLATarget)
+		}
 	case "cert.changed":
 		if p.Monitor != nil {
 			return fmt.Sprintf("[CERT] Certificate fingerprint changed for %s", p.Monitor.Name)

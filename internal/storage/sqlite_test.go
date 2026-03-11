@@ -1161,3 +1161,62 @@ func TestBulkSetMonitorGroup(t *testing.T) {
 		t.Error("m1 should have no group")
 	}
 }
+
+func TestMonitorSLATarget(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	m := &Monitor{
+		Name:             "SLA Monitor",
+		Type:             "http",
+		Target:           "https://example.com",
+		Interval:         60,
+		Timeout:          10,
+		Enabled:          true,
+		Tags:             []string{},
+		SLATarget:        99.9,
+		FailureThreshold: 3,
+		SuccessThreshold: 1,
+	}
+	if err := store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.GetMonitor(ctx, m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SLATarget != 99.9 {
+		t.Fatalf("expected SLATarget 99.9, got %v", got.SLATarget)
+	}
+
+	m.SLATarget = 99.99
+	if err := store.UpdateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = store.GetMonitor(ctx, m.ID)
+	if got.SLATarget != 99.99 {
+		t.Fatalf("expected SLATarget 99.99, got %v", got.SLATarget)
+	}
+
+	m.SLATarget = 0
+	if err := store.UpdateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = store.GetMonitor(ctx, m.ID)
+	if got.SLATarget != 0 {
+		t.Fatalf("expected SLATarget 0, got %v", got.SLATarget)
+	}
+
+	result, err := store.ListMonitors(ctx, MonitorListFilter{}, Pagination{Page: 1, PerPage: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	monList := result.Data.([]*Monitor)
+	if len(monList) != 1 {
+		t.Fatalf("expected 1 monitor, got %d", len(monList))
+	}
+	if monList[0].SLATarget != 0 {
+		t.Fatalf("expected SLATarget 0 in list, got %v", monList[0].SLATarget)
+	}
+}

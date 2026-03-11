@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 23
+const schemaVersion = 24
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS monitors (
 	success_threshold INTEGER NOT NULL DEFAULT 1,
 	upside_down     INTEGER NOT NULL DEFAULT 0,
 	resend_interval INTEGER NOT NULL DEFAULT 0,
+	sla_target      REAL    NOT NULL DEFAULT 0,
 	group_id        INTEGER DEFAULT NULL,
 	proxy_id              INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL,
 	escalation_policy_id  INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL,
@@ -435,5 +436,9 @@ CREATE TABLE IF NOT EXISTS escalation_states (
 );
 CREATE INDEX IF NOT EXISTS idx_escalation_states_fire ON escalation_states(next_fire_at);
 ALTER TABLE monitors ADD COLUMN escalation_policy_id INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL;`,
+	},
+	{
+		version: 24,
+		sql:     `ALTER TABLE monitors ADD COLUMN sla_target REAL NOT NULL DEFAULT 0;`,
 	},
 }

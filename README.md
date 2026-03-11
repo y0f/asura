@@ -56,6 +56,7 @@ docker compose up -d
 - **Heartbeat monitoring** — cron jobs and workers report in; silence triggers an incident
 - **Advanced HTTP auth** — OAuth2 Client Credentials with token caching, mutual TLS (mTLS) with inline PEM certificates
 - **Proxy support** — HTTP and SOCKS5 proxies with per-monitor assignment
+- **SLA targets** — per-monitor SLA tracking with error budgets, breach alerts, and monthly reports
 - **Analytics** — uptime %, response time percentiles, Prometheus `/metrics`
 
 ## Why Asura?
@@ -81,6 +82,7 @@ docker compose up -d
 | [Notifications](https://y0f.github.io/asura/#notifications) | All channels, webhook signing, per-monitor routing |
 | [Escalation Policies](https://y0f.github.io/asura/#escalation-policies) | Time-based notification chains with delays and repeat |
 | [API Reference](https://y0f.github.io/asura/#api) | Full endpoint reference with request/response examples |
+| [SLA Targets](https://y0f.github.io/asura/#sla) | Per-monitor SLA tracking, error budgets, breach alerts |
 | [Backup & Restore](https://y0f.github.io/asura/#backup) | SQLite backup strategy and restore procedure |
 | [Architecture](https://y0f.github.io/asura/#architecture) | Pipeline, storage, checker registry |
 

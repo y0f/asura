@@ -297,6 +297,17 @@ templ MonitorFormPage(p MonitorFormParams) {
 							</select>
 						</div>
 					}
+					<div>
+						<label class="form-label">SLA Target (%)</label>
+						<select name="sla_target" class="form-select">
+							<option value="0" if p.Monitor.SLATarget == 0 { selected }>None</option>
+							<option value="99" if p.Monitor.SLATarget == 99 { selected }>99%</option>
+							<option value="99.5" if p.Monitor.SLATarget == 99.5 { selected }>99.5%</option>
+							<option value="99.9" if p.Monitor.SLATarget == 99.9 { selected }>99.9%</option>
+							<option value="99.95" if p.Monitor.SLATarget == 99.95 { selected }>99.95%</option>
+							<option value="99.99" if p.Monitor.SLATarget == 99.99 { selected }>99.99%</option>
+						</select>
+					</div>
 					<div class="flex items-center flex-wrap gap-5">
 						<label class="flex items-center gap-2 cursor-pointer">
 							<input type="checkbox" name="track_changes"
