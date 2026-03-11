@@ -127,7 +127,7 @@ func (h *Handler) parseEscalationPolicyForm(r *http.Request) (*storage.Escalatio
 			continue
 		}
 		steps = append(steps, &storage.EscalationPolicyStep{
-			StepOrder:              i,
+			StepOrder:              len(steps),
 			DelayMinutes:           delay,
 			NotificationChannelIDs: channelIDs,
 		})

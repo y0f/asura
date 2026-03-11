@@ -88,6 +88,12 @@ func (h *Handler) IncidentAck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if inc.Status != incident.StatusOpen {
+		h.setFlash(w, "Incident is not open")
+		h.redirect(w, r, "/incidents/"+r.PathValue("id"))
+		return
+	}
+
 	now := time.Now().UTC()
 	inc.Status = incident.StatusAcknowledged
 	inc.AcknowledgedAt = &now
@@ -128,6 +134,12 @@ func (h *Handler) IncidentResolve(w http.ResponseWriter, r *http.Request) {
 	inc, err := h.store.GetIncident(ctx, id)
 	if err != nil {
 		h.redirect(w, r, "/incidents")
+		return
+	}
+
+	if inc.Status == incident.StatusResolved {
+		h.setFlash(w, "Incident is already resolved")
+		h.redirect(w, r, "/incidents/"+r.PathValue("id"))
 		return
 	}
 

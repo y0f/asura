@@ -360,8 +360,11 @@ func (p *Pipeline) ProcessHeartbeatRecovery(ctx context.Context, mon *storage.Mo
 		p.logger.Error("heartbeat recovery: process recovery", "error", err)
 		return
 	}
-	if resolved && !inMaintenance {
-		p.emitNotification("incident.resolved", inc, mon, nil)
+	if resolved {
+		escalation.CancelEscalation(ctx, p.store, inc.ID)
+		if !inMaintenance {
+			p.emitNotification("incident.resolved", inc, mon, nil)
+		}
 	}
 }
 
@@ -408,8 +411,11 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 			p.logger.Error("manual status: process recovery", "error", err)
 			return
 		}
-		if resolved && !inMaintenance {
-			p.emitNotification("incident.resolved", inc, mon, nil)
+		if resolved {
+			escalation.CancelEscalation(ctx, p.store, inc.ID)
+			if !inMaintenance {
+				p.emitNotification("incident.resolved", inc, mon, nil)
+			}
 		}
 	} else if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending") {
 		inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, message)
@@ -419,6 +425,7 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 		}
 		if created && !inMaintenance {
 			p.emitNotification("incident.created", inc, mon, nil)
+			escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
 		}
 	}
 }
