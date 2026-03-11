@@ -108,9 +108,9 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 templ.SafeURL
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/api/v1/reports/sla/export?period=%s", p.BasePath, p.Period.Format("2006-01"))))
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/sla/export?period=%s", p.BasePath, p.Period.Format("2006-01"))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/sla_report.templ`, Line: 69, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/sla_report.templ`, Line: 69, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -251,7 +251,7 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				for _, entry := range p.Entries {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<tr class=\"border-b border-line last:border-0 hover:bg-white/[0.02] transition-colors\"><td class=\"td\"><a href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<tr class=\"border-b border-line last:border-0 hover:bg-white/[0.02] transition-colors\"><td class=\"td text-[13px]\"><a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

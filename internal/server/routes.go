@@ -89,6 +89,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/escalation-policies/{id}/delete"), webPerm("escalation_policies.write", s.web.EscalationPolicyDelete))
 
 		mux.Handle("GET "+s.p("/sla"), webAuth(http.HandlerFunc(s.web.SLAReport)))
+		mux.Handle("GET "+s.p("/sla/export"), webAuth(http.HandlerFunc(s.web.SLAExport)))
 
 		mux.Handle("GET "+s.p("/maintenance"), webAuth(http.HandlerFunc(s.web.Maintenance)))
 		mux.Handle("POST "+s.p("/maintenance"), webPerm("maintenance.write", s.web.MaintenanceCreate))
