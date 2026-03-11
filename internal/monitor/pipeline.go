@@ -13,6 +13,7 @@ import (
 	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/diff"
+	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/storage"
 )
@@ -257,6 +258,7 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mes
 	if created {
 		p.emitNotification("incident.created", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
+		escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
 	} else if p.shouldResend(mon) {
 		p.emitNotification("incident.reminder", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
@@ -269,8 +271,11 @@ func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor, in
 		p.logger.Error("process recovery", "error", err)
 		return
 	}
-	if resolved && !inMaintenance {
-		p.emitNotification("incident.resolved", inc, mon, nil)
+	if resolved {
+		escalation.CancelEscalation(ctx, p.store, inc.ID)
+		if !inMaintenance {
+			p.emitNotification("incident.resolved", inc, mon, nil)
+		}
 	}
 	p.lastNotified.Delete(mon.ID)
 }

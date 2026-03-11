@@ -15,6 +15,7 @@ import (
 
 	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/config"
+	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/monitor"
 	"github.com/y0f/asura/internal/notifier"
@@ -94,6 +95,9 @@ func main() {
 	incMgr := incident.NewManager(store, logger)
 	pipeline := monitor.NewPipeline(store, registry, incMgr, cfg.Monitor.Workers, cfg.Monitor.AdaptiveIntervals, logger)
 	dispatcher := notifier.NewDispatcher(store, logger, cfg.Monitor.AllowPrivateTargets)
+
+	escalationRunner := escalation.NewRunner(store, dispatcher, logger)
+	go escalationRunner.Start(ctx)
 
 	go forwardNotifications(ctx, pipeline, dispatcher)
 	go pipeline.Run(ctx)

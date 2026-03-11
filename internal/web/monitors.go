@@ -498,6 +498,7 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 	channels, _ := h.store.ListNotificationChannels(r.Context())
 	proxies, _ := h.store.ListProxies(r.Context())
 	allTags, _ := h.store.ListTags(r.Context())
+	escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 
 	idStr := r.PathValue("id")
 	if idStr != "" {
@@ -517,6 +518,7 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
 		fd.AllTags = allTags
+		fd.EscalationPolicies = escalationPolicies
 		fd.SelectedChannelIDs, _ = h.store.GetMonitorNotificationChannelIDs(r.Context(), id)
 		fd.SelectedTags, _ = h.store.GetMonitorTags(r.Context(), id)
 		h.renderMonitorForm(w, r, lp, fd)
@@ -526,6 +528,7 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
 		fd.AllTags = allTags
+		fd.EscalationPolicies = escalationPolicies
 		h.renderMonitorForm(w, r, lp, fd)
 	}
 }
@@ -540,6 +543,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
 		allTags, _ := h.store.ListTags(r.Context())
+		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 		lp := h.newLayoutParams(r, "New Monitor", "monitors")
 		lp.Error = err.Error()
 		fd := monitorToFormData(mon)
@@ -547,6 +551,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
 		fd.AllTags = allTags
+		fd.EscalationPolicies = escalationPolicies
 		fd.SelectedChannelIDs = channelIDs
 		fd.SelectedTags = monTags
 		h.renderMonitorForm(w, r, lp, fd)
@@ -558,6 +563,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
 		allTags, _ := h.store.ListTags(r.Context())
+		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 		h.logger.Error("web: create monitor", "error", err)
 		lp := h.newLayoutParams(r, "New Monitor", "monitors")
 		lp.Error = "Failed to create monitor"
@@ -566,6 +572,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
 		fd.AllTags = allTags
+		fd.EscalationPolicies = escalationPolicies
 		fd.SelectedChannelIDs = channelIDs
 		fd.SelectedTags = monTags
 		h.renderMonitorForm(w, r, lp, fd)
@@ -607,6 +614,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
 		allTags, _ := h.store.ListTags(r.Context())
+		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 		lp.Error = err.Error()
 		fd := monitorToFormData(mon)
@@ -614,6 +622,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
 		fd.AllTags = allTags
+		fd.EscalationPolicies = escalationPolicies
 		fd.SelectedChannelIDs = channelIDs
 		fd.SelectedTags = monTags
 		h.renderMonitorForm(w, r, lp, fd)
@@ -625,6 +634,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
 		allTags, _ := h.store.ListTags(r.Context())
+		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 		h.logger.Error("web: update monitor", "error", err)
 		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 		lp.Error = "Failed to update monitor"
@@ -633,6 +643,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
 		fd.AllTags = allTags
+		fd.EscalationPolicies = escalationPolicies
 		fd.SelectedChannelIDs = channelIDs
 		fd.SelectedTags = monTags
 		h.renderMonitorForm(w, r, lp, fd)
@@ -765,22 +776,23 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clone := &storage.Monitor{
-		Name:             src.Name + " (copy)",
-		Description:      src.Description,
-		Type:             src.Type,
-		Target:           src.Target,
-		Interval:         src.Interval,
-		Timeout:          src.Timeout,
-		Enabled:          false,
-		Settings:         src.Settings,
-		Assertions:       src.Assertions,
-		TrackChanges:     src.TrackChanges,
-		FailureThreshold: src.FailureThreshold,
-		SuccessThreshold: src.SuccessThreshold,
-		UpsideDown:       src.UpsideDown,
-		ResendInterval:   src.ResendInterval,
-		GroupID:          src.GroupID,
-		ProxyID:          src.ProxyID,
+		Name:               src.Name + " (copy)",
+		Description:        src.Description,
+		Type:               src.Type,
+		Target:             src.Target,
+		Interval:           src.Interval,
+		Timeout:            src.Timeout,
+		Enabled:            false,
+		Settings:           src.Settings,
+		Assertions:         src.Assertions,
+		TrackChanges:       src.TrackChanges,
+		FailureThreshold:   src.FailureThreshold,
+		SuccessThreshold:   src.SuccessThreshold,
+		UpsideDown:         src.UpsideDown,
+		ResendInterval:     src.ResendInterval,
+		GroupID:            src.GroupID,
+		ProxyID:            src.ProxyID,
+		EscalationPolicyID: src.EscalationPolicyID,
 	}
 
 	if err := h.store.CreateMonitor(ctx, clone); err != nil {
@@ -935,6 +947,13 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 		pid, err := strconv.ParseInt(v, 10, 64)
 		if err == nil && pid > 0 {
 			mon.ProxyID = &pid
+		}
+	}
+
+	if v := r.FormValue("escalation_policy_id"); v != "" {
+		epid, err := strconv.ParseInt(v, 10, 64)
+		if err == nil && epid > 0 {
+			mon.EscalationPolicyID = &epid
 		}
 	}
 

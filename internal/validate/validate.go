@@ -39,8 +39,30 @@ var _validNotificationEvents = map[string]bool{
 	"incident.acknowledged": true,
 	"incident.resolved":     true,
 	"incident.reminder":     true,
+	"incident.escalated":    true,
 	"content.changed":       true,
 	"cert.changed":          true,
+}
+
+func ValidateEscalationPolicy(ep *storage.EscalationPolicy) error {
+	if strings.TrimSpace(ep.Name) == "" {
+		return fmt.Errorf("name is required")
+	}
+	if len(ep.Name) > 255 {
+		return fmt.Errorf("name must be at most 255 characters")
+	}
+	if len(ep.Steps) == 0 {
+		return fmt.Errorf("at least one step is required")
+	}
+	for i, step := range ep.Steps {
+		if step.DelayMinutes < 0 {
+			return fmt.Errorf("step %d: delay_minutes must be >= 0", i+1)
+		}
+		if len(step.NotificationChannelIDs) == 0 {
+			return fmt.Errorf("step %d: at least one notification channel is required", i+1)
+		}
+	}
+	return nil
 }
 
 func ValidateMonitor(m *storage.Monitor) error {

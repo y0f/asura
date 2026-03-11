@@ -2,7 +2,7 @@
 
 <p>13 notification channels. Each one can be scoped to specific event types and routed to specific monitors. All delivery attempts are recorded in notification history.</p>
 
-<p>Events: <code>incident.created</code>, <code>incident.acknowledged</code>, <code>incident.resolved</code>, <code>incident.reminder</code>, <code>content.changed</code>, <code>cert.changed</code></p>
+<p>Events: <code>incident.created</code>, <code>incident.acknowledged</code>, <code>incident.resolved</code>, <code>incident.reminder</code>, <code>incident.escalated</code>, <code>content.changed</code>, <code>cert.changed</code></p>
 
 <p>The <code>incident.reminder</code> event fires when a monitor's <code>resend_interval</code> elapses while an incident is still open, re-alerting channels that subscribe to it.</p>
 

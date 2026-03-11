@@ -18,10 +18,12 @@ type Sender interface {
 
 // Payload contains the notification data.
 type Payload struct {
-	EventType string                 `json:"event_type"`
-	Incident  *storage.Incident      `json:"incident,omitempty"`
-	Monitor   *storage.Monitor       `json:"monitor,omitempty"`
-	Change    *storage.ContentChange `json:"change,omitempty"`
+	EventType       string                 `json:"event_type"`
+	Incident        *storage.Incident      `json:"incident,omitempty"`
+	Monitor         *storage.Monitor       `json:"monitor,omitempty"`
+	Change          *storage.ContentChange `json:"change,omitempty"`
+	EscalationStep  int                    `json:"escalation_step,omitempty"`
+	EscalationTotal int                    `json:"escalation_total,omitempty"`
 }
 
 type Dispatcher struct {
@@ -108,6 +110,33 @@ func (d *Dispatcher) NotifyForMonitor(monitorID int64, payload *Payload) {
 			continue
 		}
 		if allowed != nil && !allowed[ch.ID] {
+			continue
+		}
+		sender, ok := d.senders[ch.Type]
+		if !ok {
+			d.logger.Warn("no sender for channel type", "type", ch.Type)
+			continue
+		}
+		go d.sendWithRetry(sender, ch, payload)
+	}
+}
+
+// NotifyChannels sends a notification to specific channels by ID, bypassing event subscription filters.
+func (d *Dispatcher) NotifyChannels(channelIDs []int64, payload *Payload) {
+	if len(channelIDs) == 0 {
+		return
+	}
+	channels, err := d.store.ListNotificationChannels(context.Background())
+	if err != nil {
+		d.logger.Error("list notification channels for escalation", "error", err)
+		return
+	}
+	wanted := make(map[int64]bool, len(channelIDs))
+	for _, id := range channelIDs {
+		wanted[id] = true
+	}
+	for _, ch := range channels {
+		if !wanted[ch.ID] || !ch.Enabled {
 			continue
 		}
 		sender, ok := d.senders[ch.Type]
@@ -242,6 +271,11 @@ func FormatMessage(p *Payload) string {
 		if p.Incident != nil {
 			return fmt.Sprintf("[RESOLVED] Incident #%d for %s resolved by %s",
 				p.Incident.ID, p.Incident.MonitorName, p.Incident.ResolvedBy)
+		}
+	case "incident.escalated":
+		if p.Incident != nil {
+			return fmt.Sprintf("[ESCALATION] Step %d/%d for incident #%d (%s): %s",
+				p.EscalationStep, p.EscalationTotal, p.Incident.ID, p.Incident.MonitorName, p.Incident.Cause)
 		}
 	case "content.changed":
 		if p.Change != nil {

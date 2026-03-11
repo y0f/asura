@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/notifier"
@@ -100,6 +101,7 @@ func (h *Handler) AckIncident(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("insert ack event", "error", err)
 	}
 
+	escalation.CancelEscalation(r.Context(), h.store, inc.ID)
 	h.audit(r, "acknowledge", "incident", id, "")
 
 	if h.notifier != nil {
@@ -150,6 +152,7 @@ func (h *Handler) ResolveIncident(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("insert resolve event", "error", err)
 	}
 
+	escalation.CancelEscalation(r.Context(), h.store, inc.ID)
 	h.audit(r, "resolve", "incident", id, "")
 
 	if h.notifier != nil {

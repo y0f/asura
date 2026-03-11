@@ -148,6 +148,22 @@ type Store interface {
 	UpdateProxy(ctx context.Context, p *Proxy) error
 	DeleteProxy(ctx context.Context, id int64) error
 
+	// Escalation policies
+	CreateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error
+	GetEscalationPolicy(ctx context.Context, id int64) (*EscalationPolicy, error)
+	ListEscalationPolicies(ctx context.Context) ([]*EscalationPolicy, error)
+	UpdateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error
+	DeleteEscalationPolicy(ctx context.Context, id int64) error
+	GetEscalationPolicySteps(ctx context.Context, policyID int64) ([]*EscalationPolicyStep, error)
+	ReplaceEscalationPolicySteps(ctx context.Context, policyID int64, steps []*EscalationPolicyStep) error
+
+	// Escalation state
+	CreateEscalationState(ctx context.Context, state *EscalationState) error
+	GetEscalationStateByIncident(ctx context.Context, incidentID int64) (*EscalationState, error)
+	ListPendingEscalationStates(ctx context.Context, before time.Time) ([]*EscalationState, error)
+	UpdateEscalationState(ctx context.Context, state *EscalationState) error
+	DeleteEscalationStateByIncident(ctx context.Context, incidentID int64) error
+
 	// Data retention
 	PurgeOldData(ctx context.Context, before time.Time) (int64, error)
 

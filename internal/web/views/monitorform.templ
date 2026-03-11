@@ -31,6 +31,7 @@ type MonitorFormParams struct {
 	NotificationChannels []*storage.NotificationChannel
 	SelectedChannelIDs   []int64
 	Proxies              []*storage.Proxy
+	EscalationPolicies   []*storage.EscalationPolicy
 	AllTags              []*storage.Tag
 	SelectedTags         []storage.MonitorTag
 }
@@ -280,6 +281,20 @@ templ MonitorFormPage(p MonitorFormParams) {
 									</label>
 								}
 							</div>
+						</div>
+					}
+					if len(p.EscalationPolicies) > 0 {
+						<div>
+							<label class="form-label">Escalation Policy</label>
+							<select name="escalation_policy_id" class="form-select">
+								<option value="">None</option>
+								for _, ep := range p.EscalationPolicies {
+									<option value={ fmt.Sprint(ep.ID) }
+										if p.Monitor.EscalationPolicyID != nil && *p.Monitor.EscalationPolicyID == ep.ID {
+											selected
+										}>{ fmt.Sprintf("%s (%d steps)", ep.Name, len(ep.Steps)) }</option>
+								}
+							</select>
 						</div>
 					}
 					<div class="flex items-center flex-wrap gap-5">

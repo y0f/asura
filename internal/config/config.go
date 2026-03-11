@@ -84,6 +84,7 @@ var AllPermissions = []string{
 	"monitors.read", "monitors.write",
 	"incidents.read", "incidents.write",
 	"notifications.read", "notifications.write",
+	"escalation_policies.read", "escalation_policies.write",
 	"maintenance.read", "maintenance.write",
 	"metrics.read",
 }
@@ -303,7 +304,8 @@ func validateAPIKeys(keys []APIKeyConfig) error {
 		} else if key.Role == "readonly" {
 			key.Permissions = []string{
 				"monitors.read", "incidents.read",
-				"notifications.read", "maintenance.read", "metrics.read",
+				"notifications.read", "escalation_policies.read",
+				"maintenance.read", "metrics.read",
 			}
 			key.Role = ""
 		}

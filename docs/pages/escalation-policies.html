@@ -1,0 +1,73 @@
+<h1>Escalation Policies</h1>
+
+<p>Escalation policies define time-based notification chains for incidents. When an incident is created on a monitor that has an escalation policy assigned, notifications are sent to different channels at increasing delay intervals until the incident is acknowledged or resolved.</p>
+
+<h2>How it works</h2>
+
+<ol>
+  <li>A monitor goes down and an incident is created</li>
+  <li>If the monitor has an escalation policy, Asura starts the escalation chain</li>
+  <li>Each step fires after its configured delay, sending notifications to the step's channels</li>
+  <li>When the incident is acknowledged or resolved, the escalation stops</li>
+  <li>If <strong>repeat</strong> is enabled, the chain restarts from step 1 after the last step fires</li>
+</ol>
+
+<p>Escalation notifications use the <code>incident.escalated</code> event type and bypass normal channel event filters &mdash; they always fire regardless of the channel's event subscription settings.</p>
+
+<h2>Creating a policy</h2>
+
+<p>In the web UI, navigate to <strong>Escalation Policies</strong> in the sidebar. Click <strong>New Policy</strong> to create one.</p>
+
+<p>Each policy has:</p>
+<ul>
+  <li><strong>Name</strong> &mdash; a descriptive label</li>
+  <li><strong>Description</strong> &mdash; optional notes</li>
+  <li><strong>Enabled</strong> &mdash; toggle the policy on or off</li>
+  <li><strong>Repeat</strong> &mdash; restart from step 1 after the last step</li>
+  <li><strong>Steps</strong> &mdash; ordered list of notification escalations</li>
+</ul>
+
+<p>Each step specifies a <strong>delay in minutes</strong> (0 = immediate) and one or more <strong>notification channels</strong> to send to.</p>
+
+<h2>Assigning to a monitor</h2>
+
+<p>When creating or editing a monitor, select an escalation policy from the <strong>Escalation Policy</strong> dropdown. Only enabled policies with at least one step will trigger escalation.</p>
+
+<h2>API</h2>
+
+<h3>List policies</h3>
+<pre><code>GET /api/v1/escalation-policies</code></pre>
+
+<h3>Get policy</h3>
+<pre><code>GET /api/v1/escalation-policies/{id}</code></pre>
+
+<h3>Create policy</h3>
+<pre><code>POST /api/v1/escalation-policies
+
+{
+  "name": "Critical Alert Chain",
+  "description": "3-step escalation for production monitors",
+  "enabled": true,
+  "repeat": false,
+  "steps": [
+    { "delay_minutes": 0, "notification_channel_ids": [1] },
+    { "delay_minutes": 5, "notification_channel_ids": [1, 2] },
+    { "delay_minutes": 15, "notification_channel_ids": [1, 2, 3] }
+  ]
+}</code></pre>
+
+<h3>Update policy</h3>
+<pre><code>PUT /api/v1/escalation-policies/{id}</code></pre>
+<p>Same body format as create.</p>
+
+<h3>Delete policy</h3>
+<pre><code>DELETE /api/v1/escalation-policies/{id}</code></pre>
+<p>Monitors referencing a deleted policy will have their escalation policy set to null.</p>
+
+<h2>Permissions</h2>
+
+<p>Escalation policies use dedicated permissions:</p>
+<ul>
+  <li><code>escalation_policies.read</code> &mdash; view policies (included in the <code>readonly</code> role)</li>
+  <li><code>escalation_policies.write</code> &mdash; create, update, and delete policies</li>
+</ul>

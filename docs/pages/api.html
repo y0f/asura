@@ -211,9 +211,26 @@
 
 <p>Types: <code>webhook</code> <code>email</code> <code>telegram</code> <code>discord</code> <code>slack</code> <code>ntfy</code> <code>teams</code> <code>pagerduty</code> <code>opsgenie</code> <code>pushover</code> <code>googlechat</code> <code>matrix</code> <code>gotify</code></p>
 
-<p>Events: <code>incident.created</code> <code>incident.acknowledged</code> <code>incident.resolved</code> <code>incident.reminder</code> <code>content.changed</code> <code>cert.changed</code></p>
+<p>Events: <code>incident.created</code> <code>incident.acknowledged</code> <code>incident.resolved</code> <code>incident.reminder</code> <code>incident.escalated</code> <code>content.changed</code> <code>cert.changed</code></p>
 
 <p>See <a href="#notifications">Notifications</a> for per-type settings and webhook signing.</p>
+
+<h2>Escalation Policies</h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/escalation-policies</code></td><td>List</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/v1/escalation-policies</code></td><td>Create</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/escalation-policies/{id}</code></td><td>Get</td></tr>
+    <tr><td><code>PUT</code></td><td><code>/api/v1/escalation-policies/{id}</code></td><td>Update</td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/escalation-policies/{id}</code></td><td>Delete</td></tr>
+  </tbody>
+</table>
+
+<p>Permissions: <code>escalation_policies.read</code>, <code>escalation_policies.write</code>. See <a href="#escalation-policies">Escalation Policies</a> for details.</p>
 
 <h2>Maintenance Windows</h2>
 

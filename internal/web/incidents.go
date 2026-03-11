@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/notifier"
@@ -103,6 +104,8 @@ func (h *Handler) IncidentAck(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("web: insert ack event", "error", err)
 	}
 
+	escalation.CancelEscalation(ctx, h.store, inc.ID)
+
 	if h.notifier != nil {
 		h.notifier.NotifyWithPayload(&notifier.Payload{
 			EventType: "incident.acknowledged",
@@ -143,6 +146,8 @@ func (h *Handler) IncidentResolve(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.InsertIncidentEvent(ctx, newIncidentEvent(inc.ID, incident.EventResolved, "Manually resolved by "+inc.ResolvedBy)); err != nil {
 		h.logger.Error("web: insert resolve event", "error", err)
 	}
+
+	escalation.CancelEscalation(ctx, h.store, inc.ID)
 
 	if h.notifier != nil {
 		h.notifier.NotifyWithPayload(&notifier.Payload{

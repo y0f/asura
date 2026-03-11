@@ -49,6 +49,7 @@ docker compose up -d
 - **Assertion engine** — 8 condition types with AND/OR group logic: status code, body text, body regex, JSON path, headers, response time, cert expiry, DNS records
 - **Incidents** — automatic creation with configurable failure/success thresholds, acknowledge, recovery
 - **13 notification channels** — Webhook (HMAC-SHA256), Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
+- **Escalation policies** — time-based notification chains with per-step delays, channel targeting, and repeat mode
 - **Status pages** — multiple public pages with custom slugs and monitor grouping
 - **Change detection** — line-level diffs on HTTP response bodies
 - **Maintenance windows** — recurring schedules to suppress alerts during planned downtime
@@ -78,6 +79,7 @@ docker compose up -d
 | [Configuration](https://y0f.github.io/asura/#configuration) | Config reference, auth, adaptive intervals |
 | [Monitors](https://y0f.github.io/asura/#monitors) | All monitor types, assertions, heartbeats, manual |
 | [Notifications](https://y0f.github.io/asura/#notifications) | All channels, webhook signing, per-monitor routing |
+| [Escalation Policies](https://y0f.github.io/asura/#escalation-policies) | Time-based notification chains with delays and repeat |
 | [API Reference](https://y0f.github.io/asura/#api) | Full endpoint reference with request/response examples |
 | [Backup & Restore](https://y0f.github.io/asura/#backup) | SQLite backup strategy and restore procedure |
 | [Architecture](https://y0f.github.io/asura/#architecture) | Pipeline, storage, checker registry |

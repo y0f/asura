@@ -7,26 +7,27 @@ import (
 
 // Monitor represents a monitored endpoint.
 type Monitor struct {
-	ID               int64           `json:"id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description,omitempty"`
-	Type             string          `json:"type"` // http, tcp, dns, icmp, tls, websocket, command
-	Target           string          `json:"target"`
-	Interval         int             `json:"interval"` // seconds
-	Timeout          int             `json:"timeout"`  // seconds
-	Enabled          bool            `json:"enabled"`
-	Tags             []string        `json:"tags"`
-	Settings         json.RawMessage `json:"settings,omitempty"`
-	Assertions       json.RawMessage `json:"assertions,omitempty"`
-	TrackChanges     bool            `json:"track_changes"`
-	FailureThreshold int             `json:"failure_threshold"`
-	SuccessThreshold int             `json:"success_threshold"`
-	UpsideDown       bool            `json:"upside_down"`
-	ResendInterval   int             `json:"resend_interval"`
-	GroupID          *int64          `json:"group_id,omitempty"`
-	ProxyID          *int64          `json:"proxy_id,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
+	ID                 int64           `json:"id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description,omitempty"`
+	Type               string          `json:"type"` // http, tcp, dns, icmp, tls, websocket, command
+	Target             string          `json:"target"`
+	Interval           int             `json:"interval"` // seconds
+	Timeout            int             `json:"timeout"`  // seconds
+	Enabled            bool            `json:"enabled"`
+	Tags               []string        `json:"tags"`
+	Settings           json.RawMessage `json:"settings,omitempty"`
+	Assertions         json.RawMessage `json:"assertions,omitempty"`
+	TrackChanges       bool            `json:"track_changes"`
+	FailureThreshold   int             `json:"failure_threshold"`
+	SuccessThreshold   int             `json:"success_threshold"`
+	UpsideDown         bool            `json:"upside_down"`
+	ResendInterval     int             `json:"resend_interval"`
+	GroupID            *int64          `json:"group_id,omitempty"`
+	ProxyID            *int64          `json:"proxy_id,omitempty"`
+	EscalationPolicyID *int64          `json:"escalation_policy_id,omitempty"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 
 	// Transient fields (not stored in monitors table)
 	NotificationChannelIDs []int64      `json:"notification_channel_ids,omitempty"`
@@ -430,6 +431,37 @@ type Proxy struct {
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// EscalationPolicy defines a time-based notification escalation chain.
+type EscalationPolicy struct {
+	ID          int64                   `json:"id"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description"`
+	Enabled     bool                    `json:"enabled"`
+	Repeat      bool                    `json:"repeat"`
+	Steps       []*EscalationPolicyStep `json:"steps,omitempty"`
+	CreatedAt   time.Time               `json:"created_at"`
+	UpdatedAt   time.Time               `json:"updated_at"`
+}
+
+// EscalationPolicyStep defines one step in an escalation chain.
+type EscalationPolicyStep struct {
+	ID                     int64   `json:"id,omitempty"`
+	PolicyID               int64   `json:"policy_id,omitempty"`
+	StepOrder              int     `json:"step_order"`
+	DelayMinutes           int     `json:"delay_minutes"`
+	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
+}
+
+// EscalationState tracks the current escalation progress for an incident.
+type EscalationState struct {
+	ID          int64     `json:"id"`
+	IncidentID  int64     `json:"incident_id"`
+	PolicyID    int64     `json:"policy_id"`
+	CurrentStep int       `json:"current_step"`
+	NextFireAt  time.Time `json:"next_fire_at"`
+	StartedAt   time.Time `json:"started_at"`
 }
 
 // Session represents a server-side web UI session.

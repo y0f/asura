@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 22
+const schemaVersion = 23
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -14,6 +14,27 @@ CREATE TABLE IF NOT EXISTS monitor_groups (
 	created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
+
+CREATE TABLE IF NOT EXISTS escalation_policies (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	name        TEXT    NOT NULL,
+	description TEXT    NOT NULL DEFAULT '',
+	enabled     INTEGER NOT NULL DEFAULT 1,
+	repeat      INTEGER NOT NULL DEFAULT 0,
+	created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+	updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS escalation_policy_steps (
+	id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+	policy_id                INTEGER NOT NULL REFERENCES escalation_policies(id) ON DELETE CASCADE,
+	step_order               INTEGER NOT NULL,
+	delay_minutes            INTEGER NOT NULL DEFAULT 0,
+	notification_channel_ids TEXT    NOT NULL DEFAULT '[]',
+	UNIQUE(policy_id, step_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_escalation_steps_policy ON escalation_policy_steps(policy_id, step_order);
 
 CREATE TABLE IF NOT EXISTS monitors (
 	id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,9 +54,10 @@ CREATE TABLE IF NOT EXISTS monitors (
 	upside_down     INTEGER NOT NULL DEFAULT 0,
 	resend_interval INTEGER NOT NULL DEFAULT 0,
 	group_id        INTEGER DEFAULT NULL,
-	proxy_id        INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL,
-	created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-	updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+	proxy_id              INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL,
+	escalation_policy_id  INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL,
+	created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+	updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_monitors_group_id ON monitors(group_id);
@@ -99,6 +121,17 @@ CREATE TABLE IF NOT EXISTS incident_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_incident_events_incident_id ON incident_events(incident_id);
+
+CREATE TABLE IF NOT EXISTS escalation_states (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	incident_id  INTEGER NOT NULL UNIQUE REFERENCES incidents(id) ON DELETE CASCADE,
+	policy_id    INTEGER NOT NULL REFERENCES escalation_policies(id) ON DELETE CASCADE,
+	current_step INTEGER NOT NULL DEFAULT 0,
+	next_fire_at TEXT    NOT NULL,
+	started_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_escalation_states_fire ON escalation_states(next_fire_at);
 
 CREATE TABLE IF NOT EXISTS notification_channels (
 	id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -371,5 +404,36 @@ ALTER TABLE status_pages ADD COLUMN favicon_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE status_pages ADD COLUMN custom_header_html TEXT NOT NULL DEFAULT '';
 ALTER TABLE status_pages ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';
 ALTER TABLE status_pages ADD COLUMN analytics_script TEXT NOT NULL DEFAULT '';`,
+	},
+	{
+		version: 23,
+		sql: `CREATE TABLE IF NOT EXISTS escalation_policies (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	name        TEXT    NOT NULL,
+	description TEXT    NOT NULL DEFAULT '',
+	enabled     INTEGER NOT NULL DEFAULT 1,
+	repeat      INTEGER NOT NULL DEFAULT 0,
+	created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+	updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE TABLE IF NOT EXISTS escalation_policy_steps (
+	id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+	policy_id                INTEGER NOT NULL REFERENCES escalation_policies(id) ON DELETE CASCADE,
+	step_order               INTEGER NOT NULL,
+	delay_minutes            INTEGER NOT NULL DEFAULT 0,
+	notification_channel_ids TEXT    NOT NULL DEFAULT '[]',
+	UNIQUE(policy_id, step_order)
+);
+CREATE INDEX IF NOT EXISTS idx_escalation_steps_policy ON escalation_policy_steps(policy_id, step_order);
+CREATE TABLE IF NOT EXISTS escalation_states (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	incident_id  INTEGER NOT NULL UNIQUE REFERENCES incidents(id) ON DELETE CASCADE,
+	policy_id    INTEGER NOT NULL REFERENCES escalation_policies(id) ON DELETE CASCADE,
+	current_step INTEGER NOT NULL DEFAULT 0,
+	next_fire_at TEXT    NOT NULL,
+	started_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_escalation_states_fire ON escalation_states(next_fire_at);
+ALTER TABLE monitors ADD COLUMN escalation_policy_id INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL;`,
 	},
 }

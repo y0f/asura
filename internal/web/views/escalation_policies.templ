@@ -1,0 +1,186 @@
+package views
+
+import (
+	"fmt"
+	"github.com/y0f/asura/internal/storage"
+)
+
+type EscalationPolicyListParams struct {
+	LayoutParams
+	Policies []*storage.EscalationPolicy
+	Channels []*storage.NotificationChannel
+}
+
+templ EscalationPolicyListPage(p EscalationPolicyListParams) {
+	@Layout(p.LayoutParams) {
+		<div x-data={ escalationXData(p) } class="space-y-4">
+			<div class="flex items-center justify-between mb-2">
+				<h1 class="text-lg font-semibold text-white">Escalation Policies</h1>
+				if p.Perms["escalation_policies.write"] {
+					<button type="button" @click="openCreate()" class="px-3 py-1.5 text-xs bg-brand hover:bg-brand/85 text-white rounded-lg transition-colors">New Policy</button>
+				}
+			</div>
+			if len(p.Policies) == 0 {
+				<div class="border border-line rounded-lg p-8 text-center">
+					<p class="text-muted text-sm">No escalation policies configured.</p>
+					<p class="text-muted text-xs mt-1">Create a policy to define time-based notification escalation chains.</p>
+				</div>
+			} else {
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+					for _, ep := range p.Policies {
+						<div class="border border-line rounded-lg p-4 hover:border-line-light transition-colors">
+							<div class="flex items-start justify-between mb-2">
+								<div>
+									<h3 class="text-sm font-medium text-white">{ ep.Name }</h3>
+									if ep.Description != "" {
+										<p class="text-[11px] text-muted mt-0.5">{ ep.Description }</p>
+									}
+								</div>
+								<div class="flex items-center gap-1.5">
+									if ep.Enabled {
+										<span class="px-1.5 py-0.5 text-[10px] rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">on</span>
+									} else {
+										<span class="px-1.5 py-0.5 text-[10px] rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">off</span>
+									}
+									if ep.Repeat {
+										<span class="px-1.5 py-0.5 text-[10px] rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">repeat</span>
+									}
+								</div>
+							</div>
+							<div class="space-y-1 mb-3">
+								for i, step := range ep.Steps {
+									<div class="flex items-center gap-2 text-[11px]">
+										<span class="w-4 h-4 rounded-full bg-surface-200 flex items-center justify-center text-[9px] text-muted shrink-0">{ fmt.Sprint(i + 1) }</span>
+										<span class="text-muted-light">
+											if step.DelayMinutes == 0 {
+												Immediately
+											} else {
+												After { fmt.Sprintf("%dm", step.DelayMinutes) }
+											}
+										</span>
+										<span class="text-muted">→ { fmt.Sprintf("%d channel(s)", len(step.NotificationChannelIDs)) }</span>
+									</div>
+								}
+							</div>
+							if p.Perms["escalation_policies.write"] {
+								<div class="flex items-center gap-2 pt-2 border-t border-line">
+									<button type="button" @click={ fmt.Sprintf("openEdit(%s)", ToJSON(ep)) } class="px-2 py-1 text-[11px] text-brand hover:text-brand/80 transition-colors">Edit</button>
+									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID)) } @submit.prevent="if(confirm('Delete this policy?')) $el.submit()">
+										<button type="submit" class="px-2 py-1 text-[11px] text-red-400 hover:text-red-300 transition-colors">Delete</button>
+									</form>
+								</div>
+							}
+						</div>
+					}
+				</div>
+			}
+			<!-- Modal -->
+			<div x-show="showForm" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+				<div @click.outside="showForm = false" class="bg-surface-100 border border-line rounded-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+					<form method="POST" :action="formAction" class="p-5 space-y-4">
+						<h2 class="text-sm font-semibold text-white" x-text="editId ? 'Edit Policy' : 'New Policy'"></h2>
+						<div>
+							<label class="form-label">Name</label>
+							<input type="text" name="name" x-model="formData.name" class="form-input" required/>
+						</div>
+						<div>
+							<label class="form-label">Description</label>
+							<input type="text" name="description" x-model="formData.description" class="form-input"/>
+						</div>
+						<div class="flex items-center gap-5">
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input type="checkbox" name="enabled" x-model="formData.enabled" class="form-checkbox"/>
+								<span class="text-[12px] text-muted-light">Enabled</span>
+							</label>
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input type="checkbox" name="repeat" x-model="formData.repeat" class="form-checkbox"/>
+								<span class="text-[12px] text-muted-light">Repeat after last step</span>
+							</label>
+						</div>
+						<div>
+							<label class="form-label">Steps</label>
+							<div class="space-y-2">
+								<template x-for="(step, idx) in formData.steps" :key="idx">
+									<div class="border border-line rounded-lg p-3 space-y-2 bg-surface-200/30">
+										<div class="flex items-center justify-between">
+											<span class="text-[11px] text-muted" x-text="'Step ' + (idx + 1)"></span>
+											<div class="flex items-center gap-1">
+												<button type="button" @click="moveStep(idx, -1)" x-show="idx > 0" class="px-1 text-[10px] text-muted hover:text-white">↑</button>
+												<button type="button" @click="moveStep(idx, 1)" x-show="idx < formData.steps.length - 1" class="px-1 text-[10px] text-muted hover:text-white">↓</button>
+												<button type="button" @click="removeStep(idx)" class="px-1 text-[10px] text-red-400 hover:text-red-300">✕</button>
+											</div>
+										</div>
+										<div>
+											<label class="text-[10px] text-muted mb-1 block">Delay (minutes)</label>
+											<input type="number" min="0" x-model.number="step.delay_minutes" class="form-input text-xs w-24"/>
+											<input type="hidden" :name="'step_delay_minutes[]'" :value="step.delay_minutes"/>
+										</div>
+										<div>
+											<label class="text-[10px] text-muted mb-1 block">Notification channels</label>
+											<div class="flex flex-wrap gap-1.5">
+												for _, ch := range p.Channels {
+													<label class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none border-line hover:border-line-light" :class={ fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand/30 bg-brand/[0.06]'", ch.ID) }>
+														<input type="checkbox" :checked={ fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID) } @change={ fmt.Sprintf("toggleChannel(idx, %d)", ch.ID) } class="hidden"/>
+														<span class="text-muted-light">{ ch.Name }</span>
+														<span class="text-muted">({ ch.Type })</span>
+													</label>
+												}
+											</div>
+											<input type="hidden" :name="'step_channels[]'" :value="JSON.stringify(step.channel_ids)"/>
+										</div>
+									</div>
+								</template>
+							</div>
+							<button type="button" @click="addStep()" class="mt-2 px-3 py-1 text-[11px] border border-dashed border-line rounded-lg text-muted hover:text-white hover:border-line-light transition-colors">+ Add Step</button>
+						</div>
+						<div class="flex items-center justify-end gap-2 pt-2 border-t border-line">
+							<button type="button" @click="showForm = false" class="px-3 py-1.5 text-xs text-muted hover:text-white transition-colors">Cancel</button>
+							<button type="submit" class="px-3 py-1.5 text-xs bg-brand hover:bg-brand/85 text-white rounded-lg transition-colors" x-text="editId ? 'Save' : 'Create'"></button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+func escalationXData(p EscalationPolicyListParams) string {
+	return fmt.Sprintf(`{
+		showForm: false,
+		editId: null,
+		formAction: '%s/escalation-policies',
+		formData: { name: '', description: '', enabled: true, repeat: false, steps: [] },
+		openCreate() {
+			this.editId = null;
+			this.formAction = '%s/escalation-policies';
+			this.formData = { name: '', description: '', enabled: true, repeat: false, steps: [{ delay_minutes: 0, channel_ids: [] }] };
+			this.showForm = true;
+		},
+		openEdit(ep) {
+			this.editId = ep.id;
+			this.formAction = '%s/escalation-policies/' + ep.id;
+			this.formData = {
+				name: ep.name,
+				description: ep.description,
+				enabled: ep.enabled,
+				repeat: ep.repeat,
+				steps: (ep.steps || []).map(s => ({ delay_minutes: s.delay_minutes, channel_ids: [...s.notification_channel_ids] }))
+			};
+			if (this.formData.steps.length === 0) this.formData.steps.push({ delay_minutes: 0, channel_ids: [] });
+			this.showForm = true;
+		},
+		addStep() { this.formData.steps.push({ delay_minutes: 0, channel_ids: [] }) },
+		removeStep(idx) { this.formData.steps.splice(idx, 1) },
+		moveStep(idx, dir) {
+			let s = this.formData.steps;
+			let t = idx + dir;
+			if (t < 0 || t >= s.length) return;
+			[s[idx], s[t]] = [s[t], s[idx]];
+		},
+		toggleChannel(stepIdx, chId) {
+			let ids = this.formData.steps[stepIdx].channel_ids;
+			let i = ids.indexOf(chId);
+			if (i >= 0) ids.splice(i, 1); else ids.push(chId);
+		}
+	}`, p.BasePath, p.BasePath, p.BasePath)
+}

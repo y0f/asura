@@ -182,10 +182,10 @@ func scanMonitor(row scanner) (*Monitor, error) {
 	var tagsStr, settingsStr, assertionsStr string
 	var createdAt, updatedAt string
 	var lastCheck sql.NullString
-	var groupID, proxyID sql.NullInt64
+	var groupID, proxyID, escalationPolicyID sql.NullInt64
 	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.Type, &m.Target, &m.Interval, &m.Timeout, &m.Enabled,
 		&tagsStr, &settingsStr, &assertionsStr, &m.TrackChanges, &m.FailureThreshold, &m.SuccessThreshold,
-		&m.UpsideDown, &m.ResendInterval, &groupID, &proxyID, &createdAt, &updatedAt,
+		&m.UpsideDown, &m.ResendInterval, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
 		&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses)
 	if err != nil {
 		return nil, err
@@ -197,6 +197,10 @@ func scanMonitor(row scanner) (*Monitor, error) {
 	if proxyID.Valid {
 		pid := proxyID.Int64
 		m.ProxyID = &pid
+	}
+	if escalationPolicyID.Valid {
+		epid := escalationPolicyID.Int64
+		m.EscalationPolicyID = &epid
 	}
 	m.CreatedAt = parseTime(createdAt)
 	m.UpdatedAt = parseTime(updatedAt)

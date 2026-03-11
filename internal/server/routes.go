@@ -83,6 +83,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/notifications/{id}/delete"), webPerm("notifications.write", s.web.NotificationDelete))
 		mux.Handle("POST "+s.p("/notifications/{id}/test"), webPerm("notifications.write", s.web.NotificationTest))
 
+		mux.Handle("GET "+s.p("/escalation-policies"), webAuth(http.HandlerFunc(s.web.EscalationPolicies)))
+		mux.Handle("POST "+s.p("/escalation-policies"), webPerm("escalation_policies.write", s.web.EscalationPolicyCreate))
+		mux.Handle("POST "+s.p("/escalation-policies/{id}"), webPerm("escalation_policies.write", s.web.EscalationPolicyUpdate))
+		mux.Handle("POST "+s.p("/escalation-policies/{id}/delete"), webPerm("escalation_policies.write", s.web.EscalationPolicyDelete))
+
 		mux.Handle("GET "+s.p("/maintenance"), webAuth(http.HandlerFunc(s.web.Maintenance)))
 		mux.Handle("POST "+s.p("/maintenance"), webPerm("maintenance.write", s.web.MaintenanceCreate))
 		mux.Handle("POST "+s.p("/maintenance/{id}"), webPerm("maintenance.write", s.web.MaintenanceUpdate))
@@ -164,6 +169,14 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST "+s.p("/api/v1/maintenance"), maintWrite(http.HandlerFunc(s.api.CreateMaintenance)))
 	mux.Handle("PUT "+s.p("/api/v1/maintenance/{id}"), maintWrite(http.HandlerFunc(s.api.UpdateMaintenance)))
 	mux.Handle("DELETE "+s.p("/api/v1/maintenance/{id}"), maintWrite(http.HandlerFunc(s.api.DeleteMaintenance)))
+
+	epRead := s.api.Auth("escalation_policies.read")
+	epWrite := s.api.Auth("escalation_policies.write")
+	mux.Handle("GET "+s.p("/api/v1/escalation-policies"), epRead(http.HandlerFunc(s.api.ListEscalationPolicies)))
+	mux.Handle("GET "+s.p("/api/v1/escalation-policies/{id}"), epRead(http.HandlerFunc(s.api.GetEscalationPolicy)))
+	mux.Handle("POST "+s.p("/api/v1/escalation-policies"), epWrite(http.HandlerFunc(s.api.CreateEscalationPolicy)))
+	mux.Handle("PUT "+s.p("/api/v1/escalation-policies/{id}"), epWrite(http.HandlerFunc(s.api.UpdateEscalationPolicy)))
+	mux.Handle("DELETE "+s.p("/api/v1/escalation-policies/{id}"), epWrite(http.HandlerFunc(s.api.DeleteEscalationPolicy)))
 
 	mux.Handle("GET "+s.p("/api/v1/proxies"), monRead(http.HandlerFunc(s.api.ListProxies)))
 	mux.Handle("GET "+s.p("/api/v1/proxies/{id}"), monRead(http.HandlerFunc(s.api.GetProxy)))
