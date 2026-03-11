@@ -119,21 +119,21 @@ templ SLAReportPage(p SLAReportParams) {
 						<tbody>
 							for _, entry := range p.Entries {
 								<tr class="border-b border-line last:border-0 hover:bg-white/[0.02] transition-colors">
-									<td class="td text-[13px]">
-										<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="text-white hover:text-brand transition-colors">{ entry.MonitorName }</a>
+									<td class="px-4 py-3 text-[13px] text-white font-medium">
+										<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="hover:text-brand transition-colors">{ entry.MonitorName }</a>
 									</td>
-									<td class="td text-muted-light font-mono text-[12px]">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
-									<td class="td">
+									<td class="px-4 py-3 text-muted-light font-mono text-[12px]">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
+									<td class="px-4 py-3">
 										<span class={ "font-mono text-[12px] font-medium", UptimeColor(entry.UptimePct) }>{ UptimeFmt(entry.UptimePct) }</span>
 									</td>
-									<td class="td">
+									<td class="px-4 py-3">
 										<span class={ "inline-flex px-2 py-0.5 text-[10px] font-medium rounded border", slaStatusBadge(entry) }>{ slaStatusText(entry) }</span>
 									</td>
-									<td class="td">
+									<td class="px-4 py-3">
 										<div class={ "text-[12px] font-mono", slaBudgetColor(entry) }>{ sla.FormatDuration(entry.RemainSecs) }</div>
 										<div class="text-[10px] text-muted">of { sla.FormatDuration(entry.BudgetSecs) }</div>
 									</td>
-									<td class="td text-[12px] text-muted-light tabular-nums">
+									<td class="px-4 py-3 text-[12px] text-muted-light tabular-nums">
 										{ fmt.Sprint(entry.TotalChecks) }
 										if entry.DownChecks > 0 {
 											<span class="text-red-400/70 ml-1">({ fmt.Sprint(entry.DownChecks) } down)</span>
