@@ -80,7 +80,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Policies) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line rounded-lg p-8 text-center\"><p class=\"text-muted text-[13px]\">No escalation policies configured.</p><p class=\"text-muted/60 text-[11px] mt-1\">Create a policy to define time-based notification escalation chains.</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px]\">No escalation policies configured</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -97,7 +97,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(ep.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 38, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 37, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -115,7 +115,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 						var templ_7745c5c3_Var5 string
 						templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(ep.Description)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 40, Col: 67}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 39, Col: 67}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 						if templ_7745c5c3_Err != nil {
@@ -159,7 +159,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 						var templ_7745c5c3_Var6 string
 						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(i + 1))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 57, Col: 143}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 56, Col: 143}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {
@@ -182,7 +182,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 							var templ_7745c5c3_Var7 string
 							templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%dm", step.DelayMinutes))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 62, Col: 57}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 61, Col: 57}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 							if templ_7745c5c3_Err != nil {
@@ -196,7 +196,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 						var templ_7745c5c3_Var8 string
 						templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d channel(s)", len(step.NotificationChannelIDs)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 65, Col: 103}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 64, Col: 103}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 						if templ_7745c5c3_Err != nil {
@@ -219,7 +219,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 						var templ_7745c5c3_Var9 string
 						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("openEdit(%s)", ToJSON(ep)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 71, Col: 79}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 70, Col: 79}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
@@ -232,7 +232,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 						var templ_7745c5c3_Var10 templ.SafeURL
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 72, Col: 119}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 71, Col: 119}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -253,7 +253,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div x-show=\"showForm\" x-cloak x-transition.opacity class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\" x-text=\"editId ? 'Edit Policy' : 'New Policy'\"></h3><form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"formData.name\" class=\"form-input\" required></div><div><label class=\"form-label\">Description</label> <input type=\"text\" name=\"description\" x-model=\"formData.description\" class=\"form-input\"></div><div class=\"flex items-center gap-5\"><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"enabled\" x-model=\"formData.enabled\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Enabled</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"repeat\" x-model=\"formData.repeat\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Repeat after last step</span></label></div><div><label class=\"form-label\">Steps</label><div class=\"space-y-2\"><template x-for=\"(step, idx) in formData.steps\" :key=\"idx\"><div class=\"border border-line rounded-lg p-3 space-y-2 bg-surface-200/30\"><div class=\"flex items-center justify-between\"><span class=\"text-[11px] text-muted\" x-text=\"'Step ' + (idx + 1)\"></span><div class=\"flex items-center gap-1\"><button type=\"button\" @click=\"moveStep(idx, -1)\" x-show=\"idx > 0\" class=\"px-1 text-[10px] text-muted hover:text-white\">↑</button> <button type=\"button\" @click=\"moveStep(idx, 1)\" x-show=\"idx < formData.steps.length - 1\" class=\"px-1 text-[10px] text-muted hover:text-white\">↓</button> <button type=\"button\" @click=\"removeStep(idx)\" class=\"px-1 text-[10px] text-red-400 hover:text-red-300\">✕</button></div></div><div><label class=\"text-[10px] text-muted mb-1 block\">Delay (minutes)</label> <input type=\"number\" min=\"0\" x-model.number=\"step.delay_minutes\" class=\"form-input text-xs w-24\"> <input type=\"hidden\" :name=\"'step_delay_minutes[]'\" :value=\"step.delay_minutes\"></div><div><label class=\"text-[10px] text-muted mb-1 block\">Notification channels</label><div class=\"flex flex-wrap gap-1.5\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div x-show=\"showForm\" x-cloak x-transition.opacity class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-md max-h-[90vh] overflow-y-auto\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\" x-text=\"editId ? 'Edit Policy' : 'New Policy'\"></h3><form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"formData.name\" class=\"form-input\" required></div><div><label class=\"form-label\">Description</label> <input type=\"text\" name=\"description\" x-model=\"formData.description\" class=\"form-input\"></div><div class=\"flex items-center gap-5\"><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"enabled\" x-model=\"formData.enabled\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Enabled</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"repeat\" x-model=\"formData.repeat\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Repeat after last step</span></label></div><div><label class=\"form-label\">Steps</label><div class=\"space-y-2\"><template x-for=\"(step, idx) in formData.steps\" :key=\"idx\"><div class=\"border border-line rounded-lg p-3 space-y-2 bg-surface-200/30\"><div class=\"flex items-center justify-between\"><span class=\"text-[11px] text-muted\" x-text=\"'Step ' + (idx + 1)\"></span><div class=\"flex items-center gap-1\"><button type=\"button\" @click=\"moveStep(idx, -1)\" x-show=\"idx > 0\" class=\"px-1 text-[10px] text-muted hover:text-white\">↑</button> <button type=\"button\" @click=\"moveStep(idx, 1)\" x-show=\"idx < formData.steps.length - 1\" class=\"px-1 text-[10px] text-muted hover:text-white\">↓</button> <button type=\"button\" @click=\"removeStep(idx)\" class=\"px-1 text-[10px] text-red-400 hover:text-red-300\">✕</button></div></div><div><label class=\"text-[10px] text-muted mb-1 block\">Delay (minutes)</label> <input type=\"number\" min=\"0\" x-model.number=\"step.delay_minutes\" class=\"form-input text-xs w-24\"> <input type=\"hidden\" :name=\"'step_delay_minutes[]'\" :value=\"step.delay_minutes\"></div><div><label class=\"text-[10px] text-muted mb-1 block\">Notification channels</label><div class=\"flex flex-wrap gap-1.5\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -265,7 +265,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand/30 bg-brand/[0.06]'", ch.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 125, Col: 278}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 124, Col: 278}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -278,7 +278,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 126, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 125, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -291,7 +291,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("toggleChannel(idx, %d)", ch.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 126, Col: 156}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 125, Col: 156}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -304,7 +304,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 127, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 126, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
@@ -317,7 +317,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 128, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 127, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
