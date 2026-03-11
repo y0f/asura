@@ -431,6 +431,9 @@ func applyMonitorDefaults(m *storage.Monitor, cfg config.MonitorConfig) {
 	if m.Type == "heartbeat" && m.Target == "" {
 		m.Target = "heartbeat"
 	}
+	if m.Type == "manual" && m.Target == "" {
+		m.Target = "manual"
+	}
 	m.Enabled = true
 }
 

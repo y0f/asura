@@ -174,9 +174,10 @@ templ MonitorFormPage(p MonitorFormParams) {
 								<option value="grpc">gRPC</option>
 								<option value="mqtt">MQTT</option>
 								<option value="heartbeat">Heartbeat</option>
+								<option value="manual">Manual</option>
 							</select>
 						</div>
-						<div x-show="monitorType !== 'heartbeat'">
+						<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'">
 							<label class="form-label" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
 							<input type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'nginx, postgres, or container ID', domain:'example.com', grpc:'host:port', mqtt:'broker.example.com:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
 						</div>
@@ -306,7 +307,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 					</div>
 				</div>
 				<!-- Settings -->
-				<div class="border border-line rounded-lg p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp'" x-cloak>
+				<div class="border border-line rounded-lg p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
 					<div class="flex items-center justify-between mb-4">
 						<span class="text-[11px] text-muted uppercase tracking-widest">Settings</span>
 						<button type="button" @click="advancedSettings = !advancedSettings" class="text-[11px] text-brand hover:text-brand/80 transition-colors">

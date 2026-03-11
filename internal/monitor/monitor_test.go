@@ -650,6 +650,35 @@ func TestSchedulerDispatch(t *testing.T) {
 		}
 	})
 
+	t.Run("manual monitors skipped", func(t *testing.T) {
+		for len(jobs) > 0 {
+			<-jobs
+		}
+		manualMon := &storage.Monitor{
+			Name:             "Manual",
+			Type:             "manual",
+			Target:           "manual",
+			Interval:         60,
+			Timeout:          10,
+			Enabled:          true,
+			FailureThreshold: 3,
+			SuccessThreshold: 1,
+		}
+		if err := store.CreateMonitor(ctx, manualMon); err != nil {
+			t.Fatal(err)
+		}
+		s.loadMonitors(ctx)
+		now := time.Now().Add(3 * time.Minute)
+		s.dispatch(now)
+
+		for len(jobs) > 0 {
+			job := <-jobs
+			if job.Monitor.Type == "manual" {
+				t.Fatal("manual monitor should not be dispatched")
+			}
+		}
+	})
+
 	t.Run("heartbeat monitors skipped", func(t *testing.T) {
 		// Drain and re-dispatch
 		for len(jobs) > 0 {
@@ -888,4 +917,143 @@ func TestSchedulerReload(t *testing.T) {
 	if heapLen != 0 {
 		t.Fatalf("expected empty heap after disabling only monitor, got %d entries", heapLen)
 	}
+}
+
+func TestProcessManualStatus(t *testing.T) {
+	logger := discardLogger()
+	store := testStore(t)
+	ctx := context.Background()
+
+	mon := &storage.Monitor{
+		Name:             "Manual Test",
+		Type:             "manual",
+		Target:           "manual",
+		Interval:         60,
+		Timeout:          10,
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+	}
+	if err := store.CreateMonitor(ctx, mon); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := checker.NewRegistry()
+	incMgr := incident.NewManager(store, logger)
+	p := NewPipeline(store, registry, incMgr, 1, false, logger)
+
+	drainNotifications := func() {
+		for {
+			select {
+			case <-p.notifyChan:
+			default:
+				return
+			}
+		}
+	}
+
+	t.Run("set down creates incident", func(t *testing.T) {
+		p.ProcessManualStatus(ctx, mon, "down", "manual outage")
+
+		status, err := store.GetMonitorStatus(ctx, mon.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Status != "down" {
+			t.Fatalf("expected down, got %s", status.Status)
+		}
+		if status.ConsecFails != mon.FailureThreshold {
+			t.Fatalf("expected consec_fails=%d, got %d", mon.FailureThreshold, status.ConsecFails)
+		}
+
+		inc, err := store.GetOpenIncident(ctx, mon.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if inc == nil {
+			t.Fatal("expected incident to be created")
+		}
+
+		select {
+		case ev := <-p.notifyChan:
+			if ev.EventType != "incident.created" {
+				t.Fatalf("expected incident.created, got %s", ev.EventType)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected notification event")
+		}
+	})
+
+	t.Run("set up resolves incident", func(t *testing.T) {
+		drainNotifications()
+		p.ProcessManualStatus(ctx, mon, "up", "back online")
+
+		status, err := store.GetMonitorStatus(ctx, mon.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Status != "up" {
+			t.Fatalf("expected up, got %s", status.Status)
+		}
+		if status.ConsecSuccesses != mon.SuccessThreshold {
+			t.Fatalf("expected consec_successes=%d, got %d", mon.SuccessThreshold, status.ConsecSuccesses)
+		}
+
+		inc, _ := store.GetOpenIncident(ctx, mon.ID)
+		if inc != nil {
+			t.Fatal("expected no open incident after recovery")
+		}
+
+		select {
+		case ev := <-p.notifyChan:
+			if ev.EventType != "incident.resolved" {
+				t.Fatalf("expected incident.resolved, got %s", ev.EventType)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected resolution notification")
+		}
+	})
+
+	t.Run("set degraded creates incident", func(t *testing.T) {
+		drainNotifications()
+		p.ProcessManualStatus(ctx, mon, "degraded", "partial outage")
+
+		status, err := store.GetMonitorStatus(ctx, mon.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Status != "degraded" {
+			t.Fatalf("expected degraded, got %s", status.Status)
+		}
+
+		select {
+		case ev := <-p.notifyChan:
+			if ev.EventType != "incident.created" {
+				t.Fatalf("expected incident.created, got %s", ev.EventType)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected notification event")
+		}
+	})
+
+	t.Run("inserts check result", func(t *testing.T) {
+		drainNotifications()
+
+		beforeChecks, err := store.ListCheckResults(ctx, mon.ID, storage.Pagination{Page: 1, PerPage: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		countBefore := beforeChecks.Total
+
+		p.ProcessManualStatus(ctx, mon, "up", "test check result")
+		drainNotifications()
+
+		afterChecks, err := store.ListCheckResults(ctx, mon.ID, storage.Pagination{Page: 1, PerPage: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if afterChecks.Total <= countBefore {
+			t.Fatalf("expected check result count to increase, before=%d after=%d", countBefore, afterChecks.Total)
+		}
+	})
 }

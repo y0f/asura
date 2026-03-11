@@ -65,6 +65,7 @@ func TestValidateMonitor(t *testing.T) {
 		{"empty target", func(m *storage.Monitor) { m.Target = "" }, "target is required"},
 		{"target too long", func(m *storage.Monitor) { m.Target = strings.Repeat("x", 2049) }, "at most 2048"},
 		{"heartbeat no target", func(m *storage.Monitor) { m.Type = "heartbeat"; m.Target = "" }, ""},
+		{"manual no target", func(m *storage.Monitor) { m.Type = "manual"; m.Target = "" }, ""},
 		{"interval too low", func(m *storage.Monitor) { m.Interval = 4 }, "at least 5"},
 		{"interval too high", func(m *storage.Monitor) { m.Interval = 86401 }, "at most 86400"},
 		{"timeout too low", func(m *storage.Monitor) { m.Timeout = 0 }, "at least 1"},

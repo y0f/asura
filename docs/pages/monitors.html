@@ -1,6 +1,6 @@
 <h1>Monitors</h1>
 
-<p>Asura supports 11 check protocols plus passive heartbeat monitoring. Each monitor runs on its own interval with protocol-specific settings and optional assertions.</p>
+<p>Asura supports 11 check protocols plus passive heartbeat monitoring and user-controlled manual monitors. Each monitor runs on its own interval with protocol-specific settings and optional assertions.</p>
 
 <h2>Monitor Fields</h2>
 
@@ -11,7 +11,7 @@
   <tbody>
     <tr><td><code>name</code></td><td>string</td><td>yes</td><td>Display name</td></tr>
     <tr><td><code>description</code></td><td>string</td><td></td><td>Optional description, rendered as markdown on the detail page (max 5000 chars)</td></tr>
-    <tr><td><code>type</code></td><td>string</td><td>yes</td><td><code>http</code> <code>tcp</code> <code>dns</code> <code>icmp</code> <code>tls</code> <code>websocket</code> <code>command</code> <code>docker</code> <code>heartbeat</code> <code>domain</code> <code>grpc</code> <code>mqtt</code></td></tr>
+    <tr><td><code>type</code></td><td>string</td><td>yes</td><td><code>http</code> <code>tcp</code> <code>dns</code> <code>icmp</code> <code>tls</code> <code>websocket</code> <code>command</code> <code>docker</code> <code>heartbeat</code> <code>domain</code> <code>grpc</code> <code>mqtt</code> <code>manual</code></td></tr>
     <tr><td><code>target</code></td><td>string</td><td>yes</td><td>URL, host:port, domain, or command</td></tr>
     <tr><td><code>interval</code></td><td>int</td><td></td><td>Seconds between checks (default: 60)</td></tr>
     <tr><td><code>timeout</code></td><td>int</td><td></td><td>Timeout in seconds (default: 10)</td></tr>
@@ -225,6 +225,32 @@ curl -X POST https://example.com/asura/api/v1/monitors \
 <pre><code>curl -X POST https://example.com/asura/api/v1/heartbeat/a1b2c3d4e5f6...</code></pre>
 
 <p>If no ping arrives within <code>interval + grace</code> seconds, the monitor goes down and an incident is created.</p>
+
+<h2>Manual Monitoring</h2>
+
+<p>Manual monitors let you control status directly for things that can't be auto-checked — manual processes, third-party dependencies, or business-hour services. No automated checks run; you set the status via the web UI or API.</p>
+
+<pre><code># Create manual monitor
+curl -X POST https://example.com/asura/api/v1/monitors \
+  -H "X-API-Key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Third-Party Payment Gateway","type":"manual"}'</code></pre>
+
+<p>Set status via API:</p>
+
+<pre><code># Set to down with a message
+curl -X POST https://example.com/asura/api/v1/monitors/1/status \
+  -H "X-API-Key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"down","message":"Vendor reported outage"}'
+
+# Set back to up
+curl -X POST https://example.com/asura/api/v1/monitors/1/status \
+  -H "X-API-Key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"up","message":"Vendor confirmed recovery"}'</code></pre>
+
+<p>Valid statuses: <code>up</code>, <code>down</code>, <code>degraded</code>. Status changes create check results and trigger incidents normally — the same notification channels, thresholds, and incident lifecycle apply. The web UI shows Set Up / Set Degraded / Set Down buttons on the monitor detail page.</p>
 
 <h2>Assertions</h2>
 

@@ -712,6 +712,43 @@ func (h *Handler) MonitorResume(w http.ResponseWriter, r *http.Request) {
 	h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 }
 
+func (h *Handler) MonitorSetManualStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := httputil.ParseID(r)
+	if err != nil {
+		h.redirect(w, r, "/monitors")
+		return
+	}
+
+	status := r.FormValue("status")
+	if status != "up" && status != "down" && status != "degraded" {
+		h.setFlash(w, "Invalid status")
+		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
+		return
+	}
+
+	mon, err := h.store.GetMonitor(r.Context(), id)
+	if err != nil {
+		h.setFlash(w, "Monitor not found")
+		h.redirect(w, r, "/monitors")
+		return
+	}
+
+	if mon.Type != "manual" {
+		h.setFlash(w, "Status can only be set on manual monitors")
+		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
+		return
+	}
+
+	message := r.FormValue("message")
+	if h.pipeline != nil {
+		h.pipeline.ProcessManualStatus(r.Context(), mon, status, message)
+	}
+
+	h.audit(r, "set_status", "monitor", id, status)
+	h.setFlash(w, "Status set to "+status)
+	h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
+}
+
 func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
@@ -855,6 +892,9 @@ func (h *Handler) applyMonitorDefaults(m *storage.Monitor) {
 	}
 	if m.Type == "heartbeat" && m.Target == "" {
 		m.Target = "heartbeat"
+	}
+	if m.Type == "manual" && m.Target == "" {
+		m.Target = "manual"
 	}
 }
 

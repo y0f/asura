@@ -167,7 +167,7 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		iv := s.interval(entry.monitorID, mon.Interval)
 
-		if mon.Type == "heartbeat" {
+		if mon.Type == "heartbeat" || mon.Type == "manual" {
 			entry.nextRun = nowNano + iv
 			heap.Push(&s.heap, entry)
 			continue

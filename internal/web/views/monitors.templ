@@ -542,6 +542,41 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						</form>
 					</div>
 				}
+				if p.Monitor.Type == "manual" && p.Perms["monitors.write"] {
+					<div class="flex items-center gap-1.5 shrink-0" x-data="{ showMsg: false, msg: '' }">
+						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", p.BasePath, p.Monitor.ID)) }>
+							<input type="hidden" name="status" value="up"/>
+							<input type="hidden" name="message" :value="msg"/>
+							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/5 transition-colors">
+								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+								Set Up
+							</button>
+						</form>
+						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", p.BasePath, p.Monitor.ID)) }>
+							<input type="hidden" name="status" value="degraded"/>
+							<input type="hidden" name="message" :value="msg"/>
+							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-yellow-400 border border-yellow-500/20 rounded hover:bg-yellow-500/5 transition-colors">
+								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+								Set Degraded
+							</button>
+						</form>
+						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", p.BasePath, p.Monitor.ID)) }>
+							<input type="hidden" name="status" value="down"/>
+							<input type="hidden" name="message" :value="msg"/>
+							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors">
+								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+								Set Down
+							</button>
+						</form>
+						<button type="button" @click="showMsg = !showMsg" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-muted border border-line rounded hover:text-white transition-colors">
+							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+							<span x-text="showMsg ? 'Hide' : 'Message'"></span>
+						</button>
+						<div x-show="showMsg" x-cloak class="w-48">
+							<input type="text" x-model="msg" placeholder="Optional message" class="form-input text-[11px] py-1"/>
+						</div>
+					</div>
+				}
 			</div>
 			if p.OpenIncident != nil {
 				<div class="mb-5 px-4 py-2.5 border border-red-500/15 rounded text-[13px] text-red-400 flex items-center gap-2">

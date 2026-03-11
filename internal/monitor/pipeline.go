@@ -360,6 +360,64 @@ func (p *Pipeline) ProcessHeartbeatRecovery(ctx context.Context, mon *storage.Mo
 	}
 }
 
+// ProcessManualStatus handles a user-set status change for a manual monitor.
+func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor, newStatus, message string) {
+	now := time.Now()
+
+	cr := &storage.CheckResult{
+		MonitorID: mon.ID,
+		Status:    newStatus,
+		Message:   message,
+	}
+	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
+		p.logger.Error("manual status: insert check result", "error", err)
+		return
+	}
+
+	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
+	if err != nil {
+		status = &storage.MonitorStatus{MonitorID: mon.ID}
+	}
+
+	prevStatus := status.Status
+	status.Status = newStatus
+	status.LastCheckAt = &now
+
+	if newStatus == "up" {
+		status.ConsecSuccesses = mon.SuccessThreshold
+		status.ConsecFails = 0
+	} else {
+		status.ConsecFails = mon.FailureThreshold
+		status.ConsecSuccesses = 0
+	}
+
+	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
+		p.logger.Error("manual status: upsert status", "error", err)
+	}
+
+	inMaintenance, _ := p.store.IsMonitorInMaintenance(ctx, mon.ID, now)
+
+	if newStatus == "up" && prevStatus != "up" {
+		inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
+		if err != nil {
+			p.logger.Error("manual status: process recovery", "error", err)
+			return
+		}
+		if resolved && !inMaintenance {
+			p.emitNotification("incident.resolved", inc, mon, nil)
+		}
+	} else if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending") {
+		inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, message)
+		if err != nil {
+			p.logger.Error("manual status: process failure", "error", err)
+			return
+		}
+		if created && !inMaintenance {
+			p.emitNotification("incident.created", inc, mon, nil)
+		}
+	}
+}
+
 func HashBody(body string) string {
 	h := sha256.Sum256([]byte(body))
 	return hex.EncodeToString(h[:])

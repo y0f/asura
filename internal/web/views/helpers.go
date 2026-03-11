@@ -227,6 +227,8 @@ func TypeLabel(t string) string {
 		return "gRPC"
 	case "mqtt":
 		return "MQTT"
+	case "manual":
+		return "Manual"
 	default:
 		return t
 	}

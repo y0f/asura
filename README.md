@@ -45,7 +45,7 @@ docker compose up -d
 
 ## What it does
 
-- **12 monitor types** — HTTP, TCP, DNS, ICMP, TLS, WebSocket, Command, Docker, Domain (WHOIS), gRPC, MQTT, and passive heartbeat
+- **13 monitor types** — HTTP, TCP, DNS, ICMP, TLS, WebSocket, Command, Docker, Domain (WHOIS), gRPC, MQTT, passive heartbeat, and manual
 - **Assertion engine** — 8 condition types with AND/OR group logic: status code, body text, body regex, JSON path, headers, response time, cert expiry, DNS records
 - **Incidents** — automatic creation with configurable failure/success thresholds, acknowledge, recovery
 - **13 notification channels** — Webhook (HMAC-SHA256), Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
@@ -76,7 +76,7 @@ docker compose up -d
 | [Getting Started](https://y0f.github.io/asura/#getting-started) | Install via VPS, Docker, or source |
 | [Deployment](https://y0f.github.io/asura/#deployment) | nginx / Caddy reverse proxy, TLS |
 | [Configuration](https://y0f.github.io/asura/#configuration) | Config reference, auth, adaptive intervals |
-| [Monitors](https://y0f.github.io/asura/#monitors) | All monitor types, assertions, heartbeats |
+| [Monitors](https://y0f.github.io/asura/#monitors) | All monitor types, assertions, heartbeats, manual |
 | [Notifications](https://y0f.github.io/asura/#notifications) | All channels, webhook signing, per-monitor routing |
 | [API Reference](https://y0f.github.io/asura/#api) | Full endpoint reference with request/response examples |
 | [Backup & Restore](https://y0f.github.io/asura/#backup) | SQLite backup strategy and restore procedure |
