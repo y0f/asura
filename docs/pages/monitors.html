@@ -42,10 +42,19 @@
     <tr><td><code>headers</code></td><td>map[string]string</td><td>Custom request headers</td></tr>
     <tr><td><code>body</code></td><td>string</td><td>Request body (for POST/PUT/PATCH)</td></tr>
     <tr><td><code>body_encoding</code></td><td>string</td><td>Content-Type hint: <code>json</code>, <code>xml</code>, <code>form</code>, or empty for raw</td></tr>
-    <tr><td><code>auth_method</code></td><td>string</td><td><code>none</code>, <code>basic</code>, or <code>bearer</code> (default: inferred)</td></tr>
+    <tr><td><code>auth_method</code></td><td>string</td><td><code>none</code>, <code>basic</code>, <code>bearer</code>, or <code>oauth2</code> (default: inferred)</td></tr>
     <tr><td><code>basic_auth_user</code></td><td>string</td><td>Basic auth username</td></tr>
     <tr><td><code>basic_auth_pass</code></td><td>string</td><td>Basic auth password</td></tr>
     <tr><td><code>bearer_token</code></td><td>string</td><td>Bearer token</td></tr>
+    <tr><td><code>oauth2_token_url</code></td><td>string</td><td>OAuth2 token endpoint URL</td></tr>
+    <tr><td><code>oauth2_client_id</code></td><td>string</td><td>OAuth2 client ID</td></tr>
+    <tr><td><code>oauth2_client_secret</code></td><td>string</td><td>OAuth2 client secret</td></tr>
+    <tr><td><code>oauth2_scopes</code></td><td>string</td><td>OAuth2 scopes (space-separated)</td></tr>
+    <tr><td><code>oauth2_audience</code></td><td>string</td><td>OAuth2 audience (optional)</td></tr>
+    <tr><td><code>mtls_enabled</code></td><td>bool</td><td>Enable mutual TLS client authentication</td></tr>
+    <tr><td><code>mtls_client_cert</code></td><td>string</td><td>Client certificate (PEM)</td></tr>
+    <tr><td><code>mtls_client_key</code></td><td>string</td><td>Client private key (PEM)</td></tr>
+    <tr><td><code>mtls_ca_cert</code></td><td>string</td><td>Custom CA certificate (PEM, optional)</td></tr>
     <tr><td><code>expected_status</code></td><td>int</td><td>Expected HTTP status code (0 = any 2xx/3xx)</td></tr>
     <tr><td><code>follow_redirects</code></td><td>bool</td><td>Follow redirects (default: true)</td></tr>
     <tr><td><code>max_redirects</code></td><td>int</td><td>Maximum redirect hops (0 = don't follow, default: 10)</td></tr>
@@ -66,6 +75,30 @@
   "skip_tls_verify": false,
   "cache_buster": false
 }</code></pre>
+
+<h4>OAuth2 Client Credentials</h4>
+
+<pre><code>{
+  "auth_method": "oauth2",
+  "oauth2_token_url": "https://auth.example.com/oauth/token",
+  "oauth2_client_id": "my-client-id",
+  "oauth2_client_secret": "my-secret",
+  "oauth2_scopes": "read write",
+  "oauth2_audience": "https://api.example.com"
+}</code></pre>
+
+<p>Asura fetches a token from the token URL using the client credentials grant, caches it in memory, and automatically refreshes before expiry. If the token endpoint is unreachable, the monitor goes down with a distinct error message.</p>
+
+<h4>Mutual TLS (mTLS)</h4>
+
+<pre><code>{
+  "mtls_enabled": true,
+  "mtls_client_cert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+  "mtls_client_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+  "mtls_ca_cert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+}</code></pre>
+
+<p>mTLS is independent of the auth method — it can be combined with any authentication type. The CA certificate is optional and used for custom trust stores (e.g., self-signed server certificates). Certificates are stored inline as PEM text.</p>
 
 <h3>TCP</h3>
 

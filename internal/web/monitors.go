@@ -94,6 +94,9 @@ func inferHTTPAuthMethod(h storage.HTTPSettings) string {
 	if h.BearerToken != "" {
 		return "bearer"
 	}
+	if h.OAuth2TokenURL != "" {
+		return "oauth2"
+	}
 	return "none"
 }
 
@@ -241,6 +244,18 @@ func assembleHTTPSettings(r *http.Request) storage.HTTPSettings {
 		s.BasicAuthPass = r.FormValue("settings_basic_auth_pass")
 	case "bearer":
 		s.BearerToken = r.FormValue("settings_bearer_token")
+	case "oauth2":
+		s.OAuth2TokenURL = r.FormValue("settings_oauth2_token_url")
+		s.OAuth2ClientID = r.FormValue("settings_oauth2_client_id")
+		s.OAuth2ClientSecret = r.FormValue("settings_oauth2_client_secret")
+		s.OAuth2Scopes = r.FormValue("settings_oauth2_scopes")
+		s.OAuth2Audience = r.FormValue("settings_oauth2_audience")
+	}
+	s.MTLSEnabled = r.FormValue("settings_mtls_enabled") == "on"
+	if s.MTLSEnabled {
+		s.MTLSClientCert = r.FormValue("settings_mtls_client_cert")
+		s.MTLSClientKey = r.FormValue("settings_mtls_client_key")
+		s.MTLSCACert = r.FormValue("settings_mtls_ca_cert")
 	}
 	return s
 }
@@ -392,17 +407,17 @@ func (h *Handler) Monitors(w http.ResponseWriter, r *http.Request) {
 
 	lp := h.newLayoutParams(r, "Monitors", "monitors")
 	h.renderComponent(w, r, views.MonitorListPage(views.MonitorListParams{
-		LayoutParams:  lp,
-		Result:        result,
-		Search:        q,
-		Type:          typeFilter,
-		Groups:        groups,
-		TagMap:        tagMap,
-		AllTags:       allTags,
-		TagFilter:     tagFilter,
-		GroupFilter:   groupFilter,
-		StatusFilter:  statusFilter,
-		SortParam:     sortParam,
+		LayoutParams: lp,
+		Result:       result,
+		Search:       q,
+		Type:         typeFilter,
+		Groups:       groups,
+		TagMap:       tagMap,
+		AllTags:      allTags,
+		TagFilter:    tagFilter,
+		GroupFilter:  groupFilter,
+		StatusFilter: statusFilter,
+		SortParam:    sortParam,
 	}))
 }
 

@@ -42,19 +42,28 @@ type Monitor struct {
 
 // HTTPSettings holds configuration specific to HTTP checks.
 type HTTPSettings struct {
-	Method          string            `json:"method,omitempty"`
-	Headers         map[string]string `json:"headers,omitempty"`
-	Body            string            `json:"body,omitempty"`
-	BodyEncoding    string            `json:"body_encoding,omitempty"` // json, xml, form, raw
-	FollowRedirects *bool             `json:"follow_redirects,omitempty"`
-	MaxRedirects    int               `json:"max_redirects,omitempty"`
-	SkipTLSVerify   bool              `json:"skip_tls_verify,omitempty"`
-	CacheBuster     bool              `json:"cache_buster,omitempty"`
-	AuthMethod      string            `json:"auth_method,omitempty"` // none, basic, bearer
-	BasicAuthUser   string            `json:"basic_auth_user,omitempty"`
-	BasicAuthPass   string            `json:"basic_auth_pass,omitempty"`
-	BearerToken     string            `json:"bearer_token,omitempty"`
-	ExpectedStatus  int               `json:"expected_status,omitempty"`
+	Method             string            `json:"method,omitempty"`
+	Headers            map[string]string `json:"headers,omitempty"`
+	Body               string            `json:"body,omitempty"`
+	BodyEncoding       string            `json:"body_encoding,omitempty"` // json, xml, form, raw
+	FollowRedirects    *bool             `json:"follow_redirects,omitempty"`
+	MaxRedirects       int               `json:"max_redirects,omitempty"`
+	SkipTLSVerify      bool              `json:"skip_tls_verify,omitempty"`
+	CacheBuster        bool              `json:"cache_buster,omitempty"`
+	AuthMethod         string            `json:"auth_method,omitempty"` // none, basic, bearer, oauth2
+	BasicAuthUser      string            `json:"basic_auth_user,omitempty"`
+	BasicAuthPass      string            `json:"basic_auth_pass,omitempty"`
+	BearerToken        string            `json:"bearer_token,omitempty"`
+	OAuth2TokenURL     string            `json:"oauth2_token_url,omitempty"`
+	OAuth2ClientID     string            `json:"oauth2_client_id,omitempty"`
+	OAuth2ClientSecret string            `json:"oauth2_client_secret,omitempty"`
+	OAuth2Scopes       string            `json:"oauth2_scopes,omitempty"`
+	OAuth2Audience     string            `json:"oauth2_audience,omitempty"`
+	MTLSEnabled        bool              `json:"mtls_enabled,omitempty"`
+	MTLSClientCert     string            `json:"mtls_client_cert,omitempty"`
+	MTLSClientKey      string            `json:"mtls_client_key,omitempty"`
+	MTLSCACert         string            `json:"mtls_ca_cert,omitempty"`
+	ExpectedStatus     int               `json:"expected_status,omitempty"`
 }
 
 // TCPSettings holds TCP check configuration.
@@ -362,23 +371,23 @@ type TimeSeriesPoint struct {
 
 // StatusPage represents a public status page with its own slug and monitor set.
 type StatusPage struct {
-	ID              int64     `json:"id"`
-	Slug            string    `json:"slug"`
-	Title           string    `json:"title"`
-	Description     string    `json:"description"`
-	CustomCSS       string    `json:"custom_css"`
-	ShowIncidents   bool      `json:"show_incidents"`
-	Enabled         bool      `json:"enabled"`
-	APIEnabled      bool      `json:"api_enabled"`
-	SortOrder       int       `json:"sort_order"`
-	LogoURL         string    `json:"logo_url"`
-	FaviconURL      string    `json:"favicon_url"`
-	CustomHeaderHTML string   `json:"custom_header_html"`
-	PasswordHash    string    `json:"-"`
-	PasswordEnabled bool      `json:"password_enabled"`
-	AnalyticsScript string    `json:"analytics_script"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID               int64     `json:"id"`
+	Slug             string    `json:"slug"`
+	Title            string    `json:"title"`
+	Description      string    `json:"description"`
+	CustomCSS        string    `json:"custom_css"`
+	ShowIncidents    bool      `json:"show_incidents"`
+	Enabled          bool      `json:"enabled"`
+	APIEnabled       bool      `json:"api_enabled"`
+	SortOrder        int       `json:"sort_order"`
+	LogoURL          string    `json:"logo_url"`
+	FaviconURL       string    `json:"favicon_url"`
+	CustomHeaderHTML string    `json:"custom_header_html"`
+	PasswordHash     string    `json:"-"`
+	PasswordEnabled  bool      `json:"password_enabled"`
+	AnalyticsScript  string    `json:"analytics_script"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 
 	// Transient fields
 	MonitorCount int `json:"monitor_count,omitempty"`

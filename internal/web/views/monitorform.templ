@@ -71,7 +71,15 @@ func (p MonitorFormParams) httpMethodOrDefault() string {
 	return "GET"
 }
 
-func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSON, conditionsJSON string) string {
+func (p MonitorFormParams) mtlsEnabled() bool {
+	return p.HTTP.MTLSEnabled
+}
+
+func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSON, conditionsJSON string, mtlsEnabled bool) string {
+	mtlsVal := "false"
+	if mtlsEnabled {
+		mtlsVal = "true"
+	}
 	return `{
     monitorType: '` + JSEscapeString(monType) + `',
     advancedSettings: false,
@@ -81,6 +89,7 @@ func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSO
     conditions: ` + conditionsJSON + `,
     httpMethod: '` + JSEscapeString(httpMethod) + `',
     authMethod: '` + JSEscapeString(authMethod) + `',
+    mtlsEnabled: ` + mtlsVal + `,
     newCond() { return {type:'status_code',operator:'eq',target:'',value:'',degraded:false}; },
     addGroup() { this.conditions.groups.push({operator:'and',conditions:[this.newCond()]}); },
     operatorsFor(type) {
@@ -130,7 +139,7 @@ func intOrDefault(v, def int) string {
 
 templ MonitorFormPage(p MonitorFormParams) {
 	@Layout(p.LayoutParams) {
-		<div x-cloak x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON) }>
+		<div x-cloak x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled()) }>
 			<h1 class="text-[15px] font-medium text-white mb-5">{ p.Title }</h1>
 			<form method="POST"
 				if p.Monitor.ID != 0 {
@@ -403,6 +412,7 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 					<option value="none">None</option>
 					<option value="basic">Basic Auth</option>
 					<option value="bearer">Bearer Token</option>
+					<option value="oauth2">OAuth2 Client Credentials</option>
 				</select>
 			</div>
 			<div x-show="authMethod === 'basic'" x-cloak class="grid grid-cols-2 gap-4">
@@ -418,6 +428,57 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 			<div x-show="authMethod === 'bearer'" x-cloak>
 				<label class="form-label">Token</label>
 				<input type="password" name="settings_bearer_token" value={ p.HTTP.BearerToken } class="form-input"/>
+			</div>
+			<div x-show="authMethod === 'oauth2'" x-cloak class="space-y-3">
+				<div>
+					<label class="form-label">Token URL</label>
+					<input type="url" name="settings_oauth2_token_url" value={ p.HTTP.OAuth2TokenURL } placeholder="https://auth.example.com/oauth/token" class="form-input"/>
+				</div>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label class="form-label">Client ID</label>
+						<input type="text" name="settings_oauth2_client_id" value={ p.HTTP.OAuth2ClientID } class="form-input"/>
+					</div>
+					<div>
+						<label class="form-label">Client Secret</label>
+						<input type="password" name="settings_oauth2_client_secret" value={ p.HTTP.OAuth2ClientSecret } class="form-input"/>
+					</div>
+				</div>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label class="form-label">Scopes <span class="text-muted/50 font-normal">(optional)</span></label>
+						<input type="text" name="settings_oauth2_scopes" value={ p.HTTP.OAuth2Scopes } placeholder="read write" class="form-input"/>
+					</div>
+					<div>
+						<label class="form-label">Audience <span class="text-muted/50 font-normal">(optional)</span></label>
+						<input type="text" name="settings_oauth2_audience" value={ p.HTTP.OAuth2Audience } placeholder="https://api.example.com" class="form-input"/>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="space-y-3">
+			<label class="flex items-center gap-2 cursor-pointer">
+				<input type="checkbox" name="settings_mtls_enabled" x-model="mtlsEnabled"
+					if p.HTTP.MTLSEnabled {
+						checked
+					}
+					class="form-checkbox"/>
+				<span class="text-[12px] text-muted-light">Mutual TLS (mTLS)</span>
+			</label>
+			<div x-show="mtlsEnabled" x-cloak class="space-y-3">
+				<div>
+					<label class="form-label">Client Certificate <span class="text-muted/50 font-normal">(PEM)</span></label>
+					<textarea name="settings_mtls_client_cert" rows="4" placeholder="-----BEGIN CERTIFICATE-----" class="form-input font-mono text-[12px] resize-y">{ p.HTTP.MTLSClientCert }</textarea>
+				</div>
+				<div>
+					<label class="form-label">Client Key <span class="text-muted/50 font-normal">(PEM)</span></label>
+					<textarea name="settings_mtls_client_key" rows="4" placeholder="-----BEGIN PRIVATE KEY-----" class="form-input font-mono text-[12px] resize-y">{ p.HTTP.MTLSClientKey }</textarea>
+				</div>
+				<div>
+					<label class="form-label">CA Certificate <span class="text-muted/50 font-normal">(optional, PEM)</span></label>
+					<textarea name="settings_mtls_ca_cert" rows="3" placeholder="-----BEGIN CERTIFICATE-----" class="form-input font-mono text-[12px] resize-y">{ p.HTTP.MTLSCACert }</textarea>
+					<p class="text-[10px] text-muted mt-1">Custom CA for self-signed server certificates</p>
+				</div>
 			</div>
 		</div>
 		<div>

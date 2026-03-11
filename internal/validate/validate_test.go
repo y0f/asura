@@ -1,13 +1,42 @@
 package validate
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
+
+func generateTestCertPEM(t *testing.T) (certPEM, keyPEM string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test"},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certB := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyDER, _ := x509.MarshalECPrivateKey(key)
+	keyB := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	return string(certB), string(keyB)
+}
 
 func validMonitor() *storage.Monitor {
 	return &storage.Monitor{
@@ -593,6 +622,171 @@ func TestValidateMonitorTags(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.wantErr) {
 					t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErr)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateHTTPSettingsOAuth2(t *testing.T) {
+	tests := []struct {
+		name    string
+		s       storage.HTTPSettings
+		wantErr string
+	}{
+		{
+			name: "valid oauth2",
+			s: storage.HTTPSettings{
+				AuthMethod:         "oauth2",
+				OAuth2TokenURL:     "https://auth.example.com/token",
+				OAuth2ClientID:     "client-id",
+				OAuth2ClientSecret: "client-secret",
+				OAuth2Scopes:       "read",
+			},
+		},
+		{
+			name: "missing token URL",
+			s: storage.HTTPSettings{
+				AuthMethod:         "oauth2",
+				OAuth2ClientID:     "client-id",
+				OAuth2ClientSecret: "client-secret",
+			},
+			wantErr: "oauth2 token URL is required",
+		},
+		{
+			name: "invalid token URL",
+			s: storage.HTTPSettings{
+				AuthMethod:         "oauth2",
+				OAuth2TokenURL:     "not-a-url",
+				OAuth2ClientID:     "client-id",
+				OAuth2ClientSecret: "client-secret",
+			},
+			wantErr: "oauth2 token URL must be a valid HTTP(S) URL",
+		},
+		{
+			name: "missing client ID",
+			s: storage.HTTPSettings{
+				AuthMethod:         "oauth2",
+				OAuth2TokenURL:     "https://auth.example.com/token",
+				OAuth2ClientSecret: "client-secret",
+			},
+			wantErr: "oauth2 client ID is required",
+		},
+		{
+			name: "missing client secret",
+			s: storage.HTTPSettings{
+				AuthMethod:     "oauth2",
+				OAuth2TokenURL: "https://auth.example.com/token",
+				OAuth2ClientID: "client-id",
+			},
+			wantErr: "oauth2 client secret is required",
+		},
+		{
+			name: "non-oauth2 auth method skips",
+			s:    storage.HTTPSettings{AuthMethod: "basic"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := validMonitor()
+			b, _ := json.Marshal(tt.s)
+			m.Settings = b
+
+			err := ValidateMonitor(m)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateHTTPSettingsMTLS(t *testing.T) {
+	certPEM, keyPEM := generateTestCertPEM(t)
+
+	tests := []struct {
+		name    string
+		s       storage.HTTPSettings
+		wantErr string
+	}{
+		{
+			name: "mtls disabled",
+			s:    storage.HTTPSettings{MTLSEnabled: false},
+		},
+		{
+			name:    "missing client cert",
+			s:       storage.HTTPSettings{MTLSEnabled: true, MTLSClientKey: keyPEM},
+			wantErr: "mTLS client certificate is required",
+		},
+		{
+			name:    "missing client key",
+			s:       storage.HTTPSettings{MTLSEnabled: true, MTLSClientCert: certPEM},
+			wantErr: "mTLS client key is required",
+		},
+		{
+			name: "invalid cert/key pair",
+			s: storage.HTTPSettings{
+				MTLSEnabled:    true,
+				MTLSClientCert: "not-a-cert",
+				MTLSClientKey:  "not-a-key",
+			},
+			wantErr: "mTLS cert/key pair invalid",
+		},
+		{
+			name: "invalid CA cert",
+			s: storage.HTTPSettings{
+				MTLSEnabled:    true,
+				MTLSClientCert: certPEM,
+				MTLSClientKey:  keyPEM,
+				MTLSCACert:     "not-a-cert",
+			},
+			wantErr: "mTLS CA certificate is not valid PEM",
+		},
+		{
+			name: "valid with cert and key",
+			s: storage.HTTPSettings{
+				MTLSEnabled:    true,
+				MTLSClientCert: certPEM,
+				MTLSClientKey:  keyPEM,
+			},
+		},
+		{
+			name: "valid with CA",
+			s: storage.HTTPSettings{
+				MTLSEnabled:    true,
+				MTLSClientCert: certPEM,
+				MTLSClientKey:  keyPEM,
+				MTLSCACert:     certPEM,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := validMonitor()
+			b, _ := json.Marshal(tt.s)
+			m.Settings = b
+
+			err := ValidateMonitor(m)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErr)
 			}
 		})
 	}

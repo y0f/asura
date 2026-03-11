@@ -419,6 +419,158 @@ func TestHTTPCheckerAuthMethods(t *testing.T) {
 	})
 }
 
+func TestHTTPCheckerOAuth2(t *testing.T) {
+	t.Run("successful token fetch", func(t *testing.T) {
+		var gotAuth string
+		// target server that validates bearer token
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotAuth = r.Header.Get("Authorization")
+			w.WriteHeader(200)
+		}))
+		defer target.Close()
+
+		// token server
+		tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "POST" {
+				t.Errorf("expected POST to token endpoint, got %s", r.Method)
+			}
+			if r.FormValue("grant_type") != "client_credentials" {
+				t.Errorf("expected grant_type=client_credentials, got %q", r.FormValue("grant_type"))
+			}
+			if r.FormValue("client_id") != "my-client" {
+				t.Errorf("expected client_id=my-client, got %q", r.FormValue("client_id"))
+			}
+			if r.FormValue("scope") != "read write" {
+				t.Errorf("expected scope='read write', got %q", r.FormValue("scope"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"access_token":"test-token-123","expires_in":3600}`))
+		}))
+		defer tokenServer.Close()
+
+		settings, _ := json.Marshal(storage.HTTPSettings{
+			AuthMethod:         "oauth2",
+			OAuth2TokenURL:     tokenServer.URL,
+			OAuth2ClientID:     "my-client",
+			OAuth2ClientSecret: "my-secret",
+			OAuth2Scopes:       "read write",
+		})
+
+		c := &HTTPChecker{AllowPrivate: true}
+		mon := &storage.Monitor{ID: 9990, Target: target.URL, Timeout: 5, Settings: settings}
+		defer ClearOAuth2TokenCache(9990)
+
+		result, err := c.Check(context.Background(), mon)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status != "up" {
+			t.Fatalf("expected up, got %s: %s", result.Status, result.Message)
+		}
+		if gotAuth != "Bearer test-token-123" {
+			t.Errorf("expected 'Bearer test-token-123', got %q", gotAuth)
+		}
+	})
+
+	t.Run("token cached across checks", func(t *testing.T) {
+		tokenFetches := 0
+		tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenFetches++
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"access_token":"cached-token","expires_in":3600}`))
+		}))
+		defer tokenServer.Close()
+
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+		}))
+		defer target.Close()
+
+		settings, _ := json.Marshal(storage.HTTPSettings{
+			AuthMethod:         "oauth2",
+			OAuth2TokenURL:     tokenServer.URL,
+			OAuth2ClientID:     "client",
+			OAuth2ClientSecret: "secret",
+		})
+
+		c := &HTTPChecker{AllowPrivate: true}
+		mon := &storage.Monitor{ID: 9991, Target: target.URL, Timeout: 5, Settings: settings}
+		defer ClearOAuth2TokenCache(9991)
+
+		c.Check(context.Background(), mon)
+		c.Check(context.Background(), mon)
+		c.Check(context.Background(), mon)
+
+		if tokenFetches != 1 {
+			t.Errorf("expected 1 token fetch (cached), got %d", tokenFetches)
+		}
+	})
+
+	t.Run("token fetch failure", func(t *testing.T) {
+		tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(401)
+			w.Write([]byte(`{"error":"invalid_client"}`))
+		}))
+		defer tokenServer.Close()
+
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+		}))
+		defer target.Close()
+
+		settings, _ := json.Marshal(storage.HTTPSettings{
+			AuthMethod:         "oauth2",
+			OAuth2TokenURL:     tokenServer.URL,
+			OAuth2ClientID:     "bad-client",
+			OAuth2ClientSecret: "bad-secret",
+		})
+
+		c := &HTTPChecker{AllowPrivate: true}
+		mon := &storage.Monitor{ID: 9992, Target: target.URL, Timeout: 5, Settings: settings}
+		defer ClearOAuth2TokenCache(9992)
+
+		result, err := c.Check(context.Background(), mon)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status != "down" {
+			t.Fatalf("expected down, got %s", result.Status)
+		}
+		if !strings.Contains(result.Message, "oauth2 token fetch failed") {
+			t.Errorf("expected oauth2 error message, got %q", result.Message)
+		}
+	})
+}
+
+func TestHTTPCheckerMTLS(t *testing.T) {
+	t.Run("invalid cert/key pair", func(t *testing.T) {
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+		}))
+		defer target.Close()
+
+		settings, _ := json.Marshal(storage.HTTPSettings{
+			MTLSEnabled:    true,
+			MTLSClientCert: "not-a-cert",
+			MTLSClientKey:  "not-a-key",
+		})
+
+		c := &HTTPChecker{AllowPrivate: true}
+		mon := &storage.Monitor{Target: target.URL, Timeout: 5, Settings: settings}
+
+		result, err := c.Check(context.Background(), mon)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status != "down" {
+			t.Fatalf("expected down, got %s", result.Status)
+		}
+		if !strings.Contains(result.Message, "mtls config failed") {
+			t.Errorf("expected mtls error message, got %q", result.Message)
+		}
+	})
+}
+
 func TestHTTPCheckerNoRedirects(t *testing.T) {
 	redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/redirect" {

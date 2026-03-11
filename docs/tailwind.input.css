@@ -58,7 +58,7 @@
   @apply leading-relaxed;
 }
 .prose-docs code {
-  @apply font-mono text-[12px] bg-surface-200 px-1.5 py-0.5 rounded text-brand;
+  @apply font-mono text-[12px] bg-surface-200 px-1.5 py-0.5 rounded text-brand break-words;
 }
 .prose-docs pre {
   @apply bg-surface-100 border border-line rounded-lg p-4 mb-4 overflow-x-auto;
@@ -67,7 +67,7 @@
   @apply bg-transparent px-0 py-0 text-muted-light;
 }
 .prose-docs table {
-  @apply w-full text-[13px] mb-6 border-collapse;
+  @apply w-full text-[13px] mb-6 border-collapse block overflow-x-auto;
 }
 .prose-docs thead th {
   @apply text-left text-[10px] font-medium text-muted uppercase tracking-widest px-3 py-2 border-b border-line bg-surface-50;

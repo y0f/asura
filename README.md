@@ -53,6 +53,7 @@ docker compose up -d
 - **Change detection** — line-level diffs on HTTP response bodies
 - **Maintenance windows** — recurring schedules to suppress alerts during planned downtime
 - **Heartbeat monitoring** — cron jobs and workers report in; silence triggers an incident
+- **Advanced HTTP auth** — OAuth2 Client Credentials with token caching, mutual TLS (mTLS) with inline PEM certificates
 - **Proxy support** — HTTP and SOCKS5 proxies with per-monitor assignment
 - **Analytics** — uptime %, response time percentiles, Prometheus `/metrics`
 

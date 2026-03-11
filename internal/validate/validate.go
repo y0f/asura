@@ -1,8 +1,11 @@
 package validate
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -108,6 +111,66 @@ func validateMonitorJSON(m *storage.Monitor) error {
 	}
 	if m.Type == "docker" {
 		return validateDockerSettings(m)
+	}
+	if m.Type == "http" {
+		return validateHTTPSettings(m)
+	}
+	return nil
+}
+
+func validateHTTPSettings(m *storage.Monitor) error {
+	if len(m.Settings) == 0 {
+		return nil
+	}
+	var s storage.HTTPSettings
+	if err := json.Unmarshal(m.Settings, &s); err != nil {
+		return fmt.Errorf("invalid http settings: %w", err)
+	}
+
+	if s.AuthMethod == "oauth2" {
+		if s.OAuth2TokenURL == "" {
+			return fmt.Errorf("oauth2 token URL is required")
+		}
+		u, err := url.Parse(s.OAuth2TokenURL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+			return fmt.Errorf("oauth2 token URL must be a valid HTTP(S) URL")
+		}
+		if s.OAuth2ClientID == "" {
+			return fmt.Errorf("oauth2 client ID is required")
+		}
+		if len(s.OAuth2ClientID) > 1024 {
+			return fmt.Errorf("oauth2 client ID must be at most 1024 characters")
+		}
+		if s.OAuth2ClientSecret == "" {
+			return fmt.Errorf("oauth2 client secret is required")
+		}
+		if len(s.OAuth2ClientSecret) > 4096 {
+			return fmt.Errorf("oauth2 client secret must be at most 4096 characters")
+		}
+		if len(s.OAuth2Scopes) > 1024 {
+			return fmt.Errorf("oauth2 scopes must be at most 1024 characters")
+		}
+		if len(s.OAuth2Audience) > 1024 {
+			return fmt.Errorf("oauth2 audience must be at most 1024 characters")
+		}
+	}
+
+	if s.MTLSEnabled {
+		if s.MTLSClientCert == "" {
+			return fmt.Errorf("mTLS client certificate is required")
+		}
+		if s.MTLSClientKey == "" {
+			return fmt.Errorf("mTLS client key is required")
+		}
+		if _, err := tls.X509KeyPair([]byte(s.MTLSClientCert), []byte(s.MTLSClientKey)); err != nil {
+			return fmt.Errorf("mTLS cert/key pair invalid: %w", err)
+		}
+		if s.MTLSCACert != "" {
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM([]byte(s.MTLSCACert)) {
+				return fmt.Errorf("mTLS CA certificate is not valid PEM")
+			}
+		}
 	}
 	return nil
 }

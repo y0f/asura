@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/y0f/asura/internal/safenet"
@@ -20,6 +22,14 @@ import (
 )
 
 const maxBodyRead = 1 << 20 // 1MB
+
+var oauth2TokenCache sync.Map // map[int64]*oauth2CachedToken
+
+type oauth2CachedToken struct {
+	mu        sync.Mutex
+	token     string
+	expiresAt time.Time
+}
 
 type HTTPChecker struct {
 	AllowPrivate bool
@@ -56,7 +66,16 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	}
 
 	applyBodyAndHeaders(req, settings)
-	applyAuthentication(req, settings)
+
+	if settings.AuthMethod == "oauth2" {
+		token, err := fetchOAuth2Token(ctx, monitor.ID, settings)
+		if err != nil {
+			return &Result{Status: "down", Message: fmt.Sprintf("oauth2 token fetch failed: %v", err)}, nil
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else {
+		applyAuthentication(req, settings)
+	}
 
 	timeout := time.Duration(monitor.Timeout) * time.Second
 	baseDial := (&net.Dialer{
@@ -64,9 +83,16 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 		Control: safenet.MaybeDialControl(c.AllowPrivate),
 	}).DialContext
 
+	tlsCfg := &tls.Config{InsecureSkipVerify: settings.SkipTLSVerify}
+	if settings.MTLSEnabled {
+		if err := applyMTLS(tlsCfg, settings); err != nil {
+			return &Result{Status: "down", Message: fmt.Sprintf("mtls config failed: %v", err)}, nil
+		}
+	}
+
 	transport := &http.Transport{
 		DialContext:       baseDial,
-		TLSClientConfig:   &tls.Config{InsecureSkipVerify: settings.SkipTLSVerify},
+		TLSClientConfig:   tlsCfg,
 		DisableKeepAlives: true,
 	}
 	applyHTTPProxy(transport, monitor.ProxyURL, baseDial)
@@ -197,6 +223,90 @@ func applyAuthentication(req *http.Request, settings storage.HTTPSettings) {
 			req.SetBasicAuth(settings.BasicAuthUser, settings.BasicAuthPass)
 		}
 	}
+}
+
+func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTTPSettings) (string, error) {
+	val, _ := oauth2TokenCache.LoadOrStore(monitorID, &oauth2CachedToken{})
+	cached := val.(*oauth2CachedToken)
+
+	cached.mu.Lock()
+	defer cached.mu.Unlock()
+
+	if cached.token != "" && time.Now().Before(cached.expiresAt.Add(-30*time.Second)) {
+		return cached.token, nil
+	}
+
+	data := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {settings.OAuth2ClientID},
+		"client_secret": {settings.OAuth2ClientSecret},
+	}
+	if settings.OAuth2Scopes != "" {
+		data.Set("scope", settings.OAuth2Scopes)
+	}
+	if settings.OAuth2Audience != "" {
+		data.Set("audience", settings.OAuth2Audience)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", settings.OAuth2TokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	if tokenResp.AccessToken == "" {
+		return "", fmt.Errorf("empty access_token in response")
+	}
+
+	cached.token = tokenResp.AccessToken
+	if tokenResp.ExpiresIn > 0 {
+		cached.expiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	} else {
+		cached.expiresAt = time.Now().Add(time.Hour)
+	}
+
+	return cached.token, nil
+}
+
+func applyMTLS(tlsCfg *tls.Config, settings storage.HTTPSettings) error {
+	cert, err := tls.X509KeyPair([]byte(settings.MTLSClientCert), []byte(settings.MTLSClientKey))
+	if err != nil {
+		return fmt.Errorf("parse client cert/key: %w", err)
+	}
+	tlsCfg.Certificates = []tls.Certificate{cert}
+
+	if settings.MTLSCACert != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(settings.MTLSCACert)) {
+			return fmt.Errorf("failed to parse CA certificate")
+		}
+		tlsCfg.RootCAs = pool
+	}
+	return nil
+}
+
+// ClearOAuth2TokenCache removes the cached token for a monitor (used when settings change).
+func ClearOAuth2TokenCache(monitorID int64) {
+	oauth2TokenCache.Delete(monitorID)
 }
 
 func resolveMaxRedirects(s storage.HTTPSettings) int {
