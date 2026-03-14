@@ -75,5 +75,6 @@ func DefaultRegistry(commandAllowlist []string, allowPrivateTargets bool) *Regis
 	r.Register(&RedisChecker{AllowPrivate: allowPrivateTargets})
 	r.Register(&PostgreSQLChecker{AllowPrivate: allowPrivateTargets})
 	r.Register(&UDPChecker{AllowPrivate: allowPrivateTargets})
+	r.Register(&HTTPMultiChecker{AllowPrivate: allowPrivateTargets})
 	return r
 }

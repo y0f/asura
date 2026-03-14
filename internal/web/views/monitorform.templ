@@ -25,6 +25,7 @@ type MonitorFormParams struct {
 	Redis                storage.RedisSettings
 	PostgreSQL           storage.PostgreSQLSettings
 	UDP                  storage.UDPSettings
+	MultiStep            storage.MultiStepHTTPSettings
 	FollowRedirects      bool
 	MaxRedirects         int
 	HeadersJSON          string
@@ -186,6 +187,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 								<select name="type" x-model="monitorType" class="form-select">
 									<optgroup label="Network">
 										<option value="http">HTTP(S)</option>
+										<option value="http_multi">HTTP Multi-Step</option>
 										<option value="tcp">TCP Port</option>
 										<option value="icmp">Ping (ICMP)</option>
 										<option value="dns">DNS Lookup</option>

@@ -15,7 +15,7 @@ import (
 )
 
 var agentEligibleTypes = map[string]bool{
-	"http": true, "tcp": true, "dns": true, "icmp": true,
+	"http": true, "http_multi": true, "tcp": true, "dns": true, "icmp": true,
 	"tls": true, "websocket": true, "domain": true,
 	"grpc": true, "mqtt": true, "smtp": true, "ssh": true,
 	"redis": true, "postgresql": true, "udp": true,

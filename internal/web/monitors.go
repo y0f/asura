@@ -71,6 +71,7 @@ var _settingsTargets = map[string]func(*views.MonitorFormParams) any{
 	"redis":      func(fd *views.MonitorFormParams) any { return &fd.Redis },
 	"postgresql": func(fd *views.MonitorFormParams) any { return &fd.PostgreSQL },
 	"udp":        func(fd *views.MonitorFormParams) any { return &fd.UDP },
+	"http_multi": func(fd *views.MonitorFormParams) any { return &fd.MultiStep },
 }
 
 func unmarshalMonitorSettings(fd *views.MonitorFormParams, mon *storage.Monitor) {
