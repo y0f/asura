@@ -179,6 +179,14 @@ type Store interface {
 	UpdateEscalationState(ctx context.Context, state *EscalationState) error
 	DeleteEscalationStateByIncident(ctx context.Context, incidentID int64) error
 
+	// On-call rotations
+	CreateOnCallRotation(ctx context.Context, r *OnCallRotation) error
+	GetOnCallRotation(ctx context.Context, id int64) (*OnCallRotation, error)
+	ListOnCallRotations(ctx context.Context) ([]*OnCallRotation, error)
+	UpdateOnCallRotation(ctx context.Context, r *OnCallRotation) error
+	DeleteOnCallRotation(ctx context.Context, id int64) error
+	AdvanceRotation(ctx context.Context, id int64) error
+
 	// Agents
 	CreateAgent(ctx context.Context, a *Agent) error
 	GetAgent(ctx context.Context, id int64) (*Agent, error)

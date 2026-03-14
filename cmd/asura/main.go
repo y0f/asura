@@ -128,6 +128,7 @@ func main() {
 	go srv.RequestLogWriter().Run(ctx)
 	go runRollupWorker(ctx, store, logger)
 	go runBaselineWorker(ctx, store, logger)
+	go runRotationAdvancer(ctx, store, logger)
 	httpServer := startHTTPServer(cfg, srv, logger, cancel)
 
 	quit := make(chan os.Signal, 1)
@@ -291,6 +292,28 @@ func runBaselineWorker(ctx context.Context, store storage.Store, logger *slog.Lo
 			return
 		case <-ticker.C:
 			recalculate()
+		}
+	}
+}
+
+func runRotationAdvancer(ctx context.Context, store storage.Store, logger *slog.Logger) {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rotations, err := store.ListOnCallRotations(ctx)
+			if err != nil {
+				logger.Error("rotation advancer: list", "error", err)
+				continue
+			}
+			for _, rot := range rotations {
+				if err := store.AdvanceRotation(ctx, rot.ID); err != nil {
+					logger.Error("rotation advancer: advance", "id", rot.ID, "error", err)
+				}
+			}
 		}
 	}
 }

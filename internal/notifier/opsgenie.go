@@ -56,7 +56,7 @@ func opsgenieCreate(ctx context.Context, baseURL, apiKey, alias string, payload 
 	alert := map[string]any{
 		"message":     FormatMessage(payload),
 		"alias":       alias,
-		"description": string(marshalPayload(payload)),
+		"description": FormatMessage(payload),
 		"priority":    priority,
 		"source":      "asura",
 	}

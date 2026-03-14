@@ -193,6 +193,19 @@ type Agent struct {
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
+// OnCallRotation defines a rotating on-call schedule across notification channels.
+type OnCallRotation struct {
+	ID                int64      `json:"id"`
+	Name              string     `json:"name"`
+	ChannelIDs        []int64    `json:"channel_ids"`
+	Period            string     `json:"period"` // daily, weekly
+	CurrentIndex      int        `json:"current_index"`
+	OverrideChannelID *int64     `json:"override_channel_id,omitempty"`
+	OverrideUntil     *time.Time `json:"override_until,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
 // AgentJob is a monitor sent to an agent for checking.
 type AgentJob struct {
 	ID       int64           `json:"id"`

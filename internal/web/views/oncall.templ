@@ -1,0 +1,140 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/y0f/asura/internal/storage"
+)
+
+type OnCallListParams struct {
+	LayoutParams
+	Rotations []*storage.OnCallRotation
+	Channels  []*storage.NotificationChannel
+}
+
+func channelName(channels []*storage.NotificationChannel, id int64) string {
+	for _, ch := range channels {
+		if ch.ID == id {
+			return ch.Name
+		}
+	}
+	return fmt.Sprintf("#%d", id)
+}
+
+templ OnCallListPage(p OnCallListParams) {
+	@Layout(p.LayoutParams) {
+		<div x-data="{showForm: false, showOverride: false, overrideId: 0}">
+			<div class="flex items-center justify-between mb-5">
+				<h1 class="text-[15px] font-medium text-white">On-Call Rotations</h1>
+				if p.Perms["notifications.write"] {
+					<button @click="showForm = true"
+						class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
+						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
+						New Rotation
+					</button>
+				}
+			</div>
+			if len(p.Rotations) > 0 {
+				<div class="space-y-3">
+					for _, rot := range p.Rotations {
+						<div class="border border-line rounded-lg p-4">
+							<div class="flex items-center justify-between mb-3">
+								<div>
+									<span class="text-[13px] text-white font-medium">{ rot.Name }</span>
+									<span class="ml-2 text-[10px] text-muted uppercase tracking-wider">{ rot.Period }</span>
+								</div>
+								<div class="flex items-center gap-2">
+									if p.Perms["notifications.write"] {
+										<button type="button"
+											@click={ fmt.Sprintf("overrideId = %d; showOverride = true", rot.ID) }
+											class="text-[11px] text-brand hover:text-brand/80 transition-colors">Override</button>
+										@DeleteButton(fmt.Sprintf("%s/on-call/%d/delete", p.BasePath, rot.ID), "Delete this rotation?")
+									}
+								</div>
+							</div>
+							<div class="flex flex-wrap gap-1.5 mb-2">
+								for i, chID := range rot.ChannelIDs {
+									<span class={ "text-[11px] px-1.5 py-0.5 rounded border",
+										templ.KV("border-brand/30 bg-brand/[0.06] text-brand", i == rot.CurrentIndex%len(rot.ChannelIDs)),
+										templ.KV("border-line text-muted-light", i != rot.CurrentIndex%len(rot.ChannelIDs)) }>
+										{ channelName(p.Channels, chID) }
+										if i == rot.CurrentIndex%len(rot.ChannelIDs) {
+											<span class="ml-1 text-[9px]">(on-call)</span>
+										}
+									</span>
+								}
+							</div>
+							if rot.OverrideChannelID != nil && rot.OverrideUntil != nil {
+								<div class="text-[11px] text-amber-400 mt-1">
+									Override active: { channelName(p.Channels, *rot.OverrideChannelID) } until { rot.OverrideUntil.Format("Jan 2, 15:04") }
+								</div>
+							}
+						</div>
+					}
+				</div>
+			} else {
+				@EmptyState("No on-call rotations configured", "", "")
+			}
+			<!-- Create modal -->
+			<div x-show="showForm" x-cloak x-transition:enter="transition-opacity" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showForm = false">
+				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm" x-show="showForm" x-transition @click.stop>
+					<h3 class="text-[15px] font-medium text-white mb-4">New On-Call Rotation</h3>
+					<form method="POST" action={ templ.SafeURL(p.BasePath + "/on-call") } class="space-y-3">
+						<div>
+							<label class="form-label">Name</label>
+							<input type="text" name="name" required placeholder="Primary On-Call" class="form-input"/>
+						</div>
+						<div>
+							<label class="form-label">Rotation Period</label>
+							<select name="period" class="form-select">
+								<option value="daily">Daily</option>
+								<option value="weekly">Weekly</option>
+							</select>
+						</div>
+						<div>
+							<label class="form-label">Channels (in rotation order)</label>
+							<div class="space-y-1.5 max-h-48 overflow-y-auto">
+								for _, ch := range p.Channels {
+									<label class="flex items-center gap-2 cursor-pointer">
+										<input type="checkbox" name="channel_ids[]" value={ fmt.Sprint(ch.ID) } class="form-checkbox"/>
+										<span class="text-[12px] text-muted-light">{ ch.Name }</span>
+										<span class="text-[10px] text-muted">({ ch.Type })</span>
+									</label>
+								}
+							</div>
+						</div>
+						<div class="flex items-center gap-3 pt-1">
+							<button type="submit" class="btn-primary">Create</button>
+							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
+						</div>
+					</form>
+				</div>
+			</div>
+			<!-- Override modal -->
+			<div x-show="showOverride" x-cloak x-transition:enter="transition-opacity" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showOverride = false">
+				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm" x-show="showOverride" x-transition @click.stop>
+					<h3 class="text-[15px] font-medium text-white mb-4">Set Override</h3>
+					<form method="POST" :action={ templ.SafeURL(p.BasePath + "/on-call/") } x-bind:action="''" @submit="$el.action = $el.dataset.base + overrideId + '/override'" data-base={ p.BasePath + "/on-call/" } class="space-y-3">
+						<div>
+							<label class="form-label">Override Channel</label>
+							<select name="override_channel_id" class="form-select">
+								<option value="">Clear override</option>
+								for _, ch := range p.Channels {
+									<option value={ fmt.Sprint(ch.ID) }>{ ch.Name }</option>
+								}
+							</select>
+						</div>
+						<div>
+							<label class="form-label">Until</label>
+							<input type="datetime-local" name="override_until" class="form-input"/>
+						</div>
+						<div class="flex items-center gap-3 pt-1">
+							<button type="submit" class="btn-primary">Save</button>
+							<button type="button" @click="showOverride = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	}
+}

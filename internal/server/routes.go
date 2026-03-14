@@ -107,6 +107,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/proxies/{id}"), webPerm("monitors.write", s.web.ProxyUpdate))
 		mux.Handle("POST "+s.p("/proxies/{id}/delete"), webPerm("monitors.write", s.web.ProxyDelete))
 
+		mux.Handle("GET "+s.p("/on-call"), webAuth(http.HandlerFunc(s.web.OnCallRotations)))
+		mux.Handle("POST "+s.p("/on-call"), webPerm("notifications.write", s.web.OnCallCreate))
+		mux.Handle("POST "+s.p("/on-call/{id}/delete"), webPerm("notifications.write", s.web.OnCallDelete))
+		mux.Handle("POST "+s.p("/on-call/{id}/override"), webPerm("notifications.write", s.web.OnCallOverride))
+
 		mux.Handle("GET "+s.p("/agents"), webAuth(http.HandlerFunc(s.web.Agents)))
 		mux.Handle("POST "+s.p("/agents"), webPerm("monitors.write", s.web.AgentCreate))
 		mux.Handle("POST "+s.p("/agents/{id}/delete"), webPerm("monitors.write", s.web.AgentDelete))
@@ -219,6 +224,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("GET "+s.p("/api/v1/export"), monRead(http.HandlerFunc(s.api.Export)))
 	mux.Handle("POST "+s.p("/api/v1/import"), monWrite(http.HandlerFunc(s.api.Import)))
+
+	// On-call rotations
+	mux.Handle("GET "+s.p("/api/v1/on-call"), notifRead(http.HandlerFunc(s.api.ListOnCallRotations)))
+	mux.Handle("GET "+s.p("/api/v1/on-call/current"), notifRead(http.HandlerFunc(s.api.GetCurrentOnCall)))
+	mux.Handle("POST "+s.p("/api/v1/on-call"), notifWrite(http.HandlerFunc(s.api.CreateOnCallRotation)))
+	mux.Handle("PUT "+s.p("/api/v1/on-call/{id}"), notifWrite(http.HandlerFunc(s.api.UpdateOnCallRotation)))
+	mux.Handle("DELETE "+s.p("/api/v1/on-call/{id}"), notifWrite(http.HandlerFunc(s.api.DeleteOnCallRotation)))
 
 	// Agent admin endpoints (API key auth)
 	mux.Handle("GET "+s.p("/api/v1/agents"), monRead(http.HandlerFunc(s.api.ListAgents)))

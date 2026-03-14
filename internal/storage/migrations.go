@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 30
+const schemaVersion = 31
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -315,6 +315,19 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token);
+
+CREATE TABLE IF NOT EXISTS on_call_rotations (
+	id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+	name                TEXT    NOT NULL,
+	channel_ids         TEXT    NOT NULL DEFAULT '[]',
+	period              TEXT    NOT NULL DEFAULT 'daily',
+	current_index       INTEGER NOT NULL DEFAULT 0,
+	override_channel_id INTEGER DEFAULT NULL,
+	override_until      TEXT,
+	created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+	updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_check_results_created_at ON check_results(created_at);
 CREATE INDEX IF NOT EXISTS idx_incidents_resolved_at ON incidents(status, resolved_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
@@ -571,5 +584,19 @@ CREATE TABLE IF NOT EXISTS check_result_daily (
 );
 CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token);
 ALTER TABLE check_results ADD COLUMN agent_id INTEGER DEFAULT NULL;`,
+	},
+	{
+		version: 31,
+		sql: `CREATE TABLE IF NOT EXISTS on_call_rotations (
+	id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+	name                TEXT    NOT NULL,
+	channel_ids         TEXT    NOT NULL DEFAULT '[]',
+	period              TEXT    NOT NULL DEFAULT 'daily',
+	current_index       INTEGER NOT NULL DEFAULT 0,
+	override_channel_id INTEGER DEFAULT NULL,
+	override_until      TEXT,
+	created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+	updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);`,
 	},
 }
