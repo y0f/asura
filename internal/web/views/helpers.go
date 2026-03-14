@@ -507,3 +507,64 @@ func mdInline(s string) string {
 	}
 	return buf.String()
 }
+
+type HeatmapDay struct {
+	Date      string
+	UptimePct float64
+	HasData   bool
+	Label     string
+	Weekday   int
+	Week      int
+}
+
+func heatmapColor(pct float64, hasData bool) string {
+	if !hasData {
+		return "#1f2937"
+	}
+	if pct >= 99.995 {
+		return "#34d399"
+	}
+	if pct >= 99 {
+		return "#fbbf24"
+	}
+	if pct >= 95 {
+		return "#f97316"
+	}
+	return "#f87171"
+}
+
+func HeatmapSVG(days []HeatmapDay) string {
+	if len(days) == 0 {
+		return ""
+	}
+	const cellSize = 11
+	const cellGap = 2
+	const step = cellSize + cellGap
+
+	maxWeek := 0
+	for _, d := range days {
+		if d.Week > maxWeek {
+			maxWeek = d.Week
+		}
+	}
+	w := (maxWeek + 1) * step
+	h := 7 * step
+
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg width="%d" height="%d" xmlns="http://www.w3.org/2000/svg">`, w, h)
+	for _, d := range days {
+		x := d.Week * step
+		y := d.Weekday * step
+		color := heatmapColor(d.UptimePct, d.HasData)
+		tooltip := d.Label
+		if d.HasData {
+			tooltip += fmt.Sprintf(": %.2f%%", d.UptimePct)
+		} else {
+			tooltip += ": no data"
+		}
+		fmt.Fprintf(&b, `<rect x="%d" y="%d" width="%d" height="%d" rx="2" fill="%s"><title>%s</title></rect>`,
+			x, y, cellSize, cellSize, color, html.EscapeString(tooltip))
+	}
+	b.WriteString(`</svg>`)
+	return b.String()
+}

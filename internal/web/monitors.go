@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -498,6 +499,8 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	heatmap := buildHeatmap(ctx, h.store, id, now)
+
 	lp := h.newLayoutParams(r, mon.Name, "monitors")
 	h.renderComponent(w, r, views.MonitorDetailPage(views.MonitorDetailParams{
 		LayoutParams: lp,
@@ -519,7 +522,46 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		OpenIncident: openIncident,
 		Tags:         monTags,
 		SLA:          slaData,
+		Heatmap:      heatmap,
 	}))
+}
+
+func buildHeatmap(ctx context.Context, store storage.Store, monitorID int64, now time.Time) []views.HeatmapDay {
+	from := now.AddDate(-1, 0, 0)
+	daily, err := store.GetDailyUptime(ctx, monitorID, from, now)
+	if err != nil {
+		return nil
+	}
+	dayMap := make(map[string]*storage.DailyUptime, len(daily))
+	for _, d := range daily {
+		dayMap[d.Date] = d
+	}
+
+	startDay := from
+	for startDay.Weekday() != time.Sunday {
+		startDay = startDay.AddDate(0, 0, -1)
+	}
+
+	var days []views.HeatmapDay
+	for d := startDay; !d.After(now); d = d.AddDate(0, 0, 1) {
+		dateStr := d.Format("2006-01-02")
+		label := d.Format("Jan 2, 2006")
+		weekday := int(d.Weekday())
+		week := int(d.Sub(startDay).Hours() / 24 / 7)
+
+		hd := views.HeatmapDay{
+			Date:    dateStr,
+			Label:   label,
+			Weekday: weekday,
+			Week:    week,
+		}
+		if du, ok := dayMap[dateStr]; ok {
+			hd.UptimePct = du.UptimePct
+			hd.HasData = true
+		}
+		days = append(days, hd)
+	}
+	return days
 }
 
 func (h *Handler) renderMonitorForm(w http.ResponseWriter, r *http.Request, lp views.LayoutParams, fd *views.MonitorFormParams) {

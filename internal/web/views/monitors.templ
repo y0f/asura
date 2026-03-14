@@ -43,6 +43,7 @@ type MonitorDetailParams struct {
 	OpenIncident *storage.Incident
 	Tags         []storage.MonitorTag
 	SLA          *SLAData
+	Heatmap      []HeatmapDay
 }
 
 type SLAData struct {
@@ -617,6 +618,22 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					}
 				</div>
 			</div>
+			if len(p.Heatmap) > 0 {
+				<div class="border border-line rounded-lg px-4 py-3 mb-5">
+					<div class="flex items-center justify-between mb-2">
+						<div class="stat-label">365-Day Uptime</div>
+						<div class="flex items-center gap-3 text-[10px] text-muted">
+							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#34d399]"></span>100%</span>
+							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#fbbf24]"></span>&gt;99%</span>
+							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#f97316]"></span>&gt;95%</span>
+							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#f87171]"></span>&lt;95%</span>
+						</div>
+					</div>
+					<div class="overflow-x-auto">
+						@templ.Raw(HeatmapSVG(p.Heatmap))
+					</div>
+				</div>
+			}
 			if p.SLA != nil {
 				<div class="border border-line rounded-lg px-4 py-3 mb-5">
 					<div class="flex items-center justify-between mb-2">
