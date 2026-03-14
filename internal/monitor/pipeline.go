@@ -203,6 +203,42 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	p.processIncidents(ctx, mon, finalStatus, status, cr.Message)
 }
 
+// ProcessAgentResult handles a check result submitted by a remote agent.
+// It updates monitor status, processes incidents, and emits notifications.
+func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor, cr *storage.CheckResult) {
+	now := time.Now()
+	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
+	if err != nil {
+		status = &storage.MonitorStatus{MonitorID: mon.ID}
+	}
+
+	finalStatus := cr.Status
+	status.Status = finalStatus
+	status.LastCheckAt = &now
+
+	if finalStatus == "up" {
+		status.ConsecSuccesses++
+		status.ConsecFails = 0
+	} else {
+		status.ConsecFails++
+		status.ConsecSuccesses = 0
+	}
+
+	if cr.CertFingerprint != "" {
+		oldFP := status.LastCertFingerprint
+		if oldFP != "" && oldFP != cr.CertFingerprint {
+			p.emitNotification("cert.changed", nil, mon, nil)
+		}
+		status.LastCertFingerprint = cr.CertFingerprint
+	}
+
+	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
+		p.logger.Error("agent result: upsert status", "error", err)
+	}
+
+	p.processIncidents(ctx, mon, finalStatus, status, cr.Message)
+}
+
 func evaluateAssertions(mon *storage.Monitor, result *checker.Result) string {
 	finalStatus := result.Status
 	if len(mon.Assertions) == 0 || string(mon.Assertions) == "[]" {

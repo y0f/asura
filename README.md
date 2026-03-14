@@ -45,9 +45,10 @@ Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#
 
 ## Features
 
-- **13 monitor types** — HTTP, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain/WHOIS, Command, Heartbeat, Manual
+- **18 monitor types** — HTTP, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain/WHOIS, Command, Heartbeat, Manual
 - **13 notification channels** — Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
 - **Assertions** — Status code, body text, regex, JSONPath, headers, response time, cert expiry, DNS records with AND/OR group logic
+- **Distributed probe agents** — Run checks from multiple locations with a lightweight agent binary (~16MB)
 - **Live dashboard** — Real-time SSE push with sparklines, uptime stats, and bulk operations. Falls back to polling.
 - **Public status pages** — 90-day uptime bars, incidents, email/webhook subscriptions, password protection, custom CSS
 - **Escalation policies** — Time-based notification chains with per-step delays and repeat

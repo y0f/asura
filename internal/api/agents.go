@@ -6,12 +6,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
 )
+
+var agentEligibleTypes = map[string]bool{
+	"http": true, "tcp": true, "dns": true, "icmp": true,
+	"tls": true, "websocket": true, "domain": true,
+	"grpc": true, "mqtt": true, "smtp": true, "ssh": true,
+	"redis": true, "postgresql": true, "udp": true,
+}
+
+var validCheckStatuses = map[string]bool{
+	"up": true, "down": true, "degraded": true,
+}
+
+const agentResultMaxBody = 10 << 20 // 10MB
 
 func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	agents, err := h.store.ListAgents(r.Context())
@@ -40,8 +54,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit(r, "create", "agent", a.ID, a.Name)
-	resp := map[string]any{"id": a.ID, "name": a.Name, "token": a.Token}
-	writeJSON(w, http.StatusCreated, resp)
+	writeJSON(w, http.StatusCreated, map[string]any{"id": a.ID, "name": a.Name, "token": a.Token})
 }
 
 func (h *Handler) DeleteAgentAPI(w http.ResponseWriter, r *http.Request) {
@@ -136,15 +149,17 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var results []agentResultRequest
-	dec := json.NewDecoder(r.Body)
+	r.Body = http.MaxBytesReader(w, r.Body, agentResultMaxBody)
 	defer r.Body.Close()
 
-	if err := dec.Decode(&results); err != nil {
-		var single agentResultRequest
-		r.Body.Close()
+	var results []agentResultRequest
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+	if err := json.Unmarshal(body, &results); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: expected array of results")
-		_ = single
 		return
 	}
 
@@ -152,7 +167,18 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 	accepted := 0
 
 	for _, res := range results {
-		if res.MonitorID == 0 || res.Status == "" {
+		if res.MonitorID == 0 {
+			continue
+		}
+		if !validCheckStatuses[res.Status] {
+			continue
+		}
+
+		mon, err := h.store.GetMonitor(r.Context(), res.MonitorID)
+		if err != nil || mon == nil || !mon.Enabled {
+			continue
+		}
+		if !agentEligibleTypes[mon.Type] {
 			continue
 		}
 
@@ -173,6 +199,11 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 			h.logger.Error("insert agent check result", "agent", agent.Name, "monitor_id", res.MonitorID, "error", err)
 			continue
 		}
+
+		if h.pipeline != nil {
+			h.pipeline.ProcessAgentResult(r.Context(), mon, cr)
+		}
+
 		accepted++
 	}
 

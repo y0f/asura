@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -102,7 +103,7 @@ func (s *SQLiteStore) DeleteAgent(ctx context.Context, id int64) error {
 
 func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, type, target, interval_secs, timeout_secs, settings, assertions
+		`SELECT id, name, type, target, interval_secs, timeout_secs, settings
 		 FROM monitors WHERE enabled=1 AND type NOT IN ('heartbeat', 'manual', 'docker', 'command')
 		 ORDER BY id`)
 	if err != nil {
@@ -113,15 +114,12 @@ func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 	var jobs []*AgentJob
 	for rows.Next() {
 		var j AgentJob
-		var settings, assertions string
-		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings, &assertions); err != nil {
+		var settings string
+		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings); err != nil {
 			return nil, err
 		}
 		if settings != "" && settings != "{}" {
-			j.Settings = []byte(settings)
-		}
-		if assertions != "" && assertions != "[]" {
-			j.Assertions = []byte(assertions)
+			j.Settings = sanitizeSettingsForAgent([]byte(settings))
 		}
 		jobs = append(jobs, &j)
 	}
@@ -132,4 +130,19 @@ func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 		jobs = []*AgentJob{}
 	}
 	return jobs, nil
+}
+
+func sanitizeSettingsForAgent(raw []byte) json.RawMessage {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	for _, secret := range []string{
+		"basic_auth_pass", "bearer_token", "oauth2_client_secret",
+		"mtls_client_key", "mtls_client_cert", "mtls_ca_cert", "password",
+	} {
+		delete(m, secret)
+	}
+	out, _ := json.Marshal(m)
+	return out
 }

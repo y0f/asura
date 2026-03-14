@@ -357,3 +357,41 @@
 <p>Event types: <code>incident.created</code>, <code>incident.resolved</code>, <code>content.changed</code>, <code>cert.changed</code>, <code>sla.breach</code>. Each event contains a JSON payload in the <code>data</code> field.</p>
 
 <p>The web UI connects via <code>GET /events</code> (session auth). A heartbeat ping is sent every 30 seconds. Max 100 concurrent connections.</p>
+
+<h2>Agents</h2>
+
+<p>Distributed probe agents run checks from remote locations and report results back to the central server.</p>
+
+<h3>Admin Endpoints (API key auth)</h3>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/agents</code></td><td>List all agents</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/v1/agents</code></td><td>Create agent (returns token)</td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/agents/{id}</code></td><td>Delete agent</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/agents/status</code></td><td>Agent online/offline status</td></tr>
+  </tbody>
+</table>
+
+<h3>Agent Endpoints (X-Agent-Token auth)</h3>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/agent/jobs</code></td><td>Poll for monitors to check</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/v1/agent/results</code></td><td>Submit check results (JSON array)</td></tr>
+  </tbody>
+</table>
+
+<p>Agent results are processed through the full pipeline: monitor status updates, incident creation/resolution, and notifications all work the same as central checks. Agents only receive non-sensitive monitor settings (credentials are stripped).</p>
+
+<h3>Running an Agent</h3>
+
+<pre><code>asura-agent --server https://your-server.com --token &lt;agent-token&gt; --interval 30s</code></pre>
+
+<p>The agent binary polls the server for jobs, runs checks locally, and posts results back. Only outbound HTTPS is needed. The agent binary is ~16MB and runs on any Linux server.</p>
