@@ -58,17 +58,18 @@
     <tr><th>Feature</th><th>Aspect</th></tr>
   </thead>
   <tbody>
-    <tr><td><strong>13 monitor types</strong></td><td>HTTP, TCP, DNS, ICMP, TLS, WebSocket, Command, Docker, Domain (WHOIS), gRPC, MQTT, passive heartbeat, plus manual</td></tr>
-    <tr><td><strong>Assertion engine</strong></td><td>8 condition types with AND/OR group logic. status code, body text, body regex, JSON path, headers, response time, cert expiry, DNS records</td></tr>
-    <tr><td><strong>Change detection</strong></td><td>Line-level diffs on response bodies</td></tr>
-    <tr><td><strong>Incidents</strong></td><td>Automatic creation, configurable thresholds, acknowledge, recovery</td></tr>
-    <tr><td><strong>13 notification channels</strong></td><td>Webhook (HMAC-SHA256), Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify</td></tr>
-    <tr><td><strong>Monitor groups</strong></td><td>Organize monitors into named groups with custom sort order</td></tr>
-    <tr><td><strong>Proxy support</strong></td><td>HTTP and SOCKS5 proxies with per-monitor assignment</td></tr>
-    <tr><td><strong>Maintenance windows</strong></td><td>Recurring schedules to suppress alerts during planned downtime</td></tr>
-    <tr><td><strong>Heartbeat monitoring</strong></td><td>Cron jobs, workers, and pipelines report in. silence triggers an incident</td></tr>
-    <tr><td><strong>Status pages</strong></td><td>Multiple public status pages with custom slugs and grouping</td></tr>
-    <tr><td><strong>Analytics</strong></td><td>Uptime %, response time percentiles, Prometheus <code>/metrics</code> endpoint</td></tr>
+    <tr><td><strong>19 monitor types</strong></td><td>HTTP, HTTP Multi-Step, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain (WHOIS), Command, SMTP, SSH, Redis, PostgreSQL, UDP, Heartbeat, Manual</td></tr>
+    <tr><td><strong>Assertion engine</strong></td><td>8 condition types with AND/OR group logic</td></tr>
+    <tr><td><strong>Distributed agents</strong></td><td>Run checks from multiple locations with a lightweight agent binary</td></tr>
+    <tr><td><strong>Anomaly detection</strong></td><td>Statistical baseline with configurable sensitivity</td></tr>
+    <tr><td><strong>Incident severity</strong></td><td>Critical, major, minor, warning with auto-assignment</td></tr>
+    <tr><td><strong>13 notification channels</strong></td><td>Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify</td></tr>
+    <tr><td><strong>Escalation policies</strong></td><td>Time-based notification chains with delays and repeat</td></tr>
+    <tr><td><strong>Status pages</strong></td><td>Public pages with uptime bars, RSS feed, email/webhook subscriptions</td></tr>
+    <tr><td><strong>SLA tracking</strong></td><td>Per-monitor targets, error budgets, breach alerts</td></tr>
+    <tr><td><strong>Maintenance</strong></td><td>6 modes: manual, one-time, cron, daily, weekly, monthly</td></tr>
+    <tr><td><strong>Encryption at rest</strong></td><td>AES-256-GCM for notification secrets and proxy passwords</td></tr>
+    <tr><td><strong>Data rollup</strong></td><td>Hourly and daily aggregates for long-running instances</td></tr>
     <tr><td><strong>~15 MB binary</strong></td><td>Cross-compiles to <code>linux/amd64</code> and <code>linux/arm64</code></td></tr>
   </tbody>
 </table>

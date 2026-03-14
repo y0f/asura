@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This guide covers the basics.
 
 ## Running Locally
 
-Requires Go 1.24+ and [templ](https://templ.guide/) CLI:
+Requires Go 1.25+ and [templ](https://templ.guide/) CLI:
 
 ```bash
 go install github.com/a-h/templ/cmd/templ@v0.3.977

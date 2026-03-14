@@ -1,6 +1,6 @@
 <h1>Monitors</h1>
 
-<p>Asura supports 11 check protocols plus passive heartbeat monitoring and user-controlled manual monitors. Each monitor runs on its own interval with protocol-specific settings and optional assertions.</p>
+<p>Asura supports 19 monitor types. Each monitor runs on its own interval with protocol-specific settings and optional assertions.</p>
 
 <h2>Monitor Fields</h2>
 
@@ -11,7 +11,7 @@
   <tbody>
     <tr><td><code>name</code></td><td>string</td><td>yes</td><td>Display name</td></tr>
     <tr><td><code>description</code></td><td>string</td><td></td><td>Optional description, rendered as markdown on the detail page (max 5000 chars)</td></tr>
-    <tr><td><code>type</code></td><td>string</td><td>yes</td><td><code>http</code> <code>tcp</code> <code>dns</code> <code>icmp</code> <code>tls</code> <code>websocket</code> <code>command</code> <code>docker</code> <code>heartbeat</code> <code>domain</code> <code>grpc</code> <code>mqtt</code> <code>manual</code></td></tr>
+    <tr><td><code>type</code></td><td>string</td><td>yes</td><td><code>http</code> <code>http_multi</code> <code>tcp</code> <code>dns</code> <code>icmp</code> <code>tls</code> <code>websocket</code> <code>command</code> <code>docker</code> <code>heartbeat</code> <code>domain</code> <code>grpc</code> <code>mqtt</code> <code>smtp</code> <code>ssh</code> <code>redis</code> <code>postgresql</code> <code>udp</code> <code>manual</code></td></tr>
     <tr><td><code>target</code></td><td>string</td><td>yes</td><td>URL, host:port, domain, or command</td></tr>
     <tr><td><code>interval</code></td><td>int</td><td></td><td>Seconds between checks (default: 60)</td></tr>
     <tr><td><code>timeout</code></td><td>int</td><td></td><td>Timeout in seconds (default: 10)</td></tr>
@@ -308,3 +308,71 @@ curl -X POST https://example.com/asura/api/v1/monitors/1/status \
 }</code></pre>
 
 <p>In this example: the monitor passes if the status code is 200 <em>or</em> 201 <strong>and</strong> the response time is under 2 s <strong>and</strong> the <code>status</code> JSON field equals <code>ok</code>. A response time between 2 s and 5 s marks the monitor degraded instead of down.</p>
+
+<h2>Additional Monitor Types</h2>
+
+<h3>SMTP</h3>
+<p>Checks mail server availability via EHLO handshake. Supports STARTTLS and expected banner validation. Configurable port (25, 465, 587).</p>
+
+<h3>SSH</h3>
+<p>Connects to an SSH server and verifies the protocol banner (SSH-2.0). Optional host key fingerprint verification via SHA-256.</p>
+
+<h3>Redis</h3>
+<p>Sends PING via the RESP protocol and expects PONG. Supports optional AUTH password. Default port 6379.</p>
+
+<h3>PostgreSQL</h3>
+<p>Performs a protocol v3 startup handshake to verify the server accepts connections. Configurable username and database. No driver required.</p>
+
+<h3>UDP</h3>
+<p>Sends a packet and optionally validates response content. Useful for DNS-over-UDP and custom UDP services.</p>
+
+<h3>HTTP Multi-Step</h3>
+<p>Executes a sequence of up to 5 HTTP requests. Variables extracted from one step (via regex or JSON dot-path) can be interpolated into subsequent steps using <code>{{var}}</code> syntax. The check fails if any step returns an unexpected status or errors. Response time is the sum of all steps.</p>
+
+<pre><code>{
+  "steps": [
+    {
+      "name": "Login",
+      "url": "https://api.example.com/auth",
+      "method": "POST",
+      "headers": {"Content-Type": "application/json"},
+      "body": "{\"user\":\"test\",\"pass\":\"secret\"}",
+      "expected_status": 200,
+      "extract_var": "token",
+      "extract_json": "data.access_token"
+    },
+    {
+      "name": "Get profile",
+      "url": "https://api.example.com/me",
+      "method": "GET",
+      "headers": {"Authorization": "Bearer {{token}}"},
+      "expected_status": 200
+    }
+  ]
+}</code></pre>
+
+<h2>Anomaly Detection</h2>
+
+<p>Per-monitor anomaly sensitivity detects response time spikes by comparing against a 7-day rolling baseline. When a check exceeds the configured threshold, the monitor is marked degraded instead of up.</p>
+
+<table>
+  <thead>
+    <tr><th>Sensitivity</th><th>Threshold</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Off</td><td>Disabled</td></tr>
+    <tr><td>Low</td><td>3 standard deviations above baseline</td></tr>
+    <tr><td>Medium</td><td>2 standard deviations</td></tr>
+    <tr><td>High</td><td>1.5 standard deviations</td></tr>
+  </tbody>
+</table>
+
+<p>Baselines recalculate every 6 hours. A minimum of 30 data points are required before detection activates. Set via the <code>anomaly_sensitivity</code> field or the monitor form.</p>
+
+<h2>Incident Severity</h2>
+
+<p>Incidents are auto-assigned a severity when created: <code>critical</code> for down monitors, <code>warning</code> for degraded. Severity can be manually overridden via <code>POST /api/v1/incidents/{id}/severity</code> with <code>{"severity": "major"}</code>. Four levels: critical, major, minor, warning.</p>
+
+<h2>Uptime Heatmap</h2>
+
+<p>The monitor detail page shows a 365-day uptime calendar. Each cell represents one day, color-coded by uptime percentage: green (100%), yellow (>99%), orange (>95%), red (&lt;95%). Hover for exact percentages.</p>

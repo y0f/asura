@@ -107,3 +107,40 @@
 </ul>
 
 <p>The base interval on each monitor is never modified. adaptive intervals only change the scheduler's internal timing. Disable with <code>adaptive_intervals: false</code>.</p>
+
+<h2>Encryption at Rest</h2>
+
+<p>Notification channel settings (tokens, passwords, webhook secrets) and proxy auth passwords can be encrypted in the database using AES-256-GCM.</p>
+
+<pre><code>database:
+  encryption_key: "your-secret-key-here"</code></pre>
+
+<p>When set, secrets are encrypted on write and decrypted on read. Existing unencrypted data is read transparently and encrypted on the next update. The key is hashed with SHA-256 to derive the AES key.</p>
+
+<h2>Data Rollup</h2>
+
+<p>Check results are automatically aggregated into hourly and daily rollups by the retention worker. Chart queries select the appropriate tier based on the requested time range:</p>
+
+<ul>
+  <li>Less than 7 days: raw check results</li>
+  <li>7 to 90 days: hourly aggregates (avg/min/max/p95 response time, up/down counts)</li>
+  <li>Over 90 days: daily aggregates</li>
+</ul>
+
+<p>Hourly rollups are retained for 90 days, daily rollups for 365 days. This keeps the database size manageable for long-running instances.</p>
+
+<h2>Keyboard Shortcuts</h2>
+
+<table>
+  <thead>
+    <tr><th>Key</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>n</code></td><td>New monitor</td></tr>
+    <tr><td><code>/</code></td><td>Focus search</td></tr>
+    <tr><td><code>Escape</code></td><td>Close modal</td></tr>
+    <tr><td><code>?</code></td><td>Show shortcut help</td></tr>
+  </tbody>
+</table>
+
+<p>Shortcuts are disabled when typing in form fields.</p>
