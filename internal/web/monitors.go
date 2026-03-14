@@ -808,6 +808,7 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 		UpsideDown:         src.UpsideDown,
 		ResendInterval:     src.ResendInterval,
 		SLATarget:          src.SLATarget,
+		AnomalySensitivity: src.AnomalySensitivity,
 		GroupID:            src.GroupID,
 		ProxyID:            src.ProxyID,
 		EscalationPolicyID: src.EscalationPolicyID,
@@ -958,6 +959,10 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 && f <= 100 {
 			mon.SLATarget = f
 		}
+	}
+
+	if v := r.FormValue("anomaly_sensitivity"); v != "" {
+		mon.AnomalySensitivity = v
 	}
 
 	if v := r.FormValue("group_id"); v != "" {

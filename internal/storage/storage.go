@@ -141,6 +141,10 @@ type Store interface {
 	ListStatusPageMonitors(ctx context.Context, pageID int64) ([]StatusPageMonitor, error)
 	ListStatusPageMonitorsWithStatus(ctx context.Context, pageID int64) ([]*Monitor, []StatusPageMonitor, error)
 
+	// Anomaly detection baselines
+	UpdateBaseline(ctx context.Context, monitorID int64, avg, stddev float64) error
+	GetResponseTimeStats(ctx context.Context, monitorID int64, from time.Time) (avg, stddev float64, count int64, err error)
+
 	// Status page subscribers
 	CreateStatusPageSubscriber(ctx context.Context, sub *StatusPageSubscriber) error
 	GetSubscriberByToken(ctx context.Context, token string) (*StatusPageSubscriber, error)

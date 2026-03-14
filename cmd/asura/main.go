@@ -117,6 +117,7 @@ func main() {
 	go forwardNotifications(ctx, pipeline, dispatcher, subNotifier, srv.EventBroker())
 	go srv.RequestLogWriter().Run(ctx)
 	go runRollupWorker(ctx, store, logger)
+	go runBaselineWorker(ctx, store, logger)
 	httpServer := startHTTPServer(cfg, srv, logger, cancel)
 
 	quit := make(chan os.Signal, 1)
@@ -244,6 +245,42 @@ func runRollupWorker(ctx context.Context, store storage.Store, logger *slog.Logg
 			if err := store.RollupRequestLogs(ctx, yesterday); err != nil {
 				logger.Error("request log rollup failed", "date", yesterday, "error", err)
 			}
+		}
+	}
+}
+
+func runBaselineWorker(ctx context.Context, store storage.Store, logger *slog.Logger) {
+	recalculate := func() {
+		monitors, err := store.GetAllEnabledMonitors(ctx)
+		if err != nil {
+			logger.Error("baseline: list monitors", "error", err)
+			return
+		}
+		from := time.Now().UTC().AddDate(0, 0, -7)
+		for _, mon := range monitors {
+			if mon.AnomalySensitivity == "" || mon.AnomalySensitivity == "off" {
+				continue
+			}
+			avg, stddev, count, err := store.GetResponseTimeStats(ctx, mon.ID, from)
+			if err != nil || count < 30 {
+				continue
+			}
+			if err := store.UpdateBaseline(ctx, mon.ID, avg, stddev); err != nil {
+				logger.Error("baseline: update", "monitor_id", mon.ID, "error", err)
+			}
+		}
+	}
+
+	recalculate()
+
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			recalculate()
 		}
 	}
 }

@@ -24,6 +24,7 @@ type Monitor struct {
 	UpsideDown         bool            `json:"upside_down"`
 	ResendInterval     int             `json:"resend_interval"`
 	SLATarget          float64         `json:"sla_target"`
+	AnomalySensitivity string          `json:"anomaly_sensitivity,omitempty"` // off, low, medium, high
 	GroupID            *int64          `json:"group_id,omitempty"`
 	ProxyID            *int64          `json:"proxy_id,omitempty"`
 	EscalationPolicyID *int64          `json:"escalation_policy_id,omitempty"`
@@ -218,6 +219,9 @@ type MonitorStatus struct {
 	ConsecSuccesses     int        `json:"consec_successes"`
 	LastBodyHash        string     `json:"-"`
 	LastCertFingerprint string     `json:"-"`
+	BaselineAvg         float64    `json:"baseline_avg,omitempty"`
+	BaselineStddev      float64    `json:"baseline_stddev,omitempty"`
+	BaselineUpdatedAt   *time.Time `json:"baseline_updated_at,omitempty"`
 }
 
 // Pagination contains parameters for list queries.

@@ -185,7 +185,7 @@ func scanMonitor(row scanner) (*Monitor, error) {
 	var groupID, proxyID, escalationPolicyID sql.NullInt64
 	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.Type, &m.Target, &m.Interval, &m.Timeout, &m.Enabled,
 		&tagsStr, &settingsStr, &assertionsStr, &m.TrackChanges, &m.FailureThreshold, &m.SuccessThreshold,
-		&m.UpsideDown, &m.ResendInterval, &m.SLATarget, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
+		&m.UpsideDown, &m.ResendInterval, &m.SLATarget, &m.AnomalySensitivity, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
 		&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses)
 	if err != nil {
 		return nil, err

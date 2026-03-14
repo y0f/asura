@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 25
+const schemaVersion = 26
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS monitors (
 	success_threshold INTEGER NOT NULL DEFAULT 1,
 	upside_down     INTEGER NOT NULL DEFAULT 0,
 	resend_interval INTEGER NOT NULL DEFAULT 0,
-	sla_target      REAL    NOT NULL DEFAULT 0,
+	sla_target           REAL    NOT NULL DEFAULT 0,
+	anomaly_sensitivity  TEXT    NOT NULL DEFAULT 'off',
 	group_id        INTEGER DEFAULT NULL,
 	proxy_id              INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL,
 	escalation_policy_id  INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL,
@@ -78,7 +79,10 @@ CREATE TABLE IF NOT EXISTS monitor_status (
 	consec_fails           INTEGER NOT NULL DEFAULT 0,
 	consec_successes       INTEGER NOT NULL DEFAULT 0,
 	last_body_hash         TEXT    NOT NULL DEFAULT '',
-	last_cert_fingerprint  TEXT    NOT NULL DEFAULT ''
+	last_cert_fingerprint  TEXT    NOT NULL DEFAULT '',
+	baseline_avg           REAL    NOT NULL DEFAULT 0,
+	baseline_stddev        REAL    NOT NULL DEFAULT 0,
+	baseline_updated_at    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS check_results (
@@ -469,5 +473,12 @@ ALTER TABLE monitors ADD COLUMN escalation_policy_id INTEGER DEFAULT NULL REFERE
 );
 CREATE INDEX IF NOT EXISTS idx_sp_subscribers_page ON status_page_subscribers(status_page_id, confirmed);
 CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(token);`,
+	},
+	{
+		version: 26,
+		sql: `ALTER TABLE monitors ADD COLUMN anomaly_sensitivity TEXT NOT NULL DEFAULT 'off';
+ALTER TABLE monitor_status ADD COLUMN baseline_avg REAL NOT NULL DEFAULT 0;
+ALTER TABLE monitor_status ADD COLUMN baseline_stddev REAL NOT NULL DEFAULT 0;
+ALTER TABLE monitor_status ADD COLUMN baseline_updated_at TEXT;`,
 	},
 }

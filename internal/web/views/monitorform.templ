@@ -140,10 +140,11 @@ func advancedSectionData(p MonitorFormParams) string {
 		hasChannels := len(p.SelectedChannelIDs) > 0
 		hasEscalation := p.Monitor.EscalationPolicyID != nil
 		hasSLA := p.Monitor.SLATarget != 0
+		hasAnomaly := p.Monitor.AnomalySensitivity != "" && p.Monitor.AnomalySensitivity != "off"
 		hasResend := p.Monitor.ResendInterval != 0
 		hasTrack := p.Monitor.TrackChanges
 		hasUpside := p.Monitor.UpsideDown
-		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasResend || hasTrack || hasUpside {
+		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasAnomaly || hasResend || hasTrack || hasUpside {
 			show = "true"
 		}
 	}
@@ -382,6 +383,16 @@ templ MonitorFormPage(p MonitorFormParams) {
 										<option value="99.95" if p.Monitor.SLATarget == 99.95 { selected }>99.95%</option>
 										<option value="99.99" if p.Monitor.SLATarget == 99.99 { selected }>99.99%</option>
 									</select>
+								</div>
+								<div>
+									<label class="form-label">Anomaly Detection</label>
+									<select name="anomaly_sensitivity" class="form-select">
+										<option value="off" if p.Monitor.AnomalySensitivity == "" || p.Monitor.AnomalySensitivity == "off" { selected }>Off</option>
+										<option value="low" if p.Monitor.AnomalySensitivity == "low" { selected }>Low (3 sigma)</option>
+										<option value="medium" if p.Monitor.AnomalySensitivity == "medium" { selected }>Medium (2 sigma)</option>
+										<option value="high" if p.Monitor.AnomalySensitivity == "high" { selected }>High (1.5 sigma)</option>
+									</select>
+									<p class="text-[10px] text-muted mt-1">Mark as degraded when response time exceeds the rolling baseline</p>
 								</div>
 								<div>
 									<label class="form-label">Resend Notification Interval (s)</label>

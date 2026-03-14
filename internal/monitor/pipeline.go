@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/y0f/asura/internal/anomaly"
 	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/diff"
@@ -175,6 +177,16 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 			p.emitNotification("cert.changed", nil, mon, nil)
 		}
 		status.LastCertFingerprint = result.CertFingerprint
+	}
+
+	if finalStatus == "up" && mon.AnomalySensitivity != "" && mon.AnomalySensitivity != "off" {
+		ms, err := p.store.GetMonitorStatus(ctx, mon.ID)
+		if err == nil && ms.BaselineAvg > 0 && anomaly.IsAnomaly(cr.ResponseTime, ms.BaselineAvg, ms.BaselineStddev, mon.AnomalySensitivity) {
+			finalStatus = "degraded"
+			status.Status = "degraded"
+			cr.Message = fmt.Sprintf("response time %dms exceeds baseline %.0fms (%.1fσ)",
+				cr.ResponseTime, ms.BaselineAvg, (float64(cr.ResponseTime)-ms.BaselineAvg)/ms.BaselineStddev)
+		}
 	}
 
 	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
