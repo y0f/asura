@@ -134,6 +134,18 @@ monitor:
   #   - /usr/local/bin/check_health
   #   - /opt/scripts/verify
 
+# Status page subscriptions (email + webhook)
+# Allows public status page visitors to subscribe to incident updates.
+# subscriptions:
+#   enabled: true
+#   smtp:
+#     host: "smtp.example.com"
+#     port: 587
+#     username: ""
+#     password: ""
+#     from: "status@example.com"
+#     tls_mode: "starttls"  # none, starttls, smtps
+
 logging:
   # Log level: debug, info, warn, error
   level: "info"

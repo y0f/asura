@@ -15,13 +15,28 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Auth     AuthConfig     `yaml:"auth"`
-	Monitor  MonitorConfig  `yaml:"monitor"`
-	Logging  LoggingConfig  `yaml:"logging"`
+	Server        ServerConfig        `yaml:"server"`
+	Database      DatabaseConfig      `yaml:"database"`
+	Auth          AuthConfig          `yaml:"auth"`
+	Monitor       MonitorConfig       `yaml:"monitor"`
+	Logging       LoggingConfig       `yaml:"logging"`
+	Subscriptions SubscriptionsConfig `yaml:"subscriptions"`
 
 	trustedNets []net.IPNet
+}
+
+type SubscriptionsConfig struct {
+	Enabled bool       `yaml:"enabled"`
+	SMTP    SMTPConfig `yaml:"smtp"`
+}
+
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
+	TLSMode  string `yaml:"tls_mode"`
 }
 
 type ServerConfig struct {

@@ -196,6 +196,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("PUT "+s.p("/api/v1/status-pages/{id}"), monWrite(http.HandlerFunc(s.api.UpdateStatusPage)))
 	mux.Handle("DELETE "+s.p("/api/v1/status-pages/{id}"), monWrite(http.HandlerFunc(s.api.DeleteStatusPage)))
 	mux.HandleFunc("GET "+s.p("/api/v1/status-pages/{id}/public"), s.api.PublicStatusPage)
+	mux.HandleFunc("POST "+s.p("/api/v1/status-pages/{id}/subscribe"), s.api.SubscribeAPI)
+	mux.Handle("GET "+s.p("/api/v1/status-pages/{id}/subscribers"), monRead(http.HandlerFunc(s.api.CountSubscribers)))
+	mux.Handle("DELETE "+s.p("/api/v1/status-pages/{id}/subscribers/{subId}"), monWrite(http.HandlerFunc(s.api.DeleteSubscriber)))
 
 	mux.Handle("GET "+s.p("/api/v1/request-logs"), metricsRead(http.HandlerFunc(s.api.ListRequestLogs)))
 	mux.Handle("GET "+s.p("/api/v1/request-logs/stats"), metricsRead(http.HandlerFunc(s.api.RequestLogStats)))

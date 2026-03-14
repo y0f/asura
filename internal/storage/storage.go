@@ -141,6 +141,16 @@ type Store interface {
 	ListStatusPageMonitors(ctx context.Context, pageID int64) ([]StatusPageMonitor, error)
 	ListStatusPageMonitorsWithStatus(ctx context.Context, pageID int64) ([]*Monitor, []StatusPageMonitor, error)
 
+	// Status page subscribers
+	CreateStatusPageSubscriber(ctx context.Context, sub *StatusPageSubscriber) error
+	GetSubscriberByToken(ctx context.Context, token string) (*StatusPageSubscriber, error)
+	ConfirmSubscriber(ctx context.Context, token string) error
+	DeleteSubscriberByToken(ctx context.Context, token string) error
+	CountSubscribersByPage(ctx context.Context, pageID int64) (int64, error)
+	ListConfirmedSubscribers(ctx context.Context, pageID int64) ([]*StatusPageSubscriber, error)
+	DeleteSubscriber(ctx context.Context, id int64) error
+	GetStatusPageIDsForMonitor(ctx context.Context, monitorID int64) ([]int64, error)
+
 	// Proxies
 	CreateProxy(ctx context.Context, p *Proxy) error
 	GetProxy(ctx context.Context, id int64) (*Proxy, error)

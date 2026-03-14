@@ -20,6 +20,7 @@ type Handler struct {
 	store              storage.Store
 	pipeline           *monitor.Pipeline
 	notifier           *notifier.Dispatcher
+	subNotifier        *notifier.SubscriberNotifier
 	logger             *slog.Logger
 	version            string
 	cspFrameDirective  string
@@ -36,12 +37,14 @@ func (h *Handler) Stop() {
 }
 
 func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
-	dispatcher *notifier.Dispatcher, logger *slog.Logger, version, cspDirective string) *Handler {
+	dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier,
+	logger *slog.Logger, version, cspDirective string) *Handler {
 	h := &Handler{
 		cfg:               cfg,
 		store:             store,
 		pipeline:          pipeline,
 		notifier:          dispatcher,
+		subNotifier:       subNotifier,
 		logger:            logger,
 		version:           version,
 		cspFrameDirective: cspDirective,

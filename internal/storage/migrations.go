@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 24
+const schemaVersion = 25
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -256,6 +256,20 @@ CREATE TABLE IF NOT EXISTS status_page_monitors (
 	PRIMARY KEY (page_id, monitor_id)
 );
 
+CREATE TABLE IF NOT EXISTS status_page_subscribers (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	status_page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
+	type           TEXT    NOT NULL,
+	email          TEXT    NOT NULL DEFAULT '',
+	webhook_url    TEXT    NOT NULL DEFAULT '',
+	confirmed      INTEGER NOT NULL DEFAULT 0,
+	token          TEXT    NOT NULL UNIQUE,
+	created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sp_subscribers_page ON status_page_subscribers(status_page_id, confirmed);
+CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(token);
+
 CREATE INDEX IF NOT EXISTS idx_check_results_created_at ON check_results(created_at);
 CREATE INDEX IF NOT EXISTS idx_incidents_resolved_at ON incidents(status, resolved_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
@@ -440,5 +454,20 @@ ALTER TABLE monitors ADD COLUMN escalation_policy_id INTEGER DEFAULT NULL REFERE
 	{
 		version: 24,
 		sql:     `ALTER TABLE monitors ADD COLUMN sla_target REAL NOT NULL DEFAULT 0;`,
+	},
+	{
+		version: 25,
+		sql: `CREATE TABLE IF NOT EXISTS status_page_subscribers (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	status_page_id INTEGER NOT NULL REFERENCES status_pages(id) ON DELETE CASCADE,
+	type           TEXT    NOT NULL,
+	email          TEXT    NOT NULL DEFAULT '',
+	webhook_url    TEXT    NOT NULL DEFAULT '',
+	confirmed      INTEGER NOT NULL DEFAULT 0,
+	token          TEXT    NOT NULL UNIQUE,
+	created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sp_subscribers_page ON status_page_subscribers(status_page_id, confirmed);
+CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(token);`,
 	},
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/y0f/asura/internal/web/views"
 )
 
-
 func spAuthCookieValue(passwordHash string) string {
 	h := sha256.New()
 	h.Write([]byte(passwordHash + ":sp-auth"))
@@ -92,16 +91,20 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 	overall := httputil.OverallStatus(monitors)
 	incidents := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
 
+	msg := r.URL.Query().Get("msg")
+
 	h.renderComponent(w, r, views.PublicStatusPage(views.PublicStatusPageParams{
-		Title:        sp.Title,
-		BasePath:     h.cfg.Server.BasePath,
-		Config:       sp,
-		Monitors:     monitorData,
-		Groups:       groups,
-		HasGroups:    len(groups) > 1 || (len(groups) == 1 && groups[0].Name != ""),
-		Overall:      overall,
-		Incidents:    incidents,
-		HasIncidents: len(incidents) > 0,
+		Title:                sp.Title,
+		BasePath:             h.cfg.Server.BasePath,
+		Config:               sp,
+		Monitors:             monitorData,
+		Groups:               groups,
+		HasGroups:            len(groups) > 1 || (len(groups) == 1 && groups[0].Name != ""),
+		Overall:              overall,
+		Incidents:            incidents,
+		HasIncidents:         len(incidents) > 0,
+		SubscriptionsEnabled: h.cfg.Subscriptions.Enabled,
+		Message:              msg,
 	}))
 }
 

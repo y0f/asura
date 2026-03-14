@@ -32,7 +32,7 @@ type Server struct {
 	version       string
 }
 
-func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher, logger *slog.Logger, version string) *Server {
+func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier, logger *slog.Logger, version string) *Server {
 	s := &Server{
 		cfg:          cfg,
 		store:        store,
@@ -50,7 +50,7 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 	s.api.OnStatusPageChange = s.refreshStatusSlugs
 
 	if cfg.IsWebUIEnabled() {
-		s.web = web.New(cfg, store, pipeline, dispatcher, logger, version, cspDirective)
+		s.web = web.New(cfg, store, pipeline, dispatcher, subNotifier, logger, version, cspDirective)
 		s.web.OnStatusPageChange = s.refreshStatusSlugs
 	}
 

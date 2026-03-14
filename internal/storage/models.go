@@ -403,6 +403,18 @@ type StatusPageMonitor struct {
 	GroupName string `json:"group_name"`
 }
 
+// StatusPageSubscriber represents a subscriber to a status page.
+type StatusPageSubscriber struct {
+	ID           int64     `json:"id"`
+	StatusPageID int64     `json:"status_page_id"`
+	Type         string    `json:"type"` // "email" or "webhook"
+	Email        string    `json:"email,omitempty"`
+	WebhookURL   string    `json:"webhook_url,omitempty"`
+	Confirmed    bool      `json:"confirmed"`
+	Token        string    `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // DailyUptime holds uptime statistics for a single day.
 type DailyUptime struct {
 	Date        string  `json:"date"`

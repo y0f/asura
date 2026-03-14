@@ -96,10 +96,16 @@ func main() {
 	pipeline := monitor.NewPipeline(store, registry, incMgr, cfg.Monitor.Workers, cfg.Monitor.AdaptiveIntervals, logger)
 	dispatcher := notifier.NewDispatcher(store, logger, cfg.Monitor.AllowPrivateTargets)
 
+	var subNotifier *notifier.SubscriberNotifier
+	if cfg.Subscriptions.Enabled {
+		subNotifier = notifier.NewSubscriberNotifier(store, cfg.Subscriptions.SMTP, cfg.ResolvedExternalURL(), logger)
+		logger.Info("status page subscriptions enabled")
+	}
+
 	escalationRunner := escalation.NewRunner(store, dispatcher, logger)
 	go escalationRunner.Start(ctx)
 
-	go forwardNotifications(ctx, pipeline, dispatcher)
+	go forwardNotifications(ctx, pipeline, dispatcher, subNotifier)
 	go pipeline.Run(ctx)
 
 	heartbeatWatcher := monitor.NewHeartbeatWatcher(store, incMgr, pipeline, cfg.Monitor.HeartbeatCheckInterval, logger)
@@ -108,7 +114,7 @@ func main() {
 	retentionWorker := storage.NewRetentionWorker(store, cfg.Database.RetentionDays, cfg.Database.RequestLogRetentionDays, cfg.Database.RetentionPeriod, logger)
 	go retentionWorker.Run(ctx)
 
-	srv := server.NewServer(cfg, store, pipeline, dispatcher, logger, version)
+	srv := server.NewServer(cfg, store, pipeline, dispatcher, subNotifier, logger, version)
 	go srv.RequestLogWriter().Run(ctx)
 	go runRollupWorker(ctx, store, logger)
 	httpServer := startHTTPServer(cfg, srv, logger, cancel)
@@ -134,7 +140,7 @@ func main() {
 	logger.Info("shutdown complete")
 }
 
-func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher) {
+func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -150,6 +156,13 @@ func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispa
 				dispatcher.NotifyForMonitor(event.MonitorID, payload)
 			} else {
 				dispatcher.NotifyWithPayload(payload)
+			}
+
+			if subNotifier != nil && event.MonitorID > 0 {
+				switch event.EventType {
+				case "incident.created", "incident.resolved":
+					go subNotifier.NotifyForMonitor(ctx, event.MonitorID, event.EventType, event.Incident, event.Monitor)
+				}
 			}
 		}
 	}
