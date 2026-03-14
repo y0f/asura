@@ -22,7 +22,7 @@ func NewManager(store storage.Store, logger *slog.Logger) *Manager {
 
 // ProcessFailure checks if an incident should be created for the monitor.
 // Returns the incident and whether it was newly created.
-func (m *Manager) ProcessFailure(ctx context.Context, monitorID int64, monitorName, cause string) (*storage.Incident, bool, error) {
+func (m *Manager) ProcessFailure(ctx context.Context, monitorID int64, monitorName, monitorStatus, cause string) (*storage.Incident, bool, error) {
 	existing, err := m.store.GetOpenIncident(ctx, monitorID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, false, err
@@ -41,6 +41,7 @@ func (m *Manager) ProcessFailure(ctx context.Context, monitorID int64, monitorNa
 		MonitorID:   monitorID,
 		MonitorName: monitorName,
 		Status:      StatusOpen,
+		Severity:    SeverityForStatus(monitorStatus),
 		Cause:       cause,
 	}
 	if err := m.store.CreateIncident(ctx, inc); err != nil {

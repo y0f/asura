@@ -8,10 +8,13 @@ import (
 )
 
 func (s *SQLiteStore) CreateIncident(ctx context.Context, inc *Incident) error {
+	if inc.Severity == "" {
+		inc.Severity = "critical"
+	}
 	now := formatTime(time.Now())
 	res, err := s.writeDB.ExecContext(ctx,
-		`INSERT INTO incidents (monitor_id, status, cause, started_at) VALUES (?, ?, ?, ?)`,
-		inc.MonitorID, inc.Status, inc.Cause, now)
+		`INSERT INTO incidents (monitor_id, status, severity, cause, started_at) VALUES (?, ?, ?, ?, ?)`,
+		inc.MonitorID, inc.Status, inc.Severity, inc.Cause, now)
 	if err != nil {
 		return err
 	}
@@ -21,26 +24,36 @@ func (s *SQLiteStore) CreateIncident(ctx context.Context, inc *Incident) error {
 	return nil
 }
 
-func (s *SQLiteStore) GetIncident(ctx context.Context, id int64) (*Incident, error) {
+const incidentColumns = `i.id, i.monitor_id, i.status, i.severity, i.cause, i.started_at,
+		        i.acknowledged_at, i.acknowledged_by, i.resolved_at, i.resolved_by`
+
+const incidentColumnsWithName = incidentColumns + `, COALESCE(m.name, '')`
+
+func scanIncident(scan func(dest ...any) error, withName bool) (*Incident, error) {
 	var inc Incident
 	var startedAt string
 	var ackAt, resAt sql.NullString
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT i.id, i.monitor_id, i.status, i.cause, i.started_at,
-		        i.acknowledged_at, i.acknowledged_by, i.resolved_at, i.resolved_by,
-		        COALESCE(m.name, '')
-		 FROM incidents i
-		 LEFT JOIN monitors m ON m.id = i.monitor_id
-		 WHERE i.id=?`, id).
-		Scan(&inc.ID, &inc.MonitorID, &inc.Status, &inc.Cause, &startedAt,
-			&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy, &inc.MonitorName)
-	if err != nil {
+	var dest []any
+	dest = append(dest, &inc.ID, &inc.MonitorID, &inc.Status, &inc.Severity, &inc.Cause, &startedAt,
+		&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy)
+	if withName {
+		dest = append(dest, &inc.MonitorName)
+	}
+	if err := scan(dest...); err != nil {
 		return nil, err
 	}
 	inc.StartedAt = parseTime(startedAt)
 	inc.AcknowledgedAt = parseTimePtr(ackAt)
 	inc.ResolvedAt = parseTimePtr(resAt)
 	return &inc, nil
+}
+
+func (s *SQLiteStore) GetIncident(ctx context.Context, id int64) (*Incident, error) {
+	row := s.readDB.QueryRowContext(ctx,
+		`SELECT `+incidentColumnsWithName+`
+		 FROM incidents i LEFT JOIN monitors m ON m.id = i.monitor_id
+		 WHERE i.id=?`, id)
+	return scanIncident(row.Scan, true)
 }
 
 func (s *SQLiteStore) ListIncidents(ctx context.Context, monitorID int64, status string, search string, p Pagination) (*PaginatedResult, error) {
@@ -71,11 +84,8 @@ func (s *SQLiteStore) ListIncidents(ctx context.Context, monitorID int64, status
 	offset := (p.Page - 1) * p.PerPage
 	args = append(args, p.PerPage, offset)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT i.id, i.monitor_id, i.status, i.cause, i.started_at,
-		        i.acknowledged_at, i.acknowledged_by, i.resolved_at, i.resolved_by,
-		        COALESCE(m.name, '')
-		 FROM incidents i
-		 LEFT JOIN monitors m ON m.id = i.monitor_id
+		`SELECT `+incidentColumnsWithName+`
+		 FROM incidents i LEFT JOIN monitors m ON m.id = i.monitor_id
 		 WHERE `+where+` ORDER BY i.started_at DESC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, err
@@ -84,18 +94,11 @@ func (s *SQLiteStore) ListIncidents(ctx context.Context, monitorID int64, status
 
 	var incidents []*Incident
 	for rows.Next() {
-		var inc Incident
-		var startedAt string
-		var ackAt, resAt sql.NullString
-		err := rows.Scan(&inc.ID, &inc.MonitorID, &inc.Status, &inc.Cause, &startedAt,
-			&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy, &inc.MonitorName)
+		inc, err := scanIncident(rows.Scan, true)
 		if err != nil {
 			return nil, err
 		}
-		inc.StartedAt = parseTime(startedAt)
-		inc.AcknowledgedAt = parseTimePtr(ackAt)
-		inc.ResolvedAt = parseTimePtr(resAt)
-		incidents = append(incidents, &inc)
+		incidents = append(incidents, inc)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -122,8 +125,8 @@ func (s *SQLiteStore) UpdateIncident(ctx context.Context, inc *Incident) error {
 		resAt = formatTime(*inc.ResolvedAt)
 	}
 	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE incidents SET status=?, cause=?, acknowledged_at=?, acknowledged_by=?, resolved_at=?, resolved_by=? WHERE id=?`,
-		inc.Status, inc.Cause, ackAt, inc.AcknowledgedBy, resAt, inc.ResolvedBy, inc.ID)
+		`UPDATE incidents SET status=?, severity=?, cause=?, acknowledged_at=?, acknowledged_by=?, resolved_at=?, resolved_by=? WHERE id=?`,
+		inc.Status, inc.Severity, inc.Cause, ackAt, inc.AcknowledgedBy, resAt, inc.ResolvedBy, inc.ID)
 	return err
 }
 
@@ -133,22 +136,11 @@ func (s *SQLiteStore) DeleteIncident(ctx context.Context, id int64) error {
 }
 
 func (s *SQLiteStore) GetOpenIncident(ctx context.Context, monitorID int64) (*Incident, error) {
-	var inc Incident
-	var startedAt string
-	var ackAt, resAt sql.NullString
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT id, monitor_id, status, cause, started_at, acknowledged_at, acknowledged_by, resolved_at, resolved_by
-		 FROM incidents WHERE monitor_id=? AND status IN ('open','acknowledged') ORDER BY started_at DESC LIMIT 1`,
-		monitorID).
-		Scan(&inc.ID, &inc.MonitorID, &inc.Status, &inc.Cause, &startedAt,
-			&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy)
-	if err != nil {
-		return nil, err
-	}
-	inc.StartedAt = parseTime(startedAt)
-	inc.AcknowledgedAt = parseTimePtr(ackAt)
-	inc.ResolvedAt = parseTimePtr(resAt)
-	return &inc, nil
+	row := s.readDB.QueryRowContext(ctx,
+		`SELECT `+incidentColumns+`
+		 FROM incidents i WHERE i.monitor_id=? AND i.status IN ('open','acknowledged') ORDER BY i.started_at DESC LIMIT 1`,
+		monitorID)
+	return scanIncident(row.Scan, false)
 }
 
 // --- Incident Events ---

@@ -48,7 +48,7 @@ func TestIncidentLifecycle(t *testing.T) {
 	mgr := NewManager(store, logger)
 
 	// First failure should create incident
-	inc, created, err := mgr.ProcessFailure(ctx, m.ID, m.Name, "connection timeout")
+	inc, created, err := mgr.ProcessFailure(ctx, m.ID, m.Name, "down", "connection timeout")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestIncidentLifecycle(t *testing.T) {
 	}
 
 	// Second failure should add event, not create new incident
-	inc2, created2, err := mgr.ProcessFailure(ctx, m.ID, m.Name, "connection timeout again")
+	inc2, created2, err := mgr.ProcessFailure(ctx, m.ID, m.Name, "down", "connection timeout again")
 	if err != nil {
 		t.Fatal(err)
 	}

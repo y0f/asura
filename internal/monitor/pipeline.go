@@ -254,14 +254,14 @@ func (p *Pipeline) processIncidents(ctx context.Context, mon *storage.Monitor, f
 	inMaintenance, _ := p.store.IsMonitorInMaintenance(ctx, mon.ID, time.Now())
 
 	if finalStatus != "up" && status.ConsecFails >= mon.FailureThreshold {
-		p.processFailure(ctx, mon, message, inMaintenance)
+		p.processFailure(ctx, mon, finalStatus, message, inMaintenance)
 	} else if finalStatus == "up" && status.ConsecSuccesses >= mon.SuccessThreshold {
 		p.processRecovery(ctx, mon, inMaintenance)
 	}
 }
 
-func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, message string, inMaintenance bool) {
-	inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, message)
+func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, monitorStatus, message string, inMaintenance bool) {
+	inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, monitorStatus, message)
 	if err != nil {
 		p.logger.Error("process failure", "error", err)
 		return
@@ -452,7 +452,7 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 			}
 		}
 	} else if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending") {
-		inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, message)
+		inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, newStatus, message)
 		if err != nil {
 			p.logger.Error("manual status: process failure", "error", err)
 			return

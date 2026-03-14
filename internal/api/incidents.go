@@ -192,6 +192,45 @@ func (h *Handler) DeleteIncident(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) SetIncidentSeverity(w http.ResponseWriter, r *http.Request) {
+	id, err := httputil.ParseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	inc, err := h.store.GetIncident(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "incident not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get incident")
+		return
+	}
+
+	var req struct {
+		Severity string `json:"severity"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !incident.ValidSeverity(req.Severity) {
+		writeError(w, http.StatusBadRequest, "severity must be one of: critical, major, minor, warning")
+		return
+	}
+
+	inc.Severity = req.Severity
+	if err := h.store.UpdateIncident(r.Context(), inc); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update severity")
+		return
+	}
+
+	h.audit(r, "set_severity", "incident", id, req.Severity)
+	writeJSON(w, http.StatusOK, inc)
+}
+
 func newIncidentEvent(incidentID int64, eventType, message string) *storage.IncidentEvent {
 	return &storage.IncidentEvent{
 		IncidentID: incidentID,

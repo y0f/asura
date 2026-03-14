@@ -98,6 +98,7 @@ templ IncidentListPage(p IncidentListParams) {
 							<thead>
 								<tr class="border-b border-line text-left">
 									<th class="th">Monitor</th>
+									<th class="th">Severity</th>
 									<th class="th">Status</th>
 									<th class="th">Cause</th>
 									<th class="th">Duration</th>
@@ -109,6 +110,7 @@ templ IncidentListPage(p IncidentListParams) {
 								for _, inc := range incs {
 									<tr class="hover:bg-surface-200/20 transition-colors">
 										<td class="px-4 py-3 text-[13px] text-white font-medium">{ inc.MonitorName }</td>
+										<td class="px-4 py-3"><span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", SeverityBg(inc.Severity) }>{ inc.Severity }</span></td>
 										<td class="px-4 py-3"><span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(inc.Status) }>{ inc.Status }</span></td>
 										<td class="px-4 py-3 text-[12px] text-muted truncate max-w-[200px]" title={ inc.Cause }>{ inc.Cause }</td>
 										<td class="px-4 py-3 text-[12px] text-muted tabular-nums font-mono">{ IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</td>
@@ -169,6 +171,7 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 					</a>
 					<div class="flex items-center gap-2.5 mt-1.5">
 						<h1 class="text-[17px] font-medium text-white">{ fmt.Sprintf("Incident #%d", p.Incident.ID) }</h1>
+						<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", SeverityBg(p.Incident.Severity) }>{ p.Incident.Severity }</span>
 						<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(p.Incident.Status) }>{ p.Incident.Status }</span>
 					</div>
 					<div class="text-[11px] text-muted mt-1">

@@ -168,7 +168,8 @@ type Incident struct {
 	ID             int64      `json:"id"`
 	MonitorID      int64      `json:"monitor_id"`
 	MonitorName    string     `json:"monitor_name,omitempty"`
-	Status         string     `json:"status"` // open, acknowledged, resolved
+	Status         string     `json:"status"`   // open, acknowledged, resolved
+	Severity       string     `json:"severity"` // critical, major, minor, warning
 	Cause          string     `json:"cause"`
 	StartedAt      time.Time  `json:"started_at"`
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`

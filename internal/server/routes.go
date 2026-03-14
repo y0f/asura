@@ -168,6 +168,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("POST "+s.p("/api/v1/incidents/{id}/ack"), incWrite(http.HandlerFunc(s.api.AckIncident)))
 	mux.Handle("POST "+s.p("/api/v1/incidents/{id}/resolve"), incWrite(http.HandlerFunc(s.api.ResolveIncident)))
+	mux.Handle("POST "+s.p("/api/v1/incidents/{id}/severity"), incWrite(http.HandlerFunc(s.api.SetIncidentSeverity)))
 	mux.Handle("DELETE "+s.p("/api/v1/incidents/{id}"), incWrite(http.HandlerFunc(s.api.DeleteIncident)))
 
 	mux.Handle("POST "+s.p("/api/v1/notifications"), notifWrite(http.HandlerFunc(s.api.CreateNotification)))

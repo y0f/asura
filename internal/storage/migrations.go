@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 27
+const schemaVersion = 28
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS incidents (
 	monitor_id      INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	status          TEXT    NOT NULL DEFAULT 'open',
 	cause           TEXT    NOT NULL DEFAULT '',
+	severity        TEXT    NOT NULL DEFAULT 'critical',
 	started_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	acknowledged_at TEXT,
 	acknowledged_by TEXT    NOT NULL DEFAULT '',
@@ -487,5 +488,9 @@ ALTER TABLE monitor_status ADD COLUMN baseline_updated_at TEXT;`,
 		version: 27,
 		sql: `ALTER TABLE maintenance_windows ADD COLUMN cron_expr TEXT NOT NULL DEFAULT '';
 ALTER TABLE maintenance_windows ADD COLUMN active INTEGER NOT NULL DEFAULT 0;`,
+	},
+	{
+		version: 28,
+		sql:     `ALTER TABLE incidents ADD COLUMN severity TEXT NOT NULL DEFAULT 'critical';`,
 	},
 }

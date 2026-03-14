@@ -83,7 +83,7 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 
 		// Create incident through the incident manager
 		inMaintenance, _ := w.store.IsMonitorInMaintenance(ctx, mon.ID, now)
-		inc, created, err := w.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, "heartbeat missed")
+		inc, created, err := w.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, "down", "heartbeat missed")
 		if err != nil {
 			w.logger.Error("heartbeat watcher: process failure", "error", err)
 			continue
