@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 29
+const schemaVersion = 30
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS check_results (
 	cert_expiry      TEXT,
 	cert_fingerprint TEXT    NOT NULL DEFAULT '',
 	dns_records      TEXT    NOT NULL DEFAULT '',
+	agent_id         INTEGER DEFAULT NULL,
 	created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
@@ -303,6 +304,17 @@ CREATE TABLE IF NOT EXISTS check_result_daily (
 	PRIMARY KEY (monitor_id, day)
 );
 
+CREATE TABLE IF NOT EXISTS agents (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	name           TEXT    NOT NULL,
+	location       TEXT    NOT NULL DEFAULT '',
+	token          TEXT    NOT NULL UNIQUE,
+	last_heartbeat TEXT,
+	enabled        INTEGER NOT NULL DEFAULT 1,
+	created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token);
 CREATE INDEX IF NOT EXISTS idx_check_results_created_at ON check_results(created_at);
 CREATE INDEX IF NOT EXISTS idx_incidents_resolved_at ON incidents(status, resolved_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
@@ -545,5 +557,19 @@ CREATE TABLE IF NOT EXISTS check_result_daily (
 	total      INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (monitor_id, day)
 );`,
+	},
+	{
+		version: 30,
+		sql: `CREATE TABLE IF NOT EXISTS agents (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	name           TEXT    NOT NULL,
+	location       TEXT    NOT NULL DEFAULT '',
+	token          TEXT    NOT NULL UNIQUE,
+	last_heartbeat TEXT,
+	enabled        INTEGER NOT NULL DEFAULT 1,
+	created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token);
+ALTER TABLE check_results ADD COLUMN agent_id INTEGER DEFAULT NULL;`,
 	},
 }

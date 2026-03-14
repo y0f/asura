@@ -179,6 +179,15 @@ type Store interface {
 	UpdateEscalationState(ctx context.Context, state *EscalationState) error
 	DeleteEscalationStateByIncident(ctx context.Context, incidentID int64) error
 
+	// Agents
+	CreateAgent(ctx context.Context, a *Agent) error
+	GetAgent(ctx context.Context, id int64) (*Agent, error)
+	GetAgentByToken(ctx context.Context, token string) (*Agent, error)
+	ListAgents(ctx context.Context) ([]*Agent, error)
+	UpdateAgentHeartbeat(ctx context.Context, agentID int64) error
+	DeleteAgent(ctx context.Context, id int64) error
+	ListAgentJobs(ctx context.Context) ([]*AgentJob, error)
+
 	// Data rollup
 	RollupHourly(ctx context.Context, hour string) error
 	RollupDaily(ctx context.Context, day string) error

@@ -361,10 +361,10 @@ func (s *SQLiteStore) InsertCheckResult(ctx context.Context, r *CheckResult) err
 	}
 	now := formatTime(time.Now())
 	res, err := s.writeDB.ExecContext(ctx,
-		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, agent_id, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.MonitorID, r.Status, r.ResponseTime, r.StatusCode, r.Message, r.Headers,
-		r.Body, r.BodyHash, nullStr(certExpiry), r.CertFingerprint, r.DNSRecords, now)
+		r.Body, r.BodyHash, nullStr(certExpiry), r.CertFingerprint, r.DNSRecords, r.AgentID, now)
 	if err != nil {
 		return err
 	}

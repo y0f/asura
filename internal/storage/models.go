@@ -177,7 +177,32 @@ type CheckResult struct {
 	CertExpiry      *time.Time `json:"cert_expiry,omitempty"`
 	CertFingerprint string     `json:"cert_fingerprint,omitempty"`
 	DNSRecords      string     `json:"dns_records,omitempty"` // JSON encoded
+	AgentID         *int64     `json:"agent_id,omitempty"`
+	AgentName       string     `json:"agent_name,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// Agent represents a remote probe that runs checks on behalf of the server.
+type Agent struct {
+	ID            int64      `json:"id"`
+	Name          string     `json:"name"`
+	Location      string     `json:"location"`
+	Token         string     `json:"-"`
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	Enabled       bool       `json:"enabled"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// AgentJob is a monitor sent to an agent for checking.
+type AgentJob struct {
+	ID         int64           `json:"id"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Target     string          `json:"target"`
+	Interval   int             `json:"interval"`
+	Timeout    int             `json:"timeout"`
+	Settings   json.RawMessage `json:"settings,omitempty"`
+	Assertions json.RawMessage `json:"assertions,omitempty"`
 }
 
 // Incident tracks a period of downtime or degradation.

@@ -5,7 +5,7 @@ GOFLAGS  := -trimpath
 
 TAILWIND := ./tailwindcss
 
-.PHONY: all build css watch dev test lint run clean hash-key release generate
+.PHONY: all build css watch dev test lint run clean hash-key release generate agent
 
 all: build
 
@@ -41,8 +41,13 @@ hash-key:
 	@read -p "Enter API key: " key; \
 	go run ./cmd/asura -hash-key "$$key"
 
+agent:
+	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o asura-agent ./cmd/asura-agent
+
 release:
 	@mkdir -p dist
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-linux-amd64 ./cmd/asura
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-linux-arm64 ./cmd/asura
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-agent-linux-amd64 ./cmd/asura-agent
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-agent-linux-arm64 ./cmd/asura-agent
 	@echo "Binaries written to dist/"

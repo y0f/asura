@@ -107,6 +107,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/proxies/{id}"), webPerm("monitors.write", s.web.ProxyUpdate))
 		mux.Handle("POST "+s.p("/proxies/{id}/delete"), webPerm("monitors.write", s.web.ProxyDelete))
 
+		mux.Handle("GET "+s.p("/agents"), webAuth(http.HandlerFunc(s.web.Agents)))
+		mux.Handle("POST "+s.p("/agents"), webPerm("monitors.write", s.web.AgentCreate))
+		mux.Handle("POST "+s.p("/agents/{id}/delete"), webPerm("monitors.write", s.web.AgentDelete))
+
 		mux.Handle("GET "+s.p("/status-pages"), webAuth(http.HandlerFunc(s.web.StatusPages)))
 		mux.Handle("GET "+s.p("/status-pages/new"), webAuth(http.HandlerFunc(s.web.StatusPageForm)))
 		mux.Handle("GET "+s.p("/status-pages/{id}/edit"), webAuth(http.HandlerFunc(s.web.StatusPageForm)))
@@ -215,4 +219,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("GET "+s.p("/api/v1/export"), monRead(http.HandlerFunc(s.api.Export)))
 	mux.Handle("POST "+s.p("/api/v1/import"), monWrite(http.HandlerFunc(s.api.Import)))
+
+	// Agent admin endpoints (API key auth)
+	mux.Handle("GET "+s.p("/api/v1/agents"), monRead(http.HandlerFunc(s.api.ListAgents)))
+	mux.Handle("POST "+s.p("/api/v1/agents"), monWrite(http.HandlerFunc(s.api.CreateAgent)))
+	mux.Handle("DELETE "+s.p("/api/v1/agents/{id}"), monWrite(http.HandlerFunc(s.api.DeleteAgentAPI)))
+	mux.Handle("GET "+s.p("/api/v1/agents/status"), monRead(http.HandlerFunc(s.api.AgentHealthAPI)))
+
+	// Agent communication endpoints (agent token auth)
+	agentAuth := s.api.AgentAuth
+	mux.Handle("GET "+s.p("/api/v1/agent/jobs"), agentAuth(http.HandlerFunc(s.api.AgentGetJobs)))
+	mux.Handle("POST "+s.p("/api/v1/agent/results"), agentAuth(http.HandlerFunc(s.api.AgentPostResults)))
 }
