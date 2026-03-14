@@ -20,6 +20,8 @@ type MonitorFormParams struct {
 	Domain               storage.DomainSettings
 	GRPC                 storage.GRPCSettings
 	MQTT                 storage.MQTTSettings
+	SMTP                 storage.SMTPSettings
+	SSH                  storage.SSHSettings
 	FollowRedirects      bool
 	MaxRedirects         int
 	HeadersJSON          string
@@ -184,6 +186,8 @@ templ MonitorFormPage(p MonitorFormParams) {
 										<option value="tcp">TCP Port</option>
 										<option value="icmp">Ping (ICMP)</option>
 										<option value="dns">DNS Lookup</option>
+										<option value="smtp">SMTP Mail Server</option>
+										<option value="ssh">SSH Server</option>
 									</optgroup>
 									<optgroup label="Security">
 										<option value="tls">TLS Certificate</option>
@@ -264,6 +268,8 @@ templ MonitorFormPage(p MonitorFormParams) {
 						@monitorDomainSettings(p)
 						@monitorGRPCSettings(p)
 						@monitorMQTTSettings(p)
+						@monitorSMTPSettings(p)
+						@monitorSSHSettings(p)
 					</div>
 				</div>
 				<!-- Card 4: Conditions -->
@@ -875,6 +881,44 @@ templ monitorAssertions(p MonitorFormParams) {
 				</template>
 			</div>
 			<button type="button" @click="addGroup()" class="mt-3 text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Group</button>
+		</div>
+	</div>
+}
+
+templ monitorSMTPSettings(p MonitorFormParams) {
+	<div x-show="monitorType === 'smtp'" x-cloak class="space-y-4">
+		<div class="grid grid-cols-2 gap-4">
+			<div>
+				<label class="form-label">Port</label>
+				<input type="number" name="settings_smtp_port"
+					if p.SMTP.Port != 0 {
+						value={ fmt.Sprint(p.SMTP.Port) }
+					}
+					placeholder="25" min="1" max="65535" class="form-input tabular-nums"/>
+				<p class="text-[10px] text-muted mt-1">25 (plain), 465 (SMTPS), 587 (submission)</p>
+			</div>
+			<div>
+				<label class="form-label">Expected Banner</label>
+				<input type="text" name="settings_smtp_expect_banner" value={ p.SMTP.ExpectBanner } placeholder="Optional" class="form-input"/>
+			</div>
+		</div>
+		<label class="flex items-center gap-2 cursor-pointer">
+			<input type="checkbox" name="settings_smtp_starttls"
+				if p.SMTP.STARTTLS {
+					checked
+				}
+				class="form-checkbox"/>
+			<span class="text-[12px] text-muted-light">Require STARTTLS</span>
+		</label>
+	</div>
+}
+
+templ monitorSSHSettings(p MonitorFormParams) {
+	<div x-show="monitorType === 'ssh'" x-cloak class="space-y-4">
+		<div>
+			<label class="form-label">Expected Host Key Fingerprint</label>
+			<input type="text" name="settings_ssh_fingerprint" value={ p.SSH.ExpectedFingerprint } placeholder="Optional SHA-256 hex fingerprint" class="form-input font-mono"/>
+			<p class="text-[10px] text-muted mt-1">Leave empty to accept any host key</p>
 		</div>
 	</div>
 }

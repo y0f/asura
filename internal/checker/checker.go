@@ -70,5 +70,7 @@ func DefaultRegistry(commandAllowlist []string, allowPrivateTargets bool) *Regis
 	r.Register(&DomainChecker{AllowPrivate: allowPrivateTargets})
 	r.Register(&GRPCChecker{AllowPrivate: allowPrivateTargets})
 	r.Register(&MQTTChecker{AllowPrivate: allowPrivateTargets})
+	r.Register(&SMTPChecker{AllowPrivate: allowPrivateTargets})
+	r.Register(&SSHChecker{AllowPrivate: allowPrivateTargets})
 	return r
 }

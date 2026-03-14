@@ -65,6 +65,8 @@ var _settingsTargets = map[string]func(*views.MonitorFormParams) any{
 	"domain":    func(fd *views.MonitorFormParams) any { return &fd.Domain },
 	"grpc":      func(fd *views.MonitorFormParams) any { return &fd.GRPC },
 	"mqtt":      func(fd *views.MonitorFormParams) any { return &fd.MQTT },
+	"smtp":      func(fd *views.MonitorFormParams) any { return &fd.SMTP },
+	"ssh":       func(fd *views.MonitorFormParams) any { return &fd.SSH },
 }
 
 func unmarshalMonitorSettings(fd *views.MonitorFormParams, mon *storage.Monitor) {
@@ -194,6 +196,23 @@ var _settingsAssemblers = map[string]func(*http.Request) json.RawMessage{
 			Topic:         r.FormValue("settings_mqtt_topic"),
 			ExpectMessage: r.FormValue("settings_mqtt_expect"),
 			UseTLS:        r.FormValue("settings_mqtt_tls") == "on",
+		})
+		return b
+	},
+	"smtp": func(r *http.Request) json.RawMessage {
+		s := storage.SMTPSettings{
+			STARTTLS:     r.FormValue("settings_smtp_starttls") == "on",
+			ExpectBanner: r.FormValue("settings_smtp_expect_banner"),
+		}
+		if v := r.FormValue("settings_smtp_port"); v != "" {
+			s.Port, _ = strconv.Atoi(v)
+		}
+		b, _ := json.Marshal(s)
+		return b
+	},
+	"ssh": func(r *http.Request) json.RawMessage {
+		b, _ := json.Marshal(storage.SSHSettings{
+			ExpectedFingerprint: r.FormValue("settings_ssh_fingerprint"),
 		})
 		return b
 	},

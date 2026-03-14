@@ -128,6 +128,18 @@ type MQTTSettings struct {
 	UseTLS        bool   `json:"use_tls,omitempty"`
 }
 
+// SMTPSettings holds SMTP check configuration.
+type SMTPSettings struct {
+	Port         int    `json:"port,omitempty"`
+	STARTTLS     bool   `json:"starttls,omitempty"`
+	ExpectBanner string `json:"expect_banner,omitempty"`
+}
+
+// SSHSettings holds SSH check configuration.
+type SSHSettings struct {
+	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
+}
+
 // SparklinePoint holds a single data point for sparkline rendering.
 type SparklinePoint struct {
 	Status       string
