@@ -71,6 +71,13 @@ templ Layout(p LayoutParams) {
 		@ConfirmModal()
 		<script>
 			function toggleTheme(){var d=document.documentElement.classList.toggle('dark');localStorage.setItem('theme',d?'dark':'light');window.dispatchEvent(new CustomEvent('theme-changed'));}
+			document.addEventListener('keydown',function(e){
+				if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;
+				if(e.key==='n'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();window.location.href=document.querySelector('[href*="/monitors/new"]')?.href||''}
+				if(e.key==='/'){e.preventDefault();var s=document.querySelector('input[name="q"],input[type="search"]');if(s){s.focus();s.select()}}
+				if(e.key==='Escape'){document.querySelectorAll('[x-data]').forEach(function(el){if(el.__x){try{el.__x.$data.open=false;el.__x.$data.showForm=false}catch(e){}}})}
+				if(e.key==='?'){e.preventDefault();alert('Keyboard Shortcuts\\n\\nn - New monitor\\n/ - Focus search\\nEsc - Close modal\\n? - This help')}
+			});
 		</script>
 	</body>
 	</html>

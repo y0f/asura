@@ -5,18 +5,32 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/y0f/asura/internal/api"
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/web/views"
 )
 
 func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 	lp := h.newLayoutParams(r, "Settings", "settings")
 	dbSize, _ := h.store.DBSize()
+	up, _, _, _, _ := h.store.CountMonitorsByStatus(r.Context())
+	total := up
+	if result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 1}); err == nil {
+		total = result.Total
+	}
+	uptime := time.Since(h.startTime).Truncate(time.Second).String()
 	h.renderComponent(w, r, views.SettingsPage(views.SettingsParams{
-		LayoutParams: lp,
-		DBSizeBytes:  dbSize,
+		LayoutParams:  lp,
+		DBSizeBytes:   dbSize,
+		AppVersion:    h.version,
+		Uptime:        uptime,
+		MonitorCount:  total,
+		WorkerCount:   h.cfg.Monitor.Workers,
+		RetentionDays: h.cfg.Database.RetentionDays,
+		EncryptionOn:  h.cfg.Database.EncryptionKey != "",
 	}))
 }
 

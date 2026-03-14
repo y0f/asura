@@ -1,10 +1,20 @@
 package views
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
 type SettingsParams struct {
 	LayoutParams
-	DBSizeBytes int64
+	DBSizeBytes    int64
+	GoVersion      string
+	AppVersion     string
+	Uptime         string
+	MonitorCount   int64
+	WorkerCount    int
+	RetentionDays  int
+	EncryptionOn   bool
 }
 
 func formatBytes(b int64) string {
@@ -25,6 +35,47 @@ templ SettingsPage(p SettingsParams) {
 		<div>
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Settings</h1>
+			</div>
+			<div class="border border-line rounded-lg p-5 mb-5">
+				<h2 class="text-[11px] text-muted uppercase tracking-widest mb-3">System Info</h2>
+				<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
+					<div>
+						<div class="text-muted mb-0.5">Version</div>
+						<div class="text-white font-medium">{ p.AppVersion }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Go</div>
+						<div class="text-white font-medium">{ runtime.Version() }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Uptime</div>
+						<div class="text-white font-medium">{ p.Uptime }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Database</div>
+						<div class="text-white font-medium">{ formatBytes(p.DBSizeBytes) }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Monitors</div>
+						<div class="text-white font-medium">{ fmt.Sprint(p.MonitorCount) }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Workers</div>
+						<div class="text-white font-medium">{ fmt.Sprint(p.WorkerCount) }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Retention</div>
+						<div class="text-white font-medium">{ fmt.Sprintf("%d days", p.RetentionDays) }</div>
+					</div>
+					<div>
+						<div class="text-muted mb-0.5">Encryption</div>
+						if p.EncryptionOn {
+							<div class="text-emerald-400 font-medium">Enabled</div>
+						} else {
+							<div class="text-muted-light font-medium">Disabled</div>
+						}
+					</div>
+				</div>
 			</div>
 			<div class="grid gap-5 md:grid-cols-2">
 				<div class="border border-line rounded-lg p-5">
@@ -65,7 +116,6 @@ templ SettingsPage(p SettingsParams) {
 				<div class="border border-line rounded-lg p-5">
 					<h2 class="text-[13px] font-medium text-white mb-1">Database Maintenance</h2>
 					<p class="text-[12px] text-muted-light mb-4">
-						Current database size: <span class="text-muted-light font-medium">{ formatBytes(p.DBSizeBytes) }</span>.
 						VACUUM reclaims unused space from deleted rows and rebuilds the database file.
 					</p>
 					<button type="button"

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/y0f/asura/internal/config"
@@ -24,6 +25,7 @@ type Handler struct {
 	subNotifier        *notifier.SubscriberNotifier
 	logger             *slog.Logger
 	version            string
+	startTime          time.Time
 	cspFrameDirective  string
 	OnStatusPageChange func()
 	loginRL            *httputil.RateLimiter
@@ -48,6 +50,7 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 		subNotifier:       subNotifier,
 		logger:            logger,
 		version:           version,
+		startTime:         time.Now(),
 		cspFrameDirective: cspDirective,
 		loginRL:           httputil.NewRateLimiter(cfg.Auth.Login.RateLimitPerSec, cfg.Auth.Login.RateLimitBurst),
 		totpChallenges:    make(map[string]*totpChallenge),

@@ -1,12 +1,14 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/notifier"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 	"github.com/y0f/asura/internal/web/views"
@@ -94,10 +96,14 @@ func (h *Handler) MaintenanceToggle(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.ToggleMaintenanceWindow(r.Context(), id, newActive); err != nil {
 		h.logger.Error("web: toggle maintenance", "error", err)
 		h.setFlash(w, "Failed to toggle maintenance window")
-	} else if newActive {
-		h.setFlash(w, "Maintenance started")
 	} else {
-		h.setFlash(w, "Maintenance stopped")
+		if newActive {
+			h.setFlash(w, "Maintenance started")
+			h.notifyMaintenance(mw, "started")
+		} else {
+			h.setFlash(w, "Maintenance stopped")
+			h.notifyMaintenance(mw, "ended")
+		}
 	}
 	h.redirect(w, r, "/maintenance")
 }
@@ -134,4 +140,15 @@ func (h *Handler) parseMaintenanceForm(r *http.Request) *storage.MaintenanceWind
 	}
 
 	return mw
+}
+
+func (h *Handler) notifyMaintenance(mw *storage.MaintenanceWindow, action string) {
+	if h.notifier == nil {
+		return
+	}
+	msg := fmt.Sprintf("[MAINTENANCE] %s %s: %s", mw.Name, action, mw.Name)
+	h.notifier.NotifyWithPayload(&notifier.Payload{
+		EventType: "maintenance." + action,
+		Monitor:   &storage.Monitor{Name: msg},
+	})
 }
