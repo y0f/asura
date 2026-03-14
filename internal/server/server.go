@@ -27,6 +27,7 @@ type Server struct {
 	web           *web.Handler
 	handler       http.Handler
 	reqLogWriter  *RequestLogWriter
+	events        *EventBroker
 	statusSlugsMu sync.RWMutex
 	statusSlugs   map[string]int64
 	version       string
@@ -41,6 +42,7 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 		logger:       logger,
 		version:      version,
 		reqLogWriter: NewRequestLogWriter(store, logger),
+		events:       NewEventBroker(logger),
 		statusSlugs:  make(map[string]int64),
 	}
 
@@ -83,6 +85,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) RequestLogWriter() *RequestLogWriter {
 	return s.reqLogWriter
+}
+
+func (s *Server) EventBroker() *EventBroker {
+	return s.events
 }
 
 func (s *Server) p(path string) string {
