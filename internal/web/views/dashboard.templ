@@ -126,7 +126,7 @@ templ DashboardPage(p DashboardParams) {
 						</div>
 						<div id="monitor-grid"
 							hx-get={ p.pageHref(p.Page) }
-							hx-trigger="every 30s" hx-select="#monitor-grid" hx-swap="outerHTML" hx-push-url="false"
+							hx-trigger="sse:refresh, every 30s" hx-select="#monitor-grid" hx-swap="outerHTML" hx-push-url="false"
 							class="border border-line border-t-0 rounded-b-lg overflow-hidden">
 							if len(p.Monitors) > 0 {
 								<div class="divide-y divide-line">
@@ -204,5 +204,21 @@ templ DashboardPage(p DashboardParams) {
 				</div>
 			</div>
 		</div>
+		@sseListener(p.BasePath)
 	}
+}
+
+templ sseListener(basePath string) {
+	<div id="sse-connector" data-url={ basePath + "/events" } style="display:none"></div>
+	<script>
+		(function(){
+			var url = document.getElementById('sse-connector').dataset.url;
+			var grid = document.getElementById('monitor-grid');
+			if (!url || !grid || typeof EventSource === 'undefined') return;
+			var src = new EventSource(url);
+			var events = ['incident.created','incident.resolved','content.changed','cert.changed','sla.breach'];
+			events.forEach(function(e){ src.addEventListener(e, function(){ htmx.trigger(grid,'sse:refresh'); }); });
+			src.onerror = function(){ src.close(); };
+		})();
+	</script>
 }

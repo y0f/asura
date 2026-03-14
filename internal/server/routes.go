@@ -117,9 +117,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("GET "+s.p("/settings/export"), webAuth(http.HandlerFunc(s.web.ExportConfig)))
 		mux.Handle("POST "+s.p("/settings/import"), webPerm("monitors.write", s.web.ImportConfig))
 		mux.Handle("POST "+s.p("/settings/vacuum"), webPerm("monitors.write", s.web.DBVacuum))
+		mux.Handle("GET "+s.p("/events"), webAuth(s.events))
 	}
 
 	mux.HandleFunc("GET "+s.p("/api/v1/health"), s.api.Health)
+	mux.Handle("GET "+s.p("/api/v1/events"), monRead(s.events))
 	mux.Handle("GET "+s.p("/metrics"), metricsRead(http.HandlerFunc(s.api.Metrics)))
 	mux.HandleFunc("POST "+s.p("/api/v1/heartbeat/{token}"), s.api.HeartbeatPing)
 	mux.HandleFunc("GET "+s.p("/api/v1/heartbeat/{token}"), s.api.HeartbeatPing)

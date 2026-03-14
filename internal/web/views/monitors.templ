@@ -379,7 +379,7 @@ templ MonitorListPage(p MonitorListParams) {
 					</form>
 				</div>
 			}
-			<div id="monitor-list" hx-get="" hx-trigger="every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
+			<div id="monitor-list" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
 				class="border border-line rounded-lg overflow-hidden">
 				if ms := p.monitors(); len(ms) > 0 {
 					<div class="overflow-x-auto">
@@ -501,7 +501,7 @@ templ MonitorListPage(p MonitorListParams) {
 
 templ MonitorDetailPage(p MonitorDetailParams) {
 	@Layout(p.LayoutParams) {
-		<div id="monitor-detail" hx-get="" hx-trigger="every 15s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false">
+		<div id="monitor-detail" hx-get="" hx-trigger="sse:refresh, every 15s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false">
 			<div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
 				<div>
 					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="inline-flex items-center gap-1 text-[11px] text-muted hover:text-muted-light transition-colors">

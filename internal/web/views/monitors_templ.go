@@ -814,7 +814,7 @@ func MonitorListPage(p MonitorListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<div id=\"monitor-list\" hx-get=\"\" hx-trigger=\"every 30s\" hx-select=\"#monitor-list\" hx-swap=\"outerHTML\" hx-push-url=\"false\" class=\"border border-line rounded-lg overflow-hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<div id=\"monitor-list\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-list\" hx-swap=\"outerHTML\" hx-push-url=\"false\" class=\"border border-line rounded-lg overflow-hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1288,7 +1288,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "<div id=\"monitor-detail\" hx-get=\"\" hx-trigger=\"every 15s\" hx-select=\"#monitor-detail\" hx-swap=\"outerHTML\" hx-push-url=\"false\"><div class=\"flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6\"><div><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "<div id=\"monitor-detail\" hx-get=\"\" hx-trigger=\"sse:refresh, every 15s\" hx-select=\"#monitor-detail\" hx-swap=\"outerHTML\" hx-push-url=\"false\"><div class=\"flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6\"><div><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

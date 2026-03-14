@@ -105,7 +105,6 @@ func main() {
 	escalationRunner := escalation.NewRunner(store, dispatcher, logger)
 	go escalationRunner.Start(ctx)
 
-	go forwardNotifications(ctx, pipeline, dispatcher, subNotifier)
 	go pipeline.Run(ctx)
 
 	heartbeatWatcher := monitor.NewHeartbeatWatcher(store, incMgr, pipeline, cfg.Monitor.HeartbeatCheckInterval, logger)
@@ -115,6 +114,7 @@ func main() {
 	go retentionWorker.Run(ctx)
 
 	srv := server.NewServer(cfg, store, pipeline, dispatcher, subNotifier, logger, version)
+	go forwardNotifications(ctx, pipeline, dispatcher, subNotifier, srv.EventBroker())
 	go srv.RequestLogWriter().Run(ctx)
 	go runRollupWorker(ctx, store, logger)
 	httpServer := startHTTPServer(cfg, srv, logger, cancel)
@@ -140,7 +140,7 @@ func main() {
 	logger.Info("shutdown complete")
 }
 
-func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier) {
+func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier, broker *server.EventBroker) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -163,6 +163,13 @@ func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispa
 				case "incident.created", "incident.resolved":
 					go subNotifier.NotifyForMonitor(ctx, event.MonitorID, event.EventType, event.Incident, event.Monitor)
 				}
+			}
+
+			if broker != nil {
+				broker.Broadcast(server.SSEEvent{
+					Type: event.EventType,
+					Data: payload,
+				})
 			}
 		}
 	}
