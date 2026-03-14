@@ -18,7 +18,7 @@
 
 <pre><code>git clone https://github.com/y0f/Asura.git && cd Asura && sudo bash install.sh</code></pre>
 
-<p>Handles everything — Go install, build, systemd service, admin key. Takes a couple minutes on a fresh Ubuntu box.</p>
+<p>Handles everything. Go install, build, systemd service, admin key. Takes a couple minutes on a fresh Ubuntu box.</p>
 
 <div class="flex flex-wrap gap-3 mb-10">
   <a href="#getting-started" class="inline-flex items-center gap-2 px-4 py-2 bg-brand hover:bg-brand/85 text-sm font-medium rounded-lg transition-colors" style="color: #fff;">
@@ -38,7 +38,7 @@
 
 <table>
   <thead>
-    <tr><th></th><th>Asura</th><th>Typical alternative</th></tr>
+    <tr><th>Aspect</th><th>Asura</th><th>Typical alternative</th></tr>
   </thead>
   <tbody>
     <tr><td><strong>Runtime</strong></td><td>Single static binary</td><td>Node.js / Java / Python runtime</td></tr>
@@ -47,7 +47,7 @@
     <tr><td><strong>Concurrency</strong></td><td>Goroutine worker pool with channel backpressure</td><td>Event loop or thread pool</td></tr>
     <tr><td><strong>Deploy</strong></td><td><code>scp</code> binary + run</td><td>Package manager, runtime install, migrations</td></tr>
     <tr><td><strong>Config</strong></td><td>One YAML file</td><td>Multiple config files, env vars, database setup</td></tr>
-    <tr><td><strong>RAM</strong></td><td>~20 MB idle</td><td>Varies — runtime + database overhead</td></tr>
+    <tr><td><strong>RAM</strong></td><td>~20 MB idle</td><td>Varies. runtime + database overhead</td></tr>
   </tbody>
 </table>
 
@@ -55,18 +55,18 @@
 
 <table>
   <thead>
-    <tr><th>Feature</th><th></th></tr>
+    <tr><th>Feature</th><th>Aspect</th></tr>
   </thead>
   <tbody>
     <tr><td><strong>13 monitor types</strong></td><td>HTTP, TCP, DNS, ICMP, TLS, WebSocket, Command, Docker, Domain (WHOIS), gRPC, MQTT, passive heartbeat, plus manual</td></tr>
-    <tr><td><strong>Assertion engine</strong></td><td>8 condition types with AND/OR group logic — status code, body text, body regex, JSON path, headers, response time, cert expiry, DNS records</td></tr>
+    <tr><td><strong>Assertion engine</strong></td><td>8 condition types with AND/OR group logic. status code, body text, body regex, JSON path, headers, response time, cert expiry, DNS records</td></tr>
     <tr><td><strong>Change detection</strong></td><td>Line-level diffs on response bodies</td></tr>
     <tr><td><strong>Incidents</strong></td><td>Automatic creation, configurable thresholds, acknowledge, recovery</td></tr>
     <tr><td><strong>13 notification channels</strong></td><td>Webhook (HMAC-SHA256), Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify</td></tr>
     <tr><td><strong>Monitor groups</strong></td><td>Organize monitors into named groups with custom sort order</td></tr>
     <tr><td><strong>Proxy support</strong></td><td>HTTP and SOCKS5 proxies with per-monitor assignment</td></tr>
     <tr><td><strong>Maintenance windows</strong></td><td>Recurring schedules to suppress alerts during planned downtime</td></tr>
-    <tr><td><strong>Heartbeat monitoring</strong></td><td>Cron jobs, workers, and pipelines report in — silence triggers an incident</td></tr>
+    <tr><td><strong>Heartbeat monitoring</strong></td><td>Cron jobs, workers, and pipelines report in. silence triggers an incident</td></tr>
     <tr><td><strong>Status pages</strong></td><td>Multiple public status pages with custom slugs and grouping</td></tr>
     <tr><td><strong>Analytics</strong></td><td>Uptime %, response time percentiles, Prometheus <code>/metrics</code> endpoint</td></tr>
     <tr><td><strong>~15 MB binary</strong></td><td>Cross-compiles to <code>linux/amd64</code> and <code>linux/arm64</code></td></tr>
@@ -75,6 +75,6 @@
 
 <h2>Web UI</h2>
 
-<p>Server-rendered Go templates (<a href="https://templ.guide" target="_blank">templ</a>), progressively enhanced with HTMX and Alpine.js, styled with Tailwind CSS. Configure monitors, build assertion groups, manage notifications, browse incidents, and set up status pages — all from the browser. You can also skip the UI entirely and use the <a href="#api">REST API</a>.</p>
+<p>Server-rendered Go templates (<a href="https://templ.guide" target="_blank">templ</a>), progressively enhanced with HTMX and Alpine.js, styled with Tailwind CSS. Configure monitors, build assertion groups, manage notifications, browse incidents, and set up status pages. all from the browser. You can also skip the UI entirely and use the <a href="#api">REST API</a>.</p>
 
 <img src="https://raw.githubusercontent.com/y0f/Asura/main/assets/webpanel.png" alt="Web UI" class="rounded-lg border border-line w-full max-w-full h-auto">

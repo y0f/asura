@@ -1,6 +1,6 @@
 <h1>Deployment</h1>
 
-<p>Asura listens on localhost only. Put a reverse proxy in front for TLS — don't expose it directly.</p>
+<p>Asura listens on localhost only. Put a reverse proxy in front for TLS. don't expose it directly.</p>
 
 <h2>1. Install Asura</h2>
 
@@ -15,13 +15,13 @@ sudo bash install.sh</code></pre>
 <p>Edit <code>/etc/asura/config.yaml</code>:</p>
 
 <pre><code>server:
-  # Bind to localhost only — never bind to 0.0.0.0 on a public server
+  # Bind to localhost only - never bind to 0.0.0.0 on a public server
   listen: "127.0.0.1:8090"
 
   # Serve all routes under /asura (optional, remove for root)
   base_path: "/asura"
 
-  # Your public URL — used in notification links
+  # Your public URL - used in notification links
   external_url: "https://example.com/asura"
 
   # Trust nginx's forwarded headers for real client IP

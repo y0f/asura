@@ -51,8 +51,8 @@
 <p>SQLite in WAL mode with separate connection pools:</p>
 
 <ul>
-  <li><strong>Write pool</strong>: Single writer protected by <code>writeMu</code> mutex — all INSERT/UPDATE/DELETE go through this</li>
-  <li><strong>Read pool</strong>: Multiple concurrent readers via <code>readerPool()</code> — all SELECT queries</li>
+  <li><strong>Write pool</strong>: Single writer protected by <code>writeMu</code> mutex. all INSERT/UPDATE/DELETE go through this</li>
+  <li><strong>Read pool</strong>: Multiple concurrent readers via <code>readerPool()</code>. all SELECT queries</li>
 </ul>
 
 <p>Reads never block on writes. The <code>Store</code> interface has 89 methods covering everything from monitors to request logs.</p>

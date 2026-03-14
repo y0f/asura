@@ -35,7 +35,7 @@
   <tr><th>Field</th><th>Description</th></tr>
   <tr><td><code>logo_url</code></td><td>URL of an image displayed above the status banner. Useful for showing your product or company logo.</td></tr>
   <tr><td><code>favicon_url</code></td><td>URL of a favicon for the status page tab. Defaults to the Asura favicon.</td></tr>
-  <tr><td><code>custom_header_html</code></td><td>Raw HTML injected before the status banner. Useful for custom headings, banners, or links. Rendered with <code>templ.Raw()</code> — trust only your own content here.</td></tr>
+  <tr><td><code>custom_header_html</code></td><td>Raw HTML injected before the status banner. Useful for custom headings, banners, or links. Rendered with <code>templ.Raw()</code>. trust only your own content here.</td></tr>
   <tr><td><code>custom_css</code></td><td>CSS injected into the <code>&lt;style&gt;</code> block. Overrides any default styles.</td></tr>
   <tr><td><code>analytics_script</code></td><td>HTML snippet (e.g. a Plausible or Fathom <code>&lt;script&gt;</code> tag) injected before <code>&lt;/body&gt;</code>.</td></tr>
 </table>
@@ -45,7 +45,7 @@
 <p>Set a password in the <strong>Password Protection</strong> field under Advanced. Visitors are redirected to a login form at <code>/{slug}/auth</code> and receive a 7-day <code>HttpOnly</code> cookie on success.</p>
 
 <ul>
-  <li>The password is stored as a SHA-256 hash — never in plain text</li>
+  <li>The password is stored as a SHA-256 hash. never in plain text</li>
   <li>Password comparison uses constant-time comparison to prevent timing attacks</li>
   <li>Auth attempts are rate-limited using the same limiter as admin login</li>
   <li>Leave the field blank when editing to keep the existing password unchanged</li>
@@ -130,3 +130,30 @@
 }</code></pre>
 
 <p>On <code>PUT</code>, omit <code>password</code> (or send an empty string) to leave the existing password unchanged. Send <code>"clear_password": true</code> to remove password protection.</p>
+
+<h2>Subscriptions</h2>
+
+<p>Visitors can subscribe to status page updates via email or webhook. Email subscribers go through double opt-in confirmation. Webhook subscribers are confirmed immediately.</p>
+
+<p>Subscribers are notified when incidents are created or resolved for monitors on the status page. The subscribe widget appears on the public status page when subscriptions are enabled in the server config.</p>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>POST</code></td><td><code>/api/v1/status-pages/{id}/subscribe</code></td><td>Subscribe (email or webhook)</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/status-pages/{id}/subscribers</code></td><td>Subscriber count (admin, GDPR-safe)</td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/status-pages/{id}/subscribers/{subId}</code></td><td>Remove subscriber (admin)</td></tr>
+  </tbody>
+</table>
+
+<p>Enable subscriptions by adding an SMTP config to your <code>config.yaml</code>:</p>
+
+<pre><code>subscriptions:
+  enabled: true
+  smtp:
+    host: "smtp.example.com"
+    port: 587
+    from: "status@example.com"
+    tls_mode: "starttls"</code></pre>

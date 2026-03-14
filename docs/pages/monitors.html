@@ -24,7 +24,7 @@
     <tr><td><code>track_changes</code></td><td>bool</td><td></td><td>Enable content change detection</td></tr>
     <tr><td><code>failure_threshold</code></td><td>int</td><td></td><td>Failures before incident (default: 3)</td></tr>
     <tr><td><code>success_threshold</code></td><td>int</td><td></td><td>Successes before recovery (default: 1)</td></tr>
-    <tr><td><code>upside_down</code></td><td>bool</td><td></td><td>Inverted mode — "up" becomes "down" and vice versa</td></tr>
+    <tr><td><code>upside_down</code></td><td>bool</td><td></td><td>Inverted mode. "up" becomes "down" and vice versa</td></tr>
     <tr><td><code>resend_interval</code></td><td>int</td><td></td><td>Seconds between reminder notifications while an incident is open (0 = notify once only)</td></tr>
     <tr><td><code>sla_target</code></td><td>float</td><td></td><td>SLA uptime target percentage (e.g. 99.9). Set to 0 to disable SLA tracking</td></tr>
   </tbody>
@@ -99,7 +99,7 @@
   "mtls_ca_cert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
 }</code></pre>
 
-<p>mTLS is independent of the auth method — it can be combined with any authentication type. The CA certificate is optional and used for custom trust stores (e.g., self-signed server certificates). Certificates are stored inline as PEM text.</p>
+<p>mTLS is independent of the auth method. it can be combined with any authentication type. The CA certificate is optional and used for custom trust stores (e.g., self-signed server certificates). Certificates are stored inline as PEM text.</p>
 
 <h3>TCP</h3>
 
@@ -143,12 +143,12 @@
   <li><strong>down</strong>: container stopped/exited, not found, or unhealthy</li>
 </ul>
 
-<p><strong>Setup — systemd (native install):</strong></p>
+<p><strong>Setup. systemd (native install):</strong></p>
 
 <pre><code>sudo usermod -aG docker asura
 sudo systemctl restart asura</code></pre>
 
-<p><strong>Setup — Docker:</strong> Mount the host socket:</p>
+<p><strong>Setup. Docker:</strong> Mount the host socket:</p>
 
 <pre><code>volumes:
   - /var/run/docker.sock:/var/run/docker.sock</code></pre>
@@ -229,7 +229,7 @@ curl -X POST https://example.com/asura/api/v1/monitors \
 
 <h2>Manual Monitoring</h2>
 
-<p>Manual monitors let you control status directly for things that can't be auto-checked — manual processes, third-party dependencies, or business-hour services. No automated checks run; you set the status via the web UI or API.</p>
+<p>Manual monitors let you control status directly for things that can't be auto-checked. manual processes, third-party dependencies, or business-hour services. No automated checks run; you set the status via the web UI or API.</p>
 
 <pre><code># Create manual monitor
 curl -X POST https://example.com/asura/api/v1/monitors \
@@ -251,13 +251,13 @@ curl -X POST https://example.com/asura/api/v1/monitors/1/status \
   -H "Content-Type: application/json" \
   -d '{"status":"up","message":"Vendor confirmed recovery"}'</code></pre>
 
-<p>Valid statuses: <code>up</code>, <code>down</code>, <code>degraded</code>. Status changes create check results and trigger incidents normally — the same notification channels, thresholds, and incident lifecycle apply. The web UI shows Set Up / Set Degraded / Set Down buttons on the monitor detail page.</p>
+<p>Valid statuses: <code>up</code>, <code>down</code>, <code>degraded</code>. Status changes create check results and trigger incidents normally. the same notification channels, thresholds, and incident lifecycle apply. The web UI shows Set Up / Set Degraded / Set Down buttons on the monitor detail page.</p>
 
 <h2>Assertions</h2>
 
 <p>Assertions are evaluated after each check. A failed assertion marks a monitor <code>down</code> or, if <code>degraded</code> is set, <code>degraded</code> instead.</p>
 
-<p>Conditions are organized into groups. Each group has its own <code>and</code>/<code>or</code> operator, and the top-level <code>operator</code> controls how the groups themselves are combined. The web UI lets you build this visually — API consumers send the structured object directly.</p>
+<p>Conditions are organized into groups. Each group has its own <code>and</code>/<code>or</code> operator, and the top-level <code>operator</code> controls how the groups themselves are combined. The web UI lets you build this visually. API consumers send the structured object directly.</p>
 
 <h3>Condition Types</h3>
 

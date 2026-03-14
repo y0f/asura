@@ -7,8 +7,8 @@
 <p>Downloads all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a single JSON file. Two options:</p>
 
 <ul>
-  <li><strong>Export</strong> — includes all data including secrets (passwords, tokens, bearer keys)</li>
-  <li><strong>Export (redacted)</strong> — replaces secrets with <code>***</code> for safe sharing</li>
+  <li><strong>Export</strong>. includes all data including secrets (passwords, tokens, bearer keys)</li>
+  <li><strong>Export (redacted)</strong>. replaces secrets with <code>***</code> for safe sharing</li>
 </ul>
 
 <p>Via API:</p>
@@ -42,6 +42,6 @@ curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=tru
   <li>Schedule regular exports as part of your backup strategy</li>
   <li>Use <strong>redacted</strong> exports when sharing configs between team members</li>
   <li>Test imports on a separate instance before replacing production data</li>
-  <li><strong>Replace</strong> mode is destructive — it deletes everything before importing</li>
+  <li><strong>Replace</strong> mode is destructive. it deletes everything before importing</li>
   <li>Import requires admin-level API key access</li>
 </ul>

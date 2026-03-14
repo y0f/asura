@@ -14,7 +14,7 @@
     <tr><td><code>external_url</code></td><td>auto</td><td>Public URL used in notification links</td></tr>
     <tr><td><code>trusted_proxies</code></td><td><code>[]</code></td><td>IPs/CIDRs whose <code>X-Real-IP</code>/<code>X-Forwarded-For</code> headers are trusted</td></tr>
     <tr><td><code>rate_limit_per_sec</code></td><td><code>10</code></td><td>Per-IP request rate limit</td></tr>
-    <tr><td><code>web_ui_enabled</code></td><td><code>true</code></td><td>Serve the web dashboard. Set <code>false</code> to run in API-only mode — all REST endpoints remain available</td></tr>
+    <tr><td><code>web_ui_enabled</code></td><td><code>true</code></td><td>Serve the web dashboard. Set <code>false</code> to run in API-only mode. all REST endpoints remain available</td></tr>
   </tbody>
 </table>
 
@@ -106,4 +106,4 @@
   <li><strong>Actively failing monitors</strong> stay at the normal base interval</li>
 </ul>
 
-<p>The base interval on each monitor is never modified — adaptive intervals only change the scheduler's internal timing. Disable with <code>adaptive_intervals: false</code>.</p>
+<p>The base interval on each monitor is never modified. adaptive intervals only change the scheduler's internal timing. Disable with <code>adaptive_intervals: false</code>.</p>

@@ -12,7 +12,7 @@
   <li>If <strong>repeat</strong> is enabled, the chain restarts from step 1 after the last step fires</li>
 </ol>
 
-<p>Escalation notifications use the <code>incident.escalated</code> event type and bypass normal channel event filters &mdash; they always fire regardless of the channel's event subscription settings.</p>
+<p>Escalation notifications use the <code>incident.escalated</code> event type and bypass normal channel event filters : they always fire regardless of the channel's event subscription settings.</p>
 
 <h2>Creating a policy</h2>
 
@@ -20,11 +20,11 @@
 
 <p>Each policy has:</p>
 <ul>
-  <li><strong>Name</strong> &mdash; a descriptive label</li>
-  <li><strong>Description</strong> &mdash; optional notes</li>
-  <li><strong>Enabled</strong> &mdash; toggle the policy on or off</li>
-  <li><strong>Repeat</strong> &mdash; restart from step 1 after the last step</li>
-  <li><strong>Steps</strong> &mdash; ordered list of notification escalations</li>
+  <li><strong>Name</strong> : a descriptive label</li>
+  <li><strong>Description</strong> : optional notes</li>
+  <li><strong>Enabled</strong> : toggle the policy on or off</li>
+  <li><strong>Repeat</strong> : restart from step 1 after the last step</li>
+  <li><strong>Steps</strong> : ordered list of notification escalations</li>
 </ul>
 
 <p>Each step specifies a <strong>delay in minutes</strong> (0 = immediate) and one or more <strong>notification channels</strong> to send to.</p>
@@ -68,6 +68,6 @@
 
 <p>Escalation policies use dedicated permissions:</p>
 <ul>
-  <li><code>escalation_policies.read</code> &mdash; view policies (included in the <code>readonly</code> role)</li>
-  <li><code>escalation_policies.write</code> &mdash; create, update, and delete policies</li>
+  <li><code>escalation_policies.read</code> : view policies (included in the <code>readonly</code> role)</li>
+  <li><code>escalation_policies.write</code> : create, update, and delete policies</li>
 </ul>

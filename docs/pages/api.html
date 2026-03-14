@@ -291,9 +291,9 @@
 
 <p>Query parameters:</p>
 <ul>
-  <li><code>GET /api/v1/export?redact_secrets=true</code> — strips notification channel settings and proxy credentials</li>
-  <li><code>POST /api/v1/import?mode=merge</code> — skip entities that already exist (default)</li>
-  <li><code>POST /api/v1/import?mode=replace</code> — overwrite all</li>
+  <li><code>GET /api/v1/export?redact_secrets=true</code>: strips notification channel settings and proxy credentials</li>
+  <li><code>POST /api/v1/import?mode=merge</code>: skip entities that already exist (default)</li>
+  <li><code>POST /api/v1/import?mode=replace</code>: overwrite all</li>
 </ul>
 
 <p>The import response returns counts of created, skipped, and errored entities.</p>
@@ -346,5 +346,14 @@
   </thead>
   <tbody>
     <tr><td><code>GET</code></td><td><code>/api/v1/overview</code></td><td>Status summary</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/events</code></td><td>Server-Sent Events stream (SSE)</td></tr>
   </tbody>
 </table>
+
+<h3>Server-Sent Events</h3>
+
+<p><code>GET /api/v1/events</code> opens a persistent SSE connection. The server pushes events when monitor status changes, incidents are created or resolved, and other state changes occur. Requires <code>monitors.read</code> permission.</p>
+
+<p>Event types: <code>incident.created</code>, <code>incident.resolved</code>, <code>content.changed</code>, <code>cert.changed</code>, <code>sla.breach</code>. Each event contains a JSON payload in the <code>data</code> field.</p>
+
+<p>The web UI connects via <code>GET /events</code> (session auth). A heartbeat ping is sent every 30 seconds. Max 100 concurrent connections.</p>
