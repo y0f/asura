@@ -1,7 +1,9 @@
 <p align="center">
   <img src="assets/asura.gif" alt="Asura" height="28"/>
 </p>
-<p align="center">Uptime monitoring in a single Go binary. No databases to manage, no runtime to install, no containers required.</p>
+<p align="center">
+  Self-hosted uptime monitoring. One binary, one config file, no dependencies.
+</p>
 <p align="center">
   <a href="https://github.com/y0f/asura/actions/workflows/ci.yml"><img src="https://github.com/y0f/asura/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://goreportcard.com/report/github.com/y0f/asura?branch=main"><img src="https://goreportcard.com/badge/github.com/y0f/asura?branch=main" alt="Go Report Card"></a>
@@ -11,31 +13,11 @@
   <a href="https://github.com/y0f/asura/pkgs/container/asura"><img src="https://img.shields.io/badge/ghcr.io-asura-blue?logo=docker" alt="Docker"></a>
 </p>
 <p align="center">
-  <a href="https://y0f.github.io/asura/">Documentation</a> &middot;
+  <a href="https://y0f.github.io/asura/">Docs</a> &middot;
   <a href="https://y0f.github.io/asura/#getting-started">Quick Start</a> &middot;
-  <a href="https://y0f.github.io/asura/#api">API Reference</a> &middot;
+  <a href="https://y0f.github.io/asura/#api">API</a> &middot;
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
-
----
-
-## Quick Start
-
-```bash
-git clone https://github.com/y0f/Asura.git && cd Asura && sudo bash install.sh
-```
-
-Installs Go if needed, builds the binary, creates a systemd service, and generates an admin API key. Takes a couple of minutes on a fresh Ubuntu box.
-
-By default Asura binds to `127.0.0.1:8090` — set up a [reverse proxy](https://y0f.github.io/asura/#deployment) to expose it publicly.
-
-**Docker:**
-
-```bash
-git clone https://github.com/y0f/Asura.git && cd Asura
-cp config.example.yaml config.yaml
-docker compose up -d
-```
 
 ---
 
@@ -43,62 +25,67 @@ docker compose up -d
 
 ---
 
-## What it does
+## Install
 
-- **13 monitor types** — HTTP, TCP, DNS, ICMP, TLS, WebSocket, Command, Docker, Domain (WHOIS), gRPC, MQTT, passive heartbeat, and manual
-- **Assertion engine** — 8 condition types with AND/OR group logic: status code, body text, body regex, JSON path, headers, response time, cert expiry, DNS records
-- **Incidents** — automatic creation with configurable failure/success thresholds, acknowledge, recovery
-- **13 notification channels** — Webhook (HMAC-SHA256), Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
-- **Escalation policies** — time-based notification chains with per-step delays, channel targeting, and repeat mode
-- **Status pages** — multiple public pages with custom slugs and monitor grouping
-- **Change detection** — line-level diffs on HTTP response bodies
-- **Maintenance windows** — recurring schedules to suppress alerts during planned downtime
-- **Heartbeat monitoring** — cron jobs and workers report in; silence triggers an incident
-- **Advanced HTTP auth** — OAuth2 Client Credentials with token caching, mutual TLS (mTLS) with inline PEM certificates
-- **Proxy support** — HTTP and SOCKS5 proxies with per-monitor assignment
-- **SLA targets** — per-monitor SLA tracking with error budgets, breach alerts, and monthly reports
-- **Analytics** — uptime %, response time percentiles, Prometheus `/metrics`
+**One-liner (Ubuntu/Debian):**
+```bash
+git clone https://github.com/y0f/Asura.git && cd Asura && sudo bash install.sh
+```
+
+**Docker:**
+```bash
+git clone https://github.com/y0f/Asura.git && cd Asura
+cp config.example.yaml config.yaml
+docker compose up -d
+```
+
+Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#deployment) (nginx/Caddy) for public access with TLS.
+
+---
+
+## Features
+
+- **13 monitor types** — HTTP, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain/WHOIS, Command, Heartbeat, Manual
+- **13 notification channels** — Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
+- **Assertions** — Status code, body text, regex, JSONPath, headers, response time, cert expiry, DNS records with AND/OR group logic
+- **Live dashboard** — Real-time SSE push with sparklines, uptime stats, and bulk operations. Falls back to polling.
+- **Public status pages** — 90-day uptime bars, incidents, email/webhook subscriptions, password protection, custom CSS
+- **Escalation policies** — Time-based notification chains with per-step delays and repeat
+- **SLA tracking** — Per-monitor targets, error budgets, breach alerts, monthly reports
+- **Change detection** — Line-level diffs on HTTP response bodies
+- **Security** — TOTP 2FA, role-based API keys, SSRF protection, rate limiting
+
+---
 
 ## Why Asura?
 
-| | Asura | Typical alternative |
+| Aspect | Asura | Typical alternative |
 |---|---|---|
-| **Runtime** | Single static binary | Node.js / Java / Python runtime |
-| **Database** | SQLite compiled in | Requires Postgres, MySQL, or Redis |
-| **Binary size** | ~15 MB | 100 MB+ installed |
-| **Deploy** | `scp` binary + run | Package manager, runtime install, migrations |
-| **RAM** | ~20 MB idle | Varies — runtime + database overhead |
+| **Install** | Single binary, `scp` + run | Runtime + database + migrations |
+| **Database** | SQLite (built in) | Needs Postgres, MySQL, or Redis |
+| **Size** | ~15 MB binary, ~20 MB RAM | 100 MB+, varies by runtime |
+| **API** | Full REST API, same as web UI | Often Socket.IO or undocumented |
+| **Scale** | 1000+ monitors on a $5 VPS | Node.js alternatives hit walls at 500 |
 
 ---
 
-## Documentation
+## Docs
 
-| | |
-|---|---|
-| [Getting Started](https://y0f.github.io/asura/#getting-started) | Install via VPS, Docker, or source |
-| [Deployment](https://y0f.github.io/asura/#deployment) | nginx / Caddy reverse proxy, TLS |
-| [Configuration](https://y0f.github.io/asura/#configuration) | Config reference, auth, adaptive intervals |
-| [Monitors](https://y0f.github.io/asura/#monitors) | All monitor types, assertions, heartbeats, manual |
-| [Notifications](https://y0f.github.io/asura/#notifications) | All channels, webhook signing, per-monitor routing |
-| [Escalation Policies](https://y0f.github.io/asura/#escalation-policies) | Time-based notification chains with delays and repeat |
-| [API Reference](https://y0f.github.io/asura/#api) | Full endpoint reference with request/response examples |
-| [SLA Targets](https://y0f.github.io/asura/#sla) | Per-monitor SLA tracking, error budgets, breach alerts |
-| [Backup & Restore](https://y0f.github.io/asura/#backup) | SQLite backup strategy and restore procedure |
-| [Architecture](https://y0f.github.io/asura/#architecture) | Pipeline, storage, checker registry |
+- [Getting Started](https://y0f.github.io/asura/#getting-started) — Install, configure, first monitor
+- [Deployment](https://y0f.github.io/asura/#deployment) — Reverse proxy, TLS, systemd
+- [Configuration](https://y0f.github.io/asura/#configuration) — Full config reference
+- [Monitors](https://y0f.github.io/asura/#monitors) — All types, assertions, heartbeats
+- [Notifications](https://y0f.github.io/asura/#notifications) — Channels, webhook signing, routing
+- [Escalation](https://y0f.github.io/asura/#escalation-policies) — Time-based chains
+- [API](https://y0f.github.io/asura/#api) — Endpoints with examples
+- [SLA](https://y0f.github.io/asura/#sla) — Targets, budgets, breach alerts
+- [Architecture](https://y0f.github.io/asura/#architecture) — Pipeline, storage, internals
 
 ---
 
-## Tech Stack
+## Stack
 
-- **Go 1.24+** with stdlib `net/http` — no frameworks
-- **SQLite** via `modernc.org/sqlite` (pure Go, no CGO)
-- **[templ](https://templ.guide/)** for type-safe server-rendered HTML
-- **HTMX** + **Alpine.js** for progressive enhancement
-- **Tailwind CSS v4** standalone CLI (no Node.js)
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Go 1.25+, stdlib `net/http`, SQLite via `modernc.org/sqlite` (pure Go, zero CGO), [templ](https://templ.guide/), HTMX, Alpine.js, Tailwind CSS v4.
 
 ## License
 
