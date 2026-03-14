@@ -19,8 +19,7 @@ watch:
 	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --watch
 
 dev:
-	templ generate --watch &
-	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --watch
+	bash dev.sh
 
 build: generate
 	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o $(BINARY) ./cmd/asura

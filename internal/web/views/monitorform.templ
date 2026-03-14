@@ -168,61 +168,73 @@ templ MonitorFormPage(p MonitorFormParams) {
 					action={ templ.SafeURL(p.BasePath + "/monitors") }
 				}
 				class="max-w-4xl space-y-4">
-				<!-- Card 1: Basics -->
-				@FormCard("Basics") {
+				@FormCard("") {
 					<div class="space-y-4">
-						<div>
-							<label class="form-label">Name</label>
-							<input type="text" name="name" value={ p.Monitor.Name } required class="form-input"/>
-						</div>
-						<div>
-							<label class="form-label">Description <span class="text-muted/50 font-normal">(optional, max 5000 chars)</span></label>
-							<textarea name="description" rows="2" maxlength="5000" placeholder="Runbook notes, context, links…" class="form-input resize-y">{ p.Monitor.Description }</textarea>
-						</div>
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div>
+								<label class="form-label">Name</label>
+								<input type="text" name="name" value={ p.Monitor.Name } required class="form-input" placeholder="My Website"/>
+							</div>
 							<div>
 								<label class="form-label">Type</label>
 								<select name="type" x-model="monitorType" class="form-select">
-									<option value="http">HTTP</option>
-									<option value="tcp">TCP</option>
-									<option value="dns">DNS</option>
-									<option value="icmp">ICMP</option>
-									<option value="tls">TLS</option>
-									<option value="websocket">WebSocket</option>
-									<option value="command">Command</option>
-									<option value="docker">Docker</option>
-									<option value="domain">Domain</option>
-									<option value="grpc">gRPC</option>
-									<option value="mqtt">MQTT</option>
-									<option value="heartbeat">Heartbeat</option>
-									<option value="manual">Manual</option>
+									<optgroup label="Network">
+										<option value="http">HTTP(S)</option>
+										<option value="tcp">TCP Port</option>
+										<option value="icmp">Ping (ICMP)</option>
+										<option value="dns">DNS Lookup</option>
+									</optgroup>
+									<optgroup label="Security">
+										<option value="tls">TLS Certificate</option>
+										<option value="domain">Domain Expiry</option>
+									</optgroup>
+									<optgroup label="Application">
+										<option value="websocket">WebSocket</option>
+										<option value="grpc">gRPC Health</option>
+										<option value="mqtt">MQTT Broker</option>
+										<option value="docker">Docker Container</option>
+										<option value="command">Command / Script</option>
+									</optgroup>
+									<optgroup label="Passive">
+										<option value="heartbeat">Heartbeat (push)</option>
+										<option value="manual">Manual Status</option>
+									</optgroup>
 								</select>
 							</div>
-							<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'">
-								<label class="form-label" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
-								<input type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'nginx, postgres, or container ID', domain:'example.com', grpc:'host:port', mqtt:'broker.example.com:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
-							</div>
+						</div>
+						<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'" x-cloak>
+							<label class="form-label" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
+							<input type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
+						</div>
+						<div>
+							<label class="form-label">Description <span class="text-muted/50 font-normal">(optional)</span></label>
+							<textarea name="description" rows="2" maxlength="5000" placeholder="Runbook notes, context, links…" class="form-input resize-y">{ p.Monitor.Description }</textarea>
 						</div>
 					</div>
 				}
-				<!-- Card 2: Schedule -->
 				<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'" x-cloak>
-					@FormCard("Schedule") {
+					@FormCard("Check Schedule") {
 						<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
 							<div>
-								<label class="form-label">Interval (s)</label>
-								<input type="number" name="interval" value={ intOrDefault(p.Monitor.Interval, 60) } min="5" max="86400" class="form-input tabular-nums"/>
+								<label class="form-label">Check every</label>
+								<div class="flex items-center gap-1.5">
+									<input type="number" name="interval" value={ intOrDefault(p.Monitor.Interval, 60) } min="5" max="86400" class="form-input tabular-nums flex-1"/>
+									<span class="text-[11px] text-muted shrink-0">sec</span>
+								</div>
 							</div>
 							<div>
-								<label class="form-label">Timeout (s)</label>
-								<input type="number" name="timeout" value={ intOrDefault(p.Monitor.Timeout, 10) } min="1" max="300" class="form-input tabular-nums"/>
+								<label class="form-label">Timeout after</label>
+								<div class="flex items-center gap-1.5">
+									<input type="number" name="timeout" value={ intOrDefault(p.Monitor.Timeout, 10) } min="1" max="300" class="form-input tabular-nums flex-1"/>
+									<span class="text-[11px] text-muted shrink-0">sec</span>
+								</div>
 							</div>
 							<div>
-								<label class="form-label">Fail Threshold</label>
+								<label class="form-label">Failures before alert</label>
 								<input type="number" name="failure_threshold" value={ intOrDefault(p.Monitor.FailureThreshold, 3) } min="1" class="form-input tabular-nums"/>
 							</div>
 							<div>
-								<label class="form-label">Pass Threshold</label>
+								<label class="form-label">Successes to recover</label>
 								<input type="number" name="success_threshold" value={ intOrDefault(p.Monitor.SuccessThreshold, 1) } min="1" class="form-input tabular-nums"/>
 							</div>
 						</div>
@@ -257,9 +269,9 @@ templ MonitorFormPage(p MonitorFormParams) {
 				@monitorAssertions(p)
 				<!-- Card 5: Advanced -->
 				<div x-data={ advancedSectionData(p) }>
-					<button type="button" @click="showAdvanced = !showAdvanced" class="flex items-center gap-2 w-full text-left mb-0">
-						<span class="text-[11px] text-muted uppercase tracking-widest">Advanced</span>
-						<svg :class="showAdvanced && 'rotate-90'" class="w-3 h-3 text-muted transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+					<button type="button" @click="showAdvanced = !showAdvanced" class="flex items-center gap-2 w-full text-left px-1 py-1 group cursor-pointer">
+						<span class="text-[11px] text-muted-light/70 uppercase tracking-widest font-semibold group-hover:text-muted-light transition-colors">Routing &amp; Behavior</span>
+						<span class="text-muted-light/30 group-hover:text-muted-light/60 text-[10px] transition-colors" x-text="showAdvanced ? '−' : '+'"></span>
 					</button>
 					<div x-show="showAdvanced" x-cloak class="mt-4">
 						@FormCard("") {

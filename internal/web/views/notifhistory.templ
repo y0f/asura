@@ -40,7 +40,7 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 		<div>
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Notification History</h1>
-				<a href={ templ.SafeURL(p.BasePath + "/notifications") } class="text-[12px] text-muted hover:text-white transition-colors">← Channels</a>
+				<a href={ templ.SafeURL(p.BasePath + "/notifications") } class="text-[12px] text-muted hover:text-white transition-colors">&lt; Channels</a>
 			</div>
 			<form method="GET" action={ templ.SafeURL(p.BasePath + "/notifications/history") } class="flex flex-wrap items-center gap-2 mb-4">
 				<select name="channel_id" class="form-select-sm" onchange="this.form.submit()">

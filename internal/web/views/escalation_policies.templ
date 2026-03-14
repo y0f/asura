@@ -61,7 +61,7 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 												After { fmt.Sprintf("%dm", step.DelayMinutes) }
 											}
 										</span>
-										<span class="text-muted">→ { fmt.Sprintf("%d channel(s)", len(step.NotificationChannelIDs)) }</span>
+										<span class="text-muted">&gt; { fmt.Sprintf("%d channel(s)", len(step.NotificationChannelIDs)) }</span>
 									</div>
 								}
 							</div>

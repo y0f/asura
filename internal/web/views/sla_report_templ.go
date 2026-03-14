@@ -134,7 +134,7 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" class=\"px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors\">&larr; Prev</a> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" class=\"px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors\">&lt;</a> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -170,7 +170,7 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" class=\"px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors\">Next &rarr;</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" class=\"px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors\">&gt;</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

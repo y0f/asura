@@ -18,46 +18,56 @@ cp config.example.yaml config.yaml
 go run ./cmd/asura --setup
 
 # set cookie_secure: false in config.yaml (no TLS locally)
-
-# build and run
-templ generate
-CGO_ENABLED=0 go build -o asura ./cmd/asura
-./asura -config config.yaml
 ```
-
-Open http://localhost:8090 and log in with the key from `--setup`.
 
 `config.yaml` is gitignored — it won't be committed.
 
 ## Development Workflow
 
-All commands run from inside the `asura/` directory.
+One command does everything — watches for file changes, rebuilds, and restarts the server automatically:
 
 **Linux / macOS / Git Bash:**
 ```bash
-make dev   # terminal 1: watches templates + CSS, rebuilds on save
-make run   # terminal 2: builds and starts the server
+make dev
 ```
 
-**Windows (PowerShell)** — run each in a separate terminal:
+**Windows (PowerShell):**
 ```powershell
-# terminal 1: watch templates
-templ generate --watch
-
-# terminal 1b: watch CSS (separate terminal)
-.\tailwindcss.exe -i web\tailwind.input.css -o web\static\tailwind.css --watch
-
-# terminal 2: build and run
-$env:CGO_ENABLED="0"; go build -o asura.exe ./cmd/asura; .\asura.exe -config config.yaml
+.\dev.ps1
 ```
 
-After `.go` changes: stop the server (`Ctrl+C`), rebuild, and restart.
+This watches all `.go` and `.templ` files, plus runs the Tailwind CSS watcher. When you save a file, the server rebuilds and restarts within a few seconds.
 
-To run tests: `make test` or `go test -race -count=1 ./...`
+Open http://localhost:8090 and log in with the API key from `--setup`.
+
+### Manual workflow (if you prefer)
+
+Run each in a separate terminal:
+
+```bash
+# terminal 1: watch templates + CSS
+templ generate --watch
+./tailwindcss -i web/tailwind.input.css -o web/static/tailwind.css --watch
+
+# terminal 2: build and run (re-run after .go changes)
+go build -o asura ./cmd/asura && ./asura -config config.yaml
+```
+
+### Running tests
+
+```bash
+make test
+# or
+go test -race -count=1 ./...
+```
+
+Note: `-race` requires CGO on Windows. CI runs tests on Linux with race detection.
+
+## Contributing Steps
 
 1. Fork the repo and create a branch from `main`
-2. Start the watchers and server as above
-3. Make your changes
+2. Run `make dev` (or `.\dev.ps1` on Windows)
+3. Make your changes — server auto-restarts on save
 4. Run tests to verify
 5. Commit with a clear message (see below)
 6. Open a pull request
@@ -75,10 +85,10 @@ Update SQLite dependency to v1.35
 ## Code Style
 
 - Follow standard Go conventions (`gofmt`, `go vet`)
-- No dependencies unless truly necessary -- keep the binary small
+- No dependencies unless truly necessary — keep the binary small
 - Error messages are lowercase, no trailing punctuation
 - Table-driven tests where applicable
-- Web UI templates use [templ](https://templ.guide/) -- run `templ generate` after editing `.templ` files
+- Web UI templates use [templ](https://templ.guide/) — run `templ generate` after editing `.templ` files
 
 ## What to Work On
 

@@ -1594,7 +1594,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "\" class=\"text-red-400/80 hover:text-red-300 underline underline-offset-2 ml-1\">View &rarr;</a></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "\" class=\"text-red-400/80 hover:text-red-300 underline underline-offset-2 ml-1\">View</a></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

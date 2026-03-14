@@ -89,7 +89,7 @@ func NotificationHistoryPage(p NotificationHistoryParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"text-[12px] text-muted hover:text-white transition-colors\">← Channels</a></div><form method=\"GET\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"text-[12px] text-muted hover:text-white transition-colors\">&lt; Channels</a></div><form method=\"GET\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

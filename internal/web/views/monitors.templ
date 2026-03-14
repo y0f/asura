@@ -588,7 +588,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				<div class="mb-5 px-4 py-2.5 border border-red-500/15 rounded text-[13px] text-red-400 flex items-center gap-2">
 					<svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 					Active incident: { p.OpenIncident.Cause }
-					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="text-red-400/80 hover:text-red-300 underline underline-offset-2 ml-1">View &rarr;</a>
+					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="text-red-400/80 hover:text-red-300 underline underline-offset-2 ml-1">View</a>
 				</div>
 			}
 			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">

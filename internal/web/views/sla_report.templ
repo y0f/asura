@@ -75,12 +75,12 @@ templ SLAReportPage(p SLAReportParams) {
 		<div class="flex items-center gap-3 mb-5">
 			if !p.isFutureMonth() {
 				<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.prevPeriod())) }
-					class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors">&larr; Prev</a>
+					class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors">&lt;</a>
 			}
 			<span class="text-[13px] text-white font-medium">{ p.Period.Format("January 2006") }</span>
 			if !p.isCurrentMonth() && !p.isFutureMonth() {
 				<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.nextPeriod())) }
-					class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors">Next &rarr;</a>
+					class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light border border-line rounded transition-colors">&gt;</a>
 			}
 		</div>
 		if len(p.Entries) == 0 {
