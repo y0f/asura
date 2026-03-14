@@ -395,3 +395,20 @@
 <pre><code>asura-agent --server https://your-server.com --token &lt;agent-token&gt; --interval 30s</code></pre>
 
 <p>The agent binary polls the server for jobs, runs checks locally, and posts results back. Only outbound HTTPS is needed. The agent binary is ~16MB and runs on any Linux server.</p>
+
+<h2>On-Call Rotations</h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/on-call</code></td><td>List all rotations</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/on-call/current</code></td><td>Current on-call per rotation</td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/v1/on-call</code></td><td>Create rotation</td></tr>
+    <tr><td><code>PUT</code></td><td><code>/api/v1/on-call/{id}</code></td><td>Update rotation</td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/on-call/{id}</code></td><td>Delete rotation</td></tr>
+  </tbody>
+</table>
+
+<p>Rotations cycle through an ordered list of notification channels on a daily or weekly basis. Temporary overrides can be set for vacations or coverage swaps with a channel ID and expiry time.</p>
