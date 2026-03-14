@@ -18,6 +18,11 @@ type SQLiteStore struct {
 	readDB  *sql.DB
 	writeDB *sql.DB
 	dbPath  string
+	enc     *Encryptor
+}
+
+func (s *SQLiteStore) SetEncryptor(enc *Encryptor) {
+	s.enc = enc
 }
 
 // NewSQLiteStore opens the database with separate read and write pools.

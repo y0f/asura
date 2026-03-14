@@ -2,15 +2,20 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
 func (s *SQLiteStore) CreateProxy(ctx context.Context, p *Proxy) error {
 	now := formatTime(time.Now())
+	authPass, err := s.encryptSettings(p.AuthPass)
+	if err != nil {
+		return fmt.Errorf("encrypt proxy auth: %w", err)
+	}
 	res, err := s.writeDB.ExecContext(ctx,
 		`INSERT INTO proxies (name, protocol, host, port, auth_user, auth_pass, enabled, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, p.AuthPass, boolToInt(p.Enabled), now, now)
+		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, authPass, boolToInt(p.Enabled), now, now)
 	if err != nil {
 		return err
 	}
@@ -23,14 +28,15 @@ func (s *SQLiteStore) CreateProxy(ctx context.Context, p *Proxy) error {
 
 func (s *SQLiteStore) GetProxy(ctx context.Context, id int64) (*Proxy, error) {
 	var p Proxy
-	var createdAt, updatedAt string
+	var createdAt, updatedAt, authPass string
 	err := s.readDB.QueryRowContext(ctx,
 		`SELECT id, name, protocol, host, port, auth_user, auth_pass, enabled, created_at, updated_at
 		 FROM proxies WHERE id=?`, id).
-		Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &p.AuthPass, &p.Enabled, &createdAt, &updatedAt)
+		Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &authPass, &p.Enabled, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
+	p.AuthPass, _ = s.decryptSettings(authPass)
 	p.CreatedAt = parseTime(createdAt)
 	p.UpdatedAt = parseTime(updatedAt)
 	return &p, nil
@@ -48,10 +54,11 @@ func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 	var proxies []*Proxy
 	for rows.Next() {
 		var p Proxy
-		var createdAt, updatedAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &p.AuthPass, &p.Enabled, &createdAt, &updatedAt); err != nil {
+		var createdAt, updatedAt, authPass string
+		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &authPass, &p.Enabled, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
+		p.AuthPass, _ = s.decryptSettings(authPass)
 		p.CreatedAt = parseTime(createdAt)
 		p.UpdatedAt = parseTime(updatedAt)
 		proxies = append(proxies, &p)
@@ -67,9 +74,13 @@ func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 
 func (s *SQLiteStore) UpdateProxy(ctx context.Context, p *Proxy) error {
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
+	authPass, err := s.encryptSettings(p.AuthPass)
+	if err != nil {
+		return fmt.Errorf("encrypt proxy auth: %w", err)
+	}
+	_, err = s.writeDB.ExecContext(ctx,
 		`UPDATE proxies SET name=?, protocol=?, host=?, port=?, auth_user=?, auth_pass=?, enabled=?, updated_at=? WHERE id=?`,
-		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, p.AuthPass, boolToInt(p.Enabled), now, p.ID)
+		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, authPass, boolToInt(p.Enabled), now, p.ID)
 	return err
 }
 

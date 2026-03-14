@@ -67,6 +67,11 @@ database:
   # How often to run the retention cleanup
   retention_period: 1h
 
+  # Encryption key for secrets at rest (notification tokens, proxy passwords).
+  # If set, secrets are AES-256-GCM encrypted in the database.
+  # Existing unencrypted data is read transparently and encrypted on next write.
+  # encryption_key: "your-secret-key-here"
+
 auth:
   # API keys for authentication.
   # Generate a key+hash pair: asura --setup

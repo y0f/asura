@@ -63,6 +63,7 @@ type DatabaseConfig struct {
 	RetentionDays           int           `yaml:"retention_days"`
 	RetentionPeriod         time.Duration `yaml:"retention_period"`
 	RequestLogRetentionDays int           `yaml:"request_log_retention_days"`
+	EncryptionKey           string        `yaml:"encryption_key"`
 }
 
 type AuthConfig struct {

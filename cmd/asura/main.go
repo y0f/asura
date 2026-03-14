@@ -86,6 +86,16 @@ func main() {
 	defer store.Close()
 	logger.Info("database opened", "path", cfg.Database.Path)
 
+	if cfg.Database.EncryptionKey != "" {
+		enc, err := storage.NewEncryptor(cfg.Database.EncryptionKey)
+		if err != nil {
+			logger.Error("failed to create encryptor", "error", err)
+			os.Exit(1)
+		}
+		store.SetEncryptor(enc)
+		logger.Info("encryption at rest enabled")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
