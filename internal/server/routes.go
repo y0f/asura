@@ -95,6 +95,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/maintenance"), webPerm("maintenance.write", s.web.MaintenanceCreate))
 		mux.Handle("POST "+s.p("/maintenance/{id}"), webPerm("maintenance.write", s.web.MaintenanceUpdate))
 		mux.Handle("POST "+s.p("/maintenance/{id}/delete"), webPerm("maintenance.write", s.web.MaintenanceDelete))
+		mux.Handle("POST "+s.p("/maintenance/{id}/toggle"), webPerm("maintenance.write", s.web.MaintenanceToggle))
 
 		mux.Handle("GET "+s.p("/logs"), webAuth(http.HandlerFunc(s.web.RequestLogs)))
 		mux.Handle("GET "+s.p("/audit"), webAuth(http.HandlerFunc(s.web.AuditLog)))
@@ -176,6 +177,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("POST "+s.p("/api/v1/maintenance"), maintWrite(http.HandlerFunc(s.api.CreateMaintenance)))
 	mux.Handle("PUT "+s.p("/api/v1/maintenance/{id}"), maintWrite(http.HandlerFunc(s.api.UpdateMaintenance)))
+	mux.Handle("POST "+s.p("/api/v1/maintenance/{id}/toggle"), maintWrite(http.HandlerFunc(s.api.ToggleMaintenance)))
 	mux.Handle("DELETE "+s.p("/api/v1/maintenance/{id}"), maintWrite(http.HandlerFunc(s.api.DeleteMaintenance)))
 
 	epRead := s.api.Auth("escalation_policies.read")

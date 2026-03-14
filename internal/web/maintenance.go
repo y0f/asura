@@ -78,17 +78,51 @@ func (h *Handler) MaintenanceDelete(w http.ResponseWriter, r *http.Request) {
 	h.redirect(w, r, "/maintenance")
 }
 
+func (h *Handler) MaintenanceToggle(w http.ResponseWriter, r *http.Request) {
+	id, err := httputil.ParseID(r)
+	if err != nil {
+		h.redirect(w, r, "/maintenance")
+		return
+	}
+	mw, err := h.store.GetMaintenanceWindow(r.Context(), id)
+	if err != nil {
+		h.setFlash(w, "Maintenance window not found")
+		h.redirect(w, r, "/maintenance")
+		return
+	}
+	newActive := !mw.Active
+	if err := h.store.ToggleMaintenanceWindow(r.Context(), id, newActive); err != nil {
+		h.logger.Error("web: toggle maintenance", "error", err)
+		h.setFlash(w, "Failed to toggle maintenance window")
+	} else if newActive {
+		h.setFlash(w, "Maintenance started")
+	} else {
+		h.setFlash(w, "Maintenance stopped")
+	}
+	h.redirect(w, r, "/maintenance")
+}
+
 func (h *Handler) parseMaintenanceForm(r *http.Request) *storage.MaintenanceWindow {
 	r.ParseForm()
 
+	recurring := r.FormValue("recurring")
+
 	startTime, _ := time.Parse("2006-01-02T15:04", r.FormValue("start_time"))
 	endTime, _ := time.Parse("2006-01-02T15:04", r.FormValue("end_time"))
+
+	if recurring == "manual" {
+		now := time.Now().UTC()
+		startTime = now
+		endTime = now.Add(time.Hour)
+	}
 
 	mw := &storage.MaintenanceWindow{
 		Name:      r.FormValue("name"),
 		StartTime: startTime,
 		EndTime:   endTime,
-		Recurring: r.FormValue("recurring"),
+		Recurring: recurring,
+		CronExpr:  strings.TrimSpace(r.FormValue("cron_expr")),
+		Active:    r.FormValue("active") == "on",
 	}
 
 	if ids := r.FormValue("monitor_ids"); ids != "" {

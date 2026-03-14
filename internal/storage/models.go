@@ -193,7 +193,9 @@ type MaintenanceWindow struct {
 	MonitorIDs []int64   `json:"monitor_ids"` // empty = all monitors
 	StartTime  time.Time `json:"start_time"`
 	EndTime    time.Time `json:"end_time"`
-	Recurring  string    `json:"recurring,omitempty"` // "", "daily", "weekly", "monthly"
+	Recurring  string    `json:"recurring,omitempty"` // "", "manual", "cron", "daily", "weekly", "monthly"
+	CronExpr   string    `json:"cron_expr,omitempty"`
+	Active     bool      `json:"active"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }

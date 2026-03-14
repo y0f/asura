@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/y0f/asura/internal/cron"
+
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
@@ -341,17 +343,28 @@ func ValidateMaintenanceWindow(mw *storage.MaintenanceWindow) error {
 	if strings.TrimSpace(mw.Name) == "" {
 		return fmt.Errorf("name is required")
 	}
-	if mw.StartTime.IsZero() {
-		return fmt.Errorf("start_time is required")
+	if mw.Recurring != "manual" {
+		if mw.StartTime.IsZero() {
+			return fmt.Errorf("start_time is required")
+		}
+		if mw.EndTime.IsZero() {
+			return fmt.Errorf("end_time is required")
+		}
+		if !mw.EndTime.After(mw.StartTime) {
+			return fmt.Errorf("end_time must be after start_time")
+		}
 	}
-	if mw.EndTime.IsZero() {
-		return fmt.Errorf("end_time is required")
+	validRecurring := map[string]bool{"": true, "manual": true, "cron": true, "daily": true, "weekly": true, "monthly": true}
+	if !validRecurring[mw.Recurring] {
+		return fmt.Errorf("recurring must be one of: manual, cron, daily, weekly, monthly")
 	}
-	if !mw.EndTime.After(mw.StartTime) {
-		return fmt.Errorf("end_time must be after start_time")
-	}
-	if mw.Recurring != "" && mw.Recurring != "daily" && mw.Recurring != "weekly" && mw.Recurring != "monthly" {
-		return fmt.Errorf("recurring must be one of: daily, weekly, monthly")
+	if mw.Recurring == "cron" {
+		if mw.CronExpr == "" {
+			return fmt.Errorf("cron_expr is required when recurring is cron")
+		}
+		if _, err := cron.Parse(mw.CronExpr); err != nil {
+			return fmt.Errorf("invalid cron expression: %w", err)
+		}
 	}
 	return nil
 }

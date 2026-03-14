@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 26
+const schemaVersion = 27
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -156,6 +156,8 @@ CREATE TABLE IF NOT EXISTS maintenance_windows (
 	start_time  TEXT    NOT NULL,
 	end_time    TEXT    NOT NULL,
 	recurring   TEXT    NOT NULL DEFAULT '',
+	cron_expr   TEXT    NOT NULL DEFAULT '',
+	active      INTEGER NOT NULL DEFAULT 0,
 	created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
@@ -480,5 +482,10 @@ CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(t
 ALTER TABLE monitor_status ADD COLUMN baseline_avg REAL NOT NULL DEFAULT 0;
 ALTER TABLE monitor_status ADD COLUMN baseline_stddev REAL NOT NULL DEFAULT 0;
 ALTER TABLE monitor_status ADD COLUMN baseline_updated_at TEXT;`,
+	},
+	{
+		version: 27,
+		sql: `ALTER TABLE maintenance_windows ADD COLUMN cron_expr TEXT NOT NULL DEFAULT '';
+ALTER TABLE maintenance_windows ADD COLUMN active INTEGER NOT NULL DEFAULT 0;`,
 	},
 }

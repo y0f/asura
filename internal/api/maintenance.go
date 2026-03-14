@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/y0f/asura/internal/httputil"
@@ -86,6 +87,30 @@ func (h *Handler) UpdateMaintenance(w http.ResponseWriter, r *http.Request) {
 
 	h.audit(r, "update", "maintenance_window", mw.ID, "")
 	writeJSON(w, http.StatusOK, mw)
+}
+
+func (h *Handler) ToggleMaintenance(w http.ResponseWriter, r *http.Request) {
+	id, err := httputil.ParseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	mw, err := h.store.GetMaintenanceWindow(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "maintenance window not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get maintenance window")
+		return
+	}
+	newActive := !mw.Active
+	if err := h.store.ToggleMaintenanceWindow(r.Context(), id, newActive); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to toggle maintenance window")
+		return
+	}
+	h.audit(r, "toggle", "maintenance_window", id, fmt.Sprintf("active=%v", newActive))
+	writeJSON(w, http.StatusOK, map[string]bool{"active": newActive})
 }
 
 func (h *Handler) DeleteMaintenance(w http.ResponseWriter, r *http.Request) {

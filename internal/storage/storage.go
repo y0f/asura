@@ -58,6 +58,7 @@ type Store interface {
 	ListMaintenanceWindows(ctx context.Context) ([]*MaintenanceWindow, error)
 	UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow) error
 	DeleteMaintenanceWindow(ctx context.Context, id int64) error
+	ToggleMaintenanceWindow(ctx context.Context, id int64, active bool) error
 	IsMonitorInMaintenance(ctx context.Context, monitorID int64, at time.Time) (bool, error)
 
 	// Content changes
