@@ -58,6 +58,9 @@ func (s *Server) statusPageRouter(next http.Handler) http.Handler {
 						case r.Method == http.MethodPost && suffix == "auth":
 							s.web.StatusPageAuthPost(w, r, pageID, slug)
 							return
+						case r.Method == http.MethodGet && suffix == "rss":
+							s.web.StatusPageRSS(w, r, pageID)
+							return
 						case r.Method == http.MethodPost && suffix == "subscribe":
 							s.web.StatusPageSubscribe(w, r, pageID)
 							return

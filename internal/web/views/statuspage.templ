@@ -69,6 +69,9 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 			} else {
 				<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
 			}
+			if p.Config != nil {
+				<link rel="alternate" type="application/rss+xml" title={ p.Title + " RSS" } href={ p.BasePath + "/" + p.Config.Slug + "/rss" }/>
+			}
 			<link rel="preload" href={ p.BasePath + "/static/fonts/inter.woff2" } as="font" type="font/woff2" crossorigin/>
 			<link rel="stylesheet" href={ p.BasePath + "/static/tailwind.css" }/>
 			<script defer src={ p.BasePath + "/static/alpine.min.js" }></script>
