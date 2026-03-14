@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 28
+const schemaVersion = 29
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -277,6 +277,32 @@ CREATE TABLE IF NOT EXISTS status_page_subscribers (
 CREATE INDEX IF NOT EXISTS idx_sp_subscribers_page ON status_page_subscribers(status_page_id, confirmed);
 CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(token);
 
+CREATE TABLE IF NOT EXISTS check_result_hourly (
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	hour       TEXT    NOT NULL,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, hour)
+);
+
+CREATE TABLE IF NOT EXISTS check_result_daily (
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	day        TEXT    NOT NULL,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, day)
+);
+
 CREATE INDEX IF NOT EXISTS idx_check_results_created_at ON check_results(created_at);
 CREATE INDEX IF NOT EXISTS idx_incidents_resolved_at ON incidents(status, resolved_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
@@ -492,5 +518,32 @@ ALTER TABLE maintenance_windows ADD COLUMN active INTEGER NOT NULL DEFAULT 0;`,
 	{
 		version: 28,
 		sql:     `ALTER TABLE incidents ADD COLUMN severity TEXT NOT NULL DEFAULT 'critical';`,
+	},
+	{
+		version: 29,
+		sql: `CREATE TABLE IF NOT EXISTS check_result_hourly (
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	hour       TEXT    NOT NULL,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, hour)
+);
+CREATE TABLE IF NOT EXISTS check_result_daily (
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	day        TEXT    NOT NULL,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, day)
+);`,
 	},
 }

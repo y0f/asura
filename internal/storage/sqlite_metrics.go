@@ -70,6 +70,14 @@ func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p
 // --- Analytics ---
 
 func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error) {
+	span := to.Sub(from)
+	if span > 90*24*time.Hour {
+		return s.GetTimeSeriesFromDaily(ctx, monitorID, from, to)
+	}
+	if span > 7*24*time.Hour {
+		return s.GetTimeSeriesFromHourly(ctx, monitorID, from, to, maxPoints)
+	}
+
 	fromStr := formatTime(from)
 	toStr := formatTime(to)
 

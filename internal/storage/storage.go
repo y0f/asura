@@ -179,6 +179,14 @@ type Store interface {
 	UpdateEscalationState(ctx context.Context, state *EscalationState) error
 	DeleteEscalationStateByIncident(ctx context.Context, incidentID int64) error
 
+	// Data rollup
+	RollupHourly(ctx context.Context, hour string) error
+	RollupDaily(ctx context.Context, day string) error
+	PurgeHourlyBefore(ctx context.Context, before time.Time) (int64, error)
+	PurgeDailyBefore(ctx context.Context, before time.Time) (int64, error)
+	GetTimeSeriesFromHourly(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error)
+	GetTimeSeriesFromDaily(ctx context.Context, monitorID int64, from, to time.Time) ([]*TimeSeriesPoint, error)
+
 	// Data retention
 	PurgeOldData(ctx context.Context, before time.Time) (int64, error)
 
