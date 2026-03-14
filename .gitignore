@@ -1,4 +1,9 @@
 /asura
+/asura.exe
+/asura-agent
+/asura-agent.exe
+/asura-dev
+/asura-dev.exe
 /tailwindcss
 /tailwindcss.exe
 *.db

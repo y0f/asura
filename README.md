@@ -45,22 +45,22 @@ Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#
 
 ## Features
 
-- **19 monitor types** — HTTP, HTTP Multi-Step, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain/WHOIS, Command, SMTP, SSH, Redis, PostgreSQL, UDP, Heartbeat, Manual
-- **13 notification channels** — Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
-- **Assertions** — Status code, body text, regex, JSONPath, headers, response time, cert expiry, DNS records with AND/OR group logic
-- **Multi-step HTTP chains** — Up to 5 sequential requests with variable extraction (regex/JSONPath) between steps
-- **Distributed probe agents** — Run checks from multiple locations with a lightweight agent binary (~16MB)
-- **Anomaly detection** — Statistical baseline with configurable sensitivity, auto-degrades on response time spikes
-- **Live dashboard** — Real-time SSE push with sparklines, uptime heatmap, and bulk operations
-- **Public status pages** — 90-day uptime bars, incidents, email/webhook subscriptions, RSS feed, password protection
-- **Incident severity** — Critical, major, minor, warning levels with auto-assignment
-- **Escalation policies** — Time-based notification chains with per-step delays and repeat
-- **SLA tracking** — Per-monitor targets, error budgets, breach alerts, monthly reports
-- **Cron maintenance** — 6 scheduling modes: manual, one-time, cron, daily, weekly, monthly
-- **Encryption at rest** — AES-256-GCM for notification secrets and proxy passwords
-- **Data rollup** — Hourly and daily aggregates for long-running instances
-- **Change detection** — Line-level diffs on HTTP response bodies
-- **Security** — TOTP 2FA, role-based API keys, SSRF protection, rate limiting
+- **19 monitor types** - HTTP, HTTP Multi-Step, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain/WHOIS, Command, SMTP, SSH, Redis, PostgreSQL, UDP, Heartbeat, Manual
+- **13 notification channels** - Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
+- **Assertions** - Status code, body text, regex, JSONPath, headers, response time, cert expiry, DNS records with AND/OR group logic
+- **Multi-step HTTP chains** - Up to 5 sequential requests with variable extraction (regex/JSONPath) between steps
+- **Distributed probe agents** - Run checks from multiple locations with a lightweight agent binary (~16MB)
+- **Anomaly detection** - Statistical baseline with configurable sensitivity, auto-degrades on response time spikes
+- **Live dashboard** - Real-time SSE push with sparklines, uptime heatmap, and bulk operations
+- **Public status pages** - 90-day uptime bars, incidents, email/webhook subscriptions, RSS feed, password protection
+- **Incident severity** - Critical, major, minor, warning levels with auto-assignment
+- **Escalation policies** - Time-based notification chains with per-step delays and repeat
+- **SLA tracking** - Per-monitor targets, error budgets, breach alerts, monthly reports
+- **Cron maintenance** - 6 scheduling modes: manual, one-time, cron, daily, weekly, monthly
+- **Encryption at rest** - AES-256-GCM for notification secrets and proxy passwords
+- **Data rollup** - Hourly and daily aggregates for long-running instances
+- **Change detection** - Line-level diffs on HTTP response bodies
+- **Security** - TOTP 2FA, role-based API keys, SSRF protection, rate limiting
 
 ---
 
@@ -78,15 +78,15 @@ Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#
 
 ## Docs
 
-- [Getting Started](https://y0f.github.io/asura/#getting-started) — Install, configure, first monitor
-- [Deployment](https://y0f.github.io/asura/#deployment) — Reverse proxy, TLS, systemd
-- [Configuration](https://y0f.github.io/asura/#configuration) — Full config reference
-- [Monitors](https://y0f.github.io/asura/#monitors) — All types, assertions, heartbeats
-- [Notifications](https://y0f.github.io/asura/#notifications) — Channels, webhook signing, routing
-- [Escalation](https://y0f.github.io/asura/#escalation-policies) — Time-based chains
-- [API](https://y0f.github.io/asura/#api) — Endpoints with examples
-- [SLA](https://y0f.github.io/asura/#sla) — Targets, budgets, breach alerts
-- [Architecture](https://y0f.github.io/asura/#architecture) — Pipeline, storage, internals
+- [Getting Started](https://y0f.github.io/asura/#getting-started) - Install, configure, first monitor
+- [Deployment](https://y0f.github.io/asura/#deployment) - Reverse proxy, TLS, systemd
+- [Configuration](https://y0f.github.io/asura/#configuration) - Full config reference
+- [Monitors](https://y0f.github.io/asura/#monitors) - All types, assertions, heartbeats
+- [Notifications](https://y0f.github.io/asura/#notifications) - Channels, webhook signing, routing
+- [Escalation](https://y0f.github.io/asura/#escalation-policies) - Time-based chains
+- [API](https://y0f.github.io/asura/#api) - Endpoints with examples
+- [SLA](https://y0f.github.io/asura/#sla) - Targets, budgets, breach alerts
+- [Architecture](https://y0f.github.io/asura/#architecture) - Pipeline, storage, internals
 
 ---
 

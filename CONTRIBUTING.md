@@ -20,11 +20,11 @@ go run ./cmd/asura --setup
 # set cookie_secure: false in config.yaml (no TLS locally)
 ```
 
-`config.yaml` is gitignored — it won't be committed.
+`config.yaml` is gitignored - it won't be committed.
 
 ## Development Workflow
 
-One command does everything — watches for file changes, rebuilds, and restarts the server automatically:
+One command does everything - watches for file changes, rebuilds, and restarts the server automatically:
 
 **Linux / macOS / Git Bash:**
 ```bash
@@ -67,7 +67,7 @@ Note: `-race` requires CGO on Windows. CI runs tests on Linux with race detectio
 
 1. Fork the repo and create a branch from `main`
 2. Run `make dev` (or `.\dev.ps1` on Windows)
-3. Make your changes — server auto-restarts on save
+3. Make your changes - server auto-restarts on save
 4. Run tests to verify
 5. Commit with a clear message (see below)
 6. Open a pull request
@@ -85,10 +85,10 @@ Update SQLite dependency to v1.35
 ## Code Style
 
 - Follow standard Go conventions (`gofmt`, `go vet`)
-- No dependencies unless truly necessary — keep the binary small
+- No dependencies unless truly necessary - keep the binary small
 - Error messages are lowercase, no trailing punctuation
 - Table-driven tests where applicable
-- Web UI templates use [templ](https://templ.guide/) — run `templ generate` after editing `.templ` files
+- Web UI templates use [templ](https://templ.guide/) - run `templ generate` after editing `.templ` files
 
 ## What to Work On
 
