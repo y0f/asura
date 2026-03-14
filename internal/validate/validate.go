@@ -22,7 +22,8 @@ var ValidMonitorTypes = map[string]bool{
 	"http": true, "tcp": true, "dns": true,
 	"icmp": true, "tls": true, "websocket": true, "command": true,
 	"heartbeat": true, "docker": true, "domain": true,
-	"grpc": true, "mqtt": true, "smtp": true, "ssh": true, "manual": true,
+	"grpc": true, "mqtt": true, "smtp": true, "ssh": true,
+	"redis": true, "postgresql": true, "udp": true, "manual": true,
 }
 
 var ValidIncidentStatuses = map[string]bool{
@@ -78,7 +79,7 @@ func ValidateMonitor(m *storage.Monitor) error {
 		return fmt.Errorf("description must be at most 5000 characters")
 	}
 	if !ValidMonitorTypes[m.Type] {
-		return fmt.Errorf("type must be one of: http, tcp, dns, icmp, tls, websocket, command, heartbeat, docker, domain, grpc, mqtt, smtp, ssh, manual")
+		return fmt.Errorf("type must be one of: http, tcp, dns, icmp, tls, websocket, command, heartbeat, docker, domain, grpc, mqtt, smtp, ssh, redis, postgresql, udp, manual")
 	}
 	if m.Type == "heartbeat" || m.Type == "manual" {
 		return nil

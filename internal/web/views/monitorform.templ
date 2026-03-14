@@ -22,6 +22,9 @@ type MonitorFormParams struct {
 	MQTT                 storage.MQTTSettings
 	SMTP                 storage.SMTPSettings
 	SSH                  storage.SSHSettings
+	Redis                storage.RedisSettings
+	PostgreSQL           storage.PostgreSQLSettings
+	UDP                  storage.UDPSettings
 	FollowRedirects      bool
 	MaxRedirects         int
 	HeadersJSON          string
@@ -193,10 +196,15 @@ templ MonitorFormPage(p MonitorFormParams) {
 										<option value="tls">TLS Certificate</option>
 										<option value="domain">Domain Expiry</option>
 									</optgroup>
+									<optgroup label="Database">
+										<option value="redis">Redis</option>
+										<option value="postgresql">PostgreSQL</option>
+									</optgroup>
 									<optgroup label="Application">
 										<option value="websocket">WebSocket</option>
 										<option value="grpc">gRPC Health</option>
 										<option value="mqtt">MQTT Broker</option>
+										<option value="udp">UDP</option>
 										<option value="docker">Docker Container</option>
 										<option value="command">Command / Script</option>
 									</optgroup>
@@ -270,6 +278,9 @@ templ MonitorFormPage(p MonitorFormParams) {
 						@monitorMQTTSettings(p)
 						@monitorSMTPSettings(p)
 						@monitorSSHSettings(p)
+						@monitorRedisSettings(p)
+						@monitorPostgreSQLSettings(p)
+						@monitorUDPSettings(p)
 					</div>
 				</div>
 				<!-- Card 4: Conditions -->
@@ -919,6 +930,44 @@ templ monitorSSHSettings(p MonitorFormParams) {
 			<label class="form-label">Expected Host Key Fingerprint</label>
 			<input type="text" name="settings_ssh_fingerprint" value={ p.SSH.ExpectedFingerprint } placeholder="Optional SHA-256 hex fingerprint" class="form-input font-mono"/>
 			<p class="text-[10px] text-muted mt-1">Leave empty to accept any host key</p>
+		</div>
+	</div>
+}
+
+templ monitorRedisSettings(p MonitorFormParams) {
+	<div x-show="monitorType === 'redis'" x-cloak class="space-y-4">
+		<div>
+			<label class="form-label">Password</label>
+			<input type="password" name="settings_redis_password" value={ p.Redis.Password } placeholder="Optional" class="form-input"/>
+		</div>
+	</div>
+}
+
+templ monitorPostgreSQLSettings(p MonitorFormParams) {
+	<div x-show="monitorType === 'postgresql'" x-cloak class="space-y-4">
+		<div class="grid grid-cols-2 gap-4">
+			<div>
+				<label class="form-label">Username</label>
+				<input type="text" name="settings_pg_username" value={ p.PostgreSQL.Username } placeholder="postgres" class="form-input"/>
+			</div>
+			<div>
+				<label class="form-label">Database</label>
+				<input type="text" name="settings_pg_database" value={ p.PostgreSQL.Database } placeholder="postgres" class="form-input"/>
+			</div>
+		</div>
+		<p class="text-[10px] text-muted">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p>
+	</div>
+}
+
+templ monitorUDPSettings(p MonitorFormParams) {
+	<div x-show="monitorType === 'udp'" x-cloak class="space-y-4">
+		<div>
+			<label class="form-label">Send Data</label>
+			<input type="text" name="settings_udp_send" value={ p.UDP.SendData } placeholder="Data to send" class="form-input"/>
+		</div>
+		<div>
+			<label class="form-label">Expect Data</label>
+			<input type="text" name="settings_udp_expect" value={ p.UDP.ExpectData } placeholder="Expected in response (optional)" class="form-input"/>
 		</div>
 	</div>
 }

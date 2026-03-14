@@ -56,18 +56,21 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 }
 
 var _settingsTargets = map[string]func(*views.MonitorFormParams) any{
-	"http":      func(fd *views.MonitorFormParams) any { return &fd.HTTP },
-	"tcp":       func(fd *views.MonitorFormParams) any { return &fd.TCP },
-	"dns":       func(fd *views.MonitorFormParams) any { return &fd.DNS },
-	"tls":       func(fd *views.MonitorFormParams) any { return &fd.TLS },
-	"websocket": func(fd *views.MonitorFormParams) any { return &fd.WS },
-	"command":   func(fd *views.MonitorFormParams) any { return &fd.Cmd },
-	"docker":    func(fd *views.MonitorFormParams) any { return &fd.Docker },
-	"domain":    func(fd *views.MonitorFormParams) any { return &fd.Domain },
-	"grpc":      func(fd *views.MonitorFormParams) any { return &fd.GRPC },
-	"mqtt":      func(fd *views.MonitorFormParams) any { return &fd.MQTT },
-	"smtp":      func(fd *views.MonitorFormParams) any { return &fd.SMTP },
-	"ssh":       func(fd *views.MonitorFormParams) any { return &fd.SSH },
+	"http":       func(fd *views.MonitorFormParams) any { return &fd.HTTP },
+	"tcp":        func(fd *views.MonitorFormParams) any { return &fd.TCP },
+	"dns":        func(fd *views.MonitorFormParams) any { return &fd.DNS },
+	"tls":        func(fd *views.MonitorFormParams) any { return &fd.TLS },
+	"websocket":  func(fd *views.MonitorFormParams) any { return &fd.WS },
+	"command":    func(fd *views.MonitorFormParams) any { return &fd.Cmd },
+	"docker":     func(fd *views.MonitorFormParams) any { return &fd.Docker },
+	"domain":     func(fd *views.MonitorFormParams) any { return &fd.Domain },
+	"grpc":       func(fd *views.MonitorFormParams) any { return &fd.GRPC },
+	"mqtt":       func(fd *views.MonitorFormParams) any { return &fd.MQTT },
+	"smtp":       func(fd *views.MonitorFormParams) any { return &fd.SMTP },
+	"ssh":        func(fd *views.MonitorFormParams) any { return &fd.SSH },
+	"redis":      func(fd *views.MonitorFormParams) any { return &fd.Redis },
+	"postgresql": func(fd *views.MonitorFormParams) any { return &fd.PostgreSQL },
+	"udp":        func(fd *views.MonitorFormParams) any { return &fd.UDP },
 }
 
 func unmarshalMonitorSettings(fd *views.MonitorFormParams, mon *storage.Monitor) {
@@ -214,6 +217,26 @@ var _settingsAssemblers = map[string]func(*http.Request) json.RawMessage{
 	"ssh": func(r *http.Request) json.RawMessage {
 		b, _ := json.Marshal(storage.SSHSettings{
 			ExpectedFingerprint: r.FormValue("settings_ssh_fingerprint"),
+		})
+		return b
+	},
+	"redis": func(r *http.Request) json.RawMessage {
+		b, _ := json.Marshal(storage.RedisSettings{
+			Password: r.FormValue("settings_redis_password"),
+		})
+		return b
+	},
+	"postgresql": func(r *http.Request) json.RawMessage {
+		b, _ := json.Marshal(storage.PostgreSQLSettings{
+			Username: r.FormValue("settings_pg_username"),
+			Database: r.FormValue("settings_pg_database"),
+		})
+		return b
+	},
+	"udp": func(r *http.Request) json.RawMessage {
+		b, _ := json.Marshal(storage.UDPSettings{
+			SendData:   r.FormValue("settings_udp_send"),
+			ExpectData: r.FormValue("settings_udp_expect"),
 		})
 		return b
 	},

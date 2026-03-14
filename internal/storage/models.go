@@ -140,6 +140,23 @@ type SSHSettings struct {
 	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
 }
 
+// RedisSettings holds Redis check configuration.
+type RedisSettings struct {
+	Password string `json:"password,omitempty"`
+}
+
+// PostgreSQLSettings holds PostgreSQL check configuration.
+type PostgreSQLSettings struct {
+	Username string `json:"username,omitempty"`
+	Database string `json:"database,omitempty"`
+}
+
+// UDPSettings holds UDP check configuration.
+type UDPSettings struct {
+	SendData   string `json:"send_data,omitempty"`
+	ExpectData string `json:"expect_data,omitempty"`
+}
+
 // SparklinePoint holds a single data point for sparkline rendering.
 type SparklinePoint struct {
 	Status       string
