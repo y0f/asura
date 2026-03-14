@@ -20,10 +20,12 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check if CSS already updated
+      - name: Check if rebuild needed
         id: css-check
         run: |
-          if git diff --name-only HEAD~1 HEAD | grep -q 'web/static/tailwind.css'; then
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          # Skip if no template or CSS input files changed
+          if ! echo "$CHANGED" | grep -qE '\.templ$|tailwind\.input\.css$|\.html$'; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
