@@ -373,7 +373,7 @@ templ MonitorListPage(p MonitorListParams) {
 								}
 							</select>
 						}
-						<button type="button" @click="if(confirm('Delete ' + selected.length + ' monitors?')) { bulkAction='delete'; $nextTick(() => $refs.bulkForm.submit()) }"
+						<button type="button" @click="$dispatch('confirm', {url: '', message: 'Delete ' + selected.length + ' monitors?', onConfirm: () => { bulkAction='delete'; $nextTick(() => $refs.bulkForm.submit()) }})"
 							class="px-2.5 py-1 text-[11px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors">Delete</button>
 						<button type="button" @click="selected = []" class="px-2 py-1 text-[11px] text-muted hover:text-muted-light transition-colors">Clear</button>
 					</form>
@@ -545,12 +545,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
 							Edit
 						</a>
-						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/delete", p.BasePath, p.Monitor.ID)) } x-data x-on:submit.prevent="if(confirm('Delete this monitor?')) $el.submit()">
-							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors">
-								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-								Delete
-							</button>
-						</form>
+						@DeleteButton(fmt.Sprintf("%s/monitors/%d/delete", p.BasePath, p.Monitor.ID), "Delete this monitor?")
 					</div>
 				}
 				if p.Monitor.Type == "manual" && p.Perms["monitors.write"] {

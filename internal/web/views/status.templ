@@ -71,11 +71,7 @@ templ StatusPageListPage(p StatusPageListParams) {
 											<a href={ templ.SafeURL(fmt.Sprintf("%s/status-pages/%d/edit", p.BasePath, sp.ID)) } class="text-muted hover:text-white transition-colors" title="Edit">
 												<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
 											</a>
-											<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/status-pages/%d/delete", p.BasePath, sp.ID)) } x-data @submit.prevent="if(confirm('Delete this status page?')) $el.submit()">
-												<button type="submit" class="text-muted hover:text-red-400 transition-colors" title="Delete">
-													<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-												</button>
-											</form>
+											@DeleteButton(fmt.Sprintf("%s/status-pages/%d/delete", p.BasePath, sp.ID), "Delete this status page?")
 										</div>
 									</td>
 								</tr>

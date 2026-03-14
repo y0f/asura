@@ -3,13 +3,14 @@ package views
 import "fmt"
 
 type LayoutParams struct {
-	Title    string
-	Active   string
-	Perms    map[string]bool
-	Version  string
-	Flash    string
-	Error    string
-	BasePath string
+	Title     string
+	Active    string
+	Perms     map[string]bool
+	Version   string
+	ToastKind string
+	ToastMsg  string
+	Error     string
+	BasePath  string
 }
 
 templ Layout(p LayoutParams) {
@@ -57,30 +58,22 @@ templ Layout(p LayoutParams) {
 					<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-3"/>
 				</div>
 				<div class="px-5 py-6 md:px-8 md:py-8 max-w-6xl mx-auto">
-					if p.Flash != "" {
-						@FlashMessage(p.Flash)
+					if p.ToastMsg != "" {
+						@Toast(p.ToastKind, p.ToastMsg)
 					}
 					if p.Error != "" {
-						<div class="mb-6 px-4 py-2.5 border border-red-500/15 rounded text-red-400 text-[13px]">{ p.Error }</div>
+						@Toast("error", p.Error)
 					}
 					{ children... }
 				</div>
 			</main>
 		</div>
+		@ConfirmModal()
 		<script>
 			function toggleTheme(){var d=document.documentElement.classList.toggle('dark');localStorage.setItem('theme',d?'dark':'light');window.dispatchEvent(new CustomEvent('theme-changed'));}
 		</script>
 	</body>
 	</html>
-}
-
-templ FlashMessage(msg string) {
-	<div x-data="{show:true}" x-show="show" x-init="setTimeout(()=>show=false,4000)"
-		x-transition:leave="transition duration-200" x-transition:leave-end="opacity-0"
-		class="mb-6 px-4 py-2.5 border border-emerald-500/15 rounded text-emerald-400 text-[13px] flex items-center justify-between">
-		<span>{ msg }</span>
-		<button @click="show=false" class="text-emerald-500/30 hover:text-emerald-400 ml-4">&times;</button>
-	</div>
 }
 
 templ sidebarLink(basePath, href, active, current string) {
@@ -95,6 +88,12 @@ templ sidebarLink(basePath, href, active, current string) {
 	</a>
 }
 
+templ sidebarGroup(label string) {
+	<div class="pt-4 pb-1 px-3">
+		<span class="text-[9px] font-medium text-muted/60 uppercase tracking-[.12em]">{ label }</span>
+	</div>
+}
+
 templ Sidebar(p LayoutParams) {
 	<aside class="fixed left-0 top-0 h-full w-48 bg-surface-50 border-r border-line flex flex-col z-40 transition-transform duration-200 md:translate-x-0"
 		:class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
@@ -103,11 +102,12 @@ templ Sidebar(p LayoutParams) {
 				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4"/>
 			</a>
 		</div>
-		<nav class="flex-1 px-2.5 space-y-px">
+		<nav class="flex-1 px-2.5 space-y-px overflow-y-auto">
 			@sidebarLink(p.BasePath, "/", p.Active, "dashboard") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
 				Dashboard
 			}
+			@sidebarGroup("Monitoring")
 			@sidebarLink(p.BasePath, "/monitors", p.Active, "monitors") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
 				Monitors
@@ -120,6 +120,7 @@ templ Sidebar(p LayoutParams) {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
 				Tags
 			}
+			@sidebarGroup("Alerting")
 			@sidebarLink(p.BasePath, "/incidents", p.Active, "incidents") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 				Incidents
@@ -132,6 +133,7 @@ templ Sidebar(p LayoutParams) {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"></path><path d="M7 20v-4"></path><path d="M12 20v-8"></path><path d="M17 20V8"></path><path d="M22 4v16"></path></svg>
 				Escalation
 			}
+			@sidebarGroup("Operations")
 			@sidebarLink(p.BasePath, "/sla", p.Active, "sla") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
 				SLA Report
@@ -140,6 +142,11 @@ templ Sidebar(p LayoutParams) {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"></path></svg>
 				Maintenance
 			}
+			@sidebarLink(p.BasePath, "/status-pages", p.Active, "status-pages") {
+				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+				Status Pages
+			}
+			@sidebarGroup("System")
 			@sidebarLink(p.BasePath, "/logs", p.Active, "logs") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
 				Logs
@@ -151,10 +158,6 @@ templ Sidebar(p LayoutParams) {
 			@sidebarLink(p.BasePath, "/proxies", p.Active, "proxies") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5Z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg>
 				Proxies
-			}
-			@sidebarLink(p.BasePath, "/status-pages", p.Active, "status-pages") {
-				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-				Status Pages
 			}
 			@sidebarLink(p.BasePath, "/settings", p.Active, "settings") {
 				<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>

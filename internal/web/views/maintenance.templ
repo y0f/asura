@@ -52,9 +52,7 @@ templ MaintenanceListPage(p MaintenanceListParams) {
 										</td>
 										<td class="px-4 py-3 text-right">
 											if p.Perms["maintenance.write"] {
-												<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/maintenance/%d/delete", p.BasePath, w.ID)) } x-data @submit.prevent="if(confirm('Delete this window?')) $el.submit()" class="contents">
-													<button type="submit" class="text-[11px] text-red-400 hover:text-red-300 transition-colors">Delete</button>
-												</form>
+												@DeleteButton(fmt.Sprintf("%s/maintenance/%d/delete", p.BasePath, w.ID), "Delete this window?")
 											}
 										</td>
 									</tr>

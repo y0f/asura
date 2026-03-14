@@ -131,6 +131,25 @@ func tagSelectorData(p MonitorFormParams) string {
 	return b.String()
 }
 
+func advancedSectionData(p MonitorFormParams) string {
+	show := "false"
+	if p.Monitor.ID != 0 {
+		hasGroup := p.Monitor.GroupID != nil
+		hasProxy := p.Monitor.ProxyID != nil
+		hasTags := len(p.SelectedTags) > 0
+		hasChannels := len(p.SelectedChannelIDs) > 0
+		hasEscalation := p.Monitor.EscalationPolicyID != nil
+		hasSLA := p.Monitor.SLATarget != 0
+		hasResend := p.Monitor.ResendInterval != 0
+		hasTrack := p.Monitor.TrackChanges
+		hasUpside := p.Monitor.UpsideDown
+		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasResend || hasTrack || hasUpside {
+			show = "true"
+		}
+	}
+	return "{showAdvanced: " + show + "}"
+}
+
 func intOrDefault(v, def int) string {
 	if v != 0 {
 		return fmt.Sprint(v)
@@ -149,190 +168,67 @@ templ MonitorFormPage(p MonitorFormParams) {
 					action={ templ.SafeURL(p.BasePath + "/monitors") }
 				}
 				class="max-w-4xl space-y-4">
-				<!-- Basic Info -->
-				<div class="border border-line rounded-lg p-5 space-y-4">
-					<div>
-						<label class="form-label">Name</label>
-						<input type="text" name="name" value={ p.Monitor.Name } required class="form-input"/>
-					</div>
-					<div>
-						<label class="form-label">Description <span class="text-muted/50 font-normal">(optional, max 5000 chars)</span></label>
-						<textarea name="description" rows="2" maxlength="5000" placeholder="Runbook notes, context, links…" class="form-input resize-y">{ p.Monitor.Description }</textarea>
-					</div>
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<!-- Card 1: Basics -->
+				@FormCard("Basics") {
+					<div class="space-y-4">
 						<div>
-							<label class="form-label">Type</label>
-							<select name="type" x-model="monitorType" class="form-select">
-								<option value="http">HTTP</option>
-								<option value="tcp">TCP</option>
-								<option value="dns">DNS</option>
-								<option value="icmp">ICMP</option>
-								<option value="tls">TLS</option>
-								<option value="websocket">WebSocket</option>
-								<option value="command">Command</option>
-								<option value="docker">Docker</option>
-								<option value="domain">Domain</option>
-								<option value="grpc">gRPC</option>
-								<option value="mqtt">MQTT</option>
-								<option value="heartbeat">Heartbeat</option>
-								<option value="manual">Manual</option>
-							</select>
-						</div>
-						<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'">
-							<label class="form-label" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
-							<input type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'nginx, postgres, or container ID', domain:'example.com', grpc:'host:port', mqtt:'broker.example.com:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
-						</div>
-					</div>
-					<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-						<div>
-							<label class="form-label">Interval (s)</label>
-							<input type="number" name="interval" value={ intOrDefault(p.Monitor.Interval, 60) } min="5" max="86400" class="form-input tabular-nums"/>
+							<label class="form-label">Name</label>
+							<input type="text" name="name" value={ p.Monitor.Name } required class="form-input"/>
 						</div>
 						<div>
-							<label class="form-label">Timeout (s)</label>
-							<input type="number" name="timeout" value={ intOrDefault(p.Monitor.Timeout, 10) } min="1" max="300" class="form-input tabular-nums"/>
+							<label class="form-label">Description <span class="text-muted/50 font-normal">(optional, max 5000 chars)</span></label>
+							<textarea name="description" rows="2" maxlength="5000" placeholder="Runbook notes, context, links…" class="form-input resize-y">{ p.Monitor.Description }</textarea>
 						</div>
-						<div>
-							<label class="form-label">Fail Threshold</label>
-							<input type="number" name="failure_threshold" value={ intOrDefault(p.Monitor.FailureThreshold, 3) } min="1" class="form-input tabular-nums"/>
-						</div>
-						<div>
-							<label class="form-label">Pass Threshold</label>
-							<input type="number" name="success_threshold" value={ intOrDefault(p.Monitor.SuccessThreshold, 1) } min="1" class="form-input tabular-nums"/>
-						</div>
-					</div>
-					<div>
-						<label class="form-label">Tags</label>
-						if len(p.AllTags) > 0 {
-							<div x-data={ tagSelectorData(p) }>
-								<div class="flex flex-wrap gap-1.5">
-									for i, tag := range p.AllTags {
-										<button type="button"
-											@click={ fmt.Sprintf("toggleTag(%d)", i) }
-											:class={ fmt.Sprintf("tags[%d].on ? 'border-brand/30 bg-brand/[0.06]' : 'border-line hover:border-line-light'", i) }
-											class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none">
-											<span class="w-1.5 h-1.5 rounded-full shrink-0" style={ "background-color: " + tag.Color }></span>
-											<span :class={ fmt.Sprintf("tags[%d].on ? 'text-white' : 'text-muted-light'", i) }>{ tag.Name }</span>
-										</button>
-									}
-								</div>
-								<template x-if="tags.some(t => t.on)">
-									<div class="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-										<template x-for="(t, i) in tags" :key="t.id">
-											<template x-if="t.on">
-												<div class="flex items-center gap-2 rounded border border-line px-3 py-2">
-													<input type="hidden" name="tag_ids[]" :value="t.id"/>
-													<span class="w-1.5 h-1.5 rounded-full shrink-0" :style="'background-color:' + t.color"></span>
-													<span class="text-[11px] text-muted-light shrink-0" x-text="t.name"></span>
-													<input type="text" name="tag_values[]" :value="t.val" @input="t.val = $event.target.value" placeholder="value (optional)"
-														class="form-input py-1 text-[12px] flex-1 min-w-0"/>
-												</div>
-											</template>
-										</template>
-									</div>
-								</template>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div>
+								<label class="form-label">Type</label>
+								<select name="type" x-model="monitorType" class="form-select">
+									<option value="http">HTTP</option>
+									<option value="tcp">TCP</option>
+									<option value="dns">DNS</option>
+									<option value="icmp">ICMP</option>
+									<option value="tls">TLS</option>
+									<option value="websocket">WebSocket</option>
+									<option value="command">Command</option>
+									<option value="docker">Docker</option>
+									<option value="domain">Domain</option>
+									<option value="grpc">gRPC</option>
+									<option value="mqtt">MQTT</option>
+									<option value="heartbeat">Heartbeat</option>
+									<option value="manual">Manual</option>
+								</select>
 							</div>
-						} else {
-							<p class="text-[12px] text-muted">No tags yet. <a href={ templ.SafeURL(p.BasePath + "/tags") } class="text-brand hover:text-brand/80 transition-colors">Create tags</a> to label monitors.</p>
-						}
+							<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'">
+								<label class="form-label" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
+								<input type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'nginx, postgres, or container ID', domain:'example.com', grpc:'host:port', mqtt:'broker.example.com:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
+							</div>
+						</div>
 					</div>
-					if len(p.Groups) > 0 {
-						<div>
-							<label class="form-label">Group</label>
-							<select name="group_id" class="form-select">
-								<option value="">No group</option>
-								for _, g := range p.Groups {
-									<option value={ fmt.Sprint(g.ID) }
-										if p.Monitor.GroupID != nil && *p.Monitor.GroupID == g.ID {
-											selected
-										}>{ g.Name }</option>
-								}
-							</select>
-						</div>
-					}
-					if len(p.Proxies) > 0 {
-						<div>
-							<label class="form-label">Proxy</label>
-							<select name="proxy_id" class="form-select">
-								<option value="">No proxy</option>
-								for _, px := range p.Proxies {
-									<option value={ fmt.Sprint(px.ID) }
-										if p.Monitor.ProxyID != nil && *p.Monitor.ProxyID == px.ID {
-											selected
-										}>{ fmt.Sprintf("%s (%s://%s:%d)", px.Name, px.Protocol, px.Host, px.Port) }</option>
-								}
-							</select>
-						</div>
-					}
-					if len(p.NotificationChannels) > 0 {
-						<div>
-							<label class="form-label">Notification Channels</label>
-							<p class="text-[10px] text-muted mb-2">Leave all unchecked to use all channels.</p>
-							<div class="flex flex-wrap gap-1.5">
-								for _, ch := range p.NotificationChannels {
-									<label class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none has-checked:border-brand/30 has-checked:bg-brand/[0.06] border-line hover:border-line-light">
-										<input type="checkbox" name="notification_channel_ids[]" value={ fmt.Sprint(ch.ID) }
-											if InSlice(ch.ID, p.SelectedChannelIDs) {
-												checked
-											}
-											class="hidden"/>
-										<span class="text-muted-light">{ ch.Name }</span>
-										<span class="text-muted">({ ch.Type })</span>
-									</label>
-								}
+				}
+				<!-- Card 2: Schedule -->
+				<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'" x-cloak>
+					@FormCard("Schedule") {
+						<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+							<div>
+								<label class="form-label">Interval (s)</label>
+								<input type="number" name="interval" value={ intOrDefault(p.Monitor.Interval, 60) } min="5" max="86400" class="form-input tabular-nums"/>
+							</div>
+							<div>
+								<label class="form-label">Timeout (s)</label>
+								<input type="number" name="timeout" value={ intOrDefault(p.Monitor.Timeout, 10) } min="1" max="300" class="form-input tabular-nums"/>
+							</div>
+							<div>
+								<label class="form-label">Fail Threshold</label>
+								<input type="number" name="failure_threshold" value={ intOrDefault(p.Monitor.FailureThreshold, 3) } min="1" class="form-input tabular-nums"/>
+							</div>
+							<div>
+								<label class="form-label">Pass Threshold</label>
+								<input type="number" name="success_threshold" value={ intOrDefault(p.Monitor.SuccessThreshold, 1) } min="1" class="form-input tabular-nums"/>
 							</div>
 						</div>
 					}
-					if len(p.EscalationPolicies) > 0 {
-						<div>
-							<label class="form-label">Escalation Policy</label>
-							<select name="escalation_policy_id" class="form-select">
-								<option value="">None</option>
-								for _, ep := range p.EscalationPolicies {
-									<option value={ fmt.Sprint(ep.ID) }
-										if p.Monitor.EscalationPolicyID != nil && *p.Monitor.EscalationPolicyID == ep.ID {
-											selected
-										}>{ fmt.Sprintf("%s (%d steps)", ep.Name, len(ep.Steps)) }</option>
-								}
-							</select>
-						</div>
-					}
-					<div>
-						<label class="form-label">SLA Target (%)</label>
-						<select name="sla_target" class="form-select">
-							<option value="0" if p.Monitor.SLATarget == 0 { selected }>None</option>
-							<option value="99" if p.Monitor.SLATarget == 99 { selected }>99%</option>
-							<option value="99.5" if p.Monitor.SLATarget == 99.5 { selected }>99.5%</option>
-							<option value="99.9" if p.Monitor.SLATarget == 99.9 { selected }>99.9%</option>
-							<option value="99.95" if p.Monitor.SLATarget == 99.95 { selected }>99.95%</option>
-							<option value="99.99" if p.Monitor.SLATarget == 99.99 { selected }>99.99%</option>
-						</select>
-					</div>
-					<div class="flex items-center flex-wrap gap-5">
-						<label class="flex items-center gap-2 cursor-pointer">
-							<input type="checkbox" name="track_changes"
-								if p.Monitor.TrackChanges {
-									checked
-								}
-								class="form-checkbox"/>
-							<span class="text-[12px] text-muted-light">Track changes</span>
-						</label>
-						<label class="flex items-center gap-2 cursor-pointer">
-							<input type="checkbox" name="upside_down"
-								if p.Monitor.UpsideDown {
-									checked
-								}
-								class="form-checkbox"/>
-							<span class="text-[12px] text-muted-light">Upside-down mode</span>
-						</label>
-					</div>
-					<div>
-						<label class="form-label">Resend Notification Interval (s)</label>
-						<input type="number" name="resend_interval" value={ fmt.Sprint(p.Monitor.ResendInterval) } min="0" placeholder="0 = disabled" class="form-input max-w-[200px] tabular-nums"/>
-						<p class="text-[10px] text-muted mt-1">Resend notification every N seconds while down (0 = disabled)</p>
-					</div>
 				</div>
-				<!-- Settings -->
+				<!-- Card 3: Type-specific Settings -->
 				<div class="border border-line rounded-lg p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
 					<div class="flex items-center justify-between mb-4">
 						<span class="text-[11px] text-muted uppercase tracking-widest">Settings</span>
@@ -357,8 +253,151 @@ templ MonitorFormPage(p MonitorFormParams) {
 						@monitorMQTTSettings(p)
 					</div>
 				</div>
-				<!-- Assertions -->
+				<!-- Card 4: Conditions -->
 				@monitorAssertions(p)
+				<!-- Card 5: Advanced -->
+				<div x-data={ advancedSectionData(p) }>
+					<button type="button" @click="showAdvanced = !showAdvanced" class="flex items-center gap-2 w-full text-left mb-0">
+						<span class="text-[11px] text-muted uppercase tracking-widest">Advanced</span>
+						<svg :class="showAdvanced && 'rotate-90'" class="w-3 h-3 text-muted transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+					</button>
+					<div x-show="showAdvanced" x-cloak class="mt-4">
+						@FormCard("") {
+							<div class="space-y-4">
+								if len(p.Groups) > 0 {
+									<div>
+										<label class="form-label">Group</label>
+										<select name="group_id" class="form-select">
+											<option value="">No group</option>
+											for _, g := range p.Groups {
+												<option value={ fmt.Sprint(g.ID) }
+													if p.Monitor.GroupID != nil && *p.Monitor.GroupID == g.ID {
+														selected
+													}>{ g.Name }</option>
+											}
+										</select>
+									</div>
+								}
+								<div>
+									<label class="form-label">Tags</label>
+									if len(p.AllTags) > 0 {
+										<div x-data={ tagSelectorData(p) }>
+											<div class="flex flex-wrap gap-1.5">
+												for i, tag := range p.AllTags {
+													<button type="button"
+														@click={ fmt.Sprintf("toggleTag(%d)", i) }
+														:class={ fmt.Sprintf("tags[%d].on ? 'border-brand/30 bg-brand/[0.06]' : 'border-line hover:border-line-light'", i) }
+														class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none">
+														<span class="w-1.5 h-1.5 rounded-full shrink-0" style={ "background-color: " + tag.Color }></span>
+														<span :class={ fmt.Sprintf("tags[%d].on ? 'text-white' : 'text-muted-light'", i) }>{ tag.Name }</span>
+													</button>
+												}
+											</div>
+											<template x-if="tags.some(t => t.on)">
+												<div class="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+													<template x-for="(t, i) in tags" :key="t.id">
+														<template x-if="t.on">
+															<div class="flex items-center gap-2 rounded border border-line px-3 py-2">
+																<input type="hidden" name="tag_ids[]" :value="t.id"/>
+																<span class="w-1.5 h-1.5 rounded-full shrink-0" :style="'background-color:' + t.color"></span>
+																<span class="text-[11px] text-muted-light shrink-0" x-text="t.name"></span>
+																<input type="text" name="tag_values[]" :value="t.val" @input="t.val = $event.target.value" placeholder="value (optional)"
+																	class="form-input py-1 text-[12px] flex-1 min-w-0"/>
+															</div>
+														</template>
+													</template>
+												</div>
+											</template>
+										</div>
+									} else {
+										<p class="text-[12px] text-muted">No tags yet. <a href={ templ.SafeURL(p.BasePath + "/tags") } class="text-brand hover:text-brand/80 transition-colors">Create tags</a> to label monitors.</p>
+									}
+								</div>
+								if len(p.Proxies) > 0 {
+									<div>
+										<label class="form-label">Proxy</label>
+										<select name="proxy_id" class="form-select">
+											<option value="">No proxy</option>
+											for _, px := range p.Proxies {
+												<option value={ fmt.Sprint(px.ID) }
+													if p.Monitor.ProxyID != nil && *p.Monitor.ProxyID == px.ID {
+														selected
+													}>{ fmt.Sprintf("%s (%s://%s:%d)", px.Name, px.Protocol, px.Host, px.Port) }</option>
+											}
+										</select>
+									</div>
+								}
+								if len(p.NotificationChannels) > 0 {
+									<div>
+										<label class="form-label">Notification Channels</label>
+										<p class="text-[10px] text-muted mb-2">Leave all unchecked to use all channels.</p>
+										<div class="flex flex-wrap gap-1.5">
+											for _, ch := range p.NotificationChannels {
+												<label class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none has-checked:border-brand/30 has-checked:bg-brand/[0.06] border-line hover:border-line-light">
+													<input type="checkbox" name="notification_channel_ids[]" value={ fmt.Sprint(ch.ID) }
+														if InSlice(ch.ID, p.SelectedChannelIDs) {
+															checked
+														}
+														class="hidden"/>
+													<span class="text-muted-light">{ ch.Name }</span>
+													<span class="text-muted">({ ch.Type })</span>
+												</label>
+											}
+										</div>
+									</div>
+								}
+								if len(p.EscalationPolicies) > 0 {
+									<div>
+										<label class="form-label">Escalation Policy</label>
+										<select name="escalation_policy_id" class="form-select">
+											<option value="">None</option>
+											for _, ep := range p.EscalationPolicies {
+												<option value={ fmt.Sprint(ep.ID) }
+													if p.Monitor.EscalationPolicyID != nil && *p.Monitor.EscalationPolicyID == ep.ID {
+														selected
+													}>{ fmt.Sprintf("%s (%d steps)", ep.Name, len(ep.Steps)) }</option>
+											}
+										</select>
+									</div>
+								}
+								<div>
+									<label class="form-label">SLA Target (%)</label>
+									<select name="sla_target" class="form-select">
+										<option value="0" if p.Monitor.SLATarget == 0 { selected }>None</option>
+										<option value="99" if p.Monitor.SLATarget == 99 { selected }>99%</option>
+										<option value="99.5" if p.Monitor.SLATarget == 99.5 { selected }>99.5%</option>
+										<option value="99.9" if p.Monitor.SLATarget == 99.9 { selected }>99.9%</option>
+										<option value="99.95" if p.Monitor.SLATarget == 99.95 { selected }>99.95%</option>
+										<option value="99.99" if p.Monitor.SLATarget == 99.99 { selected }>99.99%</option>
+									</select>
+								</div>
+								<div>
+									<label class="form-label">Resend Notification Interval (s)</label>
+									<input type="number" name="resend_interval" value={ fmt.Sprint(p.Monitor.ResendInterval) } min="0" placeholder="0 = disabled" class="form-input max-w-[200px] tabular-nums"/>
+									<p class="text-[10px] text-muted mt-1">Resend notification every N seconds while down (0 = disabled)</p>
+								</div>
+								<div class="flex items-center flex-wrap gap-5">
+									<label class="flex items-center gap-2 cursor-pointer">
+										<input type="checkbox" name="track_changes"
+											if p.Monitor.TrackChanges {
+												checked
+											}
+											class="form-checkbox"/>
+										<span class="text-[12px] text-muted-light">Track changes</span>
+									</label>
+									<label class="flex items-center gap-2 cursor-pointer">
+										<input type="checkbox" name="upside_down"
+											if p.Monitor.UpsideDown {
+												checked
+											}
+											class="form-checkbox"/>
+										<span class="text-[12px] text-muted-light">Upside-down mode</span>
+									</label>
+								</div>
+							</div>
+						}
+					</div>
+				</div>
 				<div class="flex items-center gap-3">
 					<button type="submit" class="btn-primary px-5">
 						if p.Monitor.ID != 0 {

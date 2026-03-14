@@ -128,9 +128,7 @@ templ NotificationListPage(p NotificationListParams) {
 									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)) } class="contents">
 										<button type="submit" class="px-2 py-1 text-[11px] text-brand border border-brand/20 rounded hover:bg-brand/5 transition-colors">Test</button>
 									</form>
-									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/notifications/%d/delete", p.BasePath, ch.ID)) } x-data @submit.prevent="if(confirm('Delete this channel?')) $el.submit()" class="contents">
-										<button type="submit" class="px-2 py-1 text-[11px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors">Delete</button>
-									</form>
+									@DeleteButton(fmt.Sprintf("%s/notifications/%d/delete", p.BasePath, ch.ID), "Delete this channel?")
 								</div>
 							}
 						</div>

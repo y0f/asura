@@ -68,9 +68,7 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 							if p.Perms["escalation_policies.write"] {
 								<div class="flex items-center gap-2 pt-2 border-t border-line">
 									<button type="button" @click={ fmt.Sprintf("openEdit(%s)", ToJSON(ep)) } class="px-2 py-1 text-[11px] text-brand hover:text-brand/80 transition-colors">Edit</button>
-									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID)) } @submit.prevent="if(confirm('Delete this policy?')) $el.submit()">
-										<button type="submit" class="px-2 py-1 text-[11px] text-red-400 hover:text-red-300 transition-colors">Delete</button>
-									</form>
+									@DeleteButton(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID), "Delete this policy?")
 								</div>
 							}
 						</div>

@@ -144,53 +144,40 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					if p.Perms["maintenance.write"] {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<form method=\"POST\" action=\"")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var7 templ.SafeURL
-						templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/maintenance/%d/delete", p.BasePath, w.ID)))
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 55, Col: 113}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" x-data @submit.prevent=\"if(confirm('Delete this window?')) $el.submit()\" class=\"contents\"><button type=\"submit\" class=\"text-[11px] text-red-400 hover:text-red-300 transition-colors\">Delete</button></form>")
+						templ_7745c5c3_Err = DeleteButton(fmt.Sprintf("%s/maintenance/%d/delete", p.BasePath, w.ID), "Delete this window?").Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</tbody></table></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</tbody></table></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px]\">No maintenance windows</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px]\">No maintenance windows</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div x-show=\"showForm\" x-cloak x-transition:enter=\"transition-opacity\" x-transition:enter-start=\"opacity-0\" x-transition:enter-end=\"opacity-100\" x-transition:leave=\"transition-opacity\" x-transition:leave-start=\"opacity-100\" x-transition:leave-end=\"opacity-0\" class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-md\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\">New Maintenance Window</h3><form method=\"POST\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div x-show=\"showForm\" x-cloak x-transition:enter=\"transition-opacity\" x-transition:enter-start=\"opacity-0\" x-transition:enter-end=\"opacity-100\" x-transition:leave=\"transition-opacity\" x-transition:leave-start=\"opacity-100\" x-transition:leave-end=\"opacity-0\" class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-md\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\">New Maintenance Window</h3><form method=\"POST\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var8 templ.SafeURL
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/maintenance"))
+			var templ_7745c5c3_Var7 templ.SafeURL
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/maintenance"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 74, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 72, Col: 76}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" required class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" required class=\"form-input\"></div></div><div><label class=\"form-label\">Recurring</label> <select name=\"recurring\" class=\"form-select\"><option value=\"\">None</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" required class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" required class=\"form-input\"></div></div><div><label class=\"form-label\">Recurring</label> <select name=\"recurring\" class=\"form-select\"><option value=\"\">None</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form></div></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

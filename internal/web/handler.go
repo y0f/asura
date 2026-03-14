@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/a-h/templ"
@@ -61,17 +62,25 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 	if k := httputil.GetAPIKey(r.Context()); k != nil {
 		perms = k.PermissionMap()
 	}
-	flash := ""
-	if c, err := r.Cookie("flash"); err == nil {
-		flash, _ = url.QueryUnescape(c.Value)
+	toastKind, toastMsg := "", ""
+	if c, err := r.Cookie("toast"); err == nil {
+		raw, _ := url.QueryUnescape(c.Value)
+		if idx := strings.Index(raw, ":"); idx > 0 {
+			toastKind = raw[:idx]
+			toastMsg = raw[idx+1:]
+		} else {
+			toastKind = "success"
+			toastMsg = raw
+		}
 	}
 	return views.LayoutParams{
-		Title:    title,
-		Active:   active,
-		Perms:    perms,
-		Version:  h.version,
-		Flash:    flash,
-		BasePath: h.cfg.Server.BasePath,
+		Title:     title,
+		Active:    active,
+		Perms:     perms,
+		Version:   h.version,
+		ToastKind: toastKind,
+		ToastMsg:  toastMsg,
+		BasePath:  h.cfg.Server.BasePath,
 	}
 }
 
@@ -88,16 +97,24 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request, path string) 
 	http.Redirect(w, r, h.cfg.Server.BasePath+path, http.StatusSeeOther)
 }
 
-func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
+func (h *Handler) setToast(w http.ResponseWriter, kind, msg string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "flash",
-		Value:    url.QueryEscape(msg),
+		Name:     "toast",
+		Value:    url.QueryEscape(kind + ":" + msg),
 		Path:     h.cfg.Server.BasePath + "/",
 		MaxAge:   5,
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
+	h.setToast(w, "success", msg)
+}
+
+func (h *Handler) setError(w http.ResponseWriter, msg string) {
+	h.setToast(w, "error", msg)
 }
 
 func (h *Handler) audit(r *http.Request, action, entity string, entityID int64, detail string) {
