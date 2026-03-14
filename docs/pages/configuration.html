@@ -144,3 +144,23 @@
 </table>
 
 <p>Shortcuts are disabled when typing in form fields.</p>
+
+<h2>Maintenance Scheduling</h2>
+
+<p>Maintenance windows support 6 scheduling modes:</p>
+
+<table>
+  <thead>
+    <tr><th>Mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>manual</code></td><td>Toggle on/off manually via the web UI or API. No schedule.</td></tr>
+    <tr><td>(empty)</td><td>One-time window with fixed start and end time.</td></tr>
+    <tr><td><code>cron</code></td><td>Cron expression (minute hour dom month dow). Window duration = end minus start time.</td></tr>
+    <tr><td><code>daily</code></td><td>Same time-of-day every day.</td></tr>
+    <tr><td><code>weekly</code></td><td>Same weekday and time every week.</td></tr>
+    <tr><td><code>monthly</code></td><td>Same day-of-month and time every month.</td></tr>
+  </tbody>
+</table>
+
+<p>During active maintenance, alerts are suppressed for affected monitors. Manual windows can be toggled via <code>POST /api/v1/maintenance/{id}/toggle</code>.</p>
