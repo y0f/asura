@@ -335,13 +335,8 @@ templ statusMonitorRow(mwu MonitorWithUptime) {
 				<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(mwu.Monitor.Status) }>{ mwu.Monitor.Status }</span>
 			</div>
 		</div>
-		<div class="flex items-center overflow-hidden" x-data="{tooltip: '', show: false, mx: 0, my: 0}">
-			for _, bar := range mwu.DailyBars {
-				<div style="width: calc(100% / 90); padding: 0 1px; box-sizing: border-box"><div class={ "h-7 w-full rounded-[2px] opacity-80 hover:opacity-100 transition-opacity cursor-default", UptimeBarColor(bar.UptimePct, bar.HasData) }
-					@mouseenter={ "tooltip = '" + UptimeBarTooltip(bar.UptimePct, bar.HasData, bar.Label) + "'; show = true; mx = $event.clientX; my = $event.clientY" }
-					@mousemove="mx = $event.clientX; my = $event.clientY"
-					@mouseleave="show = false"></div></div>
-			}
+		<div x-data="{tooltip: '', show: false, mx: 0, my: 0}">
+			@templ.Raw(UptimeBarsSVG(mwu.DailyBars))
 			<div x-show="show" x-cloak
 				class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line rounded text-[11px] text-muted-light shadow-lg pointer-events-none whitespace-nowrap"
 				:style="`top: ${my - 40}px; left: ${mx}px`"

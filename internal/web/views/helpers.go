@@ -150,6 +150,38 @@ func UptimeBarColor(pct float64, hasData bool) string {
 	return "bg-red-500"
 }
 
+func UptimeBarFill(pct float64, hasData bool) string {
+	if !hasData {
+		return "rgba(128,128,128,0.2)"
+	}
+	if pct >= 99 {
+		return "#10b981"
+	}
+	if pct >= 95 {
+		return "#eab308"
+	}
+	return "#ef4444"
+}
+
+func UptimeBarsSVG(bars []DailyBar) string {
+	const (
+		barW  = 4
+		gap   = 1
+		h     = 28
+		total = 90
+	)
+	vw := total*barW + (total-1)*gap
+	s := fmt.Sprintf(`<svg viewBox="0 0 %d %d" preserveAspectRatio="none" class="w-full" style="height:28px;display:block">`, vw, h)
+	for i, bar := range bars {
+		x := i * (barW + gap)
+		fill := UptimeBarFill(bar.UptimePct, bar.HasData)
+		tooltip := UptimeBarTooltip(bar.UptimePct, bar.HasData, bar.Label)
+		s += fmt.Sprintf(`<rect x="%d" y="0" width="%d" height="%d" rx="1" fill="%s" opacity="0.8" class="hover:opacity-100" style="cursor:default" @mouseenter="tooltip='%s';show=true;mx=$event.clientX;my=$event.clientY" @mousemove="mx=$event.clientX;my=$event.clientY" @mouseleave="show=false"/>`, x, barW, h, fill, tooltip)
+	}
+	s += `</svg>`
+	return s
+}
+
 func UptimeBarTooltip(pct float64, hasData bool, label string) string {
 	safe := jsSingleQuoteEscaper.Replace(label)
 	if !hasData {
