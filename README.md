@@ -22,6 +22,7 @@
 ---
 
 ![Web UI](assets/webpanel.png)
+![Monitor View](assets/monitorview.png)
 
 ---
 
