@@ -22,6 +22,7 @@ type Monitor struct {
 	FailureThreshold   int             `json:"failure_threshold"`
 	SuccessThreshold   int             `json:"success_threshold"`
 	UpsideDown         bool            `json:"upside_down"`
+	AgentEnabled       bool            `json:"agent_enabled"`
 	ResendInterval     int             `json:"resend_interval"`
 	SLATarget          float64         `json:"sla_target"`
 	AnomalySensitivity string          `json:"anomaly_sensitivity,omitempty"` // off, low, medium, high

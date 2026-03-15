@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 31
+const schemaVersion = 32
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS monitors (
 	failure_threshold INTEGER NOT NULL DEFAULT 3,
 	success_threshold INTEGER NOT NULL DEFAULT 1,
 	upside_down     INTEGER NOT NULL DEFAULT 0,
+	agent_enabled   INTEGER NOT NULL DEFAULT 1,
 	resend_interval INTEGER NOT NULL DEFAULT 0,
 	sla_target           REAL    NOT NULL DEFAULT 0,
 	anomaly_sensitivity  TEXT    NOT NULL DEFAULT 'off',
@@ -598,5 +599,9 @@ ALTER TABLE check_results ADD COLUMN agent_id INTEGER DEFAULT NULL;`,
 	created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );`,
+	},
+	{
+		version: 32,
+		sql:     `ALTER TABLE monitors ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 1;`,
 	},
 }

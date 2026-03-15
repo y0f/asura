@@ -24,7 +24,7 @@ type headerPair struct {
 func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 	fd := &views.MonitorFormParams{Monitor: mon}
 	if mon == nil {
-		fd.Monitor = &storage.Monitor{}
+		fd.Monitor = &storage.Monitor{AgentEnabled: true}
 		fd.FollowRedirects = true
 		fd.MaxRedirects = 10
 		fd.HTTP.AuthMethod = "none"
@@ -1032,6 +1032,7 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 		Enabled:          true,
 		TrackChanges:     r.FormValue("track_changes") == "on",
 		UpsideDown:       r.FormValue("upside_down") == "on",
+		AgentEnabled:     r.FormValue("agent_enabled") == "on",
 		FailureThreshold: failThreshold,
 		SuccessThreshold: successThreshold,
 	}

@@ -104,7 +104,7 @@ func (s *SQLiteStore) DeleteAgent(ctx context.Context, id int64) error {
 func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT id, name, type, target, interval_secs, timeout_secs, settings
-		 FROM monitors WHERE enabled=1 AND type NOT IN ('heartbeat', 'manual', 'docker', 'command')
+		 FROM monitors WHERE enabled=1 AND agent_enabled=1 AND type NOT IN ('heartbeat', 'manual', 'docker', 'command')
 		 ORDER BY id`)
 	if err != nil {
 		return nil, err

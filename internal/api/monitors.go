@@ -324,6 +324,7 @@ func (h *Handler) CloneMonitor(w http.ResponseWriter, r *http.Request) {
 		FailureThreshold:   src.FailureThreshold,
 		SuccessThreshold:   src.SuccessThreshold,
 		UpsideDown:         src.UpsideDown,
+		AgentEnabled:       src.AgentEnabled,
 		ResendInterval:     src.ResendInterval,
 		SLATarget:          src.SLATarget,
 		AnomalySensitivity: src.AnomalySensitivity,

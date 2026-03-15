@@ -150,7 +150,8 @@ func advancedSectionData(p MonitorFormParams) string {
 		hasResend := p.Monitor.ResendInterval != 0
 		hasTrack := p.Monitor.TrackChanges
 		hasUpside := p.Monitor.UpsideDown
-		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasAnomaly || hasResend || hasTrack || hasUpside {
+		hasAgentOff := !p.Monitor.AgentEnabled
+		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasAnomaly || hasResend || hasTrack || hasUpside || hasAgentOff {
 			show = "true"
 		}
 	}
@@ -434,6 +435,14 @@ templ MonitorFormPage(p MonitorFormParams) {
 											}
 											class="form-checkbox"/>
 										<span class="text-[12px] text-muted-light">Upside-down mode</span>
+									</label>
+									<label class="flex items-center gap-2 cursor-pointer">
+										<input type="checkbox" name="agent_enabled"
+											if p.Monitor.AgentEnabled {
+												checked
+											}
+											class="form-checkbox"/>
+										<span class="text-[12px] text-muted-light">Enable for agents</span>
 									</label>
 								</div>
 							</div>

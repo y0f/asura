@@ -390,6 +390,8 @@
 
 <p>Agent results are processed through the full pipeline: monitor status updates, incident creation/resolution, and notifications all work the same as central checks. Agents only receive non-sensitive monitor settings (credentials are stripped).</p>
 
+<p>Only monitors with <code>agent_enabled</code> set to true are included in agent job responses. Disable this flag on monitors targeting localhost or private IPs that should only be checked by the central server.</p>
+
 <h3>Running an Agent</h3>
 
 <pre><code>asura-agent --server https://your-server.com --token &lt;agent-token&gt; --interval 30s</code></pre>

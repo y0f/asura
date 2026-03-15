@@ -93,7 +93,7 @@ func TestListAgentJobs(t *testing.T) {
 
 	m := &Monitor{
 		Name: "HTTP Test", Type: "http", Target: "https://example.com",
-		Interval: 60, Timeout: 10, Enabled: true,
+		Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: true,
 		FailureThreshold: 3, SuccessThreshold: 1,
 	}
 	if err := store.CreateMonitor(ctx, m); err != nil {
@@ -117,5 +117,75 @@ func TestListAgentJobs(t *testing.T) {
 	}
 	if jobs[0].Name != "HTTP Test" {
 		t.Fatalf("expected HTTP Test, got %s", jobs[0].Name)
+	}
+}
+
+func TestListAgentJobsExcludesAgentDisabled(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	agentEnabled := &Monitor{
+		Name: "Agent OK", Type: "tcp", Target: "example.com:443",
+		Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: true,
+		FailureThreshold: 3, SuccessThreshold: 1,
+	}
+	if err := store.CreateMonitor(ctx, agentEnabled); err != nil {
+		t.Fatal(err)
+	}
+
+	agentDisabled := &Monitor{
+		Name: "Agent Off", Type: "tcp", Target: "127.0.0.1:3306",
+		Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: false,
+		FailureThreshold: 3, SuccessThreshold: 1,
+	}
+	if err := store.CreateMonitor(ctx, agentDisabled); err != nil {
+		t.Fatal(err)
+	}
+
+	jobs, err := store.ListAgentJobs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job (agent_enabled=true only), got %d", len(jobs))
+	}
+	if jobs[0].Name != "Agent OK" {
+		t.Fatalf("expected Agent OK, got %s", jobs[0].Name)
+	}
+}
+
+func TestAgentEnabledPersistsCorrectly(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	m := &Monitor{
+		Name: "Agent Enabled", Type: "http", Target: "https://example.com",
+		Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: true,
+		FailureThreshold: 3, SuccessThreshold: 1,
+	}
+	if err := store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.GetMonitor(ctx, m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.AgentEnabled {
+		t.Fatal("expected AgentEnabled to be true")
+	}
+
+	got.AgentEnabled = false
+	if err := store.UpdateMonitor(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+
+	got2, err := store.GetMonitor(ctx, got.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.AgentEnabled {
+		t.Fatal("expected AgentEnabled to be false after update")
 	}
 }
