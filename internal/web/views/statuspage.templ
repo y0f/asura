@@ -154,9 +154,6 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 									</div>
 									<div class="mt-1.5 flex items-center gap-3 text-[11px] text-muted">
 										<span>{ TimeAgo(inc.StartedAt) }</span>
-										if inc.Cause != "" {
-											<span>{ inc.Cause }</span>
-										}
 										if inc.ResolvedAt != nil {
 											<span class="text-emerald-400">Resolved in { IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</span>
 										}

@@ -57,12 +57,12 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 	var items []rssItem
 	for _, inc := range incidents {
 		title := fmt.Sprintf("Incident: %s", inc.MonitorName)
-		desc := inc.Cause
+		desc := fmt.Sprintf("%s is experiencing issues", inc.MonitorName)
 		if inc.Status == "resolved" {
 			title = fmt.Sprintf("Resolved: %s", inc.MonitorName)
 			if inc.ResolvedAt != nil {
-				desc = fmt.Sprintf("Resolved after %s. Cause: %s",
-					inc.ResolvedAt.Sub(inc.StartedAt).Truncate(time.Second), inc.Cause)
+				desc = fmt.Sprintf("%s recovered after %s",
+					inc.MonitorName, inc.ResolvedAt.Sub(inc.StartedAt).Truncate(time.Second))
 			}
 		}
 		items = append(items, rssItem{

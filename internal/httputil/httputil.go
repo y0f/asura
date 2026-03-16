@@ -256,7 +256,9 @@ func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storag
 		if inc.Status == incident.StatusResolved && inc.ResolvedAt != nil && inc.ResolvedAt.Before(cutoff) {
 			continue
 		}
-		filtered = append(filtered, inc)
+		safe := *inc
+		safe.Cause = ""
+		filtered = append(filtered, &safe)
 		if len(filtered) >= 10 {
 			break
 		}
