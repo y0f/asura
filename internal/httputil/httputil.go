@@ -62,6 +62,19 @@ func (w *StatusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Flush forwards to the underlying ResponseWriter so wrapping in StatusWriter
+// doesn't strip http.Flusher — required for streaming responses (SSE).
+func (w *StatusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap exposes the underlying writer to http.ResponseController.
+func (w *StatusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 func ParsePagination(r *http.Request) storage.Pagination {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
