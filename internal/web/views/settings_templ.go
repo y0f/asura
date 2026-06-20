@@ -71,7 +71,7 @@ func SettingsPage(p SettingsParams) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div><div class=\"flex items-center justify-between mb-5\"><h1 class=\"text-[15px] font-medium text-white\">Settings</h1></div><div class=\"border border-line rounded-lg p-5 mb-5\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest mb-3\">System Info</h2><div class=\"grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]\"><div><div class=\"text-muted mb-0.5\">Version</div><div class=\"text-white font-medium\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div><div class=\"flex items-center justify-between mb-5\"><h1 class=\"text-[15px] font-medium text-white\">Settings</h1></div><div class=\"border border-line-light rounded-xl bg-surface-50/40 p-5 mb-5\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest mb-3\">System Info</h2><div class=\"grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]\"><div><div class=\"text-muted mb-0.5\">Version</div><div class=\"text-white font-medium\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -177,7 +177,7 @@ func SettingsPage(p SettingsParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div></div><div class=\"grid gap-5 md:grid-cols-2\"><div class=\"border border-line rounded-lg p-5\"><h2 class=\"text-[13px] font-medium text-white mb-1\">Export Configuration</h2><p class=\"text-[12px] text-muted-light mb-4\">Download all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a JSON file.</p><div class=\"flex items-center gap-2\"><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div></div><div class=\"grid gap-5 md:grid-cols-2\"><div class=\"border border-line-light rounded-xl bg-surface-50/40 p-5\"><h2 class=\"text-[13px] font-medium text-white mb-1\">Export Configuration</h2><p class=\"text-[12px] text-muted-light mb-4\">Download all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a JSON file.</p><div class=\"flex items-center gap-2\"><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -203,7 +203,7 @@ func SettingsPage(p SettingsParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" class=\"inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-200 hover:bg-surface-200/80 text-white text-[12px] font-medium rounded transition-colors\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg> Export (redacted)</a></div></div><div class=\"border border-line rounded-lg p-5\"><h2 class=\"text-[13px] font-medium text-white mb-1\">Import Configuration</h2><p class=\"text-[12px] text-muted-light mb-4\">Upload a previously exported JSON file to restore or merge configuration.</p><form action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" class=\"inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-200 hover:bg-surface-200/80 text-white text-[12px] font-medium rounded transition-colors\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg> Export (redacted)</a></div></div><div class=\"border border-line-light rounded-xl bg-surface-50/40 p-5\"><h2 class=\"text-[13px] font-medium text-white mb-1\">Import Configuration</h2><p class=\"text-[12px] text-muted-light mb-4\">Upload a previously exported JSON file to restore or merge configuration.</p><form action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -216,7 +216,7 @@ func SettingsPage(p SettingsParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" method=\"POST\" enctype=\"multipart/form-data\" class=\"space-y-3\"><div><label class=\"form-label\">Mode</label> <select name=\"mode\" class=\"form-select\"><option value=\"merge\">Merge (skip existing)</option> <option value=\"replace\">Replace (overwrite all)</option></select></div><div><label class=\"form-label\">File</label> <input type=\"file\" name=\"file\" accept=\".json,application/json\" required class=\"block w-full text-[12px] text-muted-light file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[12px] file:font-medium file:bg-surface-200 file:text-white hover:file:bg-surface-200/80 file:cursor-pointer file:transition-colors\"></div><button type=\"submit\" class=\"btn-primary\">Import</button></form></div><div class=\"border border-line rounded-lg p-5\"><h2 class=\"text-[13px] font-medium text-white mb-1\">Database Maintenance</h2><p class=\"text-[12px] text-muted-light mb-4\">VACUUM reclaims unused space from deleted rows and rebuilds the database file.</p><button type=\"button\" data-url=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" method=\"POST\" enctype=\"multipart/form-data\" class=\"space-y-3\"><div><label class=\"form-label\">Mode</label> <select name=\"mode\" class=\"form-select\"><option value=\"merge\">Merge (skip existing)</option> <option value=\"replace\">Replace (overwrite all)</option></select></div><div><label class=\"form-label\">File</label> <input type=\"file\" name=\"file\" accept=\".json,application/json\" required class=\"block w-full text-[12px] text-muted-light file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[12px] file:font-medium file:bg-surface-200 file:text-white hover:file:bg-surface-200/80 file:cursor-pointer file:transition-colors\"></div><button type=\"submit\" class=\"btn-primary\">Import</button></form></div><div class=\"border border-line-light rounded-xl bg-surface-50/40 p-5\"><h2 class=\"text-[13px] font-medium text-white mb-1\">Database Maintenance</h2><p class=\"text-[12px] text-muted-light mb-4\">VACUUM reclaims unused space from deleted rows and rebuilds the database file.</p><button type=\"button\" data-url=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

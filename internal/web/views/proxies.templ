@@ -30,7 +30,7 @@ templ ProxyListPage(p ProxyListParams) {
 				}
 			</div>
 			if len(p.Proxies) > 0 {
-				<div class="border border-line rounded-lg overflow-hidden">
+				<div class="border border-line-light rounded-xl overflow-hidden">
 					<table class="w-full">
 						<thead>
 							<tr class="border-b border-line text-left">
@@ -72,7 +72,7 @@ templ ProxyListPage(p ProxyListParams) {
 					</table>
 				</div>
 			} else {
-				<div class="border border-line rounded-lg px-4 py-16 text-center">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 					<p class="text-muted text-[13px] mb-2">No proxies configured</p>
 					<a href={ templ.SafeURL(p.BasePath + "/proxies/new") } class="text-[12px] text-brand hover:text-brand/80 transition-colors">Create one</a>
 				</div>
@@ -88,7 +88,7 @@ templ ProxyFormPage(p ProxyFormParams) {
 			<form method="POST"
 				action={ templ.SafeURL(proxyFormAction(p.BasePath, p.Proxy)) }
 				class="max-w-2xl space-y-4">
-				<div class="border border-line rounded-lg p-5 space-y-4">
+				<div class="border border-line-light rounded-xl p-5 space-y-4">
 					<div>
 						<label class="form-label">Name</label>
 						<input type="text" name="name" value={ p.Proxy.Name } required class="form-input" placeholder="My Proxy"/>

@@ -31,7 +31,7 @@ templ StatusPageListPage(p StatusPageListParams) {
 				</a>
 			</div>
 			if len(p.Pages) > 0 {
-				<div class="border border-line rounded-lg overflow-hidden">
+				<div class="border border-line-light rounded-xl overflow-hidden">
 					<table class="w-full">
 						<thead>
 							<tr class="border-b border-line text-[10px] text-muted uppercase tracking-widest">
@@ -80,7 +80,7 @@ templ StatusPageListPage(p StatusPageListParams) {
 					</table>
 				</div>
 			} else {
-				<div class="border border-line rounded-lg px-4 py-12 text-center">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 					<p class="text-muted text-[13px] mb-3">No status pages configured</p>
 					<a href={ templ.SafeURL(p.BasePath + "/status-pages/new") } class="text-brand text-[13px] hover:underline">Create your first status page</a>
 				</div>
@@ -183,7 +183,7 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 						}
 						class="form-input w-24"/>
 				</div>
-				<div x-data="{search: ''}" class="border border-line rounded-lg overflow-hidden">
+				<div x-data="{search: ''}" class="border border-line-light rounded-xl overflow-hidden">
 					<div class="px-4 py-2.5 border-b border-line flex items-center justify-between bg-surface-50/20">
 						<label class="text-[11px] text-muted uppercase tracking-widest font-medium">Monitors</label>
 						<input type="text" x-model="search" placeholder="Search..." class="px-2.5 py-1 bg-surface border border-line rounded text-white text-[12px] focus:outline-hidden focus:border-brand/30 transition-colors w-40"/>

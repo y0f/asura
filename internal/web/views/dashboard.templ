@@ -84,27 +84,27 @@ templ DashboardPage(p DashboardParams) {
 	@Layout(p.LayoutParams) {
 		<div>
 			<div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Monitors</div>
 					<div class="text-2xl font-semibold text-white tabular-nums">{ fmt.Sprint(p.Total) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Up</div>
 					<div class="text-2xl font-semibold text-emerald-400 tabular-nums">{ fmt.Sprint(p.Up) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Down</div>
 					<div class={ "text-2xl font-semibold tabular-nums", templ.KV("text-red-400", p.Down > 0), templ.KV("text-muted", p.Down == 0) }>{ fmt.Sprint(p.Down) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Incidents</div>
 					<div class={ "text-2xl font-semibold tabular-nums", templ.KV("text-yellow-400", p.OpenIncidents > 0), templ.KV("text-muted", p.OpenIncidents == 0) }>{ fmt.Sprint(p.OpenIncidents) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Requests 24h</div>
 					<div class="text-2xl font-semibold text-muted-light tabular-nums">{ fmt.Sprint(p.Requests24h) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Visitors 24h</div>
 					<div class="text-2xl font-semibold text-muted-light tabular-nums">{ fmt.Sprint(p.Visitors24h) }</div>
 				</div>
@@ -180,7 +180,7 @@ templ DashboardPage(p DashboardParams) {
 				</div>
 				<div>
 					<h2 class="text-[11px] text-muted uppercase tracking-widest mb-3">Active Incidents</h2>
-					<div class="border border-line rounded-lg overflow-hidden">
+					<div class="border border-line-light rounded-xl overflow-hidden">
 						if len(p.Incidents) > 0 {
 							<div class="divide-y divide-line">
 								for _, inc := range p.Incidents {

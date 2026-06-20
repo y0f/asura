@@ -30,7 +30,7 @@ templ AgentListPage(p AgentListParams) {
 				}
 			</div>
 			if len(p.Agents) > 0 {
-				<div class="border border-line rounded-lg overflow-hidden">
+				<div class="border border-line-light rounded-xl overflow-hidden">
 					<table class="w-full">
 						<thead>
 							<tr class="border-b border-line text-left">
@@ -83,16 +83,14 @@ templ AgentListPage(p AgentListParams) {
 				</div>
 			} else {
 				@EmptyState("No agents configured", "", "")
-				<div class="mt-4 border border-line rounded-lg p-4">
+				<div class="mt-4 border border-line-light rounded-xl p-4">
 					<p class="text-[12px] text-muted-light mb-2">Agents run checks from remote locations and report back to this server.</p>
 					<p class="text-[12px] text-muted">Create an agent, then run the agent binary on a remote server:</p>
 					<pre class="mt-2 text-[11px] text-muted-light bg-surface-200 rounded px-3 py-2 font-mono overflow-x-auto">asura-agent --server https://your-server.com --token &lt;agent-token&gt;</pre>
 				</div>
 			}
-			<div x-show="showForm" x-cloak x-transition:enter="transition-opacity" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showForm = false">
-				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm" x-show="showForm" x-transition @click.stop>
-					<h3 class="text-[15px] font-medium text-white mb-4">New Agent</h3>
-					<form method="POST" action={ templ.SafeURL(p.BasePath + "/agents") } class="space-y-3">
+			@FormModal("showForm", "max-w-sm", "'New Agent'") {
+				<form method="POST" action={ templ.SafeURL(p.BasePath + "/agents") } class="space-y-3">
 						<div>
 							<label class="form-label">Name</label>
 							<input type="text" name="name" required placeholder="US-East, EU-West, etc." class="form-input"/>
@@ -106,8 +104,7 @@ templ AgentListPage(p AgentListParams) {
 							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
 						</div>
 					</form>
-				</div>
-			</div>
+			}
 		</div>
 	}
 }

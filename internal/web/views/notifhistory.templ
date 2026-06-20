@@ -64,7 +64,7 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 					<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="text-[11px] text-muted hover:text-white transition-colors">Clear</a>
 				}
 			</form>
-			<div class="border border-line rounded-lg overflow-hidden">
+			<div class="border border-line-light rounded-xl overflow-hidden">
 				if entries := p.entries(); len(entries) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[700px]">

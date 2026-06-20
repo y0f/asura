@@ -246,7 +246,7 @@ func IncidentListPage(p IncidentListParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" placeholder=\"Search incidents...\" class=\"w-full pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors\"></div></form><div class=\"border border-line rounded-lg overflow-hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" placeholder=\"Search incidents...\" class=\"w-full pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors\"></div></form><div class=\"border border-line-light rounded-xl overflow-hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -730,7 +730,7 @@ func IncidentDetailPage(p IncidentDetailParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</div></div><div class=\"border border-line rounded-lg overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest\">Timeline</h2></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</div></div><div class=\"border border-line-light rounded-xl overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest\">Timeline</h2></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

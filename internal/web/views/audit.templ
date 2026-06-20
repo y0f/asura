@@ -112,7 +112,7 @@ templ AuditLogPage(p AuditLogParams) {
 					<span class="text-[11px] text-muted ml-auto">{ fmt.Sprintf("%d entries", p.Result.Total) }</span>
 				}
 			</div>
-			<div class="border border-line rounded-lg overflow-hidden">
+			<div class="border border-line-light rounded-xl overflow-hidden">
 				if entries := p.entries(); len(entries) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[700px]">

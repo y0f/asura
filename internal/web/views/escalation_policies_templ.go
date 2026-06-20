@@ -80,7 +80,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Policies) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px]\">No escalation policies configured</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px]\">No escalation policies configured</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -90,7 +90,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				for _, ep := range p.Policies {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"border border-line rounded-lg p-4 hover:border-line-light transition-colors\"><div class=\"flex items-start justify-between mb-2\"><div><h3 class=\"text-sm font-medium text-white\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"border border-line rounded-xl p-4 hover:border-line-light transition-colors\"><div class=\"flex items-start justify-between mb-2\"><div><h3 class=\"text-sm font-medium text-white\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -248,82 +248,104 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div x-show=\"showForm\" x-cloak x-transition.opacity class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-md max-h-[90vh] overflow-y-auto\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\" x-text=\"editId ? 'Edit Policy' : 'New Policy'\"></h3><form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"formData.name\" class=\"form-input\" required></div><div><label class=\"form-label\">Description</label> <input type=\"text\" name=\"description\" x-model=\"formData.description\" class=\"form-input\"></div><div class=\"flex items-center gap-5\"><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"enabled\" x-model=\"formData.enabled\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Enabled</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"repeat\" x-model=\"formData.repeat\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Repeat after last step</span></label></div><div><label class=\"form-label\">Steps</label><div class=\"space-y-2\"><template x-for=\"(step, idx) in formData.steps\" :key=\"idx\"><div class=\"border border-line rounded-lg p-3 space-y-2 bg-surface-200/30\"><div class=\"flex items-center justify-between\"><span class=\"text-[11px] text-muted\" x-text=\"'Step ' + (idx + 1)\"></span><div class=\"flex items-center gap-1\"><button type=\"button\" @click=\"moveStep(idx, -1)\" x-show=\"idx > 0\" class=\"px-1 text-[10px] text-muted hover:text-white\">↑</button> <button type=\"button\" @click=\"moveStep(idx, 1)\" x-show=\"idx < formData.steps.length - 1\" class=\"px-1 text-[10px] text-muted hover:text-white\">↓</button> <button type=\"button\" @click=\"removeStep(idx)\" class=\"px-1 text-[10px] text-red-400 hover:text-red-300\">✕</button></div></div><div><label class=\"text-[10px] text-muted mb-1 block\">Delay (minutes)</label> <input type=\"number\" min=\"0\" x-model.number=\"step.delay_minutes\" class=\"form-input text-xs w-24\"> <input type=\"hidden\" :name=\"'step_delay_minutes[]'\" :value=\"step.delay_minutes\"></div><div><label class=\"text-[10px] text-muted mb-1 block\">Notification channels</label><div class=\"flex flex-wrap gap-1.5\">")
+			templ_7745c5c3_Var10 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"formData.name\" class=\"form-input\" required></div><div><label class=\"form-label\">Description</label> <input type=\"text\" name=\"description\" x-model=\"formData.description\" class=\"form-input\"></div><div class=\"flex items-center gap-5\"><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"enabled\" x-model=\"formData.enabled\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Enabled</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"repeat\" x-model=\"formData.repeat\" class=\"form-checkbox\"> <span class=\"text-[12px] text-muted-light\">Repeat after last step</span></label></div><div><label class=\"form-label\">Steps</label><div class=\"space-y-2\"><template x-for=\"(step, idx) in formData.steps\" :key=\"idx\"><div class=\"border border-line-light rounded-xl p-3 space-y-2 bg-surface-200/30\"><div class=\"flex items-center justify-between\"><span class=\"text-[11px] text-muted\" x-text=\"'Step ' + (idx + 1)\"></span><div class=\"flex items-center gap-1\"><button type=\"button\" @click=\"moveStep(idx, -1)\" x-show=\"idx > 0\" class=\"px-1 text-[10px] text-muted hover:text-white\">↑</button> <button type=\"button\" @click=\"moveStep(idx, 1)\" x-show=\"idx < formData.steps.length - 1\" class=\"px-1 text-[10px] text-muted hover:text-white\">↓</button> <button type=\"button\" @click=\"removeStep(idx)\" class=\"px-1 text-[10px] text-red-400 hover:text-red-300\">✕</button></div></div><div><label class=\"text-[10px] text-muted mb-1 block\">Delay (minutes)</label> <input type=\"number\" min=\"0\" x-model.number=\"step.delay_minutes\" class=\"form-input text-xs w-24\"> <input type=\"hidden\" :name=\"'step_delay_minutes[]'\" :value=\"step.delay_minutes\"></div><div><label class=\"text-[10px] text-muted mb-1 block\">Notification channels</label><div class=\"flex flex-wrap gap-1.5\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				for _, ch := range p.Channels {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<label class=\"inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none border-line hover:border-line-light\" :class=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var11 string
+					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand/30 bg-brand/[0.06]'", ch.ID))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 120, Col: 278}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"><input type=\"checkbox\" :checked=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var12 string
+					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 121, Col: 99}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" @change=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var13 string
+					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("toggleChannel(idx, %d)", ch.ID))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 121, Col: 156}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"hidden\"> <span class=\"text-muted-light\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var14 string
+					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 122, Col: 54}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</span> <span class=\"text-muted\">(")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var15 string
+					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 123, Col: 49}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, ")</span></label>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div><input type=\"hidden\" :name=\"'step_channels[]'\" :value=\"JSON.stringify(step.channel_ids)\"></div></div></template></div><button type=\"button\" @click=\"addStep()\" class=\"mt-2 px-3 py-1 text-[11px] border border-dashed border-line rounded-lg text-muted hover:text-white hover:border-line-light transition-colors\">+ Add Step</button></div><div class=\"flex items-center gap-3 pt-3\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Save' : 'Create'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = FormModal("showForm", "max-w-md", "editId ? 'Edit Policy' : 'New Policy'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			for _, ch := range p.Channels {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<label class=\"inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none border-line hover:border-line-light\" :class=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var10 string
-				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand/30 bg-brand/[0.06]'", ch.ID))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 122, Col: 278}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"><input type=\"checkbox\" :checked=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var11 string
-				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 123, Col: 99}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" @change=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var12 string
-				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("toggleChannel(idx, %d)", ch.ID))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 123, Col: 156}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"hidden\"> <span class=\"text-muted-light\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var13 string
-				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 124, Col: 54}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</span> <span class=\"text-muted\">(")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var14 string
-				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 125, Col: 49}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, ")</span></label>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div><input type=\"hidden\" :name=\"'step_channels[]'\" :value=\"JSON.stringify(step.channel_ids)\"></div></div></template></div><button type=\"button\" @click=\"addStep()\" class=\"mt-2 px-3 py-1 text-[11px] border border-dashed border-line rounded-lg text-muted hover:text-white hover:border-line-light transition-colors\">+ Add Step</button></div><div class=\"flex items-center gap-3 pt-3\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Save' : 'Create'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

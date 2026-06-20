@@ -104,7 +104,7 @@ func TagListPage(p TagListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Tags) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line rounded-lg overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Tag</th><th class=\"th\">Color</th>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Tag</th><th class=\"th\">Color</th>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -199,7 +199,7 @@ func TagListPage(p TagListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px] mb-2\">No tags yet</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px] mb-2\">No tags yet</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -214,7 +214,29 @@ func TagListPage(p TagListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<!-- Modal --><div x-show=\"showForm\" x-cloak x-transition.opacity class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\" x-text=\"editId ? 'Edit Tag' : 'New Tag'\"></h3><form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"name\" required maxlength=\"50\" placeholder=\"production, staging, critical…\" class=\"form-input\"></div><div><label class=\"form-label\">Color</label><div class=\"flex items-center gap-3\"><input type=\"color\" name=\"color\" x-model=\"color\" class=\"w-10 h-10 rounded border border-line bg-transparent cursor-pointer p-0.5\"> <input type=\"text\" x-model=\"color\" @input=\"color = $event.target.value\" placeholder=\"#6366f1\" maxlength=\"7\" class=\"form-input font-mono flex-1\"></div></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Update' : 'Create'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form></div></div></div>")
+			templ_7745c5c3_Var8 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"name\" required maxlength=\"50\" placeholder=\"production, staging, critical…\" class=\"form-input\"></div><div><label class=\"form-label\">Color</label><div class=\"flex items-center gap-3\"><input type=\"color\" name=\"color\" x-model=\"color\" class=\"w-10 h-10 rounded border border-line bg-transparent cursor-pointer p-0.5\"> <input type=\"text\" x-model=\"color\" @input=\"color = $event.target.value\" placeholder=\"#6366f1\" maxlength=\"7\" class=\"form-input font-mono flex-1\"></div></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Update' : 'Create'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = FormModal("showForm", "max-w-sm", "editId ? 'Edit Tag' : 'New Tag'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

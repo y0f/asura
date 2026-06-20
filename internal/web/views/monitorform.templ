@@ -257,7 +257,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 					}
 				</div>
 				<!-- Card 3: Type-specific Settings -->
-				<div class="border border-line rounded-lg p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
+				<div class="border border-line-light rounded-xl p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
 					<div class="flex items-center justify-between mb-4">
 						<span class="text-[11px] text-muted uppercase tracking-widest">Settings</span>
 						<button type="button" @click="advancedSettings = !advancedSettings" class="text-[11px] text-brand hover:text-brand/80 transition-colors">
@@ -812,7 +812,7 @@ templ monitorMQTTSettings(p MonitorFormParams) {
 }
 
 templ monitorAssertions(p MonitorFormParams) {
-	<div class="border border-line rounded-lg p-5">
+	<div class="border border-line-light rounded-xl p-5">
 		<div class="flex items-center justify-between mb-4">
 			<span class="text-[11px] text-muted uppercase tracking-widest">Conditions</span>
 			<button type="button" @click="advancedAssertions = !advancedAssertions" class="text-[11px] text-brand hover:text-brand/80 transition-colors">

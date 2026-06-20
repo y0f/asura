@@ -122,27 +122,27 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 						if g.Name != "" {
 							<h2 class="text-[11px] font-medium text-muted uppercase tracking-widest mb-2 mt-6">{ g.Name }</h2>
 						}
-						<div class="border border-line rounded-lg overflow-hidden divide-y divide-line mb-4">
+						<div class="border border-line-light rounded-xl overflow-hidden divide-y divide-line mb-4">
 							for _, mwu := range g.Monitors {
 								@statusMonitorRow(mwu)
 							}
 						</div>
 					}
 				} else if len(p.Monitors) > 0 {
-					<div class="border border-line rounded-lg overflow-hidden divide-y divide-line">
+					<div class="border border-line-light rounded-xl overflow-hidden divide-y divide-line">
 						for _, mwu := range p.Monitors {
 							@statusMonitorRow(mwu)
 						}
 					</div>
 				} else {
-					<div class="border border-line rounded-lg px-4 py-12 text-center">
+					<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 						<p class="text-muted text-[13px]">No monitors configured</p>
 					</div>
 				}
 				if p.Config != nil && p.Config.ShowIncidents && p.HasIncidents {
 					<div class="mt-8">
 						<h2 class="text-[10px] font-medium text-muted uppercase tracking-widest mb-3">Recent Incidents</h2>
-						<div class="border border-line rounded-lg overflow-hidden divide-y divide-line">
+						<div class="border border-line-light rounded-xl overflow-hidden divide-y divide-line">
 							for _, inc := range p.Incidents {
 								<div class="px-4 py-3" style="background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)">
 									<div class="flex items-center justify-between">
@@ -193,7 +193,7 @@ templ statusSubscribeWidget(basePath, slug string) {
 				Subscribe to updates
 			</button>
 		</div>
-		<div x-show="open" x-transition class="mt-3 border border-line rounded-lg overflow-hidden" style="background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)">
+		<div x-show="open" x-transition class="mt-3 border border-line-light rounded-xl overflow-hidden" style="background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)">
 			<form method="POST" action={ templ.SafeURL(basePath + "/" + slug + "/subscribe") } class="p-4 space-y-3">
 				<div class="flex gap-2">
 					<button type="button" @click="type = 'email'"

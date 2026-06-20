@@ -108,7 +108,7 @@ func RequestLogListPage(p RequestLogParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.Stats != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6\"><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Requests</div><div class=\"text-2xl font-semibold text-white tabular-nums\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6\"><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Requests</div><div class=\"text-2xl font-semibold text-white tabular-nums\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -121,7 +121,7 @@ func RequestLogListPage(p RequestLogParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Visitors</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Visitors</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -134,7 +134,7 @@ func RequestLogListPage(p RequestLogParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Avg Latency</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Avg Latency</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -418,7 +418,7 @@ func RequestLogListPage(p RequestLogParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div><div class=\"border border-line rounded-lg overflow-hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div><div class=\"border border-line-light rounded-xl overflow-hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

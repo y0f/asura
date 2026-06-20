@@ -67,7 +67,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Windows) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"border border-line rounded-lg overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"w-full min-w-[640px]\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Schedule</th><th class=\"th\">Status</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"w-full min-w-[640px]\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Schedule</th><th class=\"th\">Status</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -282,25 +282,47 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px]\">No maintenance windows</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px]\">No maintenance windows</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<div x-show=\"showForm\" x-cloak x-transition:enter=\"transition-opacity\" x-transition:enter-start=\"opacity-0\" x-transition:enter-end=\"opacity-100\" x-transition:leave=\"transition-opacity\" x-transition:leave-start=\"opacity-100\" x-transition:leave-end=\"opacity-0\" class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-md\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\">New Maintenance Window</h3><form method=\"POST\" action=\"")
+			templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<form method=\"POST\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var13 templ.SafeURL
+				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/maintenance"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 97, Col: 75}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"recurring\" x-model=\"mode\" class=\"form-select\"><option value=\"\">One-time</option> <option value=\"manual\">Manual (start/stop)</option> <option value=\"cron\">Cron Schedule</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div x-show=\"mode !== 'manual'\" x-cloak class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div></div><div x-show=\"mode === 'cron'\" x-cloak><label class=\"form-label\">Cron Expression</label> <input type=\"text\" name=\"cron_expr\" placeholder=\"0 2 * * *\" class=\"form-input font-mono\"><p class=\"text-[10px] text-muted mt-1\">minute hour day-of-month month day-of-week</p></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = FormModal("showForm", "max-w-md", "'New Maintenance Window'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var12 templ.SafeURL
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/maintenance"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 99, Col: 76}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"recurring\" x-model=\"mode\" class=\"form-select\"><option value=\"\">One-time</option> <option value=\"manual\">Manual (start/stop)</option> <option value=\"cron\">Cron Schedule</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div x-show=\"mode !== 'manual'\" x-cloak class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div></div><div x-show=\"mode === 'cron'\" x-cloak><label class=\"form-label\">Cron Expression</label> <input type=\"text\" name=\"cron_expr\" placeholder=\"0 2 * * *\" class=\"form-input font-mono\"><p class=\"text-[10px] text-muted mt-1\">minute hour day-of-month month day-of-week</p></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

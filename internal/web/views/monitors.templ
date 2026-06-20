@@ -381,7 +381,7 @@ templ MonitorListPage(p MonitorListParams) {
 				</div>
 			}
 			<div id="monitor-list" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
-				class="border border-line rounded-lg overflow-hidden">
+				class="border border-line-light rounded-xl overflow-hidden">
 				if ms := p.monitors(); len(ms) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[640px]">
@@ -593,19 +593,19 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			}
 			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Uptime 24h</div>
 					<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.Uptime24h) }>{ UptimeFmt(p.Uptime24h) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Uptime 7d</div>
 					<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.Uptime7d) }>{ UptimeFmt(p.Uptime7d) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Uptime 30d</div>
 					<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.Uptime30d) }>{ UptimeFmt(p.Uptime30d) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Checks 24h</div>
 					<div class="text-lg font-semibold text-white tabular-nums">{ fmt.Sprint(p.TotalChecks) }</div>
 					if p.TotalChecks > 0 {
@@ -619,7 +619,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			</div>
 			if len(p.Heatmap) > 0 {
-				<div class="border border-line rounded-lg px-4 py-3 mb-5">
+				<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
 					<div class="flex items-center justify-between mb-2">
 						<div class="stat-label">365-Day Uptime</div>
 						<div class="flex items-center gap-3 text-[10px] text-muted">
@@ -635,7 +635,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			}
 			if p.SLA != nil {
-				<div class="border border-line rounded-lg px-4 py-3 mb-5">
+				<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
 					<div class="flex items-center justify-between mb-2">
 						<div class="stat-label">SLA Target: { fmt.Sprintf("%.2f%%", p.SLA.Target) }</div>
 						if p.SLA.Breached {
@@ -668,15 +668,15 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			}
 			if p.showPercentiles() {
 				<div class="grid grid-cols-3 gap-3 mb-5">
-					<div class="border border-line rounded-lg px-4 py-3">
+					<div class="border border-line-light rounded-xl px-4 py-3">
 						<div class="stat-label">p50</div>
 						<div class="text-lg font-semibold text-white tabular-nums font-mono">{ FormatFloat(p.P50) }</div>
 					</div>
-					<div class="border border-line rounded-lg px-4 py-3">
+					<div class="border border-line-light rounded-xl px-4 py-3">
 						<div class="stat-label">p95</div>
 						<div class="text-lg font-semibold text-white tabular-nums font-mono">{ FormatFloat(p.P95) }</div>
 					</div>
-					<div class="border border-line rounded-lg px-4 py-3">
+					<div class="border border-line-light rounded-xl px-4 py-3">
 						<div class="stat-label">p99</div>
 						<div class="text-lg font-semibold text-white tabular-nums font-mono">{ FormatFloat(p.P99) }</div>
 					</div>
@@ -684,7 +684,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			}
 			<div id="response-chart" hx-preserve="true"
 				data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
-				class="border border-line rounded-lg px-4 py-3 mb-5"
+				class="border border-line-light rounded-xl px-4 py-3 mb-5"
 				x-data={ monitorChartXData() } x-init="init()" x-cloak>
 				<div class="flex items-center justify-between mb-3">
 					<h2 class="text-[11px] text-muted uppercase tracking-widest">Response Time</h2>
@@ -712,7 +712,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			</div>
 			if p.LatestCheck != nil && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
-				<div class="border border-line rounded-lg px-4 py-3 mb-5 flex items-center justify-between">
+				<div class="border border-line-light rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
 					<div>
 						<div class="stat-label">TLS Certificate</div>
 						<div class={ "text-[13px] font-medium", CertColor(p.LatestCheck.CertExpiry) }>{ fmt.Sprint(CertDays(p.LatestCheck.CertExpiry)) } days remaining</div>
@@ -722,7 +722,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			}
 			if p.LatestCheck != nil && p.Monitor.Type == "dns" {
 				if records := ParseDNS(p.LatestCheck.DNSRecords); len(records) > 0 {
-					<div class="border border-line rounded-lg px-4 py-3 mb-5">
+					<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
 						<div class="stat-label mb-2">DNS Records</div>
 						<div class="space-y-0.5">
 							for _, rec := range records {
@@ -732,7 +732,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 				}
 			}
-			<div class="border border-line rounded-lg px-4 py-3 mb-5">
+			<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
 				<div class="stat-label mb-2">Configuration</div>
 				<div class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-[12px]">
 					<div><span class="text-muted">Interval</span> <span class="text-muted-light ml-1">{ fmt.Sprint(p.Monitor.Interval) }s</span></div>
@@ -778,7 +778,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					}
 				</div>
 			</div>
-			<div class="border border-line rounded-lg mb-5 overflow-hidden">
+			<div class="border border-line-light rounded-xl mb-5 overflow-hidden">
 				<div class="px-4 py-2.5 border-b border-line flex items-center justify-between">
 					<h2 class="text-[11px] text-muted uppercase tracking-widest">Recent Checks</h2>
 					if p.Checks != nil && p.Checks.Total > 0 {
@@ -857,7 +857,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				}
 			</div>
 			if chs := p.changes(); len(chs) > 0 {
-				<div class="border border-line rounded-lg overflow-hidden">
+				<div class="border border-line-light rounded-xl overflow-hidden">
 					<div class="px-4 py-2.5 border-b border-line flex items-center justify-between">
 						<h2 class="text-[11px] text-muted uppercase tracking-widest">Content Changes</h2>
 						if p.Changes != nil && p.Changes.Total > 0 {

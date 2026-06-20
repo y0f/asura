@@ -108,7 +108,7 @@ templ NotificationListPage(p NotificationListParams) {
 			if len(p.Channels) > 0 {
 				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 					for _, ch := range p.Channels {
-						<div class="border border-line rounded-lg p-4 hover:border-line-light transition-colors">
+						<div class="border border-line rounded-xl p-4 hover:border-line-light transition-colors">
 							<div class="flex items-center justify-between mb-2.5">
 								<div class="flex items-center gap-2">
 									<span class="text-[13px] text-white font-medium">{ ch.Name }</span>
@@ -135,16 +135,13 @@ templ NotificationListPage(p NotificationListParams) {
 					}
 				</div>
 			} else {
-				<div class="border border-line rounded-lg px-4 py-16 text-center">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 					<p class="text-muted text-[13px] mb-2">No notification channels</p>
 					<button @click="resetForm(); showForm = true" class="text-[12px] text-brand hover:text-brand/80 transition-colors">Create one</button>
 				</div>
 			}
-			<!-- Modal -->
-			<div x-show="showForm" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showForm = false">
-				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-md max-h-[90vh] overflow-y-auto" x-show="showForm" x-transition @click.stop>
-					<h3 class="text-[15px] font-medium text-white mb-4" x-text="editId ? 'Edit Notification Channel' : 'New Notification Channel'"></h3>
-					<form method="POST" data-base-action={ p.BasePath + "/notifications" } @submit="if(editId) $el.action = $el.dataset.baseAction + '/' + editId; else $el.action = $el.dataset.baseAction" class="space-y-3">
+			@FormModal("showForm", "max-w-md", "editId ? 'Edit Notification Channel' : 'New Notification Channel'") {
+				<form method="POST" data-base-action={ p.BasePath + "/notifications" } @submit="if(editId) $el.action = $el.dataset.baseAction + '/' + editId; else $el.action = $el.dataset.baseAction" class="space-y-3">
 						<div>
 							<label class="form-label">Name</label>
 							<input type="text" name="name" x-model="formData.name" required class="form-input"/>
@@ -234,8 +231,7 @@ templ NotificationListPage(p NotificationListParams) {
 							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
 						</div>
 					</form>
-				</div>
-			</div>
+			}
 		</div>
 	}
 }

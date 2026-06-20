@@ -84,26 +84,26 @@ templ SLAReportPage(p SLAReportParams) {
 			}
 		</div>
 		if len(p.Entries) == 0 {
-			<div class="border border-line rounded-lg px-6 py-12 text-center">
+			<div class="border border-line-light rounded-xl bg-surface-50/40 px-6 py-12 text-center">
 				<div class="text-muted text-[13px]">No monitors have SLA targets configured.</div>
 				<div class="text-muted/60 text-[11px] mt-1">Set an SLA target on a monitor's edit page to start tracking.</div>
 			</div>
 		} else {
 			<div class="grid grid-cols-3 gap-3 mb-5">
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Monitors Tracked</div>
 					<div class="text-lg font-semibold text-white tabular-nums">{ fmt.Sprint(len(p.Entries)) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Meeting SLA</div>
 					<div class="text-lg font-semibold text-emerald-400 tabular-nums">{ fmt.Sprint(p.meetingSLA()) }</div>
 				</div>
-				<div class="border border-line rounded-lg px-4 py-3">
+				<div class="border border-line-light rounded-xl px-4 py-3">
 					<div class="stat-label">Breached</div>
 					<div class={ "text-lg font-semibold tabular-nums", templ.KV("text-red-400", p.breachedCount() > 0), templ.KV("text-muted", p.breachedCount() == 0) }>{ fmt.Sprint(p.breachedCount()) }</div>
 				</div>
 			</div>
-			<div class="border border-line rounded-lg overflow-hidden">
+			<div class="border border-line-light rounded-xl overflow-hidden">
 				<div class="overflow-x-auto">
 					<table class="w-full min-w-[800px]">
 						<thead>

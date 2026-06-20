@@ -83,7 +83,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><script>\r\n\t\t\t\t(function(){try{var p=localStorage.getItem(\"theme\")||\"dark\";var d=p===\"dark\"||(p===\"system\"&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches);document.documentElement.setAttribute(\"data-theme\",d?\"dark\":\"light\");}catch(e){}})();\r\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><script>\n\t\t\t\t(function(){try{var p=localStorage.getItem(\"theme\")||\"dark\";var d=p===\"dark\"||(p===\"system\"&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches);document.documentElement.setAttribute(\"data-theme\",d?\"dark\":\"light\");}catch(e){}})();\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -208,7 +208,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\"></script><style>\r\n\t\t\t\t[x-cloak] { display: none !important; }\r\n\t\t\t\t::selection { background: rgba(0,128,255,.15); }\r\n\t\t\t\t::-webkit-scrollbar { width: 3px; height: 3px; }\r\n\t\t\t\t::-webkit-scrollbar-track { background: transparent; }\r\n\t\t\t\t::-webkit-scrollbar-thumb { background: var(--color-line-light); border-radius: 3px; }\r\n\t\t\t\t.noise-bg {\r\n\t\t\t\t\tposition: fixed;\r\n\t\t\t\t\tinset: 0;\r\n\t\t\t\t\tpointer-events: none;\r\n\t\t\t\t\tz-index: 0;\r\n\t\t\t\t\tbackground-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 700' width='700' height='700'%3E%3Cdefs%3E%3Cfilter id='nnnoise-filter' x='-20%25' y='-20%25' width='140%25' height='140%25' filterUnits='objectBoundingBox' primitiveUnits='userSpaceOnUse' color-interpolation-filters='linearRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='4' seed='15' stitchTiles='stitch' x='0%25' y='0%25' width='100%25' height='100%25' result='turbulence'/%3E%3CfeSpecularLighting surfaceScale='5' specularConstant='0.8' specularExponent='20' lighting-color='white' x='0%25' y='0%25' width='100%25' height='100%25' in='turbulence' result='specularLighting'%3E%3CfeDistantLight azimuth='3' elevation='96'/%3E%3C/feSpecularLighting%3E%3CfeColorMatrix type='saturate' values='0' x='0%25' y='0%25' width='100%25' height='100%25' in='specularLighting' result='colormatrix'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='700' height='700' fill='black'/%3E%3Crect width='700' height='700' fill='white' filter='url(%23nnnoise-filter)'/%3E%3C/svg%3E\");\r\n\t\t\t\t\tbackground-size: 400px;\r\n\t\t\t\t\topacity: 0.045;\r\n\t\t\t\t}\r\n\t\t\t\t.glow-bg {\r\n\t\t\t\t\tposition: fixed;\r\n\t\t\t\t\tinset: 0;\r\n\t\t\t\t\tpointer-events: none;\r\n\t\t\t\t\tz-index: 0;\r\n\t\t\t\t\tbackground: radial-gradient(ellipse 90% 45% at 50% -5%, rgba(0,128,255,0.08) 0%, transparent 70%);\r\n\t\t\t\t}\r\n\t\t\t\t@keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }\r\n\t\t\t\t.animate-ping { animation: ping 1.5s cubic-bezier(0,0,.2,1) infinite; }\r\n\t\t\t\tif p.Config != nil && p.Config.CustomCSS != \"\" {\r\n\t\t\t\t\t{ p.Config.CustomCSS }\r\n\t\t\t\t}\r\n\t\t\t</style></head><body class=\"bg-surface text-muted-light font-sans min-h-screen antialiased\"><div class=\"noise-bg\"></div><div class=\"glow-bg\"></div><div class=\"relative z-10 max-w-2xl mx-auto px-4 py-14 sm:px-6 sm:py-20\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\"></script><style>\n\t\t\t\t[x-cloak] { display: none !important; }\n\t\t\t\t::selection { background: rgba(0,128,255,.15); }\n\t\t\t\t::-webkit-scrollbar { width: 3px; height: 3px; }\n\t\t\t\t::-webkit-scrollbar-track { background: transparent; }\n\t\t\t\t::-webkit-scrollbar-thumb { background: var(--color-line-light); border-radius: 3px; }\n\t\t\t\t.noise-bg {\n\t\t\t\t\tposition: fixed;\n\t\t\t\t\tinset: 0;\n\t\t\t\t\tpointer-events: none;\n\t\t\t\t\tz-index: 0;\n\t\t\t\t\tbackground-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 700' width='700' height='700'%3E%3Cdefs%3E%3Cfilter id='nnnoise-filter' x='-20%25' y='-20%25' width='140%25' height='140%25' filterUnits='objectBoundingBox' primitiveUnits='userSpaceOnUse' color-interpolation-filters='linearRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='4' seed='15' stitchTiles='stitch' x='0%25' y='0%25' width='100%25' height='100%25' result='turbulence'/%3E%3CfeSpecularLighting surfaceScale='5' specularConstant='0.8' specularExponent='20' lighting-color='white' x='0%25' y='0%25' width='100%25' height='100%25' in='turbulence' result='specularLighting'%3E%3CfeDistantLight azimuth='3' elevation='96'/%3E%3C/feSpecularLighting%3E%3CfeColorMatrix type='saturate' values='0' x='0%25' y='0%25' width='100%25' height='100%25' in='specularLighting' result='colormatrix'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='700' height='700' fill='black'/%3E%3Crect width='700' height='700' fill='white' filter='url(%23nnnoise-filter)'/%3E%3C/svg%3E\");\n\t\t\t\t\tbackground-size: 400px;\n\t\t\t\t\topacity: 0.045;\n\t\t\t\t}\n\t\t\t\t.glow-bg {\n\t\t\t\t\tposition: fixed;\n\t\t\t\t\tinset: 0;\n\t\t\t\t\tpointer-events: none;\n\t\t\t\t\tz-index: 0;\n\t\t\t\t\tbackground: radial-gradient(ellipse 90% 45% at 50% -5%, rgba(0,128,255,0.08) 0%, transparent 70%);\n\t\t\t\t}\n\t\t\t\t@keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }\n\t\t\t\t.animate-ping { animation: ping 1.5s cubic-bezier(0,0,.2,1) infinite; }\n\t\t\t\tif p.Config != nil && p.Config.CustomCSS != \"\" {\n\t\t\t\t\t{ p.Config.CustomCSS }\n\t\t\t\t}\n\t\t\t</style></head><body class=\"bg-surface text-muted-light font-sans min-h-screen antialiased\"><div class=\"noise-bg\"></div><div class=\"glow-bg\"></div><div class=\"relative z-10 max-w-2xl mx-auto px-4 py-14 sm:px-6 sm:py-20\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -275,7 +275,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " <div class=\"border border-line rounded-lg overflow-hidden divide-y divide-line mb-4\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " <div class=\"border border-line-light rounded-xl overflow-hidden divide-y divide-line mb-4\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -291,7 +291,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				}
 			}
 		} else if len(p.Monitors) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"border border-line rounded-lg overflow-hidden divide-y divide-line\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"border border-line-light rounded-xl overflow-hidden divide-y divide-line\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -306,13 +306,13 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"border border-line rounded-lg px-4 py-12 text-center\"><p class=\"text-muted text-[13px]\">No monitors configured</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px]\">No monitors configured</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if p.Config != nil && p.Config.ShowIncidents && p.HasIncidents {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"mt-8\"><h2 class=\"text-[10px] font-medium text-muted uppercase tracking-widest mb-3\">Recent Incidents</h2><div class=\"border border-line rounded-lg overflow-hidden divide-y divide-line\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"mt-8\"><h2 class=\"text-[10px] font-medium text-muted uppercase tracking-widest mb-3\">Recent Incidents</h2><div class=\"border border-line-light rounded-xl overflow-hidden divide-y divide-line\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -510,7 +510,7 @@ func statusSubscribeWidget(basePath, slug string) templ.Component {
 			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"mt-8\" x-data=\"{open: false, type: 'email'}\" x-cloak><div class=\"flex justify-center\"><button @click=\"open = !open\" class=\"inline-flex items-center gap-1.5 text-[11px] text-muted hover:text-muted-light transition-colors\"><svg class=\"w-3 h-3\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"></path><polyline points=\"22,6 12,13 2,6\"></polyline></svg> Subscribe to updates</button></div><div x-show=\"open\" x-transition class=\"mt-3 border border-line rounded-lg overflow-hidden\" style=\"background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)\"><form method=\"POST\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"mt-8\" x-data=\"{open: false, type: 'email'}\" x-cloak><div class=\"flex justify-center\"><button @click=\"open = !open\" class=\"inline-flex items-center gap-1.5 text-[11px] text-muted hover:text-muted-light transition-colors\"><svg class=\"w-3 h-3\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"></path><polyline points=\"22,6 12,13 2,6\"></polyline></svg> Subscribe to updates</button></div><div x-show=\"open\" x-transition class=\"mt-3 border border-line-light rounded-xl overflow-hidden\" style=\"background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)\"><form method=\"POST\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -552,7 +552,7 @@ func SubscriberResultPage(p SubscriberResultParams) templ.Component {
 			templ_7745c5c3_Var25 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<!doctype html><html lang=\"en\"><head><script>\r\n\t\t\t\t(function(){try{var p=localStorage.getItem(\"theme\")||\"dark\";var d=p===\"dark\"||(p===\"system\"&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches);document.documentElement.setAttribute(\"data-theme\",d?\"dark\":\"light\");}catch(e){}})();\r\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<!doctype html><html lang=\"en\"><head><script>\n\t\t\t\t(function(){try{var p=localStorage.getItem(\"theme\")||\"dark\";var d=p===\"dark\"||(p===\"system\"&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches);document.documentElement.setAttribute(\"data-theme\",d?\"dark\":\"light\");}catch(e){}})();\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -713,7 +713,7 @@ func StatusPageAuthPage(p StatusPageAuthParams) templ.Component {
 			templ_7745c5c3_Var35 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<!doctype html><html lang=\"en\"><head><script>\r\n\t\t\t\t(function(){try{var p=localStorage.getItem(\"theme\")||\"dark\";var d=p===\"dark\"||(p===\"system\"&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches);document.documentElement.setAttribute(\"data-theme\",d?\"dark\":\"light\");}catch(e){}})();\r\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<!doctype html><html lang=\"en\"><head><script>\n\t\t\t\t(function(){try{var p=localStorage.getItem(\"theme\")||\"dark\";var d=p===\"dark\"||(p===\"system\"&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches);document.documentElement.setAttribute(\"data-theme\",d?\"dark\":\"light\");}catch(e){}})();\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

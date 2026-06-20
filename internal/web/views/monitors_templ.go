@@ -815,7 +815,7 @@ func MonitorListPage(p MonitorListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<div id=\"monitor-list\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-list\" hx-swap=\"outerHTML\" hx-push-url=\"false\" class=\"border border-line rounded-lg overflow-hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<div id=\"monitor-list\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-list\" hx-swap=\"outerHTML\" hx-push-url=\"false\" class=\"border border-line-light rounded-xl overflow-hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1600,7 +1600,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "<div class=\"grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5\"><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Uptime 24h</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "<div class=\"grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5\"><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Uptime 24h</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1635,7 +1635,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Uptime 7d</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Uptime 7d</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1670,7 +1670,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Uptime 30d</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Uptime 30d</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1705,7 +1705,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Checks 24h</div><div class=\"text-lg font-semibold text-white tabular-nums\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Checks 24h</div><div class=\"text-lg font-semibold text-white tabular-nums\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1769,7 +1769,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Heatmap) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "<div class=\"border border-line rounded-lg px-4 py-3 mb-5\"><div class=\"flex items-center justify-between mb-2\"><div class=\"stat-label\">365-Day Uptime</div><div class=\"flex items-center gap-3 text-[10px] text-muted\"><span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#34d399]\"></span>100%</span> <span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#fbbf24]\"></span>&gt;99%</span> <span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#f97316]\"></span>&gt;95%</span> <span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#f87171]\"></span>&lt;95%</span></div></div><div class=\"overflow-x-auto\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "<div class=\"border border-line-light rounded-xl px-4 py-3 mb-5\"><div class=\"flex items-center justify-between mb-2\"><div class=\"stat-label\">365-Day Uptime</div><div class=\"flex items-center gap-3 text-[10px] text-muted\"><span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#34d399]\"></span>100%</span> <span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#fbbf24]\"></span>&gt;99%</span> <span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#f97316]\"></span>&gt;95%</span> <span class=\"flex items-center gap-1\"><span class=\"w-2 h-2 rounded-sm bg-[#f87171]\"></span>&lt;95%</span></div></div><div class=\"overflow-x-auto\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1783,7 +1783,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				}
 			}
 			if p.SLA != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "<div class=\"border border-line rounded-lg px-4 py-3 mb-5\"><div class=\"flex items-center justify-between mb-2\"><div class=\"stat-label\">SLA Target: ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "<div class=\"border border-line-light rounded-xl px-4 py-3 mb-5\"><div class=\"flex items-center justify-between mb-2\"><div class=\"stat-label\">SLA Target: ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1911,7 +1911,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				}
 			}
 			if p.showPercentiles() {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "<div class=\"grid grid-cols-3 gap-3 mb-5\"><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">p50</div><div class=\"text-lg font-semibold text-white tabular-nums font-mono\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "<div class=\"grid grid-cols-3 gap-3 mb-5\"><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">p50</div><div class=\"text-lg font-semibold text-white tabular-nums font-mono\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1924,7 +1924,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">p95</div><div class=\"text-lg font-semibold text-white tabular-nums font-mono\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">p95</div><div class=\"text-lg font-semibold text-white tabular-nums font-mono\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1937,7 +1937,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">p99</div><div class=\"text-lg font-semibold text-white tabular-nums font-mono\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">p99</div><div class=\"text-lg font-semibold text-white tabular-nums font-mono\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1968,7 +1968,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "\" class=\"border border-line rounded-lg px-4 py-3 mb-5\" x-data=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "\" class=\"border border-line-light rounded-xl px-4 py-3 mb-5\" x-data=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1986,7 +1986,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.LatestCheck != nil && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "<div class=\"border border-line rounded-lg px-4 py-3 mb-5 flex items-center justify-between\"><div><div class=\"stat-label\">TLS Certificate</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "<div class=\"border border-line-light rounded-xl px-4 py-3 mb-5 flex items-center justify-between\"><div><div class=\"stat-label\">TLS Certificate</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2041,7 +2041,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 			}
 			if p.LatestCheck != nil && p.Monitor.Type == "dns" {
 				if records := ParseDNS(p.LatestCheck.DNSRecords); len(records) > 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "<div class=\"border border-line rounded-lg px-4 py-3 mb-5\"><div class=\"stat-label mb-2\">DNS Records</div><div class=\"space-y-0.5\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "<div class=\"border border-line-light rounded-xl px-4 py-3 mb-5\"><div class=\"stat-label mb-2\">DNS Records</div><div class=\"space-y-0.5\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -2070,7 +2070,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "<div class=\"border border-line rounded-lg px-4 py-3 mb-5\"><div class=\"stat-label mb-2\">Configuration</div><div class=\"grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-[12px]\"><div><span class=\"text-muted\">Interval</span> <span class=\"text-muted-light ml-1\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "<div class=\"border border-line-light rounded-xl px-4 py-3 mb-5\"><div class=\"stat-label mb-2\">Configuration</div><div class=\"grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-[12px]\"><div><span class=\"text-muted\">Interval</span> <span class=\"text-muted-light ml-1\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2251,7 +2251,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "</div></div><div class=\"border border-line rounded-lg mb-5 overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line flex items-center justify-between\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest\">Recent Checks</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "</div></div><div class=\"border border-line-light rounded-xl mb-5 overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line flex items-center justify-between\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest\">Recent Checks</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2550,7 +2550,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if chs := p.changes(); len(chs) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 247, "<div class=\"border border-line rounded-lg overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line flex items-center justify-between\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest\">Content Changes</h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 247, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line flex items-center justify-between\"><h2 class=\"text-[11px] text-muted uppercase tracking-widest\">Content Changes</h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

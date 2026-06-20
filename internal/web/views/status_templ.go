@@ -79,7 +79,7 @@ func StatusPageListPage(p StatusPageListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Pages) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"border border-line rounded-lg overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-[10px] text-muted uppercase tracking-widest\"><th class=\"text-left px-4 py-2.5 font-medium\">Title</th><th class=\"text-left px-4 py-2.5 font-medium\">Slug</th><th class=\"text-center px-4 py-2.5 font-medium\">Monitors</th><th class=\"text-center px-4 py-2.5 font-medium\">Status</th><th class=\"text-right px-4 py-2.5 font-medium\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-[10px] text-muted uppercase tracking-widest\"><th class=\"text-left px-4 py-2.5 font-medium\">Title</th><th class=\"text-left px-4 py-2.5 font-medium\">Slug</th><th class=\"text-center px-4 py-2.5 font-medium\">Monitors</th><th class=\"text-center px-4 py-2.5 font-medium\">Status</th><th class=\"text-right px-4 py-2.5 font-medium\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -192,7 +192,7 @@ func StatusPageListPage(p StatusPageListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"border border-line rounded-lg px-4 py-12 text-center\"><p class=\"text-muted text-[13px] mb-3\">No status pages configured</p><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px] mb-3\">No status pages configured</p><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -463,7 +463,7 @@ func StatusPageFormPage(p StatusPageFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " class=\"form-input w-24\"></div><div x-data=\"{search: ''}\" class=\"border border-line rounded-lg overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line flex items-center justify-between bg-surface-50/20\"><label class=\"text-[11px] text-muted uppercase tracking-widest font-medium\">Monitors</label> <input type=\"text\" x-model=\"search\" placeholder=\"Search...\" class=\"px-2.5 py-1 bg-surface border border-line rounded text-white text-[12px] focus:outline-hidden focus:border-brand/30 transition-colors w-40\"></div><div class=\"divide-y divide-line max-h-64 overflow-y-auto\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " class=\"form-input w-24\"></div><div x-data=\"{search: ''}\" class=\"border border-line-light rounded-xl overflow-hidden\"><div class=\"px-4 py-2.5 border-b border-line flex items-center justify-between bg-surface-50/20\"><label class=\"text-[11px] text-muted uppercase tracking-widest font-medium\">Monitors</label> <input type=\"text\" x-model=\"search\" placeholder=\"Search...\" class=\"px-2.5 py-1 bg-surface border border-line rounded text-white text-[12px] focus:outline-hidden focus:border-brand/30 transition-colors w-40\"></div><div class=\"divide-y divide-line max-h-64 overflow-y-auto\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

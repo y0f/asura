@@ -27,7 +27,7 @@ templ ConfirmModal() {
 				x-transition:leave="transition ease-in duration-100"
 				x-transition:leave-start="opacity-100 scale-100"
 				x-transition:leave-end="opacity-0 scale-95"
-				class="modal-panel relative z-10 w-full max-w-sm border border-line rounded-xl bg-surface-50 p-5 shadow-2xl shadow-black/50"
+				class="modal-panel relative z-10 w-full max-w-sm border border-line-light rounded-xl bg-surface-100 p-5 shadow-2xl shadow-black/50"
 			>
 				<p class="text-[13px] text-muted-light mb-5" x-text="message"></p>
 				<div class="flex items-center justify-end gap-2">
@@ -105,14 +105,14 @@ templ DeleteButton(action, message string) {
 }
 
 templ StatCard(label, value, colorClass string) {
-	<div class="lift border border-line rounded-lg bg-surface-50/40 px-4 py-3">
+	<div class="lift border border-line-light rounded-xl bg-surface-50/40 px-4 py-3">
 		<div class="stat-label">{ label }</div>
 		<div class={ "text-2xl font-semibold tabular-nums", colorClass }>{ value }</div>
 	</div>
 }
 
 templ EmptyState(message, actionHref, actionLabel string) {
-	<div class="border border-line rounded-lg bg-surface-50/40 px-4 py-12 text-center">
+	<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 		<p class="text-muted text-[13px] mb-3">{ message }</p>
 		if actionHref != "" {
 			<a href={ templ.SafeURL(actionHref) } class="text-[12px] text-brand hover:text-brand/80 transition-colors">{ actionLabel }</a>
@@ -138,7 +138,7 @@ templ PageHeader(title, description string) {
 
 // Card is a standard surface container with an optional uppercase title.
 templ Card(title string) {
-	<div class="border border-line rounded-lg bg-surface-50/40 p-5">
+	<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
 		if title != "" {
 			<h2 class="text-[11px] text-muted uppercase tracking-widest mb-4">{ title }</h2>
 		}
@@ -195,7 +195,7 @@ templ Modal(triggerLabel, title string) {
 		<button type="button" @click="open=true" class="btn-secondary btn-press px-3 py-1.5 rounded text-[13px]">{ triggerLabel }</button>
 		<div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="open=false">
 			<div class="modal-backdrop absolute inset-0 bg-black/60" @click="open=false"></div>
-			<div class="modal-panel relative z-10 w-full max-w-lg rounded-xl border border-line bg-surface-50 shadow-2xl shadow-black/50">
+			<div class="modal-panel relative z-10 w-full max-w-lg rounded-xl border border-line-light bg-surface-100 shadow-2xl shadow-black/50">
 				<div class="flex items-center justify-between border-b border-line px-5 py-3">
 					<h3 class="text-[13px] font-semibold text-white">{ title }</h3>
 					<button @click="open=false" class="icon-btn -mr-2" aria-label="Close">
@@ -205,6 +205,39 @@ templ Modal(triggerLabel, title string) {
 				<div class="p-5">
 					{ children... }
 				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// FormModal is the shared centered dialog for create/edit forms whose open state
+// is owned by the surrounding page Alpine scope. show is the boolean expression to
+// bind (e.g. "showForm"), maxWidth a max-w-* class, and titleExpr an Alpine
+// expression for the heading (static: "'New Tag'"; dynamic: "editId ? 'Edit' : 'New'").
+// Backdrop click and Escape close it; the form body is the children slot.
+templ FormModal(show, maxWidth, titleExpr string) {
+	<div
+		x-show={ show }
+		x-cloak
+		@keydown.escape.window={ show + " = false" }
+		@click.self={ show + " = false" }
+		class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+	>
+		<div
+			x-show={ show }
+			@click.stop
+			role="dialog"
+			aria-modal="true"
+			class={ "modal-panel relative w-full max-h-[85vh] overflow-y-auto rounded-xl border border-line-light bg-surface-100 shadow-2xl shadow-black/50", maxWidth }
+		>
+			<div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface-100 px-5 py-3.5">
+				<h3 class="text-[13px] font-semibold text-white" x-text={ titleExpr }></h3>
+				<button type="button" @click={ show + " = false" } aria-label="Close" class="icon-btn -mr-2">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+				</button>
+			</div>
+			<div class="space-y-4 p-5">
+				{ children... }
 			</div>
 		</div>
 	</div>
@@ -222,7 +255,7 @@ templ SectionHeader(title string) {
 }
 
 templ FormCard(title string) {
-	<div class="border border-line rounded-lg p-5">
+	<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
 		if title != "" {
 			<h2 class="text-[11px] text-muted uppercase tracking-widest mb-4">{ title }</h2>
 		}

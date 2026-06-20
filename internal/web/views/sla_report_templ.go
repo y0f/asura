@@ -180,12 +180,12 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Entries) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"border border-line rounded-lg px-6 py-12 text-center\"><div class=\"text-muted text-[13px]\">No monitors have SLA targets configured.</div><div class=\"text-muted/60 text-[11px] mt-1\">Set an SLA target on a monitor's edit page to start tracking.</div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-6 py-12 text-center\"><div class=\"text-muted text-[13px]\">No monitors have SLA targets configured.</div><div class=\"text-muted/60 text-[11px] mt-1\">Set an SLA target on a monitor's edit page to start tracking.</div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"grid grid-cols-3 gap-3 mb-5\"><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Monitors Tracked</div><div class=\"text-lg font-semibold text-white tabular-nums\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"grid grid-cols-3 gap-3 mb-5\"><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Monitors Tracked</div><div class=\"text-lg font-semibold text-white tabular-nums\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -198,7 +198,7 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Meeting SLA</div><div class=\"text-lg font-semibold text-emerald-400 tabular-nums\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Meeting SLA</div><div class=\"text-lg font-semibold text-emerald-400 tabular-nums\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -211,7 +211,7 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Breached</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Breached</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -246,7 +246,7 @@ func SLAReportPage(p SLAReportParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div></div></div><div class=\"border border-line rounded-lg overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"w-full min-w-[800px]\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Monitor</th><th class=\"th\">Target</th><th class=\"th\">Actual</th><th class=\"th\">Status</th><th class=\"th\">Error Budget</th><th class=\"th\">Checks</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div></div></div><div class=\"border border-line-light rounded-xl overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"w-full min-w-[800px]\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Monitor</th><th class=\"th\">Target</th><th class=\"th\">Actual</th><th class=\"th\">Status</th><th class=\"th\">Error Budget</th><th class=\"th\">Checks</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

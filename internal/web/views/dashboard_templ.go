@@ -121,7 +121,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div><div class=\"grid grid-cols-2 lg:grid-cols-3 gap-3 mb-8\"><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Monitors</div><div class=\"text-2xl font-semibold text-white tabular-nums\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div><div class=\"grid grid-cols-2 lg:grid-cols-3 gap-3 mb-8\"><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Monitors</div><div class=\"text-2xl font-semibold text-white tabular-nums\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -134,7 +134,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Up</div><div class=\"text-2xl font-semibold text-emerald-400 tabular-nums\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Up</div><div class=\"text-2xl font-semibold text-emerald-400 tabular-nums\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -147,7 +147,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Down</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Down</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -182,7 +182,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Incidents</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Incidents</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -217,7 +217,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Requests 24h</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Requests 24h</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -230,7 +230,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><div class=\"border border-line rounded-lg px-4 py-3\"><div class=\"stat-label\">Visitors 24h</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><div class=\"border border-line-light rounded-xl px-4 py-3\"><div class=\"stat-label\">Visitors 24h</div><div class=\"text-2xl font-semibold text-muted-light tabular-nums\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -593,7 +593,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div></div></div><div><h2 class=\"text-[11px] text-muted uppercase tracking-widest mb-3\">Active Incidents</h2><div class=\"border border-line rounded-lg overflow-hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div></div></div><div><h2 class=\"text-[11px] text-muted uppercase tracking-widest mb-3\">Active Incidents</h2><div class=\"border border-line-light rounded-xl overflow-hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -757,7 +757,7 @@ func sseListener(basePath string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\" style=\"display:none\"></div><script>\r\n\t\t(function(){\r\n\t\t\tvar url = document.getElementById('sse-connector').dataset.url;\r\n\t\t\tvar grid = document.getElementById('monitor-grid');\r\n\t\t\tif (!url || !grid || typeof EventSource === 'undefined') return;\r\n\t\t\tvar src = new EventSource(url);\r\n\t\t\tvar events = ['incident.created','incident.resolved','content.changed','cert.changed','sla.breach'];\r\n\t\t\tevents.forEach(function(e){ src.addEventListener(e, function(){ htmx.trigger(grid,'sse:refresh'); }); });\r\n\t\t\tsrc.onerror = function(){ src.close(); };\r\n\t\t})();\r\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\" style=\"display:none\"></div><script>\n\t\t(function(){\n\t\t\tvar url = document.getElementById('sse-connector').dataset.url;\n\t\t\tvar grid = document.getElementById('monitor-grid');\n\t\t\tif (!url || !grid || typeof EventSource === 'undefined') return;\n\t\t\tvar src = new EventSource(url);\n\t\t\tvar events = ['incident.created','incident.resolved','content.changed','cert.changed','sla.breach'];\n\t\t\tevents.forEach(function(e){ src.addEventListener(e, function(){ htmx.trigger(grid,'sse:refresh'); }); });\n\t\t\tsrc.onerror = function(){ src.close(); };\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -49,7 +49,7 @@ templ TagListPage(p TagListParams) {
 				}
 			</div>
 			if len(p.Tags) > 0 {
-				<div class="border border-line rounded-lg overflow-hidden">
+				<div class="border border-line-light rounded-xl overflow-hidden">
 					<table class="w-full">
 						<thead>
 							<tr class="border-b border-line text-left">
@@ -89,18 +89,15 @@ templ TagListPage(p TagListParams) {
 					</table>
 				</div>
 			} else {
-				<div class="border border-line rounded-lg px-4 py-16 text-center">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 					<p class="text-muted text-[13px] mb-2">No tags yet</p>
 					if p.Perms["monitors.write"] {
 						<button @click="resetForm(); showForm = true" class="text-[12px] text-brand hover:text-brand/80 transition-colors">Create one</button>
 					}
 				</div>
 			}
-			<!-- Modal -->
-			<div x-show="showForm" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showForm = false">
-				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm" x-show="showForm" x-transition @click.stop>
-					<h3 class="text-[15px] font-medium text-white mb-4" x-text="editId ? 'Edit Tag' : 'New Tag'"></h3>
-					<form method="POST" :action="formAction" class="space-y-3">
+			@FormModal("showForm", "max-w-sm", "editId ? 'Edit Tag' : 'New Tag'") {
+				<form method="POST" :action="formAction" class="space-y-3">
 						<div>
 							<label class="form-label">Name</label>
 							<input type="text" name="name" x-model="name" required maxlength="50" placeholder="production, staging, critical…" class="form-input"/>
@@ -118,8 +115,7 @@ templ TagListPage(p TagListParams) {
 							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
 						</div>
 					</form>
-				</div>
-			</div>
+			}
 		</div>
 	}
 }

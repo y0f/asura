@@ -85,7 +85,7 @@ func ProxyListPage(p ProxyListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Proxies) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line rounded-lg overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Protocol</th><th class=\"th\">Host</th><th class=\"th\">Port</th><th class=\"th\">Status</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Protocol</th><th class=\"th\">Host</th><th class=\"th\">Port</th><th class=\"th\">Status</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -194,7 +194,7 @@ func ProxyListPage(p ProxyListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"border border-line rounded-lg px-4 py-16 text-center\"><p class=\"text-muted text-[13px] mb-2\">No proxies configured</p><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px] mb-2\">No proxies configured</p><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -285,7 +285,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" class=\"max-w-2xl space-y-4\"><div class=\"border border-line rounded-lg p-5 space-y-4\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" class=\"max-w-2xl space-y-4\"><div class=\"border border-line-light rounded-xl p-5 space-y-4\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

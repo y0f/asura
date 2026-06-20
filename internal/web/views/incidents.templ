@@ -91,7 +91,7 @@ templ IncidentListPage(p IncidentListParams) {
 						class="w-full pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors"/>
 				</div>
 			</form>
-			<div class="border border-line rounded-lg overflow-hidden">
+			<div class="border border-line-light rounded-xl overflow-hidden">
 				if incs := p.incidents(); len(incs) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[700px]">
@@ -198,7 +198,7 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 				<div class="stat-label">Cause</div>
 				<div class="text-[13px] text-white">{ p.Incident.Cause }</div>
 			</div>
-			<div class="border border-line rounded-lg overflow-hidden">
+			<div class="border border-line-light rounded-xl overflow-hidden">
 				<div class="px-4 py-2.5 border-b border-line">
 					<h2 class="text-[11px] text-muted uppercase tracking-widest">Timeline</h2>
 				</div>

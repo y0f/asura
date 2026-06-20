@@ -36,7 +36,7 @@ templ SettingsPage(p SettingsParams) {
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Settings</h1>
 			</div>
-			<div class="border border-line rounded-lg p-5 mb-5">
+			<div class="border border-line-light rounded-xl bg-surface-50/40 p-5 mb-5">
 				<h2 class="text-[11px] text-muted uppercase tracking-widest mb-3">System Info</h2>
 				<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
 					<div>
@@ -78,7 +78,7 @@ templ SettingsPage(p SettingsParams) {
 				</div>
 			</div>
 			<div class="grid gap-5 md:grid-cols-2">
-				<div class="border border-line rounded-lg p-5">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
 					<h2 class="text-[13px] font-medium text-white mb-1">Export Configuration</h2>
 					<p class="text-[12px] text-muted-light mb-4">Download all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a JSON file.</p>
 					<div class="flex items-center gap-2">
@@ -94,7 +94,7 @@ templ SettingsPage(p SettingsParams) {
 						</a>
 					</div>
 				</div>
-				<div class="border border-line rounded-lg p-5">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
 					<h2 class="text-[13px] font-medium text-white mb-1">Import Configuration</h2>
 					<p class="text-[12px] text-muted-light mb-4">Upload a previously exported JSON file to restore or merge configuration.</p>
 					<form action={ templ.SafeURL(p.BasePath + "/settings/import") } method="POST" enctype="multipart/form-data" class="space-y-3">
@@ -113,7 +113,7 @@ templ SettingsPage(p SettingsParams) {
 						<button type="submit" class="btn-primary">Import</button>
 					</form>
 				</div>
-				<div class="border border-line rounded-lg p-5">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
 					<h2 class="text-[13px] font-medium text-white mb-1">Database Maintenance</h2>
 					<p class="text-[12px] text-muted-light mb-4">
 						VACUUM reclaims unused space from deleted rows and rebuilds the database file.

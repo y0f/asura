@@ -72,7 +72,7 @@ func AgentListPage(p AgentListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Agents) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"border border-line rounded-lg overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Location</th><th class=\"th\">Status</th><th class=\"th\">Last Seen</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><table class=\"w-full\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Location</th><th class=\"th\">Status</th><th class=\"th\">Last Seen</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -174,25 +174,47 @@ func AgentListPage(p AgentListParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, " <div class=\"mt-4 border border-line rounded-lg p-4\"><p class=\"text-[12px] text-muted-light mb-2\">Agents run checks from remote locations and report back to this server.</p><p class=\"text-[12px] text-muted\">Create an agent, then run the agent binary on a remote server:</p><pre class=\"mt-2 text-[11px] text-muted-light bg-surface-200 rounded px-3 py-2 font-mono overflow-x-auto\">asura-agent --server https://your-server.com --token &lt;agent-token&gt;</pre></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, " <div class=\"mt-4 border border-line-light rounded-xl p-4\"><p class=\"text-[12px] text-muted-light mb-2\">Agents run checks from remote locations and report back to this server.</p><p class=\"text-[12px] text-muted\">Create an agent, then run the agent binary on a remote server:</p><pre class=\"mt-2 text-[11px] text-muted-light bg-surface-200 rounded px-3 py-2 font-mono overflow-x-auto\">asura-agent --server https://your-server.com --token &lt;agent-token&gt;</pre></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div x-show=\"showForm\" x-cloak x-transition:enter=\"transition-opacity\" x-transition:enter-start=\"opacity-0\" x-transition:enter-end=\"opacity-100\" x-transition:leave=\"transition-opacity\" x-transition:leave-start=\"opacity-100\" x-transition:leave-end=\"opacity-0\" class=\"fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4\" @click.self=\"showForm = false\"><div class=\"bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm\" x-show=\"showForm\" x-transition @click.stop><h3 class=\"text-[15px] font-medium text-white mb-4\">New Agent</h3><form method=\"POST\" action=\"")
+			templ_7745c5c3_Var6 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<form method=\"POST\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var7 templ.SafeURL
+				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/agents"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/agents.templ`, Line: 93, Col: 70}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required placeholder=\"US-East, EU-West, etc.\" class=\"form-input\"></div><div><label class=\"form-label\">Location</label> <input type=\"text\" name=\"location\" placeholder=\"New York, Frankfurt, etc.\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = FormModal("showForm", "max-w-sm", "'New Agent'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var6 templ.SafeURL
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/agents"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/agents.templ`, Line: 95, Col: 71}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required placeholder=\"US-East, EU-West, etc.\" class=\"form-input\"></div><div><label class=\"form-label\">Location</label> <input type=\"text\" name=\"location\" placeholder=\"New York, Frankfurt, etc.\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

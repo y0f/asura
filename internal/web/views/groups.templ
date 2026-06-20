@@ -39,7 +39,7 @@ templ GroupListPage(p GroupListParams) {
 				}
 			</div>
 			if len(p.Groups) > 0 {
-				<div class="border border-line rounded-lg overflow-hidden">
+				<div class="border border-line-light rounded-xl overflow-hidden">
 					<table class="w-full">
 						<thead>
 							<tr class="border-b border-line text-left">
@@ -76,16 +76,13 @@ templ GroupListPage(p GroupListParams) {
 					</table>
 				</div>
 			} else {
-				<div class="border border-line rounded-lg px-4 py-16 text-center">
+				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 					<p class="text-muted text-[13px] mb-2">No groups configured</p>
 					<button @click="resetForm(); showForm = true" class="text-[12px] text-brand hover:text-brand/80 transition-colors">Create one</button>
 				</div>
 			}
-			<!-- Modal -->
-			<div x-show="showForm" x-cloak x-transition:enter="transition-opacity" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="showForm = false">
-				<div class="bg-surface-100 border border-line rounded-lg p-5 w-full max-w-sm" x-show="showForm" x-transition @click.stop>
-					<h3 class="text-[15px] font-medium text-white mb-4" x-text="editId ? 'Edit Group' : 'New Group'"></h3>
-					<form method="POST" action={ templ.SafeURL(p.BasePath + "/groups") } data-base-action={ p.BasePath + "/groups/" } @submit="if(editId) $el.action = $el.dataset.baseAction + editId" class="space-y-3">
+			@FormModal("showForm", "max-w-sm", "editId ? 'Edit Group' : 'New Group'") {
+				<form method="POST" action={ templ.SafeURL(p.BasePath + "/groups") } data-base-action={ p.BasePath + "/groups/" } @submit="if(editId) $el.action = $el.dataset.baseAction + editId" class="space-y-3">
 						<div>
 							<label class="form-label">Name</label>
 							<input type="text" name="name" x-model="formData.name" required class="form-input"/>
@@ -100,8 +97,7 @@ templ GroupListPage(p GroupListParams) {
 							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
 						</div>
 					</form>
-				</div>
-			</div>
+			}
 		</div>
 	}
 }
@@ -145,7 +141,7 @@ templ GroupDetailPage(p GroupDetailParams) {
 					</div>
 				</div>
 			</div>
-			<div class="border border-line rounded-lg overflow-hidden">
+			<div class="border border-line-light rounded-xl overflow-hidden">
 				if mons := p.monitors(); len(mons) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[640px]">
