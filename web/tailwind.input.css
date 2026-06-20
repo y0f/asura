@@ -116,9 +116,16 @@ html[data-theme="light"] body {
 .tabular, td, th { font-variant-numeric: tabular-nums; }
 
 /* ── Scrollbars / misc carried from the old shell ──────────────────────────── */
-::-webkit-scrollbar { width: 3px; height: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-line-light); border-radius: 3px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-surface-100); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-muted-light);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-muted-light) 70%, var(--color-white)); }
+* { scrollbar-width: thin; scrollbar-color: var(--color-muted-light) var(--color-surface-100); }
 ::selection { background: rgba(0, 128, 255, 0.15); }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
