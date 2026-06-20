@@ -16,7 +16,7 @@ templ ConfirmModal() {
 				x-transition:leave="transition ease-in duration-100"
 				x-transition:leave-start="opacity-100"
 				x-transition:leave-end="opacity-0"
-				class="fixed inset-0 bg-black/50"
+				class="modal-backdrop fixed inset-0 bg-black/60"
 				@click="open = false"
 			></div>
 			<div
@@ -27,20 +27,20 @@ templ ConfirmModal() {
 				x-transition:leave="transition ease-in duration-100"
 				x-transition:leave-start="opacity-100 scale-100"
 				x-transition:leave-end="opacity-0 scale-95"
-				class="relative z-10 w-full max-w-sm border border-line rounded-lg bg-surface-50 p-5 shadow-lg"
+				class="modal-panel relative z-10 w-full max-w-sm border border-line rounded-xl bg-surface-50 p-5 shadow-2xl shadow-black/50"
 			>
 				<p class="text-[13px] text-muted-light mb-5" x-text="message"></p>
 				<div class="flex items-center justify-end gap-2">
 					<button
 						@click="open = false"
 						type="button"
-						class="px-3 py-1.5 text-[12px] text-muted border border-line rounded hover:text-muted-light hover:border-line-light transition-colors"
+						class="btn-secondary btn-press px-3 py-1.5 text-[12px] rounded"
 					>Cancel</button>
 					<template x-if="url">
 						<form method="POST" :action="url">
 							<button
 								type="submit"
-								class="px-3 py-1.5 text-[12px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors"
+								class="btn-danger btn-press px-3 py-1.5 text-[12px] rounded"
 							>Confirm</button>
 						</form>
 					</template>
@@ -48,7 +48,7 @@ templ ConfirmModal() {
 						<button
 							type="button"
 							@click="callback(); open = false"
-							class="px-3 py-1.5 text-[12px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors"
+							class="btn-danger btn-press px-3 py-1.5 text-[12px] rounded"
 						>Confirm</button>
 					</template>
 				</div>
@@ -67,10 +67,10 @@ templ Toast(kind, msg string) {
 		x-transition:leave="transition ease-in duration-150"
 		x-transition:leave-start="opacity-100 translate-x-0"
 		x-transition:leave-end="opacity-0 translate-x-2"
-		class={ "mb-6 px-4 py-2.5 border rounded text-[13px] flex items-center justify-between",
-			templ.KV("border-emerald-500/15 text-emerald-400", kind == "success"),
-			templ.KV("border-red-500/15 text-red-400", kind == "error"),
-			templ.KV("border-amber-500/15 text-amber-400", kind == "warning") }
+		class={ "toast-in mb-6 px-4 py-2.5 border rounded-lg text-[13px] flex items-center justify-between",
+			templ.KV("border-emerald-500/15 bg-emerald-500/5 text-emerald-400", kind == "success"),
+			templ.KV("border-red-500/15 bg-red-500/5 text-red-400", kind == "error"),
+			templ.KV("border-amber-500/15 bg-amber-500/5 text-amber-400", kind == "warning") }
 	>
 		<span>{ msg }</span>
 		<button @click="show=false" class={ "ml-4 opacity-30 hover:opacity-100 transition-opacity",
@@ -105,18 +105,108 @@ templ DeleteButton(action, message string) {
 }
 
 templ StatCard(label, value, colorClass string) {
-	<div class="border border-line rounded-lg px-4 py-3">
+	<div class="lift border border-line rounded-lg bg-surface-50/40 px-4 py-3">
 		<div class="stat-label">{ label }</div>
 		<div class={ "text-2xl font-semibold tabular-nums", colorClass }>{ value }</div>
 	</div>
 }
 
 templ EmptyState(message, actionHref, actionLabel string) {
-	<div class="border border-line rounded-lg px-4 py-12 text-center">
+	<div class="border border-line rounded-lg bg-surface-50/40 px-4 py-12 text-center">
 		<p class="text-muted text-[13px] mb-3">{ message }</p>
 		if actionHref != "" {
 			<a href={ templ.SafeURL(actionHref) } class="text-[12px] text-brand hover:text-brand/80 transition-colors">{ actionLabel }</a>
 		}
+	</div>
+}
+
+// PageHeader is the standard page title block: a title + optional description on
+// the left, and an actions slot (buttons) on the right.
+templ PageHeader(title, description string) {
+	<div class="flex items-start justify-between gap-4 mb-6">
+		<div class="min-w-0">
+			<h2 class="text-[15px] font-semibold text-white tracking-tight">{ title }</h2>
+			if description != "" {
+				<p class="text-[12px] text-muted mt-0.5">{ description }</p>
+			}
+		</div>
+		<div class="flex items-center gap-2 shrink-0">
+			{ children... }
+		</div>
+	</div>
+}
+
+// Card is a standard surface container with an optional uppercase title.
+templ Card(title string) {
+	<div class="border border-line rounded-lg bg-surface-50/40 p-5">
+		if title != "" {
+			<h2 class="text-[11px] text-muted uppercase tracking-widest mb-4">{ title }</h2>
+		}
+		{ children... }
+	</div>
+}
+
+// Badge is a status pill. tone is one of: blue, emerald, yellow, red, zinc.
+templ Badge(text, tone string) {
+	<span class={ "badge", "badge-" + tone }>{ text }</span>
+}
+
+// Switch is an animated toggle that POSTs via HTMX on change.
+templ Switch(postURL, target string, checked bool, label string) {
+	<label class="switch gap-2.5">
+		<input
+			type="checkbox"
+			if checked {
+				checked
+			}
+			hx-post={ postURL }
+			hx-target={ target }
+			hx-swap="outerHTML"
+		/>
+		<span class="switch-track"><span class="switch-dot"></span></span>
+		if label != "" {
+			<span class="text-[13px] text-muted-light">{ label }</span>
+		}
+	</label>
+}
+
+// SwitchInput is the same animated toggle as a plain form field.
+templ SwitchInput(name string, checked bool, label string) {
+	<label class="switch gap-2.5">
+		<input
+			type="checkbox"
+			name={ name }
+			value="true"
+			if checked {
+				checked
+			}
+		/>
+		<span class="switch-track"><span class="switch-dot"></span></span>
+		if label != "" {
+			<span class="text-[13px] text-muted-light">{ label }</span>
+		}
+	</label>
+}
+
+// Modal is a reusable dialog: a secondary trigger button + a centered panel with
+// a sticky header and a body slot. Local Alpine scope.
+templ Modal(triggerLabel, title string) {
+	<div x-data="{open:false}" class="inline-block">
+		<button type="button" @click="open=true" class="btn-secondary btn-press px-3 py-1.5 rounded text-[13px]">{ triggerLabel }</button>
+		<div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="open=false">
+			<div class="modal-backdrop absolute inset-0 bg-black/60" @click="open=false"></div>
+			<div class="modal-panel relative z-10 w-full max-w-lg rounded-xl border border-line bg-surface-50 shadow-2xl shadow-black/50">
+				<div class="flex items-center justify-between border-b border-line px-5 py-3">
+					<h3 class="text-[13px] font-semibold text-white">{ title }</h3>
+					<button @click="open=false" class="icon-btn -mr-2" aria-label="Close">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+					</button>
+				</div>
+				<div class="p-5">
+					{ children... }
+				</div>
+			</div>
+		</div>
 	</div>
 }
 

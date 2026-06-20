@@ -1,0 +1,173 @@
+package views
+
+import "encoding/json"
+
+// CommandPalette is the app-wide global search: a Vercel-style ⌘K palette.
+// Opened with ⌘K / Ctrl+K / "/", it filters the navigation destinations as you
+// type and jumps to the highlighted page on Enter. Rendered once per page in the
+// app shell. The index is purely client-side — no backend round-trip.
+templ CommandPalette(p LayoutParams) {
+	<div
+		x-data="cmdPalette()"
+		data-nav={ navIndexJSON(p.BasePath) }
+		@keydown.window="hotkey($event)"
+		@cmdk-open.window="openPalette()"
+	>
+		<div x-show="open" x-cloak class="fixed inset-0 z-50" @keydown.escape.window="close()">
+			<div class="modal-backdrop absolute inset-0 bg-black/60 backdrop-blur-sm" @click="close()"></div>
+			<div class="relative mx-auto mt-[14vh] w-full max-w-xl px-4">
+				<div
+					class="modal-panel overflow-hidden rounded-xl border border-line-light bg-surface-50/95 shadow-2xl shadow-black/60 ring-1 ring-white/5 backdrop-blur-xl"
+					x-show="open"
+					x-transition:enter="transition ease-out duration-150"
+					x-transition:enter-start="opacity-0 -translate-y-2 scale-[0.98]"
+					x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+				>
+					<div class="flex items-center gap-3 px-4 border-b border-line">
+						<svg class="w-4 h-4 text-muted shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+						<input
+							x-ref="input"
+							type="search"
+							autocomplete="off"
+							role="combobox"
+							aria-controls="cmd-list"
+							aria-label="Search pages"
+							:aria-expanded="results.length > 0"
+							:aria-activedescendant="results.length ? 'cmd-opt-' + active : null"
+							placeholder="Search monitors, incidents, settings…"
+							class="cmdk-input flex-1 appearance-none border-0 bg-transparent py-3.5 text-[13px] text-white placeholder-muted outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none"
+							x-model="q"
+							@input="filter()"
+							@keydown.down.prevent="move(1)"
+							@keydown.up.prevent="move(-1)"
+							@keydown.enter.prevent="go()"
+						/>
+						<kbd class="hidden sm:inline-flex items-center rounded border border-line-light bg-surface-200/60 px-1.5 py-0.5 text-[10px] font-mono text-muted">esc</kbd>
+					</div>
+					<div id="cmd-list" role="listbox" aria-label="Search results" x-ref="list" class="max-h-[22rem] overflow-y-auto p-1.5">
+						<template x-for="(h, i) in results" :key="h.href">
+							<a
+								:href="h.href"
+								:id="'cmd-opt-' + i"
+								role="option"
+								:aria-selected="i === active"
+								:data-active="i === active"
+								@mouseenter="active = i"
+								class="cmdk-hit group flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer"
+								:class="i === active && 'is-active'"
+							>
+								<span class="inline-flex shrink-0 items-center justify-center min-w-[4.5rem] rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-surface-200/70 text-muted-light" x-text="h.group"></span>
+								<span class="min-w-0 flex-1">
+									<span class="block truncate text-[13px] text-white" x-text="h.label"></span>
+									<span class="block truncate text-[11px] text-muted" x-text="h.desc"></span>
+								</span>
+								<svg class="w-4 h-4 text-muted opacity-0 transition-opacity" :class="i === active && 'opacity-100'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+							</a>
+						</template>
+						<div x-show="results.length === 0" class="px-3 py-10 text-center text-[13px] text-muted">No results for "<span class="text-muted-light" x-text="q"></span>".</div>
+					</div>
+					<div class="flex items-center gap-4 border-t border-line px-4 py-2.5 text-[11px] text-muted">
+						<span class="flex items-center gap-1.5">
+							@kbdIcon("M12 19V5M5 12l7-7 7 7")
+							@kbdIcon("M12 5v14M19 12l-7 7-7-7")
+							<span class="ml-px">to navigate</span>
+						</span>
+						<span class="flex items-center gap-1.5">
+							@kbdIcon("M9 10l-5 5 5 5M4 15h11a4 4 0 0 0 4-4V4")
+							<span class="ml-px">to select</span>
+						</span>
+						<span class="hidden sm:flex items-center gap-1.5">
+							<kbd class="inline-flex h-5 items-center justify-center rounded border border-line-light bg-surface-200/60 px-1.5 text-[10px] font-medium text-muted">esc</kbd>
+							<span class="ml-px">to close</span>
+						</span>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	@cmdPaletteScript()
+}
+
+templ kbdIcon(d string) {
+	<kbd class="inline-flex h-5 w-5 items-center justify-center rounded border border-line-light bg-surface-200/60 text-muted">
+		<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d={ d }></path></svg>
+	</kbd>
+}
+
+templ cmdPaletteScript() {
+	<script>
+		function cmdPalette() {
+			return {
+				open: false, q: "", active: 0, all: [], results: [],
+				init() {
+					try { this.all = JSON.parse(this.$el.dataset.nav || "[]"); }
+					catch (e) { this.all = []; }
+					this.results = this.all;
+				},
+				hotkey(e) {
+					const cmdK = (e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey);
+					const slash = e.key === "/" && !this.typing(e.target);
+					if (cmdK || slash) { e.preventDefault(); this.toggle(); }
+				},
+				typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); },
+				toggle() { this.open ? this.close() : this.openPalette(); },
+				openPalette() {
+					this.open = true; this.q = ""; this.filter();
+					this.$nextTick(() => { if (this.$refs.input) this.$refs.input.focus(); });
+				},
+				close() { this.open = false; this.q = ""; },
+				filter() {
+					const q = this.q.trim().toLowerCase();
+					this.results = q
+						? this.all.filter(h => (h.label + " " + h.desc + " " + h.group).toLowerCase().includes(q))
+						: this.all;
+					this.active = 0;
+				},
+				move(d) {
+					if (!this.results.length) return;
+					this.active = (this.active + d + this.results.length) % this.results.length;
+					this.$nextTick(() => {
+						const el = this.$refs.list && this.$refs.list.querySelector('[data-active="true"]');
+						if (el) el.scrollIntoView({ block: "nearest" });
+					});
+				},
+				go() { const h = this.results[this.active]; if (h) window.location.href = h.href; },
+			};
+		}
+	</script>
+}
+
+type navSearchItem struct {
+	Label string `json:"label"`
+	Desc  string `json:"desc"`
+	Href  string `json:"href"`
+	Group string `json:"group"`
+}
+
+func navIndexJSON(basePath string) string {
+	items := []navSearchItem{
+		{"Dashboard", "Overview of monitors and incidents", basePath + "/", "Home"},
+		{"Monitors", "All monitors and their status", basePath + "/monitors", "Monitoring"},
+		{"New Monitor", "Create a new monitor", basePath + "/monitors/new", "Monitoring"},
+		{"Groups", "Monitor groups", basePath + "/groups", "Monitoring"},
+		{"Tags", "Monitor tags", basePath + "/tags", "Monitoring"},
+		{"Incidents", "Incident history and active incidents", basePath + "/incidents", "Alerting"},
+		{"Notifications", "Notification channels", basePath + "/notifications", "Alerting"},
+		{"Notification History", "Sent notification log", basePath + "/notifications/history", "Alerting"},
+		{"Escalation Policies", "On-call escalation rules", basePath + "/escalation-policies", "Alerting"},
+		{"On-Call", "On-call rotations", basePath + "/on-call", "Alerting"},
+		{"SLA Report", "Uptime and SLA reporting", basePath + "/sla", "Operations"},
+		{"Maintenance", "Scheduled maintenance windows", basePath + "/maintenance", "Operations"},
+		{"Status Pages", "Public status pages", basePath + "/status-pages", "Operations"},
+		{"Logs", "Request logs", basePath + "/logs", "System"},
+		{"Audit", "Audit log", basePath + "/audit", "System"},
+		{"Agents", "Remote monitoring agents", basePath + "/agents", "System"},
+		{"Proxies", "Outbound proxies", basePath + "/proxies", "System"},
+		{"Settings", "Application settings", basePath + "/settings", "System"},
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
