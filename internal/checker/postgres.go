@@ -68,12 +68,12 @@ func (c *PostgreSQLChecker) Check(ctx context.Context, monitor *storage.Monitor)
 	if n > 0 && buf[0] == 'R' {
 		return &Result{Status: "up", ResponseTime: elapsed, Message: "PostgreSQL accepting connections"}, nil
 	}
-	if n > 0 && buf[0] == 'E' {
+	if isPGErrorResponse(buf[:n]) {
 		msg := extractPGError(buf[:n])
 		return &Result{Status: "up", ResponseTime: elapsed, Message: "PostgreSQL up: " + msg}, nil
 	}
 
-	return &Result{Status: "up", ResponseTime: elapsed, Message: "PostgreSQL responded"}, nil
+	return &Result{Status: "down", ResponseTime: elapsed, Message: "unexpected PostgreSQL response"}, nil
 }
 
 func buildStartupMessage(user, database string) []byte {
@@ -96,6 +96,14 @@ func buildStartupMessage(user, database string) []byte {
 	binary.BigEndian.PutUint32(msg, uint32(4+len(payload)))
 	copy(msg[4:], payload)
 	return msg
+}
+
+func isPGErrorResponse(buf []byte) bool {
+	if len(buf) < 5 || buf[0] != 'E' {
+		return false
+	}
+	length := binary.BigEndian.Uint32(buf[1:5])
+	return length >= 4 && length <= uint32(len(buf)-1)
 }
 
 func extractPGError(buf []byte) string {

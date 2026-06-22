@@ -27,24 +27,10 @@ func (c *UDPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 	}
 
 	timeout := time.Duration(monitor.Timeout) * time.Second
-
-	if !c.AllowPrivate {
-		host, _, _ := net.SplitHostPort(monitor.Target)
-		if host == "" {
-			host = monitor.Target
-		}
-		ips, err := net.LookupIP(host)
-		if err == nil {
-			for _, ip := range ips {
-				if safenet.IsPrivateIP(ip) {
-					return &Result{Status: "down", Message: "private IP targets not allowed"}, nil
-				}
-			}
-		}
-	}
+	dialer := &net.Dialer{Timeout: timeout, Control: safenet.MaybeDialControl(c.AllowPrivate)}
 
 	start := time.Now()
-	conn, err := net.DialTimeout("udp", monitor.Target, timeout)
+	conn, err := dialer.DialContext(ctx, "udp", monitor.Target)
 	elapsed := time.Since(start).Milliseconds()
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("dial failed: %v", err)}, nil

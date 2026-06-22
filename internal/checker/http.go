@@ -68,7 +68,7 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	applyBodyAndHeaders(req, settings)
 
 	if settings.AuthMethod == "oauth2" {
-		token, err := fetchOAuth2Token(ctx, monitor.ID, settings)
+		token, err := fetchOAuth2Token(ctx, monitor.ID, settings, c.AllowPrivate)
 		if err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("oauth2 token fetch failed: %v", err)}, nil
 		}
@@ -108,15 +108,11 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	elapsed := time.Since(start).Milliseconds()
 
 	if err != nil {
-		if ue, ok := err.(*url.Error); ok && ue.Err == http.ErrUseLastResponse {
-			// not actually an error — we just don't follow redirects
-		} else {
-			return &Result{
-				Status:       "down",
-				ResponseTime: elapsed,
-				Message:      fmt.Sprintf("request failed: %v", err),
-			}, nil
-		}
+		return &Result{
+			Status:       "down",
+			ResponseTime: elapsed,
+			Message:      fmt.Sprintf("request failed: %v", err),
+		}, nil
 	}
 	defer resp.Body.Close()
 
@@ -225,7 +221,7 @@ func applyAuthentication(req *http.Request, settings storage.HTTPSettings) {
 	}
 }
 
-func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTTPSettings) (string, error) {
+func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTTPSettings, allowPrivate bool) (string, error) {
 	val, _ := oauth2TokenCache.LoadOrStore(monitorID, &oauth2CachedToken{})
 	cached := val.(*oauth2CachedToken)
 
@@ -254,7 +250,16 @@ func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTT
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 10 * time.Second,
+				Control: safenet.MaybeDialControl(allowPrivate),
+			}).DialContext,
+			DisableKeepAlives: true,
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request: %w", err)

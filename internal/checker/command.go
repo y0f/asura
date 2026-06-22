@@ -57,6 +57,18 @@ func (c *CommandChecker) Check(ctx context.Context, monitor *storage.Monitor) (*
 	}
 	settings.Command = cleanCmd
 
+	// Args are admin-controlled by design and passed directly to exec without a
+	// shell, so there is no shell-injection vector. Reject NUL and newline as a
+	// minimal hardening measure against malformed or smuggled arguments.
+	for _, arg := range settings.Args {
+		if strings.ContainsAny(arg, "\x00\n\r") {
+			return &Result{
+				Status:  "down",
+				Message: "command argument contains illegal control character",
+			}, nil
+		}
+	}
+
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, settings.Command, settings.Args...)
 

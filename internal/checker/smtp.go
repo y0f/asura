@@ -58,15 +58,6 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	}
 	defer client.Close()
 
-	if settings.ExpectBanner != "" {
-		buf := make([]byte, 1024)
-		n, _ := conn.Read(buf)
-		banner := string(buf[:n])
-		if !strings.Contains(banner, settings.ExpectBanner) {
-			return &Result{Status: "down", ResponseTime: elapsed, Message: "unexpected banner"}, nil
-		}
-	}
-
 	ehloHost := "asura"
 	if err := client.Hello(ehloHost); err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("EHLO failed: %v", err)}, nil
@@ -75,7 +66,7 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	if settings.STARTTLS {
 		ok, _ := client.Extension("STARTTLS")
 		if ok {
-			if err := client.StartTLS(&tls.Config{ServerName: host, InsecureSkipVerify: true}); err != nil {
+			if err := client.StartTLS(&tls.Config{ServerName: host, InsecureSkipVerify: false}); err != nil {
 				return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("STARTTLS failed: %v", err)}, nil
 			}
 		} else {
