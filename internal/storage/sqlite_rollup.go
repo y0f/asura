@@ -9,20 +9,39 @@ import (
 func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 	_, err := s.writeDB.ExecContext(ctx,
 		`INSERT OR REPLACE INTO check_result_hourly (monitor_id, hour, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
-		 SELECT monitor_id, ? AS hour,
-		        CAST(AVG(response_time) AS INTEGER),
-		        MIN(response_time),
-		        MAX(response_time),
-		        CAST(response_time AS INTEGER),
-		        SUM(CASE WHEN status='up' THEN 1 ELSE 0 END),
-		        SUM(CASE WHEN status IN ('down','degraded') THEN 1 ELSE 0 END),
-		        COUNT(*)
-		 FROM check_results
-		 WHERE created_at >= ? AND created_at < ?
-		 GROUP BY monitor_id`,
-		hour,
+		 WITH windowed AS (
+		   SELECT monitor_id, response_time,
+		          ROW_NUMBER() OVER (PARTITION BY monitor_id ORDER BY response_time) AS rn,
+		          COUNT(*)     OVER (PARTITION BY monitor_id)                         AS n
+		   FROM check_results
+		   WHERE created_at >= ? AND created_at < ?
+		 ),
+		 p95 AS (
+		   SELECT monitor_id, COALESCE(MIN(CASE WHEN rn >= n * 0.95 THEN response_time END), 0) AS p95_rt
+		   FROM windowed GROUP BY monitor_id
+		 ),
+		 agg AS (
+		   SELECT monitor_id,
+		          CAST(AVG(response_time) AS INTEGER) AS avg_rt,
+		          MIN(response_time) AS min_rt,
+		          MAX(response_time) AS max_rt,
+		          SUM(CASE WHEN status='up' THEN 1 ELSE 0 END) AS up_count,
+		          SUM(CASE WHEN status IN ('down','degraded') THEN 1 ELSE 0 END) AS down_count,
+		          COUNT(*) AS total
+		   FROM check_results
+		   WHERE created_at >= ? AND created_at < ?
+		   GROUP BY monitor_id
+		 )
+		 SELECT agg.monitor_id, ? AS hour,
+		        agg.avg_rt, agg.min_rt, agg.max_rt,
+		        COALESCE(p95.p95_rt, 0),
+		        agg.up_count, agg.down_count, agg.total
+		 FROM agg LEFT JOIN p95 ON p95.monitor_id = agg.monitor_id`,
 		hour+":00:00Z",
-		hourEnd(hour)+":00:00Z")
+		hourEnd(hour)+":00:00Z",
+		hour+":00:00Z",
+		hourEnd(hour)+":00:00Z",
+		hour)
 	return err
 }
 

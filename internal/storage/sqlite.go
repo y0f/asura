@@ -2,7 +2,10 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,8 +38,10 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 	// mattn-style _journal_mode/_busy_timeout keys are silently ignored.
 	pragmas := "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)"
 
-	// Write connection: single connection, WAL mode
-	writeDB, err := sql.Open("sqlite", "file:"+path+pragmas)
+	// auto_vacuum is a write operation and must be set before any table is
+	// created, so it goes only on the write connection and only takes effect on
+	// a fresh database. The read-only pool must not set it.
+	writeDB, err := sql.Open("sqlite", "file:"+path+pragmas+"&_pragma=auto_vacuum(INCREMENTAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open write db: %w", err)
 	}
@@ -59,7 +64,67 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
+	if err := hashLegacyTokens(writeDB); err != nil {
+		readDB.Close()
+		writeDB.Close()
+		return nil, fmt.Errorf("hash legacy tokens: %w", err)
+	}
+
 	return &SQLiteStore{readDB: readDB, writeDB: writeDB, dbPath: path}, nil
+}
+
+// hashLegacyTokens is a one-time data migration that rewrites any agent or
+// heartbeat token still stored in plaintext as its sha256-hex digest. SQLite
+// has no sha256 builtin so this cannot be expressed in SQL.
+func hashLegacyTokens(db *sql.DB) error {
+	var done string
+	err := db.QueryRow("SELECT value FROM meta WHERE key='tokens_hashed'").Scan(&done)
+	if err == nil && done == "1" {
+		return nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("check tokens_hashed: %w", err)
+	}
+
+	for _, tbl := range []string{"agents", "heartbeats"} {
+		rows, err := db.Query("SELECT id, token FROM " + tbl)
+		if err != nil {
+			return fmt.Errorf("select %s tokens: %w", tbl, err)
+		}
+		type tok struct {
+			id    int64
+			token string
+		}
+		var pending []tok
+		for rows.Next() {
+			var t tok
+			if err := rows.Scan(&t.id, &t.token); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan %s token: %w", tbl, err)
+			}
+			// Hash every legacy row unconditionally: a random 64-hex agent token is
+			// indistinguishable from a sha256 digest, so a length/hex check would
+			// skip genuine plaintext. The meta 'tokens_hashed' gate guarantees this
+			// runs exactly once, so there is no double-hashing risk.
+			pending = append(pending, t)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+
+		for _, t := range pending {
+			if _, err := db.Exec("UPDATE "+tbl+" SET token=? WHERE id=?", sha256Hex(t.token), t.id); err != nil {
+				return fmt.Errorf("update %s token: %w", tbl, err)
+			}
+		}
+	}
+
+	if _, err := db.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('tokens_hashed', '1')"); err != nil {
+		return fmt.Errorf("set tokens_hashed: %w", err)
+	}
+	return nil
 }
 
 func runMigrations(db *sql.DB) error {
@@ -124,6 +189,46 @@ func (s *SQLiteStore) Vacuum(ctx context.Context) error {
 	return err
 }
 
+// IncrementalVacuum reclaims free pages without rewriting the whole database.
+// It only has an effect when the database uses auto_vacuum=INCREMENTAL.
+func (s *SQLiteStore) IncrementalVacuum(ctx context.Context) error {
+	_, err := s.writeDB.ExecContext(ctx, "PRAGMA incremental_vacuum")
+	return err
+}
+
+// EnsureKDFSalt loads the persisted 16-byte PBKDF2 salt, generating and
+// storing one on first use. The returned salt is passed to NewEncryptor so the
+// derived key is stable across restarts.
+func (s *SQLiteStore) EnsureKDFSalt(ctx context.Context) ([]byte, error) {
+	var stored string
+	err := s.writeDB.QueryRowContext(ctx, "SELECT value FROM meta WHERE key='kdf_salt'").Scan(&stored)
+	if err == nil && stored != "" {
+		salt, decErr := hex.DecodeString(stored)
+		if decErr != nil {
+			return nil, fmt.Errorf("decode kdf salt: %w", decErr)
+		}
+		return salt, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("read kdf salt: %w", err)
+	}
+
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("generate kdf salt: %w", err)
+	}
+	if _, err := s.writeDB.ExecContext(ctx,
+		"INSERT OR REPLACE INTO meta (key, value) VALUES ('kdf_salt', ?)", hex.EncodeToString(salt)); err != nil {
+		return nil, fmt.Errorf("persist kdf salt: %w", err)
+	}
+	return salt, nil
+}
+
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
+
 func (s *SQLiteStore) DBSize() (int64, error) {
 	info, err := os.Stat(s.dbPath)
 	if err != nil {
@@ -186,7 +291,7 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanMonitor(row scanner) (*Monitor, error) {
+func (s *SQLiteStore) scanMonitor(row scanner) (*Monitor, error) {
 	var m Monitor
 	var tagsStr, settingsStr, assertionsStr string
 	var createdAt, updatedAt string
@@ -214,6 +319,10 @@ func scanMonitor(row scanner) (*Monitor, error) {
 	m.CreatedAt = parseTime(createdAt)
 	m.UpdatedAt = parseTime(updatedAt)
 	json.Unmarshal([]byte(tagsStr), &m.Tags)
+	settingsStr, err = s.decryptSettings(settingsStr)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt settings: %w", err)
+	}
 	m.Settings = json.RawMessage(settingsStr)
 	m.Assertions = json.RawMessage(assertionsStr)
 	m.LastCheckAt = parseTimePtr(lastCheck)

@@ -289,6 +289,7 @@ type MonitorStatus struct {
 	ConsecSuccesses     int        `json:"consec_successes"`
 	LastBodyHash        string     `json:"-"`
 	LastCertFingerprint string     `json:"-"`
+	ResponseTime        int64      `json:"response_time,omitempty"`
 	BaselineAvg         float64    `json:"baseline_avg,omitempty"`
 	BaselineStddev      float64    `json:"baseline_stddev,omitempty"`
 	BaselineUpdatedAt   *time.Time `json:"baseline_updated_at,omitempty"`

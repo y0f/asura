@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,33 +25,91 @@ func (s *SQLiteStore) IsMonitorOnStatusPage(ctx context.Context, monitorID int64
 }
 
 func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time) ([]*DailyUptime, error) {
-	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT DATE(created_at) as day,
-		        COUNT(*) as total,
-		        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
-		        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0)
-		 FROM check_results
-		 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-		 GROUP BY DATE(created_at)
-		 ORDER BY day ASC`,
-		monitorID, formatTime(from), formatTime(to))
-	if err != nil {
-		return nil, fmt.Errorf("get daily uptime: %w", err)
+	// Days strictly before today are served from the daily rollups; the current
+	// (uncovered) day falls back to a raw scan so it reflects fresh checks.
+	todayStart := time.Now().UTC().Truncate(24 * time.Hour)
+	rollupEnd := todayStart
+	if rollupEnd.After(to) {
+		rollupEnd = to
 	}
-	defer rows.Close()
 
-	var results []*DailyUptime
-	for rows.Next() {
-		var d DailyUptime
-		if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
-			return nil, err
-		}
+	byDay := make(map[string]*DailyUptime)
+	var order []string
+
+	add := func(d *DailyUptime) {
 		if d.TotalChecks > 0 {
 			d.UptimePct = float64(d.UpChecks) / float64(d.TotalChecks) * 100
 		}
-		results = append(results, &d)
+		if _, ok := byDay[d.Date]; !ok {
+			order = append(order, d.Date)
+		}
+		byDay[d.Date] = d
 	}
-	return results, rows.Err()
+
+	if rollupEnd.After(from) {
+		rows, err := s.readDB.QueryContext(ctx,
+			`SELECT day, total, up_count, down_count
+			 FROM check_result_daily
+			 WHERE monitor_id=? AND day >= ? AND day < ?
+			 ORDER BY day ASC`,
+			monitorID, from.UTC().Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
+		if err != nil {
+			return nil, fmt.Errorf("get daily uptime rollup: %w", err)
+		}
+		for rows.Next() {
+			var d DailyUptime
+			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			add(&d)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+
+	rawFrom := todayStart
+	if rawFrom.Before(from) {
+		rawFrom = from
+	}
+	if rawFrom.Before(to) {
+		rows, err := s.readDB.QueryContext(ctx,
+			`SELECT DATE(created_at) as day,
+			        COUNT(*) as total,
+			        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
+			        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0)
+			 FROM check_results
+			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
+			 GROUP BY DATE(created_at)
+			 ORDER BY day ASC`,
+			monitorID, formatTime(rawFrom), formatTime(to))
+		if err != nil {
+			return nil, fmt.Errorf("get daily uptime: %w", err)
+		}
+		for rows.Next() {
+			var d DailyUptime
+			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			add(&d)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+
+	sort.Strings(order)
+	results := make([]*DailyUptime, 0, len(order))
+	for _, day := range order {
+		results = append(results, byDay[day])
+	}
+	return results, nil
 }
 
 // --- Status Pages ---
@@ -274,6 +333,10 @@ func (s *SQLiteStore) ListStatusPageMonitorsWithStatus(ctx context.Context, page
 		m.CreatedAt = parseTime(createdAt)
 		m.UpdatedAt = parseTime(updatedAt)
 		json.Unmarshal([]byte(tagsStr), &m.Tags)
+		settingsStr, err = s.decryptSettings(settingsStr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("decrypt settings: %w", err)
+		}
 		m.Settings = json.RawMessage(settingsStr)
 		m.Assertions = json.RawMessage(assertionsStr)
 		m.LastCheckAt = parseTimePtr(lastCheck)
