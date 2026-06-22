@@ -136,10 +136,6 @@ func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
 	h.setToast(w, "success", msg)
 }
 
-func (h *Handler) setError(w http.ResponseWriter, msg string) {
-	h.setToast(w, "error", msg)
-}
-
 func (h *Handler) audit(r *http.Request, action, entity string, entityID int64, detail string) {
 	entry := &storage.AuditEntry{
 		Action:     action,

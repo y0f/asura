@@ -55,11 +55,11 @@
   <li><strong>Read pool</strong>: Multiple concurrent readers via <code>readerPool()</code>. all SELECT queries</li>
 </ul>
 
-<p>Reads never block on writes. The <code>Store</code> interface has 89 methods covering everything from monitors to request logs.</p>
+<p>Reads never block on writes. The <code>Store</code> interface covers everything from monitors to request logs.</p>
 
 <h2>Checker Registry</h2>
 
-<p>Each checker implements <code>Checker</code> with a <code>Check(ctx, monitor)</code> method and gets registered at startup. 11 implementations:</p>
+<p>Each checker implements <code>Checker</code> with a <code>Check(ctx, monitor)</code> method and gets registered at startup. 17 implementations:</p>
 
 <table>
   <thead>
@@ -77,6 +77,12 @@
     <tr><td>Domain</td><td>WHOIS expiry lookups</td></tr>
     <tr><td>gRPC</td><td>gRPC health check protocol</td></tr>
     <tr><td>MQTT</td><td>MQTT 3.1.1 connect + subscribe</td></tr>
+    <tr><td>HTTP Multi-Step</td><td>Chained HTTP requests with variable extraction</td></tr>
+    <tr><td>SMTP</td><td>Mail server connect (optional STARTTLS)</td></tr>
+    <tr><td>SSH</td><td>SSH server handshake</td></tr>
+    <tr><td>Redis</td><td>Redis PING</td></tr>
+    <tr><td>PostgreSQL</td><td>PostgreSQL connection check</td></tr>
+    <tr><td>UDP</td><td>UDP send/expect</td></tr>
   </tbody>
 </table>
 
@@ -88,7 +94,7 @@
 │   ├── analytics/     # Request log analytics and rollups
 │   ├── api/           # API handlers (JSON endpoints)
 │   ├── assertion/     # Assertion engine for check results
-│   ├── checker/       # 11 protocol checkers
+│   ├── checker/       # 17 protocol checkers
 │   ├── config/        # YAML configuration loading
 │   ├── diff/          # Content change diff computation
 │   ├── httputil/      # HTTP utilities (ID parsing, JSON helpers)
@@ -97,7 +103,7 @@
 │   ├── notifier/      # 13 notification channel senders
 │   ├── safenet/       # SSRF protection (private IP blocking)
 │   ├── server/        # HTTP server, routes, middleware
-│   ├── storage/       # SQLite store (89 methods), migrations
+│   ├── storage/       # SQLite store, migrations
 │   ├── totp/          # TOTP two-factor authentication
 │   ├── validate/      # Input validation
 │   └── web/           # Web UI handlers (template rendering)

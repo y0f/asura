@@ -144,12 +144,6 @@ table thead th { font-weight: 500; letter-spacing: 0.02em; }
 table tbody tr { transition: background-color 140ms ease; }
 table tbody tr:hover { background-color: color-mix(in srgb, var(--color-surface-200) 35%, transparent); }
 
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { padding-left: 0.75rem; padding-right: 0.75rem; vertical-align: middle; }
-.data-table th:first-child, .data-table td:first-child { padding-left: 0; }
-.data-table th:last-child, .data-table td:last-child { padding-right: 0; }
-.data-table tbody tr:last-child { border-bottom: 0; }
-
 /* Card lift on hover where a card opts in via .lift */
 .lift { transition: border-color 160ms ease, box-shadow 160ms ease; }
 .lift:hover {
@@ -248,8 +242,6 @@ a:focus-visible {
 }
 .icon-btn:hover { background-color: var(--color-surface-200); color: var(--color-white); }
 .icon-btn:active { transform: scale(0.92); }
-.icon-btn-danger:hover { background-color: rgba(248, 113, 113, 0.12); color: rgb(248 113 113); }
-.icon-btn-primary:hover { background-color: rgba(0, 128, 255, 0.12); color: var(--color-brand); }
 
 /* ── Badges / status pills ───────────────────────────────────────────────────
    Markup: <span class="badge badge-emerald">Active</span> */
@@ -303,9 +295,6 @@ a:focus-visible {
 .modal-backdrop { animation: vFadeIn 120ms ease-out; backdrop-filter: blur(4px); }
 @keyframes vToastIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .toast-in { animation: vToastIn 160ms ease-out both; }
-@keyframes vFlash { 0% { background-color: rgba(0, 128, 255, 0.16); } 100% { background-color: transparent; } }
-.htmx-settling.flash-on-settle, .htmx-settling .flash-on-settle { animation: vFlash 900ms ease-out both; }
-#content.htmx-settling .flash-on-settle { animation: none; }
 .htmx-indicator { opacity: 0; transition: opacity 120ms ease-in; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
 

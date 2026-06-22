@@ -215,7 +215,7 @@ var _dateFormats = []string{
 func parseWhoisExpiry(response string) (time.Time, error) {
 	for _, re := range _expiryPatterns {
 		match := re.FindStringSubmatch(response)
-		if match == nil || len(match) < 2 {
+		if len(match) < 2 {
 			continue
 		}
 		dateStr := strings.TrimSpace(match[1])

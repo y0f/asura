@@ -129,7 +129,7 @@ func (p MonitorListParams) tagFilterHref(tagID int64) string {
 	return href
 }
 
-var monitorTypes = []string{"http", "tcp", "dns", "icmp", "tls", "websocket", "command", "heartbeat", "docker", "domain", "grpc", "mqtt"}
+var monitorTypes = []string{"http", "http_multi", "tcp", "icmp", "dns", "smtp", "ssh", "tls", "domain", "redis", "postgresql", "websocket", "grpc", "mqtt", "udp", "docker", "command", "heartbeat", "manual"}
 
 func monitorListXData(ids string) string {
 	return `{

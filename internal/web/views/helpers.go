@@ -137,19 +137,6 @@ func UptimeColor(pct float64) string {
 	return "text-red-400"
 }
 
-func UptimeBarColor(pct float64, hasData bool) string {
-	if !hasData {
-		return "bg-muted/20"
-	}
-	if pct >= 99 {
-		return "bg-emerald-500"
-	}
-	if pct >= 95 {
-		return "bg-yellow-500"
-	}
-	return "bg-red-500"
-}
-
 func UptimeBarFill(pct float64, hasData bool) string {
 	if !hasData {
 		return "rgba(128,128,128,0.2)"
@@ -237,6 +224,8 @@ func TypeLabel(t string) string {
 	switch t {
 	case "http":
 		return "HTTP"
+	case "http_multi":
+		return "HTTP Multi"
 	case "tcp":
 		return "TCP"
 	case "dns":
@@ -259,6 +248,16 @@ func TypeLabel(t string) string {
 		return "gRPC"
 	case "mqtt":
 		return "MQTT"
+	case "smtp":
+		return "SMTP"
+	case "ssh":
+		return "SSH"
+	case "redis":
+		return "Redis"
+	case "postgresql":
+		return "PostgreSQL"
+	case "udp":
+		return "UDP"
 	case "manual":
 		return "Manual"
 	default:

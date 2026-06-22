@@ -256,7 +256,6 @@ templ MonitorFormPage(p MonitorFormParams) {
 						</div>
 					}
 				</div>
-				<!-- Card 3: Type-specific Settings -->
 				<div class="border border-line-light rounded-xl p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
 					<div class="flex items-center justify-between mb-4">
 						<span class="text-[11px] text-muted uppercase tracking-widest">Settings</span>
@@ -286,9 +285,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 						@monitorUDPSettings(p)
 					</div>
 				</div>
-				<!-- Card 4: Conditions -->
 				@monitorAssertions(p)
-				<!-- Card 5: Advanced -->
 				<div x-data={ advancedSectionData(p) }>
 					<button type="button" @click="showAdvanced = !showAdvanced" class="flex items-center gap-2 w-full text-left px-1 py-1 group cursor-pointer">
 						<span class="text-[11px] text-muted-light/70 uppercase tracking-widest font-semibold group-hover:text-muted-light transition-colors">Routing &amp; Behavior</span>
@@ -820,11 +817,9 @@ templ monitorAssertions(p MonitorFormParams) {
 			</button>
 		</div>
 		<input type="hidden" name="assertions_mode" :value="advancedAssertions ? 'json' : 'form'"/>
-		<!-- Advanced JSON mode -->
 		<div x-show="advancedAssertions" x-cloak>
 			<textarea name="assertions_json" rows="8" placeholder="{}" class="form-input font-mono text-[12px] resize-y">{ p.AssertionsRaw }</textarea>
 		</div>
-		<!-- Form mode -->
 		<div x-show="!advancedAssertions">
 			<input type="hidden" name="group_count" :value="conditions.groups.length"/>
 			<input type="hidden" name="condition_set_operator" :value="conditions.operator"/>
@@ -844,7 +839,6 @@ templ monitorAssertions(p MonitorFormParams) {
 						<!-- Per-group hidden structural inputs -->
 						<input type="hidden" :name="'group_' + gi + '_operator'" :value="g.operator"/>
 						<input type="hidden" :name="'group_' + gi + '_count'" :value="g.conditions.length"/>
-						<!-- Group card -->
 						<div class="border border-line/60 rounded-lg overflow-hidden">
 							<div class="flex items-center justify-between px-3 py-2 bg-surface-200/40 border-b border-line/40">
 								<div class="flex items-center gap-2">

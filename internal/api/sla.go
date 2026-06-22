@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
@@ -114,24 +113,4 @@ func (h *Handler) SLAReportExport(w http.ResponseWriter, r *http.Request) {
 		"period":  period,
 		"entries": entries,
 	})
-}
-
-func parsePeriod(r *http.Request) (int, time.Month) {
-	now := time.Now().UTC()
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err == nil {
-			return t.Year(), t.Month()
-		}
-	}
-	return now.Year(), now.Month()
-}
-
-func parseYear(r *http.Request) int {
-	if y := r.URL.Query().Get("year"); y != "" {
-		if v, err := strconv.Atoi(y); err == nil && v >= 2000 && v <= 2100 {
-			return v
-		}
-	}
-	return time.Now().UTC().Year()
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/config"
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
@@ -163,6 +164,7 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to update monitor")
 		return
 	}
+	checker.ClearOAuth2TokenCache(m.ID)
 
 	if err := h.store.SetMonitorNotificationChannels(r.Context(), m.ID, m.NotificationChannelIDs); err != nil {
 		h.logger.Error("set monitor notification channels", "error", err)

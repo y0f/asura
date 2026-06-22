@@ -88,14 +88,11 @@ func (p *Pipeline) DroppedNotifications() int64 {
 }
 
 func (p *Pipeline) Run(ctx context.Context) {
-	// Start scheduler
 	go p.scheduler.Run(ctx)
 
-	// Start worker pool
 	pool := NewPool(p.workers, p.registry, p.jobs, p.results, p.logger)
 	go pool.Run(ctx)
 
-	// Start result processor
 	p.processResults(ctx)
 }
 

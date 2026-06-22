@@ -164,7 +164,6 @@ templ NotificationListPage(p NotificationListParams) {
 					<option value="gotify">Gotify</option>
 							</select>
 						</div>
-						<!-- Settings -->
 						<div>
 							<div class="flex items-center justify-between mb-1.5">
 								<label class="form-label mb-0!">Settings</label>
@@ -174,7 +173,6 @@ templ NotificationListPage(p NotificationListParams) {
 								</button>
 							</div>
 							<input type="hidden" name="notif_settings_mode" :value="advancedNotifSettings ? 'json' : 'form'"/>
-							<!-- Advanced JSON -->
 							<div x-show="advancedNotifSettings" x-cloak>
 								<textarea name="settings_json" x-model="formData.settings_json" rows="4" class="form-input font-mono resize-y"></textarea>
 							</div>
@@ -192,7 +190,6 @@ templ NotificationListPage(p NotificationListParams) {
 		@notifMatrixFields()
 		@notifGotifyFields()
 						</div>
-						<!-- Events -->
 						<div>
 							<label class="form-label mb-2">Events</label>
 							<div class="grid grid-cols-2 gap-2">

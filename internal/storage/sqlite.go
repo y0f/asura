@@ -31,8 +31,12 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 		maxReadConns = runtime.NumCPU()
 	}
 
+	// modernc.org/sqlite expects PRAGMAs via the _pragma DSN parameter; the
+	// mattn-style _journal_mode/_busy_timeout keys are silently ignored.
+	pragmas := "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)"
+
 	// Write connection: single connection, WAL mode
-	writeDB, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_foreign_keys=ON")
+	writeDB, err := sql.Open("sqlite", "file:"+path+pragmas)
 	if err != nil {
 		return nil, fmt.Errorf("open write db: %w", err)
 	}
@@ -40,7 +44,7 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 	writeDB.SetMaxIdleConns(1)
 
 	// Read pool: multiple connections
-	readDB, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_foreign_keys=ON&mode=ro")
+	readDB, err := sql.Open("sqlite", "file:"+path+pragmas+"&mode=ro")
 	if err != nil {
 		writeDB.Close()
 		return nil, fmt.Errorf("open read db: %w", err)

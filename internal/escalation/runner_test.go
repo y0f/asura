@@ -320,30 +320,3 @@ func TestTickDeletesStateOnDisabledPolicy(t *testing.T) {
 		t.Fatal("expected state to be deleted for disabled policy")
 	}
 }
-
-func TestHelpers(t *testing.T) {
-	t.Run("MarshalUnmarshalChannelIDs", func(t *testing.T) {
-		ids := []int64{1, 5, 10}
-		s := MarshalChannelIDs(ids)
-		got := UnmarshalChannelIDs(s)
-		if len(got) != 3 || got[0] != 1 || got[1] != 5 || got[2] != 10 {
-			t.Fatalf("roundtrip failed: %v", got)
-		}
-	})
-
-	t.Run("FormatStepSummary", func(t *testing.T) {
-		if s := FormatStepSummary(nil); s != "no steps" {
-			t.Fatalf("expected 'no steps', got %q", s)
-		}
-		steps := []*storage.EscalationPolicyStep{
-			{DelayMinutes: 0},
-		}
-		if s := FormatStepSummary(steps); s != "1 step at 0m" {
-			t.Fatalf("expected '1 step at 0m', got %q", s)
-		}
-		steps = append(steps, &storage.EscalationPolicyStep{DelayMinutes: 5})
-		if s := FormatStepSummary(steps); s != "2 steps, first at 0m" {
-			t.Fatalf("expected '2 steps, first at 0m', got %q", s)
-		}
-	})
-}

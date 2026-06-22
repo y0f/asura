@@ -3,9 +3,7 @@ package escalation
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -20,7 +18,6 @@ type Runner struct {
 	dispatcher *notifier.Dispatcher
 	logger     *slog.Logger
 	interval   time.Duration
-	done       chan struct{}
 }
 
 // NewRunner creates a new escalation runner.
@@ -30,7 +27,6 @@ func NewRunner(store storage.Store, dispatcher *notifier.Dispatcher, logger *slo
 		dispatcher: dispatcher,
 		logger:     logger,
 		interval:   30 * time.Second,
-		done:       make(chan struct{}),
 	}
 }
 
@@ -42,20 +38,9 @@ func (r *Runner) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-r.done:
-			return
 		case <-ticker.C:
 			r.Tick(ctx)
 		}
-	}
-}
-
-// Stop signals the runner to stop.
-func (r *Runner) Stop() {
-	select {
-	case <-r.done:
-	default:
-		close(r.done)
 	}
 }
 
@@ -198,28 +183,4 @@ func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Moni
 // CancelEscalation removes the escalation state for an incident.
 func CancelEscalation(ctx context.Context, store storage.Store, incidentID int64) {
 	store.DeleteEscalationStateByIncident(ctx, incidentID)
-}
-
-// MarshalChannelIDs is a helper used by import/export.
-func MarshalChannelIDs(ids []int64) string {
-	b, _ := json.Marshal(ids)
-	return string(b)
-}
-
-// UnmarshalChannelIDs is a helper used by import/export.
-func UnmarshalChannelIDs(s string) []int64 {
-	var ids []int64
-	json.Unmarshal([]byte(s), &ids)
-	return ids
-}
-
-// FormatStepSummary returns a human-readable summary like "3 steps, first at 0m".
-func FormatStepSummary(steps []*storage.EscalationPolicyStep) string {
-	if len(steps) == 0 {
-		return "no steps"
-	}
-	if len(steps) == 1 {
-		return fmt.Sprintf("1 step at %dm", steps[0].DelayMinutes)
-	}
-	return fmt.Sprintf("%d steps, first at %dm", len(steps), steps[0].DelayMinutes)
 }

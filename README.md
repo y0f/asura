@@ -72,8 +72,8 @@ Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#
 | **Install** | Single binary, `scp` + run | Runtime + database + migrations |
 | **Database** | SQLite (built in) | Needs Postgres, MySQL, or Redis |
 | **Size** | ~15 MB binary, ~20 MB RAM | 100 MB+, varies by runtime |
-| **API** | Full REST API, same as web UI | Often Socket.IO or undocumented |
-| **Scale** | 1000+ monitors on a $5 VPS | Node.js alternatives hit walls at 500 |
+| **API** | Full REST API, same as web UI | Separate or undocumented API |
+| **Scale** | 1000+ monitors on a $5 VPS | Varies by runtime |
 
 ---
 

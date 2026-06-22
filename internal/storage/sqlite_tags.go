@@ -33,6 +33,19 @@ func (s *SQLiteStore) GetTag(ctx context.Context, id int64) (*Tag, error) {
 	return &t, nil
 }
 
+func (s *SQLiteStore) GetTagByName(ctx context.Context, name string) (*Tag, error) {
+	var t Tag
+	var createdAt string
+	err := s.readDB.QueryRowContext(ctx,
+		`SELECT id, name, color, created_at FROM tags WHERE name = ?`, name).
+		Scan(&t.ID, &t.Name, &t.Color, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	t.CreatedAt = parseTime(createdAt)
+	return &t, nil
+}
+
 func (s *SQLiteStore) ListTags(ctx context.Context) ([]*Tag, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT id, name, color, created_at FROM tags ORDER BY name COLLATE NOCASE ASC`)

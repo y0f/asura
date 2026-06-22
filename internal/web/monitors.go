@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/assertion"
+	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
@@ -751,6 +752,8 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		h.renderMonitorForm(w, r, lp, fd)
 		return
 	}
+
+	checker.ClearOAuth2TokenCache(id)
 
 	if err := h.store.SetMonitorNotificationChannels(r.Context(), id, channelIDs); err != nil {
 		h.logger.Error("web: set monitor notification channels", "error", err)

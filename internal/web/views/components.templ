@@ -104,109 +104,12 @@ templ DeleteButton(action, message string) {
 	</button>
 }
 
-templ StatCard(label, value, colorClass string) {
-	<div class="lift border border-line-light rounded-xl bg-surface-50/40 px-4 py-3">
-		<div class="stat-label">{ label }</div>
-		<div class={ "text-2xl font-semibold tabular-nums", colorClass }>{ value }</div>
-	</div>
-}
-
 templ EmptyState(message, actionHref, actionLabel string) {
 	<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
 		<p class="text-muted text-[13px] mb-3">{ message }</p>
 		if actionHref != "" {
 			<a href={ templ.SafeURL(actionHref) } class="text-[12px] text-brand hover:text-brand/80 transition-colors">{ actionLabel }</a>
 		}
-	</div>
-}
-
-// PageHeader is the standard page title block: a title + optional description on
-// the left, and an actions slot (buttons) on the right.
-templ PageHeader(title, description string) {
-	<div class="flex items-start justify-between gap-4 mb-6">
-		<div class="min-w-0">
-			<h2 class="text-[15px] font-semibold text-white tracking-tight">{ title }</h2>
-			if description != "" {
-				<p class="text-[12px] text-muted mt-0.5">{ description }</p>
-			}
-		</div>
-		<div class="flex items-center gap-2 shrink-0">
-			{ children... }
-		</div>
-	</div>
-}
-
-// Card is a standard surface container with an optional uppercase title.
-templ Card(title string) {
-	<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
-		if title != "" {
-			<h2 class="text-[11px] text-muted uppercase tracking-widest mb-4">{ title }</h2>
-		}
-		{ children... }
-	</div>
-}
-
-// Badge is a status pill. tone is one of: blue, emerald, yellow, red, zinc.
-templ Badge(text, tone string) {
-	<span class={ "badge", "badge-" + tone }>{ text }</span>
-}
-
-// Switch is an animated toggle that POSTs via HTMX on change.
-templ Switch(postURL, target string, checked bool, label string) {
-	<label class="switch gap-2.5">
-		<input
-			type="checkbox"
-			if checked {
-				checked
-			}
-			hx-post={ postURL }
-			hx-target={ target }
-			hx-swap="outerHTML"
-		/>
-		<span class="switch-track"><span class="switch-dot"></span></span>
-		if label != "" {
-			<span class="text-[13px] text-muted-light">{ label }</span>
-		}
-	</label>
-}
-
-// SwitchInput is the same animated toggle as a plain form field.
-templ SwitchInput(name string, checked bool, label string) {
-	<label class="switch gap-2.5">
-		<input
-			type="checkbox"
-			name={ name }
-			value="true"
-			if checked {
-				checked
-			}
-		/>
-		<span class="switch-track"><span class="switch-dot"></span></span>
-		if label != "" {
-			<span class="text-[13px] text-muted-light">{ label }</span>
-		}
-	</label>
-}
-
-// Modal is a reusable dialog: a secondary trigger button + a centered panel with
-// a sticky header and a body slot. Local Alpine scope.
-templ Modal(triggerLabel, title string) {
-	<div x-data="{open:false}" class="inline-block">
-		<button type="button" @click="open=true" class="btn-secondary btn-press px-3 py-1.5 rounded text-[13px]">{ triggerLabel }</button>
-		<div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="open=false">
-			<div class="modal-backdrop absolute inset-0 bg-black/60" @click="open=false"></div>
-			<div class="modal-panel relative z-10 w-full max-w-lg rounded-xl border border-line-light bg-surface-100 shadow-2xl shadow-black/50">
-				<div class="flex items-center justify-between border-b border-line px-5 py-3">
-					<h3 class="text-[13px] font-semibold text-white">{ title }</h3>
-					<button @click="open=false" class="icon-btn -mr-2" aria-label="Close">
-						<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
-					</button>
-				</div>
-				<div class="p-5">
-					{ children... }
-				</div>
-			</div>
-		</div>
 	</div>
 }
 
@@ -241,17 +144,6 @@ templ FormModal(show, maxWidth, titleExpr string) {
 			</div>
 		</div>
 	</div>
-}
-
-templ FilterTab(href string, active bool, label string) {
-	<a
-		href={ templ.SafeURL(href) }
-		class={ "filter-tab", templ.KV("filter-active", active), templ.KV("filter-inactive", !active) }
-	>{ label }</a>
-}
-
-templ SectionHeader(title string) {
-	<h2 class="text-[11px] text-muted uppercase tracking-widest">{ title }</h2>
 }
 
 templ FormCard(title string) {

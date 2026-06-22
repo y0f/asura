@@ -35,6 +35,12 @@ func (h *Handler) TagCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil {
+		h.setFlash(w, "Tag name already in use")
+		h.redirect(w, r, "/tags")
+		return
+	}
+
 	if err := h.store.CreateTag(r.Context(), t); err != nil {
 		h.logger.Error("web: create tag", "error", err)
 		h.setFlash(w, "Failed to create tag")
@@ -65,6 +71,12 @@ func (h *Handler) TagUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := validate.ValidateTag(t); err != nil {
 		h.setFlash(w, err.Error())
+		h.redirect(w, r, "/tags")
+		return
+	}
+
+	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil && existing.ID != id {
+		h.setFlash(w, "Tag name already in use")
 		h.redirect(w, r, "/tags")
 		return
 	}

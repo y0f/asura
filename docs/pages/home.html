@@ -43,11 +43,11 @@
   <tbody>
     <tr><td><strong>Runtime</strong></td><td>Single static binary</td><td>Node.js / Java / Python runtime</td></tr>
     <tr><td><strong>Database</strong></td><td>SQLite compiled in</td><td>Requires Postgres, MySQL, or Redis</td></tr>
-    <tr><td><strong>Binary size</strong></td><td>~15 MB</td><td>100–500 MB installed</td></tr>
+    <tr><td><strong>Binary size</strong></td><td>~15 MB</td><td>Varies by runtime</td></tr>
     <tr><td><strong>Concurrency</strong></td><td>Goroutine worker pool with channel backpressure</td><td>Event loop or thread pool</td></tr>
     <tr><td><strong>Deploy</strong></td><td><code>scp</code> binary + run</td><td>Package manager, runtime install, migrations</td></tr>
     <tr><td><strong>Config</strong></td><td>One YAML file</td><td>Multiple config files, env vars, database setup</td></tr>
-    <tr><td><strong>RAM</strong></td><td>~20 MB idle</td><td>Varies. runtime + database overhead</td></tr>
+    <tr><td><strong>RAM</strong></td><td>~20 MB idle</td><td>Varies by runtime and database</td></tr>
   </tbody>
 </table>
 

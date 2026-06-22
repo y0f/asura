@@ -1,7 +1,5 @@
 package views
 
-import "fmt"
-
 type LayoutParams struct {
 	Title     string
 	Active    string
@@ -411,22 +409,4 @@ templ NextPageBtn(href string) {
 	<a href={ templ.SafeURL(href) } aria-label="Next page" title="Next page" class="inline-flex items-center justify-center w-6 h-6 text-muted-light hover:text-white border border-line rounded hover:border-line-light transition-colors">
 		<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
 	</a>
-}
-
-templ Pagination(page, totalPages int, total int64, label, hrefFmt string) {
-	if totalPages > 1 {
-		<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-			<span class="text-[11px] text-muted tabular-nums">
-				{ fmt.Sprintf("Page %d / %d · %d %s", page, totalPages, total, label) }
-			</span>
-			<div class="flex gap-1">
-				if page > 1 {
-					@PrevPageBtn(fmt.Sprintf(hrefFmt, page-1))
-				}
-				if page < totalPages {
-					@NextPageBtn(fmt.Sprintf(hrefFmt, page+1))
-				}
-			</div>
-		</div>
-	}
 }

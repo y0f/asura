@@ -30,6 +30,10 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil {
+		writeError(w, http.StatusConflict, "tag name already in use")
+		return
+	}
 	if err := h.store.CreateTag(r.Context(), &t); err != nil {
 		h.logger.Error("create tag", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create tag")
@@ -64,6 +68,10 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	t.ID = id
 	if err := validate.ValidateTag(&t); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil && existing.ID != id {
+		writeError(w, http.StatusConflict, "tag name already in use")
 		return
 	}
 	if err := h.store.UpdateTag(r.Context(), &t); err != nil {

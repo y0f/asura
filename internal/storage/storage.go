@@ -96,6 +96,7 @@ type Store interface {
 	// Tags
 	CreateTag(ctx context.Context, t *Tag) error
 	GetTag(ctx context.Context, id int64) (*Tag, error)
+	GetTagByName(ctx context.Context, name string) (*Tag, error)
 	ListTags(ctx context.Context) ([]*Tag, error)
 	UpdateTag(ctx context.Context, t *Tag) error
 	DeleteTag(ctx context.Context, id int64) error
