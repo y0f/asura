@@ -47,31 +47,15 @@ func (h *Handler) DeleteSubscriber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.subscriberBelongsToPage(r.Context(), subID, pageID) {
-		writeError(w, http.StatusNotFound, "subscriber not found")
-		return
-	}
-
-	if err := h.store.DeleteSubscriber(r.Context(), subID); err != nil {
+	// Scope the delete to the page in the URL so a subscriber cannot be removed
+	// via another page's endpoint; the WHERE clause also covers unconfirmed rows.
+	if err := h.store.DeleteSubscriber(r.Context(), pageID, subID); err != nil {
 		writeError(w, http.StatusNotFound, "subscriber not found")
 		return
 	}
 
 	h.audit(r, "delete", "subscriber", subID, fmt.Sprintf("deleted subscriber %d", subID))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
-}
-
-func (h *Handler) subscriberBelongsToPage(ctx context.Context, subID, pageID int64) bool {
-	subs, err := h.store.ListConfirmedSubscribers(ctx, pageID)
-	if err != nil {
-		return false
-	}
-	for _, s := range subs {
-		if s.ID == subID {
-			return true
-		}
-	}
-	return false
 }
 
 func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {

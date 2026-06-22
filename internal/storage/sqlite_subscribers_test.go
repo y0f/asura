@@ -151,11 +151,15 @@ func TestSubscriberCRUD(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := store.DeleteSubscriber(ctx, sub.ID); err != nil {
+		if err := store.DeleteSubscriber(ctx, sp.ID+999, sub.ID); err == nil {
+			t.Fatal("expected error deleting subscriber via the wrong status page")
+		}
+
+		if err := store.DeleteSubscriber(ctx, sp.ID, sub.ID); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := store.DeleteSubscriber(ctx, sub.ID); err == nil {
+		if err := store.DeleteSubscriber(ctx, sp.ID, sub.ID); err == nil {
 			t.Fatal("expected error deleting non-existent subscriber")
 		}
 	})

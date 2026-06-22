@@ -100,9 +100,9 @@ func (s *SQLiteStore) ListConfirmedSubscribers(ctx context.Context, pageID int64
 	return subs, rows.Err()
 }
 
-func (s *SQLiteStore) DeleteSubscriber(ctx context.Context, id int64) error {
+func (s *SQLiteStore) DeleteSubscriber(ctx context.Context, pageID, id int64) error {
 	res, err := s.writeDB.ExecContext(ctx,
-		`DELETE FROM status_page_subscribers WHERE id = ?`, id)
+		`DELETE FROM status_page_subscribers WHERE id = ? AND status_page_id = ?`, id, pageID)
 	if err != nil {
 		return fmt.Errorf("delete subscriber: %w", err)
 	}
