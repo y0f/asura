@@ -109,7 +109,7 @@ func TestEvaluateAssertions(t *testing.T) {
 func TestBuildCheckResult(t *testing.T) {
 	now := time.Now()
 	certTs := now.Unix()
-	mon := &storage.Monitor{ID: 42}
+	mon := &storage.Monitor{ID: 42, TrackChanges: true}
 	result := &checker.Result{
 		Status:       "up",
 		ResponseTime: 150,
@@ -148,6 +148,15 @@ func TestBuildCheckResult(t *testing.T) {
 	if cr.Body != "<html>" {
 		t.Fatalf("expected body <html>, got %s", cr.Body)
 	}
+
+	mon.TrackChanges = false
+	cr = buildCheckResult(mon, result, "up")
+	if cr.Body != "" {
+		t.Fatalf("expected empty body when TrackChanges is off, got %q", cr.Body)
+	}
+	if cr.BodyHash != "abc123" {
+		t.Fatalf("expected body_hash preserved when TrackChanges is off, got %s", cr.BodyHash)
+	}
 }
 
 func TestEmitNotification(t *testing.T) {
@@ -159,7 +168,7 @@ func TestEmitNotification(t *testing.T) {
 
 	t.Run("event lands on channel", func(t *testing.T) {
 		mon := &storage.Monitor{ID: 1, Name: "test"}
-		p.emitNotification("incident.created", nil, mon, nil)
+		p.emitNotification(context.Background(), "incident.created", nil, mon, nil)
 
 		select {
 		case ev := <-p.notifyChan:
@@ -185,7 +194,7 @@ func TestEmitNotification(t *testing.T) {
 		before := smallP.droppedNotifications.Load()
 
 		mon := &storage.Monitor{ID: 2}
-		smallP.emitNotification("test", nil, mon, nil)
+		smallP.emitNotification(context.Background(), "test", nil, mon, nil)
 
 		after := smallP.droppedNotifications.Load()
 		if after <= before {
