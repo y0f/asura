@@ -16,7 +16,9 @@ type DiscordSettings struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
-type DiscordSender struct{}
+type DiscordSender struct {
+	AllowPrivate bool
+}
 
 func (s *DiscordSender) Type() string { return "discord" }
 
@@ -64,8 +66,7 @@ func (s *DiscordSender) Send(ctx context.Context, channel *storage.NotificationC
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("discord request failed: %w", err)
 	}

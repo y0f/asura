@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -18,7 +17,9 @@ type SlackSettings struct {
 	Channel    string `json:"channel,omitempty"`
 }
 
-type SlackSender struct{}
+type SlackSender struct {
+	AllowPrivate bool
+}
 
 func (s *SlackSender) Type() string { return "slack" }
 
@@ -58,8 +59,7 @@ func (s *SlackSender) Send(ctx context.Context, channel *storage.NotificationCha
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("slack request failed: %w", err)
 	}

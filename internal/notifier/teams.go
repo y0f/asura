@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -16,7 +15,9 @@ type TeamsSettings struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
-type TeamsSender struct{}
+type TeamsSender struct {
+	AllowPrivate bool
+}
 
 func (s *TeamsSender) Type() string { return "teams" }
 
@@ -75,8 +76,7 @@ func (s *TeamsSender) Send(ctx context.Context, channel *storage.NotificationCha
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("teams request failed: %w", err)
 	}

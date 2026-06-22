@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -16,7 +15,9 @@ type GoogleChatSettings struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
-type GoogleChatSender struct{}
+type GoogleChatSender struct {
+	AllowPrivate bool
+}
 
 func (s *GoogleChatSender) Type() string { return "googlechat" }
 
@@ -41,8 +42,7 @@ func (s *GoogleChatSender) Send(ctx context.Context, channel *storage.Notificati
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("googlechat request failed: %w", err)
 	}

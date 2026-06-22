@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -20,7 +19,9 @@ type NtfySettings struct {
 	ClickURL  string `json:"click_url,omitempty"`
 }
 
-type NtfySender struct{}
+type NtfySender struct {
+	AllowPrivate bool
+}
 
 func (s *NtfySender) Type() string { return "ntfy" }
 
@@ -59,8 +60,7 @@ func (s *NtfySender) Send(ctx context.Context, channel *storage.NotificationChan
 		req.Header.Set("Click", settings.ClickURL)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("ntfy request failed: %w", err)
 	}

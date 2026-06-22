@@ -9,11 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"time"
 
-	"github.com/y0f/asura/internal/safenet"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -38,7 +35,10 @@ func (s *WebhookSender) Send(ctx context.Context, channel *storage.NotificationC
 		return fmt.Errorf("webhook URL is required")
 	}
 
-	body := marshalPayload(payload)
+	body, err := marshalPayload(payload)
+	if err != nil {
+		return err
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, settings.URL, bytes.NewReader(body))
 	if err != nil {
@@ -56,16 +56,7 @@ func (s *WebhookSender) Send(ctx context.Context, channel *storage.NotificationC
 		req.Header.Set("X-Asura-Signature", "sha256="+sig)
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: 10 * time.Second,
-				Control: safenet.MaybeDialControl(s.AllowPrivate),
-			}).DialContext,
-		},
-	}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("webhook request failed: %w", err)
 	}
