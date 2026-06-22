@@ -85,11 +85,7 @@ templ IncidentListPage(p IncidentListParams) {
 				if p.Filter != "" {
 					<input type="hidden" name="status" value={ p.Filter }/>
 				}
-				<div class="relative max-w-xs">
-					<svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-					<input type="text" name="q" value={ p.Search } placeholder="Search incidents..."
-						class="w-full pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors"/>
-				</div>
+				@SearchInput("q", p.Search, "Search incidents...")
 			</form>
 			<div class="border border-line-light rounded-xl overflow-hidden">
 				if incs := p.incidents(); len(incs) > 0 {
@@ -111,7 +107,7 @@ templ IncidentListPage(p IncidentListParams) {
 									<tr class="hover:bg-surface-200/20 transition-colors">
 										<td class="px-4 py-3 text-[13px] text-white font-medium">{ inc.MonitorName }</td>
 										<td class="px-4 py-3"><span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", SeverityBg(inc.Severity) }>{ inc.Severity }</span></td>
-										<td class="px-4 py-3"><span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(inc.Status) }>{ inc.Status }</span></td>
+										<td class="px-4 py-3">@StatusPill(inc.Status)</td>
 										<td class="px-4 py-3 text-[12px] text-muted truncate max-w-[200px]" title={ inc.Cause }>{ inc.Cause }</td>
 										<td class="px-4 py-3 text-[12px] text-muted tabular-nums font-mono">{ IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</td>
 										<td class="px-4 py-3 text-[12px] text-muted/60">{ TimeAgo(inc.StartedAt) }</td>
@@ -172,7 +168,7 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 					<div class="flex items-center gap-2.5 mt-1.5">
 						<h1 class="text-[17px] font-medium text-white">{ fmt.Sprintf("Incident #%d", p.Incident.ID) }</h1>
 						<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", SeverityBg(p.Incident.Severity) }>{ p.Incident.Severity }</span>
-						<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(p.Incident.Status) }>{ p.Incident.Status }</span>
+						@StatusPill(p.Incident.Status)
 					</div>
 					<div class="text-[11px] text-muted mt-1">
 						{ p.Incident.MonitorName } · Started { TimeAgo(p.Incident.StartedAt) } · Duration { IncidentDuration(p.Incident.StartedAt, p.Incident.ResolvedAt) }

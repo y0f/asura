@@ -25,10 +25,7 @@ templ StatusPageListPage(p StatusPageListParams) {
 		<div>
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Status Pages</h1>
-				<a href={ templ.SafeURL(p.BasePath + "/status-pages/new") } class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
-					<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-					New Status Page
-				</a>
+				@ToolbarNewButton(p.BasePath+"/status-pages/new", "New Status Page")
 			</div>
 			if len(p.Pages) > 0 {
 				<div class="border border-line-light rounded-xl overflow-hidden">
@@ -80,10 +77,7 @@ templ StatusPageListPage(p StatusPageListParams) {
 					</table>
 				</div>
 			} else {
-				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
-					<p class="text-muted text-[13px] mb-3">No status pages configured</p>
-					<a href={ templ.SafeURL(p.BasePath + "/status-pages/new") } class="text-brand text-[13px] hover:underline">Create your first status page</a>
-				</div>
+				@EmptyState("No status pages configured", p.BasePath+"/status-pages/new", "Create your first status page")
 			}
 		</div>
 	}
@@ -143,33 +137,15 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 				</div>
 				<div class="flex flex-wrap gap-x-6 gap-y-3">
 					<div class="flex items-center gap-3">
-						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="enabled" class="sr-only peer"
-								if p.StatusPage != nil && p.StatusPage.Enabled {
-									checked
-								}/>
-							<div class="w-9 h-5 bg-surface-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#ffffff] after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand"></div>
-						</label>
+						@statusToggle("enabled", p.StatusPage != nil && p.StatusPage.Enabled)
 						<span class="text-[13px] text-white">Enabled</span>
 					</div>
 					<div class="flex items-center gap-3">
-						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="api_enabled" class="sr-only peer"
-								if p.StatusPage != nil && p.StatusPage.APIEnabled {
-									checked
-								}/>
-							<div class="w-9 h-5 bg-surface-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#ffffff] after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand"></div>
-						</label>
+						@statusToggle("api_enabled", p.StatusPage != nil && p.StatusPage.APIEnabled)
 						<span class="text-[13px] text-white">Public API</span>
 					</div>
 					<div class="flex items-center gap-3">
-						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="show_incidents" class="sr-only peer"
-								if p.StatusPage == nil || p.StatusPage.ShowIncidents {
-									checked
-								}/>
-							<div class="w-9 h-5 bg-surface-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#ffffff] after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand"></div>
-						</label>
+						@statusToggle("show_incidents", p.StatusPage == nil || p.StatusPage.ShowIncidents)
 						<span class="text-[13px] text-white">Show Incidents</span>
 					</div>
 				</div>
@@ -291,4 +267,14 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 			</form>
 		</div>
 	}
+}
+
+templ statusToggle(name string, checked bool) {
+	<label class="switch">
+		<input type="checkbox" name={ name }
+			if checked {
+				checked
+			}/>
+		<span class="switch-track"><span class="switch-dot"></span></span>
+	</label>
 }

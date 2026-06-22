@@ -147,7 +147,7 @@ templ DashboardPage(p DashboardParams) {
 												if pts := p.Sparklines[m.ID]; len(pts) > 0 {
 													@templ.Raw(sparklineSVG(pts))
 												}
-												<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(m.Status) }>{ m.Status }</span>
+												@StatusPill(m.Status)
 											</div>
 										</a>
 									}
@@ -184,14 +184,7 @@ templ DashboardPage(p DashboardParams) {
 						if len(p.Incidents) > 0 {
 							<div class="divide-y divide-line">
 								for _, inc := range p.Incidents {
-									<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200/20 transition-colors">
-										<div class="flex items-center justify-between mb-1">
-											<span class="text-[13px] text-muted-light">{ inc.MonitorName }</span>
-											<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(inc.Status) }>{ inc.Status }</span>
-										</div>
-										<div class="text-[11px] text-muted truncate">{ inc.Cause }</div>
-										<div class="text-[10px] text-muted/50 mt-0.5">{ TimeAgo(inc.StartedAt) }</div>
-									</a>
+									@IncidentRow(p.BasePath, inc)
 								}
 							</div>
 						} else {
@@ -204,21 +197,6 @@ templ DashboardPage(p DashboardParams) {
 				</div>
 			</div>
 		</div>
-		@sseListener(p.BasePath)
+		@MonitorListListener(p.BasePath, "monitor-grid")
 	}
-}
-
-templ sseListener(basePath string) {
-	<div id="sse-connector" data-url={ basePath + "/events" } style="display:none"></div>
-	<script>
-		(function(){
-			var url = document.getElementById('sse-connector').dataset.url;
-			var grid = document.getElementById('monitor-grid');
-			if (!url || !grid || typeof EventSource === 'undefined') return;
-			var src = new EventSource(url);
-			var events = ['incident.created','incident.resolved','content.changed','cert.changed','sla.breach'];
-			events.forEach(function(e){ src.addEventListener(e, function(){ htmx.trigger(grid,'sse:refresh'); }); });
-			src.onerror = function(){ src.close(); };
-		})();
-	</script>
 }

@@ -19,82 +19,8 @@ type NotificationListParams struct {
 	Channels []*storage.NotificationChannel
 }
 
-func notifXData() string {
-	return `{
-    showForm: false,
-    editId: 0,
-    advancedNotifSettings: false,
-    formData: {name:'', type:'webhook', enabled:true, settings_json:'{}'},
-    events: {created:true, resolved:true, acknowledged:false, reminder:true, changed:false, certChanged:false},
-    webhook: {url:'', secret:''},
-    telegram: {bot_token:'', chat_id:''},
-    discord: {webhook_url:''},
-    slack: {webhook_url:'', channel:''},
-    email: {host:'', port:587, username:'', password:'', from:'', to:'', tls_mode:'starttls', cc:'', bcc:''},
-    ntfy: {server_url:'', topic:'', priority:3, tags:'', click_url:''},
-    teams: {webhook_url:''},
-    pagerduty: {routing_key:''},
-    opsgenie: {api_key:'', region:''},
-    pushover: {user_key:'', app_token:'', priority:'0', sound:'', device:''},
-    googlechat: {webhook_url:''},
-    matrix: {homeserver:'', access_token:'', room_id:''},
-    gotify: {server_url:'', app_token:'', priority:5},
-    resetForm() {
-        this.editId = 0;
-        this.advancedNotifSettings = false;
-        this.formData = {name:'', type:'webhook', enabled:true, settings_json:'{}'};
-        this.events = {created:true, resolved:true, acknowledged:false, reminder:true, changed:false, certChanged:false};
-        this.webhook = {url:'', secret:''};
-        this.telegram = {bot_token:'', chat_id:''};
-        this.discord = {webhook_url:''};
-        this.slack = {webhook_url:'', channel:''};
-        this.email = {host:'', port:587, username:'', password:'', from:'', to:'', tls_mode:'starttls', cc:'', bcc:''};
-        this.ntfy = {server_url:'', topic:'', priority:3, tags:'', click_url:''};
-        this.teams = {webhook_url:''};
-        this.pagerduty = {routing_key:''};
-        this.opsgenie = {api_key:'', region:''};
-        this.pushover = {user_key:'', app_token:'', priority:'0', sound:'', device:''};
-        this.googlechat = {webhook_url:''};
-        this.matrix = {homeserver:'', access_token:'', room_id:''};
-        this.gotify = {server_url:'', app_token:'', priority:5};
-    },
-    editChannel(ch) {
-        this.resetForm();
-        this.editId = ch.id;
-        this.formData.name = ch.name;
-        this.formData.type = ch.type;
-        this.formData.enabled = ch.enabled;
-        this.formData.settings_json = JSON.stringify(ch.settings || {});
-        this.events = {created:false, resolved:false, acknowledged:false, reminder:false, changed:false};
-        if (ch.events) {
-            ch.events.forEach(e => {
-                if (e === 'incident.created') this.events.created = true;
-                if (e === 'incident.resolved') this.events.resolved = true;
-                if (e === 'incident.acknowledged') this.events.acknowledged = true;
-                if (e === 'incident.reminder') this.events.reminder = true;
-                if (e === 'content.changed') this.events.changed = true;
-                if (e === 'cert.changed') this.events.certChanged = true;
-            });
-        }
-        let s = ch.settings || {};
-        switch(ch.type) {
-            case 'webhook': this.webhook = {url: s.url||'', secret: s.secret||''}; break;
-            case 'telegram': this.telegram = {bot_token: s.bot_token||'', chat_id: s.chat_id||''}; break;
-            case 'discord': this.discord = {webhook_url: s.webhook_url||''}; break;
-            case 'slack': this.slack = {webhook_url: s.webhook_url||'', channel: s.channel||''}; break;
-            case 'email': this.email = {host: s.host||'', port: s.port||587, username: s.username||'', password: s.password||'', from: s.from||'', to: (s.to||[]).join(', '), tls_mode: s.tls_mode||'starttls', cc: (s.cc||[]).join(', '), bcc: (s.bcc||[]).join(', ')}; break;
-            case 'ntfy': this.ntfy = {server_url: s.server_url||'', topic: s.topic||'', priority: String(s.priority||3), tags: s.tags||'', click_url: s.click_url||''}; break;
-            case 'teams': this.teams = {webhook_url: s.webhook_url||''}; break;
-            case 'pagerduty': this.pagerduty = {routing_key: s.routing_key||''}; break;
-            case 'opsgenie': this.opsgenie = {api_key: s.api_key||'', region: s.region||''}; break;
-            case 'pushover': this.pushover = {user_key: s.user_key||'', app_token: s.app_token||'', priority: String(s.priority||0), sound: s.sound||'', device: s.device||''}; break;
-            case 'googlechat': this.googlechat = {webhook_url: s.webhook_url||''}; break;
-            case 'matrix': this.matrix = {homeserver: s.homeserver||'', access_token: s.access_token||'', room_id: s.room_id||''}; break;
-            case 'gotify': this.gotify = {server_url: s.server_url||'', app_token: s.app_token||'', priority: String(s.priority||5)}; break;
-        }
-        this.showForm = true;
-    }
-}`
+func notifChannelsXData(basePath string) string {
+	return "notifChannels('" + JSEscapeString(basePath) + "')"
 }
 
 func NotificationListPage(p NotificationListParams) templ.Component {
@@ -130,155 +56,168 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div x-data=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script src=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(notifXData())
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.BasePath + "/static/notifications-form.js")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 94, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 20, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><div class=\"flex items-center justify-between mb-5\"><div class=\"flex items-center gap-4\"><h1 class=\"text-[15px] font-medium text-white\">Notification Channels</h1><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"></script> <div x-data=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var4 templ.SafeURL
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/notifications/history"))
+			var templ_7745c5c3_Var4 string
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(notifChannelsXData(p.BasePath))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 98, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 21, Col: 46}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"text-[12px] text-muted hover:text-white transition-colors\">History</a></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"flex items-center justify-between mb-5\"><div class=\"flex items-center gap-4\"><h1 class=\"text-[15px] font-medium text-white\">Notification Channels</h1><a href=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var5 templ.SafeURL
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/notifications/history"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 25, Col: 67}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" class=\"text-[12px] text-muted hover:text-white transition-colors\">History</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Perms["notifications.write"] {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<button @click=\"resetForm(); showForm = true\" class=\"inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors\"><svg class=\"w-3 h-3\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\"><path d=\"M12 5v14m7-7H5\"></path></svg> New Channel</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<button @click=\"resetForm(); showForm = true\" class=\"inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors\"><svg class=\"w-3 h-3\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\"><path d=\"M12 5v14m7-7H5\"></path></svg> New Channel</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Channels) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, ch := range p.Channels {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"border border-line rounded-xl p-4 hover:border-line-light transition-colors\"><div class=\"flex items-center justify-between mb-2.5\"><div class=\"flex items-center gap-2\"><span class=\"text-[13px] text-white font-medium\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var5 string
-					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 114, Col: 67}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span> <span class=\"text-[10px] text-brand uppercase tracking-wider\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"border border-line rounded-xl p-4 hover:border-line-light transition-colors\"><div class=\"flex items-center justify-between mb-2.5\"><div class=\"flex items-center gap-2\"><span class=\"text-[13px] text-white font-medium\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var6 string
-					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
+					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 115, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 41, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</span></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</span> <span class=\"text-[10px] text-brand uppercase tracking-wider\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var7 = []any{"w-1.5 h-1.5 rounded-full", templ.KV("bg-emerald-400", ch.Enabled), templ.KV("bg-muted", !ch.Enabled)}
-					templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var7...)
+					var templ_7745c5c3_Var7 string
+					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 42, Col: 80}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</span></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var8 string
-					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var7).String())
+					var templ_7745c5c3_Var8 = []any{"w-1.5 h-1.5 rounded-full", templ.KV("bg-emerald-400", ch.Enabled), templ.KV("bg-muted", !ch.Enabled)}
+					templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var8...)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var9 string
+					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var8).String())
 					if templ_7745c5c3_Err != nil {
 						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 1, Col: 0}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\"></div></div><div class=\"flex flex-wrap gap-1 mb-3\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\"></div></div><div class=\"flex flex-wrap gap-1 mb-3\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					for _, ev := range ch.Events {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"text-[10px] px-1.5 py-px rounded border border-line text-muted\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var9 string
-						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(ev)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 121, Col: 90}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</span>")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					if p.Perms["notifications.write"] {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"flex items-center gap-1.5 pt-2.5 border-t border-line\"><button type=\"button\" @click=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"text-[10px] px-1.5 py-px rounded border border-line text-muted\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var10 string
-						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("editChannel(%s)", ToJSON(ch)))
+						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(ev)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 126, Col: 82}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 48, Col: 90}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" class=\"px-2 py-1 text-[11px] text-brand border border-brand/20 rounded hover:bg-brand/5 transition-colors\">Edit</button><form method=\"POST\" action=\"")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var11 templ.SafeURL
-						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)))
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 128, Col: 111}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"contents\"><button type=\"submit\" class=\"px-2 py-1 text-[11px] text-brand border border-brand/20 rounded hover:bg-brand/5 transition-colors\">Test</button></form>")
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if p.Perms["notifications.write"] {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"flex items-center gap-1.5 pt-2.5 border-t border-line\"><button type=\"button\" @click=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var11 string
+						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("editChannel(%s)", ToJSON(ch)))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 53, Col: 82}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"px-2 py-1 text-[11px] text-brand border border-brand/20 rounded hover:bg-brand/5 transition-colors\">Edit</button><form method=\"POST\" action=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var12 templ.SafeURL
+						templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 55, Col: 111}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" class=\"contents\"><button type=\"submit\" class=\"px-2 py-1 text-[11px] text-brand border border-brand/20 rounded hover:bg-brand/5 transition-colors\">Test</button></form>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -286,27 +225,27 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px] mb-2\">No notification channels</p><button @click=\"resetForm(); showForm = true\" class=\"text-[12px] text-brand hover:text-brand/80 transition-colors\">Create one</button></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px] mb-2\">No notification channels</p><button @click=\"resetForm(); showForm = true\" class=\"text-[12px] text-brand hover:text-brand/80 transition-colors\">Create one</button></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -318,20 +257,7 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<form method=\"POST\" data-base-action=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var13 string
-				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.BasePath + "/notifications")
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 144, Col: 72}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" @submit=\"if(editId) $el.action = $el.dataset.baseAction + '/' + editId; else $el.action = $el.dataset.baseAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"formData.name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"type\" x-model=\"formData.type\" class=\"form-select\"><option value=\"webhook\">Webhook</option> <option value=\"email\">Email</option> <option value=\"telegram\">Telegram</option> <option value=\"discord\">Discord</option> <option value=\"slack\">Slack</option> <option value=\"ntfy\">ntfy</option> <option value=\"teams\">Microsoft Teams</option> <option value=\"pagerduty\">PagerDuty</option> <option value=\"opsgenie\">Opsgenie</option> <option value=\"pushover\">Pushover</option> <option value=\"googlechat\">Google Chat</option> <option value=\"matrix\">Matrix</option> <option value=\"gotify\">Gotify</option></select></div><div><div class=\"flex items-center justify-between mb-1.5\"><label class=\"form-label mb-0!\">Settings</label> <button type=\"button\" @click=\"advancedNotifSettings = !advancedNotifSettings\" class=\"text-[11px] text-brand hover:text-brand/80 transition-colors\"><span x-text=\"advancedNotifSettings ? 'Form Mode' : 'Advanced (JSON)'\"></span></button></div><input type=\"hidden\" name=\"notif_settings_mode\" :value=\"advancedNotifSettings ? 'json' : 'form'\"><div x-show=\"advancedNotifSettings\" x-cloak><textarea name=\"settings_json\" x-model=\"formData.settings_json\" rows=\"4\" class=\"form-input font-mono resize-y\"></textarea></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" x-model=\"formData.name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"type\" x-model=\"formData.type\" class=\"form-select\"><option value=\"webhook\">Webhook</option> <option value=\"email\">Email</option> <option value=\"telegram\">Telegram</option> <option value=\"discord\">Discord</option> <option value=\"slack\">Slack</option> <option value=\"ntfy\">ntfy</option> <option value=\"teams\">Microsoft Teams</option> <option value=\"pagerduty\">PagerDuty</option> <option value=\"opsgenie\">Opsgenie</option> <option value=\"pushover\">Pushover</option> <option value=\"googlechat\">Google Chat</option> <option value=\"matrix\">Matrix</option> <option value=\"gotify\">Gotify</option></select></div><div><div class=\"flex items-center justify-between mb-1.5\"><label class=\"form-label mb-0!\">Settings</label> <button type=\"button\" @click=\"advancedNotifSettings = !advancedNotifSettings\" class=\"text-[11px] text-brand hover:text-brand/80 transition-colors\"><span x-text=\"advancedNotifSettings ? 'Form Mode' : 'Advanced (JSON)'\"></span></button></div><input type=\"hidden\" name=\"notif_settings_mode\" :value=\"advancedNotifSettings ? 'json' : 'form'\"><div x-show=\"advancedNotifSettings\" x-cloak><textarea name=\"settings_json\" x-model=\"formData.settings_json\" rows=\"4\" class=\"form-input font-mono resize-y\"></textarea></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -393,7 +319,7 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = FormModal("showForm", "max-w-md", "editId ? 'Edit Notification Channel' : 'New Notification Channel'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = FormModal("showForm", "max-w-md", "editId ? 'Edit Notification Channel' : 'New Notification Channel'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

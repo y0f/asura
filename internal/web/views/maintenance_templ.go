@@ -282,7 +282,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div class=\"border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center\"><p class=\"text-muted text-[13px]\">No maintenance windows</p></div>")
+				templ_7745c5c3_Err = EmptyState("No maintenance windows", "", "").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -299,20 +299,20 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<form method=\"POST\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<form method=\"POST\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var13 templ.SafeURL
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/maintenance"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 97, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 95, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"recurring\" x-model=\"mode\" class=\"form-select\"><option value=\"\">One-time</option> <option value=\"manual\">Manual (start/stop)</option> <option value=\"cron\">Cron Schedule</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div x-show=\"mode !== 'manual'\" x-cloak class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div></div><div x-show=\"mode === 'cron'\" x-cloak><label class=\"form-label\">Cron Expression</label> <input type=\"text\" name=\"cron_expr\" placeholder=\"0 2 * * *\" class=\"form-input font-mono\"><p class=\"text-[10px] text-muted mt-1\">minute hour day-of-month month day-of-week</p></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"recurring\" x-model=\"mode\" class=\"form-select\"><option value=\"\">One-time</option> <option value=\"manual\">Manual (start/stop)</option> <option value=\"cron\">Cron Schedule</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div x-show=\"mode !== 'manual'\" x-cloak class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div></div><div x-show=\"mode === 'cron'\" x-cloak><label class=\"form-label\">Cron Expression</label> <input type=\"text\" name=\"cron_expr\" placeholder=\"0 2 * * *\" class=\"form-input font-mono\"><p class=\"text-[10px] text-muted mt-1\">minute hour day-of-month month day-of-week</p></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -322,7 +322,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
