@@ -25,9 +25,7 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 				}
 			</div>
 			if len(p.Policies) == 0 {
-				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
-					<p class="text-muted text-[13px]">No escalation policies configured</p>
-				</div>
+				@EmptyState("No escalation policies configured", "", "")
 			} else {
 				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 					for _, ep := range p.Policies {

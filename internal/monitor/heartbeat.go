@@ -57,6 +57,18 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 			continue
 		}
 
+		// Re-fetch under the write path to avoid racing a ping that arrived
+		// between the expired-listing SELECT and this transition. If last_ping_at
+		// advanced, the monitor recovered and we must not mark it down.
+		fresh, err := w.store.GetHeartbeatByMonitorID(ctx, hb.MonitorID)
+		if err != nil {
+			w.logger.Error("heartbeat watcher: re-fetch heartbeat", "error", err)
+			continue
+		}
+		if fresh.Status == "down" || pingAdvanced(hb.LastPingAt, fresh.LastPingAt) {
+			continue
+		}
+
 		w.logger.Info("heartbeat expired", "monitor_id", hb.MonitorID)
 
 		// Mark heartbeat as down
@@ -89,10 +101,22 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 			continue
 		}
 		if created && !inMaintenance {
-			w.pipeline.emitNotification("incident.created", inc, mon, nil)
+			w.pipeline.emitNotification(ctx, "incident.created", inc, mon, nil)
 			w.pipeline.lastNotified.Store(mon.ID, time.Now())
 		}
 	}
+}
+
+// pingAdvanced reports whether a heartbeat ping arrived after the one observed
+// when the heartbeat was listed as expired.
+func pingAdvanced(observed, current *time.Time) bool {
+	if current == nil {
+		return false
+	}
+	if observed == nil {
+		return true
+	}
+	return current.After(*observed)
 }
 
 func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heartbeat) {
@@ -111,6 +135,6 @@ func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heart
 	if err != nil || inc == nil {
 		return
 	}
-	w.pipeline.emitNotification("incident.reminder", inc, mon, nil)
+	w.pipeline.emitNotification(ctx, "incident.reminder", inc, mon, nil)
 	w.pipeline.lastNotified.Store(mon.ID, time.Now())
 }

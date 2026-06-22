@@ -17,6 +17,16 @@ import (
 	"github.com/y0f/asura/internal/validate"
 )
 
+// monitorAlias avoids JSON recursion when wrapping storage.Monitor in a DTO.
+type monitorAlias storage.Monitor
+
+// monitorCreateRequest decodes a monitor plus an optional enabled flag so an
+// explicit enabled=false is honored and an absent field defaults to true.
+type monitorCreateRequest struct {
+	monitorAlias
+	Enabled *bool `json:"enabled"`
+}
+
 func (h *Handler) ListMonitors(w http.ResponseWriter, r *http.Request) {
 	p := httputil.ParsePagination(r)
 	result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{}, p)
@@ -67,13 +77,19 @@ func (h *Handler) GetMonitor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
-	var m storage.Monitor
-	if err := readJSON(r, &m); err != nil {
+	req := monitorCreateRequest{}
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	m := storage.Monitor(req.monitorAlias)
 
 	applyMonitorDefaults(&m, h.cfg.Monitor)
+	if req.Enabled != nil {
+		m.Enabled = *req.Enabled
+	} else {
+		m.Enabled = true
+	}
 
 	if err := validate.ValidateMonitor(&m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -147,12 +163,13 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var m storage.Monitor
-	if err := readJSON(r, &m); err != nil {
+	if err := h.readJSON(r, &m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	m.ID = existing.ID
 	m.CreatedAt = existing.CreatedAt
+	m.Enabled = existing.Enabled
 
 	if err := validate.ValidateMonitor(&m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -371,7 +388,7 @@ type bulkRequest struct {
 
 func (h *Handler) BulkMonitors(w http.ResponseWriter, r *http.Request) {
 	var req bulkRequest
-	if err := readJSON(r, &req); err != nil {
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -439,7 +456,6 @@ func applyMonitorDefaults(m *storage.Monitor, cfg config.MonitorConfig) {
 	if m.Type == "manual" && m.Target == "" {
 		m.Target = "manual"
 	}
-	m.Enabled = true
 }
 
 func (h *Handler) createHeartbeat(ctx context.Context, m *storage.Monitor) (*storage.Heartbeat, error) {

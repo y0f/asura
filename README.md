@@ -23,6 +23,7 @@
 
 ![Web UI](assets/webpanel.png)
 ![Monitor View](assets/monitorview.png)
+![Public Status Page](assets/statuspage.png)
 
 ---
 

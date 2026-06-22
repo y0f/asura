@@ -287,11 +287,11 @@ templ MonitorFormPage(p MonitorFormParams) {
 				</div>
 				@monitorAssertions(p)
 				<div x-data={ advancedSectionData(p) }>
-					<button type="button" @click="showAdvanced = !showAdvanced" class="flex items-center gap-2 w-full text-left px-1 py-1 group cursor-pointer">
+					<button type="button" @click="showAdvanced = !showAdvanced" :aria-expanded="showAdvanced ? 'true' : 'false'" aria-controls="routing-behavior-panel" class="flex items-center gap-2 w-full text-left px-1 py-1 group cursor-pointer">
 						<span class="text-[11px] text-muted-light/70 uppercase tracking-widest font-semibold group-hover:text-muted-light transition-colors">Routing &amp; Behavior</span>
-						<span class="text-muted-light/30 group-hover:text-muted-light/60 text-[10px] transition-colors" x-text="showAdvanced ? '−' : '+'"></span>
+						<svg aria-hidden="true" class="w-3 h-3 text-muted-light/30 group-hover:text-muted-light/60 transition-transform" :class="showAdvanced && 'rotate-90'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
 					</button>
-					<div x-show="showAdvanced" x-cloak class="mt-4">
+					<div id="routing-behavior-panel" x-show="showAdvanced" x-cloak class="mt-4">
 						@FormCard("") {
 							<div class="space-y-4">
 								if len(p.Groups) > 0 {
@@ -417,30 +417,9 @@ templ MonitorFormPage(p MonitorFormParams) {
 									<p class="text-[10px] text-muted mt-1">Resend notification every N seconds while down (0 = disabled)</p>
 								</div>
 								<div class="flex items-center flex-wrap gap-5">
-									<label class="flex items-center gap-2 cursor-pointer">
-										<input type="checkbox" name="track_changes"
-											if p.Monitor.TrackChanges {
-												checked
-											}
-											class="form-checkbox"/>
-										<span class="text-[12px] text-muted-light">Track changes</span>
-									</label>
-									<label class="flex items-center gap-2 cursor-pointer">
-										<input type="checkbox" name="upside_down"
-											if p.Monitor.UpsideDown {
-												checked
-											}
-											class="form-checkbox"/>
-										<span class="text-[12px] text-muted-light">Upside-down mode</span>
-									</label>
-									<label class="flex items-center gap-2 cursor-pointer">
-										<input type="checkbox" name="agent_enabled"
-											if p.Monitor.AgentEnabled {
-												checked
-											}
-											class="form-checkbox"/>
-										<span class="text-[12px] text-muted-light">Enable for agents</span>
-									</label>
+									@SettingCheckbox("Track changes", "track_changes", p.Monitor.TrackChanges)
+									@SettingCheckbox("Upside-down mode", "upside_down", p.Monitor.UpsideDown)
+									@SettingCheckbox("Enable for agents", "agent_enabled", p.Monitor.AgentEnabled)
 								</div>
 							</div>
 						}
@@ -506,19 +485,7 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				<textarea name="settings_body" rows="3" placeholder="Request body" class="form-input font-mono resize-y">{ p.HTTP.Body }</textarea>
 			</div>
 		</div>
-		<div>
-			<label class="form-label">Headers</label>
-			<div class="space-y-2">
-				<template x-for="(h, i) in httpHeaders" :key="i">
-					<div class="flex gap-2">
-						<input type="text" :name="'settings_header_key[]'" x-model="h.key" placeholder="Header Name" class="form-input flex-1"/>
-						<input type="text" :name="'settings_header_value[]'" x-model="h.value" placeholder="Value" class="form-input flex-1"/>
-						<button type="button" @click="httpHeaders.splice(i, 1)" class="px-2 text-red-400 hover:text-red-300 transition-colors text-[16px]">&times;</button>
-					</div>
-				</template>
-			</div>
-			<button type="button" @click="httpHeaders.push({key:'', value:''})" class="mt-2 text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Header</button>
-		</div>
+		@HeaderListEditor("httpHeaders", "settings_header_key[]", "settings_header_value[]")
 		<div class="space-y-3">
 			<div>
 				<label class="form-label">Authentication</label>
@@ -530,33 +497,17 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				</select>
 			</div>
 			<div x-show="authMethod === 'basic'" x-cloak class="grid grid-cols-2 gap-4">
-				<div>
-					<label class="form-label">Username</label>
-					<input type="text" name="settings_basic_auth_user" value={ p.HTTP.BasicAuthUser } class="form-input"/>
-				</div>
-				<div>
-					<label class="form-label">Password</label>
-					<input type="password" name="settings_basic_auth_pass" value={ p.HTTP.BasicAuthPass } class="form-input"/>
-				</div>
+				@SettingText("Username", "settings_basic_auth_user", p.HTTP.BasicAuthUser, "", "text")
+				@SettingPassword("Password", "settings_basic_auth_pass", p.HTTP.BasicAuthPass, "")
 			</div>
 			<div x-show="authMethod === 'bearer'" x-cloak>
-				<label class="form-label">Token</label>
-				<input type="password" name="settings_bearer_token" value={ p.HTTP.BearerToken } class="form-input"/>
+				@SettingPassword("Token", "settings_bearer_token", p.HTTP.BearerToken, "")
 			</div>
 			<div x-show="authMethod === 'oauth2'" x-cloak class="space-y-3">
-				<div>
-					<label class="form-label">Token URL</label>
-					<input type="url" name="settings_oauth2_token_url" value={ p.HTTP.OAuth2TokenURL } placeholder="https://auth.example.com/oauth/token" class="form-input"/>
-				</div>
+				@SettingText("Token URL", "settings_oauth2_token_url", p.HTTP.OAuth2TokenURL, "https://auth.example.com/oauth/token", "url")
 				<div class="grid grid-cols-2 gap-4">
-					<div>
-						<label class="form-label">Client ID</label>
-						<input type="text" name="settings_oauth2_client_id" value={ p.HTTP.OAuth2ClientID } class="form-input"/>
-					</div>
-					<div>
-						<label class="form-label">Client Secret</label>
-						<input type="password" name="settings_oauth2_client_secret" value={ p.HTTP.OAuth2ClientSecret } class="form-input"/>
-					</div>
+					@SettingText("Client ID", "settings_oauth2_client_id", p.HTTP.OAuth2ClientID, "", "text")
+					@SettingPassword("Client Secret", "settings_oauth2_client_secret", p.HTTP.OAuth2ClientSecret, "")
 				</div>
 				<div class="grid grid-cols-2 gap-4">
 					<div>
@@ -601,36 +552,16 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 			<p class="text-[10px] text-muted mt-1">0 = don't follow redirects</p>
 		</div>
 		<div class="flex items-center flex-wrap gap-5">
-			<label class="flex items-center gap-2 cursor-pointer">
-				<input type="checkbox" name="settings_skip_tls_verify"
-					if p.HTTP.SkipTLSVerify {
-						checked
-					}
-					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Ignore TLS/SSL errors</span>
-			</label>
-			<label class="flex items-center gap-2 cursor-pointer">
-				<input type="checkbox" name="settings_cache_buster"
-					if p.HTTP.CacheBuster {
-						checked
-					}
-					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Cache buster</span>
-			</label>
+			@SettingCheckbox("Ignore TLS/SSL errors", "settings_skip_tls_verify", p.HTTP.SkipTLSVerify)
+			@SettingCheckbox("Cache buster", "settings_cache_buster", p.HTTP.CacheBuster)
 		</div>
 	</div>
 }
 
 templ monitorTCPSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'tcp'" x-cloak class="space-y-4">
-		<div>
-			<label class="form-label">Send Data</label>
-			<input type="text" name="settings_send_data" value={ p.TCP.SendData } placeholder="Optional data to send" class="form-input"/>
-		</div>
-		<div>
-			<label class="form-label">Expect Data</label>
-			<input type="text" name="settings_expect_data" value={ p.TCP.ExpectData } placeholder="Expected response" class="form-input"/>
-		</div>
+		@SettingText("Send Data", "settings_send_data", p.TCP.SendData, "Optional data to send", "text")
+		@SettingText("Expect Data", "settings_expect_data", p.TCP.ExpectData, "Expected response", "text")
 	</div>
 }
 
@@ -659,45 +590,21 @@ templ monitorDNSSettings(p MonitorFormParams) {
 
 templ monitorTLSSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'tls'" x-cloak class="space-y-4">
-		<div>
-			<label class="form-label">Warning Days Before Expiry</label>
-			<input type="number" name="settings_warn_days_before" value={ intOrDefault(p.TLS.WarnDaysBefore, 30) } min="1" max="365" class="form-input max-w-[200px] tabular-nums"/>
-		</div>
+		@SettingNumber("Warning Days Before Expiry", "settings_warn_days_before", intOrDefault(p.TLS.WarnDaysBefore, 30), "", "1", "365", "max-w-[200px]")
 	</div>
 }
 
 templ monitorWSSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'websocket'" x-cloak class="space-y-4">
-		<div>
-			<label class="form-label">Headers</label>
-			<div class="space-y-2">
-				<template x-for="(h, i) in wsHeaders" :key="i">
-					<div class="flex gap-2">
-						<input type="text" :name="'settings_ws_header_key[]'" x-model="h.key" placeholder="Header Name" class="form-input flex-1"/>
-						<input type="text" :name="'settings_ws_header_value[]'" x-model="h.value" placeholder="Value" class="form-input flex-1"/>
-						<button type="button" @click="wsHeaders.splice(i, 1)" class="px-2 text-red-400 hover:text-red-300 transition-colors text-[16px]">&times;</button>
-					</div>
-				</template>
-			</div>
-			<button type="button" @click="wsHeaders.push({key:'', value:''})" class="mt-2 text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Header</button>
-		</div>
-		<div>
-			<label class="form-label">Send Message</label>
-			<input type="text" name="settings_send_message" value={ p.WS.SendMessage } placeholder="Optional message to send" class="form-input"/>
-		</div>
-		<div>
-			<label class="form-label">Expect Reply</label>
-			<input type="text" name="settings_expect_reply" value={ p.WS.ExpectReply } placeholder="Expected reply" class="form-input"/>
-		</div>
+		@HeaderListEditor("wsHeaders", "settings_ws_header_key[]", "settings_ws_header_value[]")
+		@SettingText("Send Message", "settings_send_message", p.WS.SendMessage, "Optional message to send", "text")
+		@SettingText("Expect Reply", "settings_expect_reply", p.WS.ExpectReply, "Expected reply", "text")
 	</div>
 }
 
 templ monitorCommandSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'command'" x-cloak class="space-y-4">
-		<div>
-			<label class="form-label">Command</label>
-			<input type="text" name="settings_command" value={ p.Cmd.Command } placeholder="/usr/bin/check-health" class="form-input"/>
-		</div>
+		@SettingText("Command", "settings_command", p.Cmd.Command, "/usr/bin/check-health", "text")
 		<div>
 			<label class="form-label">Arguments</label>
 			<input type="text" name="settings_args" value={ p.cmdArgsStr() } placeholder="--verbose, --timeout=5" class="form-input"/>
@@ -719,14 +626,7 @@ templ monitorDockerSettings(p MonitorFormParams) {
 			<p class="text-[10px] text-muted mt-1">Default: /var/run/docker.sock</p>
 		</div>
 		<div class="flex items-center flex-wrap gap-5">
-			<label class="flex items-center gap-2 cursor-pointer">
-				<input type="checkbox" name="settings_check_health"
-					if p.Docker.CheckHealth {
-						checked
-					}
-					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Check container health status</span>
-			</label>
+			@SettingCheckbox("Check container health status", "settings_check_health", p.Docker.CheckHealth)
 		</div>
 	</div>
 }
@@ -749,22 +649,8 @@ templ monitorGRPCSettings(p MonitorFormParams) {
 			<p class="text-[10px] text-muted mt-1">gRPC service to check (empty = all services)</p>
 		</div>
 		<div class="flex items-center flex-wrap gap-5">
-			<label class="flex items-center gap-2 cursor-pointer">
-				<input type="checkbox" name="settings_grpc_tls"
-					if p.GRPC.UseTLS {
-						checked
-					}
-					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Use TLS</span>
-			</label>
-			<label class="flex items-center gap-2 cursor-pointer">
-				<input type="checkbox" name="settings_grpc_skip_verify"
-					if p.GRPC.SkipTLSVerify {
-						checked
-					}
-					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Skip TLS verification</span>
-			</label>
+			@SettingCheckbox("Use TLS", "settings_grpc_tls", p.GRPC.UseTLS)
+			@SettingCheckbox("Skip TLS verification", "settings_grpc_skip_verify", p.GRPC.SkipTLSVerify)
 		</div>
 	</div>
 }
@@ -772,38 +658,16 @@ templ monitorGRPCSettings(p MonitorFormParams) {
 templ monitorMQTTSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'mqtt'" x-cloak class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
-			<div>
-				<label class="form-label">Client ID</label>
-				<input type="text" name="settings_mqtt_client_id" value={ p.MQTT.ClientID } placeholder="asura-monitor" class="form-input"/>
-			</div>
-			<div>
-				<label class="form-label">Topic</label>
-				<input type="text" name="settings_mqtt_topic" value={ p.MQTT.Topic } placeholder="Optional subscribe topic" class="form-input"/>
-			</div>
+			@SettingText("Client ID", "settings_mqtt_client_id", p.MQTT.ClientID, "asura-monitor", "text")
+			@SettingText("Topic", "settings_mqtt_topic", p.MQTT.Topic, "Optional subscribe topic", "text")
 		</div>
 		<div class="grid grid-cols-2 gap-4">
-			<div>
-				<label class="form-label">Username</label>
-				<input type="text" name="settings_mqtt_username" value={ p.MQTT.Username } placeholder="Optional" class="form-input"/>
-			</div>
-			<div>
-				<label class="form-label">Password</label>
-				<input type="password" name="settings_mqtt_password" value={ p.MQTT.Password } placeholder="Optional" class="form-input"/>
-			</div>
+			@SettingText("Username", "settings_mqtt_username", p.MQTT.Username, "Optional", "text")
+			@SettingPassword("Password", "settings_mqtt_password", p.MQTT.Password, "Optional")
 		</div>
-		<div>
-			<label class="form-label">Expected Message</label>
-			<input type="text" name="settings_mqtt_expect" value={ p.MQTT.ExpectMessage } placeholder="Optional message content to expect" class="form-input"/>
-		</div>
+		@SettingText("Expected Message", "settings_mqtt_expect", p.MQTT.ExpectMessage, "Optional message content to expect", "text")
 		<div class="flex items-center flex-wrap gap-5">
-			<label class="flex items-center gap-2 cursor-pointer">
-				<input type="checkbox" name="settings_mqtt_tls"
-					if p.MQTT.UseTLS {
-						checked
-					}
-					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Use TLS</span>
-			</label>
+			@SettingCheckbox("Use TLS", "settings_mqtt_tls", p.MQTT.UseTLS)
 		</div>
 	</div>
 }
@@ -918,14 +782,7 @@ templ monitorSMTPSettings(p MonitorFormParams) {
 				<input type="text" name="settings_smtp_expect_banner" value={ p.SMTP.ExpectBanner } placeholder="Optional" class="form-input"/>
 			</div>
 		</div>
-		<label class="flex items-center gap-2 cursor-pointer">
-			<input type="checkbox" name="settings_smtp_starttls"
-				if p.SMTP.STARTTLS {
-					checked
-				}
-				class="form-checkbox"/>
-			<span class="text-[12px] text-muted-light">Require STARTTLS</span>
-		</label>
+		@SettingCheckbox("Require STARTTLS", "settings_smtp_starttls", p.SMTP.STARTTLS)
 	</div>
 }
 
@@ -941,24 +798,15 @@ templ monitorSSHSettings(p MonitorFormParams) {
 
 templ monitorRedisSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'redis'" x-cloak class="space-y-4">
-		<div>
-			<label class="form-label">Password</label>
-			<input type="password" name="settings_redis_password" value={ p.Redis.Password } placeholder="Optional" class="form-input"/>
-		</div>
+		@SettingPassword("Password", "settings_redis_password", p.Redis.Password, "Optional")
 	</div>
 }
 
 templ monitorPostgreSQLSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'postgresql'" x-cloak class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
-			<div>
-				<label class="form-label">Username</label>
-				<input type="text" name="settings_pg_username" value={ p.PostgreSQL.Username } placeholder="postgres" class="form-input"/>
-			</div>
-			<div>
-				<label class="form-label">Database</label>
-				<input type="text" name="settings_pg_database" value={ p.PostgreSQL.Database } placeholder="postgres" class="form-input"/>
-			</div>
+			@SettingText("Username", "settings_pg_username", p.PostgreSQL.Username, "postgres", "text")
+			@SettingText("Database", "settings_pg_database", p.PostgreSQL.Database, "postgres", "text")
 		</div>
 		<p class="text-[10px] text-muted">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p>
 	</div>
@@ -966,13 +814,7 @@ templ monitorPostgreSQLSettings(p MonitorFormParams) {
 
 templ monitorUDPSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'udp'" x-cloak class="space-y-4">
-		<div>
-			<label class="form-label">Send Data</label>
-			<input type="text" name="settings_udp_send" value={ p.UDP.SendData } placeholder="Data to send" class="form-input"/>
-		</div>
-		<div>
-			<label class="form-label">Expect Data</label>
-			<input type="text" name="settings_udp_expect" value={ p.UDP.ExpectData } placeholder="Expected in response (optional)" class="form-input"/>
-		</div>
+		@SettingText("Send Data", "settings_udp_send", p.UDP.SendData, "Data to send", "text")
+		@SettingText("Expect Data", "settings_udp_expect", p.UDP.ExpectData, "Expected in response (optional)", "text")
 	</div>
 }

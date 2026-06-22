@@ -135,6 +135,15 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 
 	cr := buildCheckResult(mon, result, finalStatus)
 
+	// Capture the previous check's body before inserting the new row, so the
+	// content diff compares against the prior body (not the one just stored).
+	var prevBody string
+	if mon.TrackChanges {
+		if prev, err := p.store.GetLatestCheckResult(ctx, mon.ID); err == nil && prev != nil {
+			prevBody = prev.Body
+		}
+	}
+
 	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
 		p.logger.Error("insert check result", "error", err)
 		return
@@ -149,6 +158,7 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 
 	status.Status = finalStatus
 	status.LastCheckAt = &now
+	status.ResponseTime = cr.ResponseTime
 
 	if finalStatus == "up" {
 		status.ConsecSuccesses++
@@ -161,7 +171,7 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	if mon.TrackChanges && result.BodyHash != "" {
 		oldHash := status.LastBodyHash
 		if oldHash != "" && oldHash != result.BodyHash {
-			p.handleContentChange(ctx, mon, oldHash, result.BodyHash, result.Body, status)
+			p.handleContentChange(ctx, mon, oldHash, result.BodyHash, prevBody, result.Body, status)
 		}
 		status.LastBodyHash = result.BodyHash
 	} else if result.BodyHash != "" {
@@ -171,7 +181,7 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	if result.CertFingerprint != "" {
 		oldFP := status.LastCertFingerprint
 		if oldFP != "" && oldFP != result.CertFingerprint {
-			p.emitNotification("cert.changed", nil, mon, nil)
+			p.emitNotification(ctx, "cert.changed", nil, mon, nil)
 		}
 		status.LastCertFingerprint = result.CertFingerprint
 	}
@@ -212,6 +222,7 @@ func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor,
 	finalStatus := cr.Status
 	status.Status = finalStatus
 	status.LastCheckAt = &now
+	status.ResponseTime = cr.ResponseTime
 
 	if finalStatus == "up" {
 		status.ConsecSuccesses++
@@ -224,7 +235,7 @@ func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor,
 	if cr.CertFingerprint != "" {
 		oldFP := status.LastCertFingerprint
 		if oldFP != "" && oldFP != cr.CertFingerprint {
-			p.emitNotification("cert.changed", nil, mon, nil)
+			p.emitNotification(ctx, "cert.changed", nil, mon, nil)
 		}
 		status.LastCertFingerprint = cr.CertFingerprint
 	}
@@ -268,6 +279,14 @@ func buildCheckResult(mon *storage.Monitor, result *checker.Result, finalStatus 
 		certExpiry = &t
 	}
 
+	// Persist the body only for change-tracking monitors; otherwise it grows
+	// check_results unbounded with data nothing reads. The diff path relies on
+	// the stored body, which remains available for tracking monitors.
+	body := ""
+	if mon.TrackChanges {
+		body = result.Body
+	}
+
 	return &storage.CheckResult{
 		MonitorID:       mon.ID,
 		Status:          finalStatus,
@@ -275,7 +294,7 @@ func buildCheckResult(mon *storage.Monitor, result *checker.Result, finalStatus 
 		StatusCode:      result.StatusCode,
 		Message:         result.Message,
 		Headers:         string(headersJSON),
-		Body:            result.Body,
+		Body:            body,
 		BodyHash:        result.BodyHash,
 		CertExpiry:      certExpiry,
 		CertFingerprint: result.CertFingerprint,
@@ -303,12 +322,12 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mon
 		return
 	}
 	if created {
-		p.emitNotification("incident.created", inc, mon, nil)
+		p.emitNotification(ctx, "incident.created", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
 		escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
 		p.checkSLABreach(ctx, mon)
 	} else if p.shouldResend(mon) {
-		p.emitNotification("incident.reminder", inc, mon, nil)
+		p.emitNotification(ctx, "incident.reminder", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
 	}
 }
@@ -322,7 +341,7 @@ func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor, in
 	if resolved {
 		escalation.CancelEscalation(ctx, p.store, inc.ID)
 		if !inMaintenance {
-			p.emitNotification("incident.resolved", inc, mon, nil)
+			p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
 		}
 	}
 	p.lastNotified.Delete(mon.ID)
@@ -353,18 +372,12 @@ func (p *Pipeline) checkSLABreach(ctx context.Context, mon *storage.Monitor) {
 		return
 	}
 	if status.Breached || status.BudgetRemainPct <= 10 {
-		p.emitNotification("sla.breach", nil, mon, nil)
+		p.emitNotification(ctx, "sla.breach", nil, mon, nil)
 		p.lastSLABreach.Store(mon.ID, time.Now())
 	}
 }
 
-func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor, oldHash, newHash, newBody string, status *storage.MonitorStatus) {
-	oldBody := ""
-	latest, err := p.store.GetLatestCheckResult(ctx, mon.ID)
-	if err == nil && latest != nil {
-		oldBody = latest.Body
-	}
-
+func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor, oldHash, newHash, oldBody, newBody string, status *storage.MonitorStatus) {
 	diffText := diff.Compute(oldBody, newBody)
 
 	change := &storage.ContentChange{
@@ -381,10 +394,22 @@ func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor
 		return
 	}
 
-	p.emitNotification("content.changed", nil, mon, change)
+	p.emitNotification(ctx, "content.changed", nil, mon, change)
 }
 
-func (p *Pipeline) emitNotification(eventType string, inc *storage.Incident, mon *storage.Monitor, change *storage.ContentChange) {
+// criticalNotification reports whether an event is a state-transition that must
+// not be dropped under load (mass outages fill the buffer fastest exactly when
+// these events matter most).
+func criticalNotification(eventType string) bool {
+	switch eventType {
+	case "incident.created", "incident.resolved", "sla.breach":
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *storage.Incident, mon *storage.Monitor, change *storage.ContentChange) {
 	var monitorID int64
 	if mon != nil {
 		monitorID = mon.ID
@@ -393,14 +418,26 @@ func (p *Pipeline) emitNotification(eventType string, inc *storage.Incident, mon
 	} else if change != nil {
 		monitorID = change.MonitorID
 	}
-	select {
-	case p.notifyChan <- NotificationEvent{
+	ev := NotificationEvent{
 		EventType: eventType,
 		MonitorID: monitorID,
 		Incident:  inc,
 		Monitor:   mon,
 		Change:    change,
-	}:
+	}
+
+	if criticalNotification(eventType) {
+		select {
+		case p.notifyChan <- ev:
+		case <-ctx.Done():
+			p.droppedNotifications.Add(1)
+			p.logger.Warn("notification channel send aborted", "event", eventType, "error", ctx.Err())
+		}
+		return
+	}
+
+	select {
+	case p.notifyChan <- ev:
 	default:
 		p.droppedNotifications.Add(1)
 		p.logger.Warn("notification channel full, dropping event", "event", eventType)
@@ -430,7 +467,7 @@ func (p *Pipeline) ProcessHeartbeatRecovery(ctx context.Context, mon *storage.Mo
 	if resolved {
 		escalation.CancelEscalation(ctx, p.store, inc.ID)
 		if !inMaintenance {
-			p.emitNotification("incident.resolved", inc, mon, nil)
+			p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
 		}
 	}
 }
@@ -481,7 +518,7 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 		if resolved {
 			escalation.CancelEscalation(ctx, p.store, inc.ID)
 			if !inMaintenance {
-				p.emitNotification("incident.resolved", inc, mon, nil)
+				p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
 			}
 		}
 	} else if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending") {
@@ -491,7 +528,7 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 			return
 		}
 		if created && !inMaintenance {
-			p.emitNotification("incident.created", inc, mon, nil)
+			p.emitNotification(ctx, "incident.created", inc, mon, nil)
 			escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
 		}
 	}

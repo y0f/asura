@@ -27,7 +27,7 @@ func (p GroupDetailParams) monitors() []*storage.Monitor {
 
 templ GroupListPage(p GroupListParams) {
 	@Layout(p.LayoutParams) {
-		<div x-data={ groupAlpineData() }>
+		<div x-data={ groupAlpineData(p.BasePath) }>
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Monitor Groups</h1>
 				if p.Perms["monitors.write"] {
@@ -82,7 +82,7 @@ templ GroupListPage(p GroupListParams) {
 				</div>
 			}
 			@FormModal("showForm", "max-w-sm", "editId ? 'Edit Group' : 'New Group'") {
-				<form method="POST" action={ templ.SafeURL(p.BasePath + "/groups") } data-base-action={ p.BasePath + "/groups/" } @submit="if(editId) $el.action = $el.dataset.baseAction + editId" class="space-y-3">
+				<form method="POST" :action="formAction" class="space-y-3">
 						<div>
 							<label class="form-label">Name</label>
 							<input type="text" name="name" x-model="formData.name" required class="form-input"/>
@@ -102,11 +102,15 @@ templ GroupListPage(p GroupListParams) {
 	}
 }
 
-func groupAlpineData() string {
+func groupAlpineData(basePath string) string {
 	return `{
     showForm: false,
     editId: 0,
+    basePath: '` + JSEscapeString(basePath) + `',
     formData: {name:'', sort_order:0},
+    get formAction() {
+        return this.editId ? this.basePath + '/groups/' + this.editId : this.basePath + '/groups';
+    },
     resetForm() {
         this.editId = 0;
         this.formData = {name:'', sort_order:0};
@@ -178,31 +182,7 @@ templ GroupDetailPage(p GroupDetailParams) {
 											}
 										</td>
 										<td class="px-4 py-3 text-right">
-											<div class="flex items-center justify-end gap-2">
-												if p.Perms["monitors.write"] {
-													if m.Enabled {
-														<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, m.ID)) } class="contents">
-															<button type="submit" class="inline-flex items-center text-muted hover:text-yellow-400 transition-colors" title="Pause">
-																<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-															</button>
-														</form>
-													} else {
-														<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, m.ID)) } class="contents">
-															<button type="submit" class="inline-flex items-center text-muted hover:text-emerald-400 transition-colors" title="Resume">
-																<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-															</button>
-														</form>
-													}
-												}
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="inline-flex items-center text-muted hover:text-white transition-colors" title="View">
-													<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-												</a>
-												if p.Perms["monitors.write"] {
-													<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, m.ID)) } class="inline-flex items-center text-muted hover:text-brand transition-colors" title="Edit">
-														<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
-													</a>
-												}
-											</div>
+											@MonitorRowActions(p.BasePath, m, p.Perms["monitors.write"])
 										</td>
 									</tr>
 								}
@@ -210,10 +190,7 @@ templ GroupDetailPage(p GroupDetailParams) {
 						</table>
 					</div>
 				} else {
-					<div class="px-4 py-16 text-center">
-						<p class="text-muted text-[13px] mb-2">No monitors in this group</p>
-						<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="text-[12px] text-brand hover:text-brand/80 transition-colors">Add a monitor</a>
-					</div>
+					@EmptyState("No monitors in this group", p.BasePath+"/monitors/new", "Add a monitor")
 				}
 			</div>
 		</div>

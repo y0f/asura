@@ -124,7 +124,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/status-pages/{id}/delete"), webPerm("monitors.write", s.web.StatusPageDelete))
 
 		mux.Handle("GET "+s.p("/settings"), webAuth(http.HandlerFunc(s.web.Settings)))
-		mux.Handle("GET "+s.p("/settings/export"), webAuth(http.HandlerFunc(s.web.ExportConfig)))
+		mux.Handle("GET "+s.p("/settings/export"), webPerm("monitors.write", s.web.ExportConfig))
 		mux.Handle("POST "+s.p("/settings/import"), webPerm("monitors.write", s.web.ImportConfig))
 		mux.Handle("POST "+s.p("/settings/vacuum"), webPerm("monitors.write", s.web.DBVacuum))
 		mux.Handle("GET "+s.p("/events"), webAuth(s.events))
@@ -222,7 +222,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET "+s.p("/api/v1/db/size"), metricsRead(http.HandlerFunc(s.api.DBSize)))
 	mux.Handle("POST "+s.p("/api/v1/db/vacuum"), monWrite(http.HandlerFunc(s.api.DBVacuum)))
 
-	mux.Handle("GET "+s.p("/api/v1/export"), monRead(http.HandlerFunc(s.api.Export)))
+	mux.Handle("GET "+s.p("/api/v1/export"), monWrite(http.HandlerFunc(s.api.Export)))
 	mux.Handle("POST "+s.p("/api/v1/import"), monWrite(http.HandlerFunc(s.api.Import)))
 
 	// On-call rotations

@@ -89,9 +89,7 @@ templ MaintenanceListPage(p MaintenanceListParams) {
 					</div>
 				</div>
 			} else {
-				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
-					<p class="text-muted text-[13px]">No maintenance windows</p>
-				</div>
+				@EmptyState("No maintenance windows", "", "")
 			}
 			@FormModal("showForm", "max-w-md", "'New Maintenance Window'") {
 				<form method="POST" action={ templ.SafeURL(p.BasePath + "/maintenance") } class="space-y-3">

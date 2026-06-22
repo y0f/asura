@@ -56,11 +56,16 @@ func (c *SSHChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("invalid SSH banner: %s", banner)}, nil
 	}
 
+	// NOTE: This verifies the SSH identification banner, not the host key.
+	// The banner carries no cryptographic identity and offers no MITM
+	// protection. Real host-key verification requires an SSH transport
+	// handshake (golang.org/x/crypto/ssh HostKeyCallback), which is not a
+	// dependency of this module.
 	if settings.ExpectedFingerprint != "" {
 		h := sha256.Sum256([]byte(banner))
 		fp := hex.EncodeToString(h[:])
 		if !strings.EqualFold(fp, settings.ExpectedFingerprint) {
-			return &Result{Status: "down", ResponseTime: elapsed, Message: "host key fingerprint mismatch"}, nil
+			return &Result{Status: "down", ResponseTime: elapsed, Message: "SSH banner fingerprint mismatch"}, nil
 		}
 	}
 

@@ -180,10 +180,7 @@ func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID 
 
 func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context) (map[int64]int64, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT cr.monitor_id, cr.response_time
-		 FROM check_results cr
-		 INNER JOIN (SELECT monitor_id, MAX(id) AS max_id FROM check_results GROUP BY monitor_id) latest
-		 ON cr.id = latest.max_id`)
+		`SELECT monitor_id, last_response_time FROM monitor_status`)
 	if err != nil {
 		return nil, err
 	}

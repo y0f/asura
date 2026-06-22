@@ -192,101 +192,44 @@ func (p MonitorDetailParams) showPercentiles() bool {
 	return false
 }
 
-func monitorChartXData() string {
-	return `{
-    range: '24h',
-    loading: true,
-    chart: null,
-    points: [],
-    chartUrl: '',
-    async fetchData() {
-        this.loading = true;
-        try {
-            const resp = await fetch(this.chartUrl + '?range=' + this.range, {credentials: 'same-origin'});
-            const data = await resp.json();
-            this.points = data.points || [];
-        } catch(e) {
-            this.points = [];
-        }
-        this.loading = false;
-        this.$nextTick(() => this.render());
-    },
-    render() {
-        const el = this.$refs.chart;
-        const tip = this.$refs.tooltip;
-        if (!el || !this.points.length) return;
-        if (this.chart) { this.chart.destroy(); this.chart = null; }
-        const ts = this.points.map(p => p.ts);
-        const rt = this.points.map(p => p.rt);
-        const statuses = this.points.map(p => p.s);
-        const tipDate = tip ? tip.querySelector('.tip-date') : null;
-        const tipVal = tip ? tip.querySelector('.tip-value') : null;
-        const tipSt = tip ? tip.querySelector('.tip-status') : null;
-        const cs = getComputedStyle(document.documentElement);
-        const axisColor = cs.getPropertyValue('--color-muted').trim();
-        const gridColor = cs.getPropertyValue('--color-line').trim();
-        const opts = {
-            width: el.clientWidth, height: 200,
-            cursor: { show: true, drag: { x: false, y: false } },
-            select: { show: false }, legend: { show: false },
-            padding: [12, 8, 0, 0],
-            axes: [
-                { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font: '10px Inter, system-ui, sans-serif', gap: 6 },
-                { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font: '10px Inter, system-ui, sans-serif', gap: 6, values: (u, vals) => vals.map(v => v + 'ms') }
-            ],
-            series: [
-                {},
-                { label: 'Response Time', stroke: '#0080ff', width: 1.5, fill: 'rgba(0,128,255,0.06)', points: { show: false } }
-            ],
-            hooks: {
-                draw: [(u) => {
-                    const ctx = u.ctx;
-                    const { left, top, width, height } = u.bbox;
-                    for (let i = 0; i < statuses.length; i++) {
-                        if (statuses[i] !== 'down') continue;
-                        const x = Math.round(u.valToPos(ts[i], 'x', true));
-                        ctx.save();
-                        ctx.fillStyle = 'rgba(248,113,113,0.15)';
-                        const bw = Math.max(2, width / statuses.length);
-                        ctx.fillRect(x - bw/2, top, bw, height);
-                        ctx.restore();
-                    }
-                }],
-                setCursor: [(u) => {
-                    if (!tip) return;
-                    const idx = u.cursor.idx;
-                    if (idx == null) { tip.style.display = 'none'; return; }
-                    const t = new Date(ts[idx] * 1000);
-                    const time = t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-                    const date = t.toLocaleDateString([], {month:'short',day:'numeric'});
-                    if (tipDate) tipDate.textContent = date + ' ' + time;
-                    if (tipVal) tipVal.textContent = rt[idx] + 'ms';
-                    if (tipSt) { tipSt.textContent = statuses[idx] === 'down' ? 'down' : ''; tipSt.style.display = statuses[idx] === 'down' ? '' : 'none'; }
-                    tip.style.display = 'block';
-                    const cx = u.valToPos(ts[idx], 'x', true);
-                    const tipW = tip.offsetWidth;
-                    let lx = cx + 12;
-                    if (lx + tipW > el.clientWidth) lx = cx - tipW - 12;
-                    tip.style.left = lx + 'px';
-                    tip.style.top = '8px';
-                }]
-            }
-        };
-        this.chart = new uPlot(opts, [ts, rt], el);
-    },
-    resizeObs: null,
-    themeHandler: null,
-    init() {
-        this.chartUrl = this.$el.dataset.chartUrl;
-        this.fetchData();
-        this.resizeObs = new ResizeObserver(() => {
-            if (this.chart && this.$refs.chart) this.chart.setSize({width: this.$refs.chart.clientWidth, height: 200});
-        });
-        this.$nextTick(() => { if (this.$refs.chart) this.resizeObs.observe(this.$refs.chart); });
-        this.themeHandler = () => this.fetchData();
-        window.addEventListener('theme-changed', this.themeHandler);
-    },
-    destroy() { if (this.resizeObs) this.resizeObs.disconnect(); if (this.chart) this.chart.destroy(); if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler); }}`
+func manualStatusBtnClass(status string) string {
+	switch status {
+	case "up":
+		return "text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/5"
+	case "degraded":
+		return "text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/5"
+	default:
+		return "text-red-400 border-red-500/20 hover:bg-red-500/5"
+	}
+}
+
+func manualStatusBtnLabel(status string) string {
+	switch status {
+	case "up":
+		return "Set Up"
+	case "degraded":
+		return "Set Degraded"
+	default:
+		return "Set Down"
+	}
+}
+
+templ manualStatusButton(basePath string, monitorID int64, status string) {
+	<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", basePath, monitorID)) }>
+		<input type="hidden" name="status" value={ status }/>
+		<input type="hidden" name="message" :value="msg"/>
+		<button type="submit" class={ "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] border rounded transition-colors", manualStatusBtnClass(status) }>
+			switch status {
+				case "up":
+					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+				case "degraded":
+					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+				default:
+					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+			}
+			{ manualStatusBtnLabel(status) }
+		</button>
+	</form>
 }
 
 templ MonitorListPage(p MonitorListParams) {
@@ -295,22 +238,15 @@ templ MonitorListPage(p MonitorListParams) {
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Monitors</h1>
 				if p.Perms["monitors.write"] {
-					<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
-						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
-						New Monitor
-					</a>
+					@ToolbarNewButton(p.BasePath+"/monitors/new", "New Monitor")
 				}
 			</div>
-						<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="mb-4">
+			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="mb-4">
 				if p.Type != "" {
 					<input type="hidden" name="type" value={ p.Type }/>
 				}
 				<div class="flex flex-wrap items-center gap-2">
-					<div class="relative">
-						<svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-						<input type="text" name="q" value={ p.Search } placeholder="Search monitors..."
-							class="pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors w-48"/>
-					</div>
+					@SearchInput("q", p.Search, "Search monitors...")
 					<select name="status" onchange="this.form.submit()" class="form-select-sm">
 						<option value="" if p.StatusFilter == "" { selected } >All Statuses</option>
 						<option value="up" if p.StatusFilter == "up" { selected } >Up</option>
@@ -380,8 +316,14 @@ templ MonitorListPage(p MonitorListParams) {
 					</form>
 				</div>
 			}
-			<div id="monitor-list" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
-				class="border border-line-light rounded-xl overflow-hidden">
+			<div id="monitor-list" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
+				hx-indicator="#monitor-list-indicator"
+				hx-on::before-request="refreshError = false"
+				hx-on::response-error="refreshError = true"
+				hx-on::send-error="refreshError = true"
+				class="relative border border-line-light rounded-xl overflow-hidden">
+				<div id="monitor-list-indicator" class="htmx-indicator absolute top-2 right-2 z-10 text-[10px] text-muted">Refreshing…</div>
+				<div x-show="refreshError" x-cloak class="absolute top-2 right-2 z-10 text-[10px] text-red-400">Refresh failed — retrying…</div>
 				if ms := p.monitors(); len(ms) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[640px]">
@@ -389,7 +331,7 @@ templ MonitorListPage(p MonitorListParams) {
 								<tr class="border-b border-line text-left">
 									if p.Perms["monitors.write"] {
 										<th class="th w-8">
-											<input type="checkbox" :checked="allSelected" @change="toggleAll()" class="form-checkbox"/>
+											<input type="checkbox" :checked="allSelected" @change="toggleAll()" aria-label="Select all monitors" class="form-checkbox"/>
 										</th>
 									}
 									<th class="th">Monitor</th>
@@ -404,7 +346,7 @@ templ MonitorListPage(p MonitorListParams) {
 									<tr class="hover:bg-surface-200/20 transition-colors" :class={ fmt.Sprintf("selected.includes(%d) && 'bg-brand/5'", m.ID) }>
 										if p.Perms["monitors.write"] {
 											<td class="px-4 py-3">
-												<input type="checkbox" :checked={ fmt.Sprintf("selected.includes(%d)", m.ID) } @change={ fmt.Sprintf("toggle(%d)", m.ID) } class="form-checkbox"/>
+												<input type="checkbox" :checked={ fmt.Sprintf("selected.includes(%d)", m.ID) } @change={ fmt.Sprintf("toggle(%d)", m.ID) } aria-label={ "Select " + m.Name } class="form-checkbox"/>
 											</td>
 										}
 										<td class="px-4 py-3">
@@ -440,31 +382,7 @@ templ MonitorListPage(p MonitorListParams) {
 											}
 										</td>
 										<td class="px-4 py-3 text-right">
-											<div class="flex items-center justify-end gap-2">
-												if p.Perms["monitors.write"] {
-													if m.Enabled {
-														<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, m.ID)) } class="contents">
-															<button type="submit" class="inline-flex items-center text-muted hover:text-yellow-400 transition-colors" title="Pause">
-																<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-															</button>
-														</form>
-													} else {
-														<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, m.ID)) } class="contents">
-															<button type="submit" class="inline-flex items-center text-muted hover:text-emerald-400 transition-colors" title="Resume">
-																<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-															</button>
-														</form>
-													}
-												}
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="inline-flex items-center text-muted hover:text-white transition-colors" title="View">
-													<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-												</a>
-												if p.Perms["monitors.write"] {
-													<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, m.ID)) } class="inline-flex items-center text-muted hover:text-brand transition-colors" title="Edit">
-														<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
-													</a>
-												}
-											</div>
+											@MonitorRowActions(p.BasePath, m, p.Perms["monitors.write"])
 										</td>
 									</tr>
 								}
@@ -497,12 +415,21 @@ templ MonitorListPage(p MonitorListParams) {
 				}
 			</div>
 		</div>
+		@MonitorListListener(p.BasePath, "monitor-list")
 	}
 }
 
 templ MonitorDetailPage(p MonitorDetailParams) {
 	@Layout(p.LayoutParams) {
-		<div id="monitor-detail" hx-get="" hx-trigger="sse:refresh, every 15s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false">
+		<script src={ p.BasePath + "/static/monitor-chart.js" }></script>
+		<div id="monitor-detail" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false"
+			hx-indicator="#monitor-detail-indicator"
+			hx-on::before-request="refreshError = false"
+			hx-on::response-error="refreshError = true"
+			hx-on::send-error="refreshError = true"
+			class="relative">
+			<div id="monitor-detail-indicator" class="htmx-indicator absolute top-0 right-0 z-10 text-[10px] text-muted">Refreshing…</div>
+			<div x-show="refreshError" x-cloak class="absolute top-0 right-0 z-10 text-[10px] text-red-400">Refresh failed — retrying…</div>
 			<div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
 				<div>
 					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="inline-flex items-center gap-1 text-[11px] text-muted hover:text-muted-light transition-colors">
@@ -512,7 +439,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="flex items-center gap-2.5 mt-1.5">
 						<div class={ "w-2 h-2 rounded-full", StatusDot(p.Monitor.Status), templ.KV("animate-pulse-dot", p.Monitor.Status == "down") }></div>
 						<h1 class="text-[17px] font-medium text-white">{ p.Monitor.Name }</h1>
-						<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(p.Monitor.Status) }>{ p.Monitor.Status }</span>
+						@StatusPill(p.Monitor.Status)
 						if !p.Monitor.Enabled {
 							<span class="text-[10px] tracking-wide px-1.5 py-px rounded border border-line text-muted">paused</span>
 						}
@@ -551,30 +478,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				}
 				if p.Monitor.Type == "manual" && p.Perms["monitors.write"] {
 					<div class="flex items-center gap-1.5 shrink-0" x-data="{ showMsg: false, msg: '' }">
-						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", p.BasePath, p.Monitor.ID)) }>
-							<input type="hidden" name="status" value="up"/>
-							<input type="hidden" name="message" :value="msg"/>
-							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/5 transition-colors">
-								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-								Set Up
-							</button>
-						</form>
-						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", p.BasePath, p.Monitor.ID)) }>
-							<input type="hidden" name="status" value="degraded"/>
-							<input type="hidden" name="message" :value="msg"/>
-							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-yellow-400 border border-yellow-500/20 rounded hover:bg-yellow-500/5 transition-colors">
-								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-								Set Degraded
-							</button>
-						</form>
-						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", p.BasePath, p.Monitor.ID)) }>
-							<input type="hidden" name="status" value="down"/>
-							<input type="hidden" name="message" :value="msg"/>
-							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors">
-								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-								Set Down
-							</button>
-						</form>
+						@manualStatusButton(p.BasePath, p.Monitor.ID, "up")
+						@manualStatusButton(p.BasePath, p.Monitor.ID, "degraded")
+						@manualStatusButton(p.BasePath, p.Monitor.ID, "down")
 						<button type="button" @click="showMsg = !showMsg" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-muted border border-line rounded hover:text-white transition-colors">
 							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 							<span x-text="showMsg ? 'Hide' : 'Message'"></span>
@@ -685,7 +591,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			<div id="response-chart" hx-preserve="true"
 				data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
 				class="border border-line-light rounded-xl px-4 py-3 mb-5"
-				x-data={ monitorChartXData() } x-init="init()" x-cloak>
+				x-data="monitorChart()" x-init="init()" x-cloak>
 				<div class="flex items-center justify-between mb-3">
 					<h2 class="text-[11px] text-muted uppercase tracking-widest">Response Time</h2>
 					<div class="flex gap-1">
@@ -892,5 +798,6 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			}
 		</div>
+		@MonitorListListener(p.BasePath, "monitor-detail")
 	}
 }

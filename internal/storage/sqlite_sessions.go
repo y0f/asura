@@ -126,6 +126,40 @@ func (s *SQLiteStore) DeleteTOTPKey(ctx context.Context, apiKeyName string) erro
 	return err
 }
 
+func (s *SQLiteStore) GetTOTPLastCounter(ctx context.Context, apiKeyName string) (uint64, error) {
+	var counter int64
+	err := s.readDB.QueryRowContext(ctx,
+		"SELECT last_counter FROM totp_keys WHERE api_key_name=?", apiKeyName).Scan(&counter)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(counter), nil
+}
+
+func (s *SQLiteStore) UpdateTOTPLastCounter(ctx context.Context, apiKeyName string, counter uint64) error {
+	_, err := s.writeDB.ExecContext(ctx,
+		"UPDATE totp_keys SET last_counter=? WHERE api_key_name=?", int64(counter), apiKeyName)
+	return err
+}
+
+// AdvanceTOTPCounter atomically advances last_counter to counter only if it is
+// strictly greater than the stored value. It returns true when the row was
+// updated (the code is fresh) and false when it was a replay/stale code. The
+// compare-and-swap closes the TOCTOU window between a read and a blind write.
+func (s *SQLiteStore) AdvanceTOTPCounter(ctx context.Context, apiKeyName string, counter uint64) (bool, error) {
+	res, err := s.writeDB.ExecContext(ctx,
+		"UPDATE totp_keys SET last_counter=? WHERE api_key_name=? AND last_counter < ?",
+		int64(counter), apiKeyName, int64(counter))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // --- Sessions ---
 
 func (s *SQLiteStore) CreateSession(ctx context.Context, sess *Session) error {

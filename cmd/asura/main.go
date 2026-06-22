@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -86,8 +87,16 @@ func main() {
 	defer store.Close()
 	logger.Info("database opened", "path", cfg.Database.Path)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	if cfg.Database.EncryptionKey != "" {
-		enc, err := storage.NewEncryptor(cfg.Database.EncryptionKey)
+		salt, err := store.EnsureKDFSalt(ctx)
+		if err != nil {
+			logger.Error("failed to load encryption salt", "error", err)
+			os.Exit(1)
+		}
+		enc, err := storage.NewEncryptor(cfg.Database.EncryptionKey, salt)
 		if err != nil {
 			logger.Error("failed to create encryptor", "error", err)
 			os.Exit(1)
@@ -95,9 +104,6 @@ func main() {
 		store.SetEncryptor(enc)
 		logger.Info("encryption at rest enabled")
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	purgeStaleSessionsOnStartup(ctx, store, cfg, logger)
 
@@ -108,27 +114,36 @@ func main() {
 
 	var subNotifier *notifier.SubscriberNotifier
 	if cfg.Subscriptions.Enabled {
-		subNotifier = notifier.NewSubscriberNotifier(store, cfg.Subscriptions.SMTP, cfg.ResolvedExternalURL(), logger)
+		subNotifier = notifier.NewSubscriberNotifier(store, cfg.Subscriptions.SMTP, cfg.ResolvedExternalURL(), logger, cfg.Monitor.AllowPrivateTargets)
 		logger.Info("status page subscriptions enabled")
 	}
 
-	escalationRunner := escalation.NewRunner(store, dispatcher, logger)
-	go escalationRunner.Start(ctx)
-
-	go pipeline.Run(ctx)
-
-	heartbeatWatcher := monitor.NewHeartbeatWatcher(store, incMgr, pipeline, cfg.Monitor.HeartbeatCheckInterval, logger)
-	go heartbeatWatcher.Run(ctx)
-
-	retentionWorker := storage.NewRetentionWorker(store, cfg.Database.RetentionDays, cfg.Database.RequestLogRetentionDays, cfg.Database.RetentionPeriod, logger)
-	go retentionWorker.Run(ctx)
-
 	srv := server.NewServer(cfg, store, pipeline, dispatcher, subNotifier, logger, version)
-	go forwardNotifications(ctx, pipeline, dispatcher, subNotifier, srv.EventBroker())
-	go srv.RequestLogWriter().Run(ctx)
-	go runRollupWorker(ctx, store, logger)
-	go runBaselineWorker(ctx, store, logger)
-	go runRotationAdvancer(ctx, store, logger)
+
+	escalationRunner := escalation.NewRunner(store, dispatcher, logger)
+	heartbeatWatcher := monitor.NewHeartbeatWatcher(store, incMgr, pipeline, cfg.Monitor.HeartbeatCheckInterval, logger)
+	retentionWorker := storage.NewRetentionWorker(store, cfg.Database.RetentionDays, cfg.Database.RequestLogRetentionDays, cfg.Database.RetentionPeriod, logger)
+
+	var wg sync.WaitGroup
+	worker := func(fn func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fn()
+		}()
+	}
+
+	worker(func() { escalationRunner.Start(ctx) })
+	worker(func() { pipeline.Run(ctx) })
+	worker(func() { heartbeatWatcher.Run(ctx) })
+	worker(func() { retentionWorker.Run(ctx) })
+	worker(func() { forwardNotifications(ctx, pipeline, dispatcher, subNotifier, srv.EventBroker()) })
+	worker(func() { srv.RequestLogWriter().Run(ctx) })
+	worker(func() { runRollupWorker(ctx, store, logger) })
+	worker(func() { runBaselineWorker(ctx, store, logger) })
+	worker(func() { runRotationAdvancer(ctx, store, logger) })
+	worker(func() { runVacuumWorker(ctx, store, logger) })
+
 	httpServer := startHTTPServer(cfg, srv, logger, cancel)
 
 	quit := make(chan os.Signal, 1)
@@ -147,6 +162,18 @@ func main() {
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server shutdown error", "error", err)
+	}
+
+	workersDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(workersDone)
+	}()
+
+	select {
+	case <-workersDone:
+	case <-time.After(15 * time.Second):
+		logger.Warn("timed out waiting for background workers to stop")
 	}
 
 	logger.Info("shutdown complete")
@@ -313,6 +340,25 @@ func runRotationAdvancer(ctx context.Context, store storage.Store, logger *slog.
 				if err := store.AdvanceRotation(ctx, rot.ID); err != nil {
 					logger.Error("rotation advancer: advance", "id", rot.ID, "error", err)
 				}
+			}
+		}
+	}
+}
+
+func runVacuumWorker(ctx context.Context, store storage.Store, logger *slog.Logger) {
+	if err := store.IncrementalVacuum(ctx); err != nil {
+		logger.Error("incremental vacuum failed", "error", err)
+	}
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := store.IncrementalVacuum(ctx); err != nil {
+				logger.Error("incremental vacuum failed", "error", err)
 			}
 		}
 	}

@@ -2,7 +2,11 @@
 
 <p>All endpoints return JSON. Pass your key in the <code>X-API-Key</code> header. If you set a <code>base_path</code>, all paths get prefixed (e.g. <code>/asura/api/v1/health</code>).</p>
 
-<p>Pagination: <code>?page=1&amp;per_page=20</code> on all list endpoints.</p>
+<p>Pagination: <code>?page=1&amp;per_page=20</code> applies to the paginated list endpoints only: monitors, checks, changes, incidents, notification history, request-logs, and audit. Other list endpoints return the full set as <code>{"data":[...]}</code>.</p>
+
+<h2>Permissions</h2>
+
+<p>Each endpoint requires a specific permission scope. A key's scopes come from its <code>role</code> (<code>admin</code> = all, <code>readonly</code> = the <code>.read</code> scopes) or from an explicit <code>permissions</code> list. The scopes are: <code>monitors.read</code>, <code>monitors.write</code>, <code>incidents.read</code>, <code>incidents.write</code>, <code>notifications.read</code>, <code>notifications.write</code>, <code>escalation_policies.read</code>, <code>escalation_policies.write</code>, <code>maintenance.read</code>, <code>maintenance.write</code>, and <code>metrics.read</code>. The permission required is noted per section below; read endpoints take the matching <code>.read</code> scope and writes take <code>.write</code>.</p>
 
 <h2>Health <span class="text-muted text-[11px] font-normal">(no auth)</span></h2>
 
@@ -14,6 +18,19 @@
     <tr><td><code>GET</code></td><td><code>/api/v1/health</code></td><td>Status, uptime</td></tr>
   </tbody>
 </table>
+
+<h2>Heartbeat Ping <span class="text-muted text-[11px] font-normal">(no auth)</span></h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code> / <code>POST</code></td><td><code>/api/v1/heartbeat/{token}</code></td><td>Record a ping for a heartbeat monitor</td></tr>
+  </tbody>
+</table>
+
+<p>Heartbeat (push) monitors expect periodic pings from your job or service. Hit this endpoint each time the job runs. The token is generated when the heartbeat monitor is created. Returns <code>{"status":"ok"}</code>; an unknown token returns <code>404</code>. No authentication is required so it can be called from anywhere (e.g. a cron job's curl).</p>
 
 <h2>Metrics <span class="text-muted text-[11px] font-normal">(read auth)</span></h2>
 
@@ -96,6 +113,28 @@
 
 <p>The public API for a specific page is available at <code>GET /api/v1/status-pages/{id}/public</code> (no auth required). Returns public fields only.</p>
 
+<h3>Subscribers</h3>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>POST</code></td><td><code>/api/v1/status-pages/{id}/subscribe</code></td><td>public</td><td>Subscribe to incident updates</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/status-pages/{id}/subscribers</code></td><td><code>monitors.read</code></td><td>Subscriber count</td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/status-pages/{id}/subscribers/{subId}</code></td><td><code>monitors.write</code></td><td>Remove a subscriber</td></tr>
+  </tbody>
+</table>
+
+<pre><code>POST /api/v1/status-pages/{id}/subscribe
+{
+  "type": "email",                       // email | webhook
+  "email": "alerts@example.com",         // required when type is email
+  "webhook_url": "https://example.com/hook" // required when type is webhook
+}</code></pre>
+
+<p>Subscribe is public so status page visitors can opt in. Email subscriptions trigger a confirmation email; webhook subscriptions are confirmed immediately. The count endpoint returns <code>{"count":N}</code>.</p>
+
 <h2>Status Badges</h2>
 
 <p>Available for any monitor assigned to an enabled status page.</p>
@@ -107,7 +146,7 @@
   <tbody>
     <tr><td><code>GET</code></td><td><code>/api/v1/badge/{id}/status</code></td><td>Status badge (up/down/degraded)</td></tr>
     <tr><td><code>GET</code></td><td><code>/api/v1/badge/{id}/uptime</code></td><td>30-day uptime percentage</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/v1/badge/{id}/response</code></td><td>24h average response time</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/badge/{id}/response</code></td><td>Median (p50) response time over 24h</td></tr>
     <tr><td><code>GET</code></td><td><code>/api/v1/badge/{id}/cert</code></td><td>TLS certificate expiry (days remaining)</td></tr>
   </tbody>
 </table>
@@ -211,7 +250,7 @@
 
 <p>Types: <code>webhook</code> <code>email</code> <code>telegram</code> <code>discord</code> <code>slack</code> <code>ntfy</code> <code>teams</code> <code>pagerduty</code> <code>opsgenie</code> <code>pushover</code> <code>googlechat</code> <code>matrix</code> <code>gotify</code></p>
 
-<p>Events: <code>incident.created</code> <code>incident.acknowledged</code> <code>incident.resolved</code> <code>incident.reminder</code> <code>incident.escalated</code> <code>content.changed</code> <code>cert.changed</code></p>
+<p>Events: <code>incident.created</code> <code>incident.acknowledged</code> <code>incident.resolved</code> <code>incident.reminder</code> <code>incident.escalated</code> <code>content.changed</code> <code>cert.changed</code> <code>sla.breach</code> <code>maintenance.started</code> <code>maintenance.ended</code> <span class="text-muted">(a channel with no event filter receives all of them)</span></p>
 
 <p>See <a href="#notifications">Notifications</a> for per-type settings and webhook signing.</p>
 
@@ -270,10 +309,25 @@
     <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
   </thead>
   <tbody>
-    <tr><td><code>GET</code></td><td><code>/api/v1/request-logs</code></td><td>List (filter: group, method, status_code, range)</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/request-logs</code></td><td>List (filter: group, method, status_code, monitor_id, from, to)</td></tr>
     <tr><td><code>GET</code></td><td><code>/api/v1/request-logs/stats</code></td><td>Aggregate stats (requests, visitors, latency)</td></tr>
   </tbody>
 </table>
+
+<p>The <code>from</code> and <code>to</code> filters take RFC 3339 timestamps.</p>
+
+<h2>Audit Log</h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/audit</code></td><td>List audit log entries (paginated)</td></tr>
+  </tbody>
+</table>
+
+<p>Records configuration changes (creates, updates, deletes) with the acting key, action, target, and timestamp. Requires <code>metrics.read</code>.</p>
 
 <h2>Export / Import</h2>
 
@@ -375,6 +429,8 @@
     <tr><td><code>GET</code></td><td><code>/api/v1/agents/status</code></td><td>Agent online/offline status</td></tr>
   </tbody>
 </table>
+
+<p><code>POST /api/v1/agents</code> returns the created agent including its <code>token</code>. The token is shown once at creation — store it now, as it cannot be retrieved later. Pass it as the <code>X-Agent-Token</code> header when running the agent.</p>
 
 <h3>Agent Endpoints (X-Agent-Token auth)</h3>
 

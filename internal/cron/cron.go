@@ -34,8 +34,13 @@ func Parse(expr string) (*Expr, error) {
 	if e.months, err = parseField(fields[3], 1, 12); err != nil {
 		return nil, fmt.Errorf("month: %w", err)
 	}
-	if e.dows, err = parseField(fields[4], 0, 6); err != nil {
+	if e.dows, err = parseField(fields[4], 0, 7); err != nil {
 		return nil, fmt.Errorf("day-of-week: %w", err)
+	}
+	for i, d := range e.dows {
+		if d == 7 {
+			e.dows[i] = 0
+		}
 	}
 	return e, nil
 }

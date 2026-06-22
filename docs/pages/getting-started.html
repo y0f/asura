@@ -29,7 +29,10 @@ curl http://127.0.0.1:8090/api/v1/health</code></pre>
 cd Asura
 cp config.example.yaml config.yaml
 # set your API key hash and database.path to /app/data/asura.db
+# set server.listen to "0.0.0.0:8090" so the port is reachable inside the container
 docker compose up -d</code></pre>
+
+<blockquote>The default <code>listen: "127.0.0.1:8090"</code> only binds inside the container and is unreachable from the host. For Docker, set <code>server.listen: "0.0.0.0:8090"</code> in <code>config.yaml</code>. The compose file publishes <code>8090</code> on <code>127.0.0.1</code> of the host, so put a reverse proxy in front to expose it.</blockquote>
 
 <h2>From Source</h2>
 

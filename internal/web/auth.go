@@ -186,12 +186,33 @@ func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !totp.Validate(secret, code, time.Now()) {
+	matchedCounter, ok := totp.ValidateWithCounter(secret, code, time.Now())
+	if !ok {
 		h.auditLogin("login_totp_failed", apiKey.Name, ip)
 		newToken := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
 		h.renderComponent(w, r, views.TOTPPage(views.TOTPParams{
 			BasePath:       h.cfg.Server.BasePath,
 			Error:          "Invalid code. Please try again.",
+			ChallengeToken: newToken,
+		}))
+		return
+	}
+
+	// Atomic compare-and-swap: only accept the code if its time-step is strictly
+	// greater than the last accepted one. This closes the TOCTOU window so two
+	// concurrent logins reusing the same code cannot both succeed.
+	fresh, err := h.store.AdvanceTOTPCounter(r.Context(), apiKey.Name, matchedCounter)
+	if err != nil {
+		h.logger.Error("advance totp counter", "error", err)
+		h.renderComponent(w, r, views.LoginPage(views.LoginParams{BasePath: h.cfg.Server.BasePath, Error: "Internal error"}))
+		return
+	}
+	if !fresh {
+		h.auditLogin("login_totp_replay", apiKey.Name, ip)
+		newToken := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		h.renderComponent(w, r, views.TOTPPage(views.TOTPParams{
+			BasePath:       h.cfg.Server.BasePath,
+			Error:          "This code has already been used. Wait for a new code.",
 			ChallengeToken: newToken,
 		}))
 		return

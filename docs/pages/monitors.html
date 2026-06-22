@@ -313,10 +313,10 @@ curl -X POST https://example.com/asura/api/v1/monitors/1/status \
 <h2>Additional Monitor Types</h2>
 
 <h3>SMTP</h3>
-<p>Checks mail server availability via EHLO handshake. Supports STARTTLS and expected banner validation. Configurable port (25, 465, 587).</p>
+<p>Checks mail server availability via the EHLO handshake. If an expected banner is configured, the server's greeting must contain that string or the check fails. Supports STARTTLS. Configurable port (25, 465, 587).</p>
 
 <h3>SSH</h3>
-<p>Connects to an SSH server and verifies the protocol banner (SSH-2.0). Optional host key fingerprint verification via SHA-256.</p>
+<p>Connects to an SSH server and reads the identification banner. The check passes if the banner starts with the <code>SSH-</code> prefix (any protocol version). An optional fingerprint check compares a SHA-256 hash of the banner string. Note: this verifies the server's identification banner, not its host key — it does not provide cryptographic host identity or MITM protection.</p>
 
 <h3>Redis</h3>
 <p>Sends PING via the RESP protocol and expects PONG. Supports optional AUTH password. Default port 6379.</p>

@@ -22,7 +22,7 @@ func (h *Handler) ListGroups(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var g storage.MonitorGroup
-	if err := readJSON(r, &g); err != nil {
+	if err := h.readJSON(r, &g); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -61,7 +61,7 @@ func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var g storage.MonitorGroup
-	if err := readJSON(r, &g); err != nil {
+	if err := h.readJSON(r, &g); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

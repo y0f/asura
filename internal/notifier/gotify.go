@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -19,7 +18,9 @@ type GotifySettings struct {
 	Priority  int    `json:"priority,omitempty"`
 }
 
-type GotifySender struct{}
+type GotifySender struct {
+	AllowPrivate bool
+}
 
 func (s *GotifySender) Type() string { return "gotify" }
 
@@ -53,16 +54,16 @@ func (s *GotifySender) Send(ctx context.Context, channel *storage.NotificationCh
 	})
 
 	serverURL := strings.TrimRight(settings.ServerURL, "/")
-	endpoint := serverURL + "/message?token=" + settings.AppToken
+	endpoint := serverURL + "/message"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gotify-Key", settings.AppToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("gotify request failed: %w", err)
 	}

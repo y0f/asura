@@ -45,16 +45,16 @@ func NewDispatcher(store storage.Store, logger *slog.Logger, allowPrivateTargets
 	d.RegisterSender(&WebhookSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&EmailSender{})
 	d.RegisterSender(&TelegramSender{})
-	d.RegisterSender(&DiscordSender{})
-	d.RegisterSender(&SlackSender{})
-	d.RegisterSender(&NtfySender{})
-	d.RegisterSender(&TeamsSender{})
+	d.RegisterSender(&DiscordSender{AllowPrivate: allowPrivateTargets})
+	d.RegisterSender(&SlackSender{AllowPrivate: allowPrivateTargets})
+	d.RegisterSender(&NtfySender{AllowPrivate: allowPrivateTargets})
+	d.RegisterSender(&TeamsSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&PagerDutySender{})
 	d.RegisterSender(&OpsgenieSender{})
 	d.RegisterSender(&PushoverSender{})
-	d.RegisterSender(&GoogleChatSender{})
-	d.RegisterSender(&MatrixSender{})
-	d.RegisterSender(&GotifySender{})
+	d.RegisterSender(&GoogleChatSender{AllowPrivate: allowPrivateTargets})
+	d.RegisterSender(&MatrixSender{AllowPrivate: allowPrivateTargets})
+	d.RegisterSender(&GotifySender{AllowPrivate: allowPrivateTargets})
 	return d
 }
 
@@ -80,7 +80,7 @@ func (d *Dispatcher) NotifyWithPayload(payload *Payload) {
 			continue
 		}
 
-		go d.sendWithRetry(sender, ch, payload)
+		d.spawnSend(sender, ch, payload)
 	}
 }
 
@@ -117,7 +117,7 @@ func (d *Dispatcher) NotifyForMonitor(monitorID int64, payload *Payload) {
 			d.logger.Warn("no sender for channel type", "type", ch.Type)
 			continue
 		}
-		go d.sendWithRetry(sender, ch, payload)
+		d.spawnSend(sender, ch, payload)
 	}
 }
 
@@ -144,7 +144,7 @@ func (d *Dispatcher) NotifyChannels(channelIDs []int64, payload *Payload) {
 			d.logger.Warn("no sender for channel type", "type", ch.Type)
 			continue
 		}
-		go d.sendWithRetry(sender, ch, payload)
+		d.spawnSend(sender, ch, payload)
 	}
 }
 
@@ -164,7 +164,27 @@ const (
 	baseBackoff = 2 * time.Second
 )
 
-func (d *Dispatcher) sendWithRetry(sender Sender, ch *storage.NotificationChannel, payload *Payload) {
+// spawnSend acquires a concurrency slot before launching the send goroutine so
+// that a backlog of channels applies backpressure to the caller rather than
+// spawning unbounded goroutines. It bails out if ctx is cancelled while waiting.
+func (d *Dispatcher) spawnSend(sender Sender, ch *storage.NotificationChannel, payload *Payload) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	select {
+	case d.sem <- struct{}{}:
+	case <-ctx.Done():
+		cancel()
+		return
+	}
+
+	go func() {
+		defer cancel()
+		defer func() { <-d.sem }()
+		d.sendWithRetry(ctx, sender, ch, payload)
+	}()
+}
+
+func (d *Dispatcher) sendWithRetry(ctx context.Context, sender Sender, ch *storage.NotificationChannel, payload *Payload) {
 	defer func() {
 		if r := recover(); r != nil {
 			d.logger.Error("notification sender panicked",
@@ -174,12 +194,6 @@ func (d *Dispatcher) sendWithRetry(sender Sender, ch *storage.NotificationChanne
 			)
 		}
 	}()
-
-	d.sem <- struct{}{}
-	defer func() { <-d.sem }()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -193,7 +207,7 @@ func (d *Dispatcher) sendWithRetry(sender Sender, ch *storage.NotificationChanne
 				"channel_type", ch.Type,
 				"attempt", attempt+1,
 				"max_attempts", maxRetries,
-				"error", err,
+				"error", redactErr(err),
 			)
 			continue
 		}
@@ -205,16 +219,13 @@ func (d *Dispatcher) sendWithRetry(sender Sender, ch *storage.NotificationChanne
 		d.recordHistory(ch, payload, "sent", "")
 		return
 	}
+	errMsg := redactErr(lastErr)
 	d.logger.Error("notification send failed after retries",
 		"channel_id", ch.ID,
 		"channel_type", ch.Type,
 		"attempts", maxRetries,
-		"error", lastErr,
+		"error", errMsg,
 	)
-	errMsg := ""
-	if lastErr != nil {
-		errMsg = lastErr.Error()
-	}
 	d.recordHistory(ch, payload, "failed", errMsg)
 }
 
@@ -295,7 +306,10 @@ func FormatMessage(p *Payload) string {
 	return fmt.Sprintf("[%s] Notification event", p.EventType)
 }
 
-func marshalPayload(p *Payload) []byte {
-	b, _ := json.Marshal(p)
-	return b
+func marshalPayload(p *Payload) ([]byte, error) {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return nil, fmt.Errorf("marshal payload: %w", err)
+	}
+	return b, nil
 }

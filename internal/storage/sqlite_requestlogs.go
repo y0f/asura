@@ -237,7 +237,7 @@ func (s *SQLiteStore) RollupRequestLogs(ctx context.Context, date string) error 
 		   monitor_id,
 		   COUNT(*) AS requests,
 		   COUNT(DISTINCT client_ip) AS unique_visitors,
-		   COALESCE(AVG(latency_ms), 0) AS avg_latency_ms
+		   CAST(COALESCE(AVG(latency_ms), 0) AS INTEGER) AS avg_latency_ms
 		 FROM request_logs
 		 WHERE created_at >= ? AND created_at < ?
 		 GROUP BY route_group, monitor_id`,

@@ -127,7 +127,7 @@ func (h *Handler) setToast(w http.ResponseWriter, kind, msg string) {
 		Path:     h.cfg.Server.BasePath + "/",
 		MaxAge:   5,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.Auth.Session.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }

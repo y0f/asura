@@ -21,7 +21,9 @@ type MatrixSettings struct {
 	RoomID      string `json:"room_id"`
 }
 
-type MatrixSender struct{}
+type MatrixSender struct {
+	AllowPrivate bool
+}
 
 func (s *MatrixSender) Type() string { return "matrix" }
 
@@ -58,8 +60,7 @@ func (s *MatrixSender) Send(ctx context.Context, channel *storage.NotificationCh
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+settings.AccessToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(s.AllowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("matrix request failed: %w", err)
 	}

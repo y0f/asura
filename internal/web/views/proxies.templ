@@ -22,11 +22,7 @@ templ ProxyListPage(p ProxyListParams) {
 			<div class="flex items-center justify-between mb-5">
 				<h1 class="text-[15px] font-medium text-white">Proxies</h1>
 				if p.Perms["monitors.write"] {
-					<a href={ templ.SafeURL(p.BasePath + "/proxies/new") }
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
-						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
-						New Proxy
-					</a>
+					@ToolbarNewButton(p.BasePath+"/proxies/new", "New Proxy")
 				}
 			</div>
 			if len(p.Proxies) > 0 {
@@ -72,10 +68,7 @@ templ ProxyListPage(p ProxyListParams) {
 					</table>
 				</div>
 			} else {
-				<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
-					<p class="text-muted text-[13px] mb-2">No proxies configured</p>
-					<a href={ templ.SafeURL(p.BasePath + "/proxies/new") } class="text-[12px] text-brand hover:text-brand/80 transition-colors">Create one</a>
-				</div>
+				@EmptyState("No proxies configured", p.BasePath+"/proxies/new", "Create one")
 			}
 		</div>
 	}

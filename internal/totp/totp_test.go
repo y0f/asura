@@ -98,6 +98,41 @@ func TestValidate(t *testing.T) {
 	})
 }
 
+func TestValidateWithCounter(t *testing.T) {
+	secret := rfc4226Secret
+
+	t.Run("returns matching counter", func(t *testing.T) {
+		tm := time.Unix(90, 0)
+		code := Code(secret, tm)
+		counter, ok := ValidateWithCounter(secret, code, tm)
+		if !ok {
+			t.Fatal("expected valid code")
+		}
+		if counter != 3 {
+			t.Fatalf("expected counter 3, got %d", counter)
+		}
+	})
+
+	t.Run("skew returns origin counter", func(t *testing.T) {
+		tm := time.Unix(90, 0)
+		code := Code(secret, tm)
+		counter, ok := ValidateWithCounter(secret, code, tm.Add(30*time.Second))
+		if !ok {
+			t.Fatal("expected valid code within skew")
+		}
+		if counter != 3 {
+			t.Fatalf("expected counter 3 from prior step, got %d", counter)
+		}
+	})
+
+	t.Run("invalid code", func(t *testing.T) {
+		tm := time.Unix(90, 0)
+		if _, ok := ValidateWithCounter(secret, "000000", tm); ok {
+			t.Fatal("expected invalid code to fail")
+		}
+	})
+}
+
 func TestGenerateSecret(t *testing.T) {
 	s1, err := GenerateSecret()
 	if err != nil {

@@ -18,7 +18,7 @@ func (s *SQLiteStore) CreateAgent(ctx context.Context, a *Agent) error {
 	res, err := s.writeDB.ExecContext(ctx,
 		`INSERT INTO agents (name, location, token, enabled, created_at)
 		 VALUES (?, ?, ?, ?, ?)`,
-		a.Name, a.Location, token, boolToInt(a.Enabled), now)
+		a.Name, a.Location, sha256Hex(token), boolToInt(a.Enabled), now)
 	if err != nil {
 		return fmt.Errorf("create agent: %w", err)
 	}
@@ -49,7 +49,7 @@ func (s *SQLiteStore) GetAgentByToken(ctx context.Context, token string) (*Agent
 	var createdAt string
 	err := s.readDB.QueryRowContext(ctx,
 		`SELECT id, name, location, token, last_heartbeat, enabled, created_at
-		 FROM agents WHERE token=?`, token).
+		 FROM agents WHERE token=?`, sha256Hex(token)).
 		Scan(&a.ID, &a.Name, &a.Location, &a.Token, &heartbeat, &a.Enabled, &createdAt)
 	if err != nil {
 		return nil, err
@@ -117,6 +117,10 @@ func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 		var settings string
 		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings); err != nil {
 			return nil, err
+		}
+		settings, err = s.decryptSettings(settings)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt settings: %w", err)
 		}
 		if settings != "" && settings != "{}" {
 			j.Settings = sanitizeSettingsForAgent([]byte(settings))

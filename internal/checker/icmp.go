@@ -24,9 +24,8 @@ func (c *ICMPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	timeout := time.Duration(monitor.Timeout) * time.Second
 	start := time.Now()
 
-	// Try IPv4 first, then IPv6.
-	dst, isIPv6 := resolveICMPTarget(ctx, monitor.Target)
-	if dst == nil {
+	targets := resolveICMPTargets(ctx, monitor.Target)
+	if len(targets) == 0 {
 		return &Result{
 			Status:       "down",
 			ResponseTime: time.Since(start).Milliseconds(),
@@ -34,16 +33,59 @@ func (c *ICMPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 		}, nil
 	}
 
-	if !c.AllowPrivate && safenet.IsPrivateIP(dst) {
-		return &Result{
-			Status:  "down",
-			Message: fmt.Sprintf("blocked: connections to private/reserved IP %s are not allowed", dst),
-		}, nil
+	var lastResult *Result
+	for _, t := range targets {
+		if ctx.Err() != nil {
+			return &Result{
+				Status:       "down",
+				ResponseTime: time.Since(start).Milliseconds(),
+				Message:      fmt.Sprintf("context cancelled: %v", ctx.Err()),
+			}, nil
+		}
+
+		if !c.AllowPrivate && safenet.IsPrivateIP(t.ip) {
+			lastResult = &Result{
+				Status:       "down",
+				ResponseTime: time.Since(start).Milliseconds(),
+				Message:      fmt.Sprintf("blocked: connections to private/reserved IP %s are not allowed", t.ip),
+			}
+			continue
+		}
+
+		result := probeICMP(t.ip, t.isIPv6, start, timeout)
+		if result.Status == "up" {
+			return result, nil
+		}
+		lastResult = result
 	}
 
+	return lastResult, nil
+}
+
+type icmpTarget struct {
+	ip     net.IP
+	isIPv6 bool
+}
+
+func resolveICMPTargets(ctx context.Context, target string) []icmpTarget {
+	var targets []icmpTarget
+	if addrs, err := net.DefaultResolver.LookupIP(ctx, "ip4", target); err == nil {
+		for _, a := range addrs {
+			targets = append(targets, icmpTarget{ip: a, isIPv6: false})
+		}
+	}
+	if addrs, err := net.DefaultResolver.LookupIP(ctx, "ip6", target); err == nil {
+		for _, a := range addrs {
+			targets = append(targets, icmpTarget{ip: a, isIPv6: true})
+		}
+	}
+	return targets
+}
+
+func probeICMP(dst net.IP, isIPv6 bool, start time.Time, timeout time.Duration) *Result {
 	conn, err := listenICMP(isIPv6)
 	if err != nil {
-		return &Result{Status: "down", Message: fmt.Sprintf("ICMP listen failed: %v", err)}, nil
+		return &Result{Status: "down", ResponseTime: time.Since(start).Milliseconds(), Message: fmt.Sprintf("ICMP listen failed: %v", err)}
 	}
 	defer conn.Close()
 
@@ -52,20 +94,11 @@ func (c *ICMPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 			Status:       "down",
 			ResponseTime: time.Since(start).Milliseconds(),
 			Message:      fmt.Sprintf("send failed: %v", err),
-		}, nil
+		}
 	}
 
-	return readEchoReply(conn, dst, start, timeout, isIPv6)
-}
-
-func resolveICMPTarget(ctx context.Context, target string) (net.IP, bool) {
-	if addrs, err := net.DefaultResolver.LookupIP(ctx, "ip4", target); err == nil && len(addrs) > 0 {
-		return addrs[0], false
-	}
-	if addrs, err := net.DefaultResolver.LookupIP(ctx, "ip6", target); err == nil && len(addrs) > 0 {
-		return addrs[0], true
-	}
-	return nil, false
+	result, _ := readEchoReply(conn, dst, start, timeout, isIPv6)
+	return result
 }
 
 func listenICMP(isIPv6 bool) (*icmp.PacketConn, error) {

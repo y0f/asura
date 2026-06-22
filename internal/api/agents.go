@@ -39,7 +39,7 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	var a storage.Agent
-	if err := readJSON(r, &a); err != nil {
+	if err := h.readJSON(r, &a); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

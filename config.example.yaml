@@ -40,9 +40,9 @@ server:
   # cors_origins:
   #   - "https://your-app.example.com"
 
-  # Per-IP rate limiting
-  rate_limit_per_sec: 10
-  rate_limit_burst: 20
+  # Per-IP rate limiting (built-in default: 30 req/s, burst 60)
+  rate_limit_per_sec: 30
+  rate_limit_burst: 60
 
   # Enable/disable the web UI (default: true)
   # Set to false for API-only deployments
@@ -58,7 +58,7 @@ database:
   # SQLite database file path
   path: "asura.db"
 
-  # Number of read-only connections (default: number of CPUs)
+  # Number of read-only connections (default: 4)
   max_read_conns: 4
 
   # How many days to keep check results, incidents, etc.

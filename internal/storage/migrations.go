@@ -1,10 +1,15 @@
 package storage
 
-const schemaVersion = 32
+const schemaVersion = 33
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
 	version INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS meta (
+	key   TEXT PRIMARY KEY,
+	value TEXT
 );
 
 CREATE TABLE IF NOT EXISTS monitor_groups (
@@ -83,7 +88,8 @@ CREATE TABLE IF NOT EXISTS monitor_status (
 	last_cert_fingerprint  TEXT    NOT NULL DEFAULT '',
 	baseline_avg           REAL    NOT NULL DEFAULT 0,
 	baseline_stddev        REAL    NOT NULL DEFAULT 0,
-	baseline_updated_at    TEXT
+	baseline_updated_at    TEXT,
+	last_response_time     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS check_results (
@@ -339,6 +345,7 @@ CREATE TABLE IF NOT EXISTS totp_keys (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
 	api_key_name TEXT NOT NULL UNIQUE,
 	secret       TEXT NOT NULL,
+	last_counter INTEGER NOT NULL DEFAULT 0,
 	created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
@@ -603,5 +610,14 @@ ALTER TABLE check_results ADD COLUMN agent_id INTEGER DEFAULT NULL;`,
 	{
 		version: 32,
 		sql:     `ALTER TABLE monitors ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 1;`,
+	},
+	{
+		version: 33,
+		sql: `CREATE TABLE IF NOT EXISTS meta (
+	key   TEXT PRIMARY KEY,
+	value TEXT
+);
+ALTER TABLE monitor_status ADD COLUMN last_response_time INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE totp_keys ADD COLUMN last_counter INTEGER NOT NULL DEFAULT 0;`,
 	},
 }

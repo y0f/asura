@@ -31,6 +31,9 @@ func TestParseAndMatch(t *testing.T) {
 		{"list miss", "0,15,30,45 * * * *", "2026-01-15T10:20:00Z", false},
 		{"complex", "30 2 * * 1-5", "2026-01-20T02:30:00Z", true},               // Tuesday
 		{"complex miss weekend", "30 2 * * 1-5", "2026-01-18T02:30:00Z", false}, // Sunday
+		{"sunday as 7", "0 0 * * 7", "2026-01-18T00:00:00Z", true},              // Sunday
+		{"sunday as 0", "0 0 * * 0", "2026-01-18T00:00:00Z", true},              // Sunday
+		{"sunday 7 miss monday", "0 0 * * 7", "2026-01-19T00:00:00Z", false},    // Monday
 	}
 
 	for _, tt := range tests {
@@ -58,7 +61,7 @@ func TestParseErrors(t *testing.T) {
 		"* 24 * * *",
 		"* * 0 * *",
 		"* * * 13 *",
-		"* * * * 7",
+		"* * * * 8",
 		"abc * * * *",
 		"*/0 * * * *",
 	}

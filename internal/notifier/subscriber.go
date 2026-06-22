@@ -9,7 +9,6 @@ import (
 	"html"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/smtp"
 	"strings"
@@ -20,20 +19,22 @@ import (
 )
 
 type SubscriberNotifier struct {
-	store  storage.Store
-	smtp   config.SMTPConfig
-	extURL string
-	logger *slog.Logger
-	sem    chan struct{}
+	store        storage.Store
+	smtp         config.SMTPConfig
+	extURL       string
+	logger       *slog.Logger
+	sem          chan struct{}
+	allowPrivate bool
 }
 
-func NewSubscriberNotifier(store storage.Store, smtpCfg config.SMTPConfig, extURL string, logger *slog.Logger) *SubscriberNotifier {
+func NewSubscriberNotifier(store storage.Store, smtpCfg config.SMTPConfig, extURL string, logger *slog.Logger, allowPrivate bool) *SubscriberNotifier {
 	return &SubscriberNotifier{
-		store:  store,
-		smtp:   smtpCfg,
-		extURL: strings.TrimRight(extURL, "/"),
-		logger: logger,
-		sem:    make(chan struct{}, 10),
+		store:        store,
+		smtp:         smtpCfg,
+		extURL:       strings.TrimRight(extURL, "/"),
+		logger:       logger,
+		sem:          make(chan struct{}, 10),
+		allowPrivate: allowPrivate,
 	}
 }
 
@@ -113,7 +114,7 @@ func (n *SubscriberNotifier) notifyPageSubscribers(ctx context.Context, sp *stor
 					"type", sub.Type,
 					"page_id", sp.ID,
 					"subscriber_id", sub.ID,
-					"error", err,
+					"error", redactErr(err),
 				)
 			}
 		}()
@@ -266,13 +267,7 @@ func (n *SubscriberNotifier) sendSubscriberWebhook(ctx context.Context, sub *sto
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Asura/1.0")
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		},
-	}
-	resp, err := client.Do(req)
+	resp, err := newHTTPClient(n.allowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("webhook request: %w", err)
 	}

@@ -16,6 +16,7 @@ import (
 type schedulerEntry struct {
 	monitorID int64
 	nextRun   int64 // UnixNano for fast comparison
+	lastRun   int64 // UnixNano of the last dispatch
 	index     int
 }
 
@@ -106,21 +107,22 @@ func (s *Scheduler) loadMonitors(ctx context.Context) {
 
 	s.resolveProxyURLs(ctx, monitors)
 
+	activeIDs := make(map[int64]struct{}, len(monitors))
+	newMonitors := make(map[int64]*storage.Monitor, len(monitors))
+	for _, m := range monitors {
+		activeIDs[m.ID] = struct{}{}
+		newMonitors[m.ID] = m
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	nowNano := time.Now().UnixNano()
-	activeIDs := make(map[int64]struct{}, len(monitors))
-	newMonitors := make(map[int64]*storage.Monitor, len(monitors))
 
 	for _, m := range monitors {
-		activeIDs[m.ID] = struct{}{}
-		newMonitors[m.ID] = m
-
 		if _, exists := s.entries[m.ID]; !exists {
-			baseNano := int64(m.Interval) * int64(time.Second)
 			if _, hasEff := s.effectiveInterval[m.ID]; !hasEff {
-				s.effectiveInterval[m.ID] = baseNano
+				s.effectiveInterval[m.ID] = int64(m.Interval) * int64(time.Second)
 			}
 			entry := &schedulerEntry{monitorID: m.ID, nextRun: nowNano}
 			s.entries[m.ID] = entry
@@ -166,6 +168,8 @@ func (s *Scheduler) dispatch(now time.Time) {
 		}
 
 		iv := s.interval(entry.monitorID, mon.Interval)
+
+		entry.lastRun = nowNano
 
 		if mon.Type == "heartbeat" || mon.Type == "manual" {
 			entry.nextRun = nowNano + iv
@@ -253,13 +257,16 @@ func (s *Scheduler) UpdateInterval(monitorID int64, interval time.Duration) {
 		return
 	}
 
-	mon, monExists := s.monitors[monitorID]
-	if !monExists {
-		return
+	// When the interval shrinks (adaptive snap-to-fast on failure), pull the
+	// pending nextRun forward so the new cadence takes effect immediately
+	// instead of waiting for the next naturally-scheduled dispatch.
+	candidate := entry.lastRun + nano
+	if entry.lastRun == 0 {
+		candidate = time.Now().UnixNano() + nano
+	}
+	if candidate < entry.nextRun {
+		entry.nextRun = candidate
 	}
 
-	base := int64(mon.Interval) * int64(time.Second)
-	if base != nano {
-		heap.Fix(&s.heap, entry.index)
-	}
+	heap.Fix(&s.heap, entry.index)
 }

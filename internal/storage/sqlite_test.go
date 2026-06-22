@@ -263,8 +263,8 @@ func TestHeartbeatCRUD(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Token != "abc123def456" {
-			t.Fatalf("expected token abc123def456, got %s", got.Token)
+		if got.Token != sha256Hex("abc123def456") {
+			t.Fatalf("expected stored token to be hashed, got %s", got.Token)
 		}
 	})
 

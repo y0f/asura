@@ -112,6 +112,9 @@ type Store interface {
 	CreateTOTPKey(ctx context.Context, key *TOTPKey) error
 	GetTOTPKey(ctx context.Context, apiKeyName string) (*TOTPKey, error)
 	DeleteTOTPKey(ctx context.Context, apiKeyName string) error
+	GetTOTPLastCounter(ctx context.Context, apiKeyName string) (uint64, error)
+	UpdateTOTPLastCounter(ctx context.Context, apiKeyName string, counter uint64) error
+	AdvanceTOTPCounter(ctx context.Context, apiKeyName string, counter uint64) (bool, error)
 
 	// Sessions
 	CreateSession(ctx context.Context, s *Session) error
@@ -210,7 +213,11 @@ type Store interface {
 
 	// Database maintenance
 	Vacuum(ctx context.Context) error
+	IncrementalVacuum(ctx context.Context) error
 	DBSize() (int64, error)
+
+	// Encryption
+	EnsureKDFSalt(ctx context.Context) ([]byte, error)
 
 	// Lifecycle
 	Close() error

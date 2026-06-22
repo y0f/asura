@@ -9,7 +9,7 @@ import (
 func (s *SQLiteStore) CreateHeartbeat(ctx context.Context, h *Heartbeat) error {
 	res, err := s.writeDB.ExecContext(ctx,
 		`INSERT INTO heartbeats (monitor_id, token, grace, status) VALUES (?, ?, ?, ?)`,
-		h.MonitorID, h.Token, h.Grace, h.Status)
+		h.MonitorID, sha256Hex(h.Token), h.Grace, h.Status)
 	if err != nil {
 		return err
 	}
@@ -22,7 +22,7 @@ func (s *SQLiteStore) GetHeartbeatByToken(ctx context.Context, token string) (*H
 	var h Heartbeat
 	var lastPing sql.NullString
 	err := s.readDB.QueryRowContext(ctx,
-		`SELECT id, monitor_id, token, grace, last_ping_at, status FROM heartbeats WHERE token=?`, token).
+		`SELECT id, monitor_id, token, grace, last_ping_at, status FROM heartbeats WHERE token=?`, sha256Hex(token)).
 		Scan(&h.ID, &h.MonitorID, &h.Token, &h.Grace, &lastPing, &h.Status)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (s *SQLiteStore) GetHeartbeatByMonitorID(ctx context.Context, monitorID int
 func (s *SQLiteStore) UpdateHeartbeatPing(ctx context.Context, token string) error {
 	now := formatTime(time.Now())
 	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE heartbeats SET last_ping_at=?, status='up' WHERE token=?`, now, token)
+		`UPDATE heartbeats SET last_ping_at=?, status='up' WHERE token=?`, now, sha256Hex(token))
 	return err
 }
 

@@ -17,7 +17,7 @@ func (h *Handler) SetManualStatus(w http.ResponseWriter, r *http.Request) {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}
-	if err := readJSON(r, &req); err != nil {
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -55,7 +55,7 @@ func (h *Handler) CreateStatusPage(w http.ResponseWriter, r *http.Request) {
 		storage.StatusPage
 		Monitors []storage.StatusPageMonitor `json:"monitors"`
 	}
-	if err := readJSON(r, &input); err != nil {
+	if err := h.readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -120,7 +120,7 @@ func (h *Handler) UpdateStatusPage(w http.ResponseWriter, r *http.Request) {
 		storage.StatusPage
 		Monitors *[]storage.StatusPageMonitor `json:"monitors"`
 	}
-	if err := readJSON(r, &input); err != nil {
+	if err := h.readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

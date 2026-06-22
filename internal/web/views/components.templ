@@ -1,5 +1,11 @@
 package views
 
+import (
+	"fmt"
+
+	"github.com/y0f/asura/internal/storage"
+)
+
 templ ConfirmModal() {
 	<div
 		x-data="{ open: false, url: '', message: '', callback: null }"
@@ -152,5 +158,142 @@ templ FormCard(title string) {
 			<h2 class="text-[11px] text-muted uppercase tracking-widest mb-4">{ title }</h2>
 		}
 		{ children... }
+	</div>
+}
+
+// StatusPill renders the small bordered status badge used across dashboard,
+// incidents, status pages and monitor lists. The label shown is the status
+// string itself.
+templ StatusPill(status string) {
+	<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(status) }>{ status }</span>
+}
+
+// ToolbarNewButton is the page-header "New X" primary action link reused across
+// list pages.
+templ ToolbarNewButton(href, label string) {
+	<a href={ templ.SafeURL(href) } class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
+		<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
+		{ label }
+	</a>
+}
+
+// SearchInput renders the standard search field with a leading magnifier icon.
+// name is the query parameter, value the current term, placeholder the hint.
+templ SearchInput(name, value, placeholder string) {
+	<div class="relative">
+		<svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+		<input type="text" name={ name } value={ value } placeholder={ placeholder }
+			class="w-48 pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors"/>
+	</div>
+}
+
+// IncidentRow renders an active-incident summary row linking to the incident
+// detail page. Used on the dashboard active-incidents panel.
+templ IncidentRow(basePath string, inc *storage.Incident) {
+	<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", basePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200/20 transition-colors">
+		<div class="flex items-center justify-between mb-1">
+			<span class="text-[13px] text-muted-light">{ inc.MonitorName }</span>
+			@StatusPill(inc.Status)
+		</div>
+		<div class="text-[11px] text-muted truncate">{ inc.Cause }</div>
+		<div class="text-[10px] text-muted/50 mt-0.5">{ TimeAgo(inc.StartedAt) }</div>
+	</a>
+}
+
+// MonitorRowActions renders the pause/resume + view + edit action cluster shared
+// by the monitor list table and the group detail table. canWrite gates the
+// mutating actions.
+templ MonitorRowActions(basePath string, m *storage.Monitor, canWrite bool) {
+	<div class="flex items-center justify-end gap-2">
+		if canWrite {
+			if m.Enabled {
+				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", basePath, m.ID)) } class="contents">
+					<button type="submit" class="inline-flex items-center text-muted hover:text-yellow-400 transition-colors" title="Pause">
+						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+					</button>
+				</form>
+			} else {
+				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", basePath, m.ID)) } class="contents">
+					<button type="submit" class="inline-flex items-center text-muted hover:text-emerald-400 transition-colors" title="Resume">
+						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+					</button>
+				</form>
+			}
+		}
+		<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", basePath, m.ID)) } class="inline-flex items-center text-muted hover:text-white transition-colors" title="View">
+			<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+		</a>
+		if canWrite {
+			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", basePath, m.ID)) } class="inline-flex items-center text-muted hover:text-brand transition-colors" title="Edit">
+				<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
+			</a>
+		}
+	</div>
+}
+
+// MonitorListListener generalizes the dashboard SSE bridge for the monitor list
+// and detail pages: it forwards relevant server-sent events into an htmx
+// sse:refresh trigger on the given target element id.
+templ MonitorListListener(basePath, targetID string) {
+	<div class="hidden" data-sse-url={ basePath + "/events" } data-sse-target={ targetID }></div>
+	<script src={ basePath + "/static/sse-refresh.js" } defer></script>
+}
+
+// Settings field helpers shared by the per-type monitor settings blocks.
+
+// SettingText renders a labelled single-line text-ish input (text, url, etc.).
+templ SettingText(label, name, value, placeholder, inputType string) {
+	<div>
+		<label class="form-label">{ label }</label>
+		<input type={ inputType } name={ name } value={ value } placeholder={ placeholder } class="form-input"/>
+	</div>
+}
+
+// SettingPassword renders a labelled password input.
+templ SettingPassword(label, name, value, placeholder string) {
+	<div>
+		<label class="form-label">{ label }</label>
+		<input type="password" name={ name } value={ value } placeholder={ placeholder } class="form-input"/>
+	</div>
+}
+
+// SettingNumber renders a labelled number input. value/min/max/extraClass are
+// passed verbatim; extraClass defaults handled by caller.
+templ SettingNumber(label, name, value, placeholder, min, max, extraClass string) {
+	<div>
+		<label class="form-label">{ label }</label>
+		<input type="number" name={ name } value={ value } placeholder={ placeholder } min={ min } max={ max } class={ "form-input tabular-nums", extraClass }/>
+	</div>
+}
+
+// SettingCheckbox renders a labelled checkbox. checked controls the initial
+// state of the box.
+templ SettingCheckbox(label, name string, checked bool) {
+	<label class="flex items-center gap-2 cursor-pointer">
+		<input type="checkbox" name={ name }
+			if checked {
+				checked
+			}
+			class="form-checkbox"/>
+		<span class="text-[12px] text-muted-light">{ label }</span>
+	</label>
+}
+
+// HeaderListEditor renders the dynamic Alpine "+ Add Header" key/value editor.
+// modelName is the Alpine collection (e.g. "httpHeaders"), keyName/valName the
+// posted field names.
+templ HeaderListEditor(modelName, keyName, valName string) {
+	<div>
+		<label class="form-label">Headers</label>
+		<div class="space-y-2">
+			<template x-for={ "(h, i) in " + modelName } :key="i">
+				<div class="flex gap-2">
+					<input type="text" :name={ "'" + keyName + "'" } x-model="h.key" placeholder="Header Name" class="form-input flex-1"/>
+					<input type="text" :name={ "'" + valName + "'" } x-model="h.value" placeholder="Value" class="form-input flex-1"/>
+					<button type="button" @click={ modelName + ".splice(i, 1)" } class="px-2 text-red-400 hover:text-red-300 transition-colors text-[16px]">&times;</button>
+				</div>
+			</template>
+		</div>
+		<button type="button" @click={ modelName + ".push({key:'', value:''})" } class="mt-2 text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Header</button>
 	</div>
 }
