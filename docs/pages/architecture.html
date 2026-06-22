@@ -28,7 +28,7 @@
 
 <h2>Worker Pool</h2>
 
-<p>Fixed-size goroutine pool (default 10, set via <code>monitor.workers</code>). Workers pull jobs off the channel, run the protocol checker, measure response time, and evaluate assertions. Bounded channel capacity means the scheduler blocks when all workers are busy.</p>
+<p>Fixed-size goroutine pool (default 10, set via <code>monitor.workers</code>). Workers pull jobs off the channel, invoke the protocol checker's <code>Check()</code>, and measure response time. Assertion evaluation, status transitions, and threshold logic happen downstream in the result processor — not in the pool. Bounded channel capacity means the scheduler blocks when all workers are busy.</p>
 
 <h2>Result Processor</h2>
 

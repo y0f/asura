@@ -4,12 +4,12 @@ services:
     container_name: asura
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8090:8090"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - asura-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/api/v1/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8090/api/v1/health"]
       interval: 30s
       timeout: 5s
       retries: 3

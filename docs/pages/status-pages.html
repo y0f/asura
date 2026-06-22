@@ -74,7 +74,7 @@
       "status": "up",
       "uptime_90d": 99.94,
       "daily_uptime": [
-        { "date": "2025-01-01", "uptime_pct": 100, "up_count": 1440, "down_count": 0 },
+        { "date": "2025-01-01", "uptime_pct": 100, "up_checks": 1440, "down_checks": 0, "total_checks": 1440 },
         ...
       ]
     }
@@ -84,14 +84,16 @@
       "id": 3,
       "monitor_name": "API",
       "status": "resolved",
-      "cause": "Connection refused",
+      "cause": "",
       "started_at": "2025-01-15T14:22:00Z",
       "resolved_at": "2025-01-15T14:35:00Z"
     }
   ]
 }</code></pre>
 
-<p><code>overall_status</code> is one of <code>operational</code>, <code>degraded</code>, or <code>down</code>, derived from the worst current monitor status on the page.</p>
+<p>The <code>cause</code> field is always returned empty in the public payload — incident causes are never exposed publicly.</p>
+
+<p><code>overall_status</code> is one of <code>operational</code>, <code>degraded</code>, or <code>major_outage</code>, derived from the worst current monitor status on the page.</p>
 
 <h2>Admin REST API</h2>
 

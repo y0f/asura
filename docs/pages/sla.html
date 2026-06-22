@@ -42,7 +42,7 @@
 
 <h2>Breach Alerts</h2>
 
-<p>When a monitor's error budget is depleted or less than 10% remains, Asura emits an <code>sla.breach</code> notification event. This is sent at most once per hour per monitor to avoid flooding. Configure notification channels to receive these alerts.</p>
+<p>After each check, the pipeline evaluates the monitor's current SLA status. When the SLA target is already breached, or 10% or less of the error budget remains, Asura emits an <code>sla.breach</code> notification event. This is sent at most once per hour per monitor to avoid flooding. Configure notification channels to receive these alerts.</p>
 
 <h2>Monitor Detail</h2>
 

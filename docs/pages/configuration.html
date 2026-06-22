@@ -13,7 +13,7 @@
     <tr><td><code>base_path</code></td><td><code>""</code></td><td>URL prefix for all routes (e.g. <code>/asura</code>)</td></tr>
     <tr><td><code>external_url</code></td><td>auto</td><td>Public URL used in notification links</td></tr>
     <tr><td><code>trusted_proxies</code></td><td><code>[]</code></td><td>IPs/CIDRs whose <code>X-Real-IP</code>/<code>X-Forwarded-For</code> headers are trusted</td></tr>
-    <tr><td><code>rate_limit_per_sec</code></td><td><code>10</code></td><td>Per-IP request rate limit</td></tr>
+    <tr><td><code>rate_limit_per_sec</code></td><td><code>30</code></td><td>Per-IP request rate limit</td></tr>
     <tr><td><code>web_ui_enabled</code></td><td><code>true</code></td><td>Serve the web dashboard. Set <code>false</code> to run in API-only mode. all REST endpoints remain available</td></tr>
   </tbody>
 </table>
@@ -54,7 +54,7 @@
   </thead>
   <tbody>
     <tr><td><code>admin</code></td><td>Full read/write access to all resources</td></tr>
-    <tr><td><code>readonly</code></td><td>Read-only access (monitors, incidents, notifications, maintenance, metrics)</td></tr>
+    <tr><td><code>readonly</code></td><td>Read-only access (monitors, incidents, notifications, escalation policies, maintenance, metrics)</td></tr>
   </tbody>
 </table>
 
@@ -71,7 +71,7 @@
         - "monitors.write"
         - "incidents.read"</code></pre>
 
-<p>Available permissions: <code>monitors.read</code>, <code>monitors.write</code>, <code>incidents.read</code>, <code>incidents.write</code>, <code>notifications.read</code>, <code>notifications.write</code>, <code>maintenance.read</code>, <code>maintenance.write</code>, <code>metrics.read</code>.</p>
+<p>Available permissions: <code>monitors.read</code>, <code>monitors.write</code>, <code>incidents.read</code>, <code>incidents.write</code>, <code>notifications.read</code>, <code>notifications.write</code>, <code>escalation_policies.read</code>, <code>escalation_policies.write</code>, <code>maintenance.read</code>, <code>maintenance.write</code>, <code>metrics.read</code>.</p>
 
 <h3>Using a Key</h3>
 

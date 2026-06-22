@@ -43,5 +43,5 @@ curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=tru
   <li>Use <strong>redacted</strong> exports when sharing configs between team members</li>
   <li>Test imports on a separate instance before replacing production data</li>
   <li><strong>Replace</strong> mode is destructive. it deletes everything before importing</li>
-  <li>Import requires admin-level API key access</li>
+  <li>Import requires the <code>monitors.write</code> permission. Any key with this scope (not just admin) can run a destructive Replace import, so scope keys carefully</li>
 </ul>
