@@ -427,11 +427,19 @@ func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *
 	}
 
 	if criticalNotification(eventType) {
+		// Prefer delivery of state-transition events, but bound the wait so a
+		// slow consumer cannot stall the single result-processing goroutine
+		// (and thus every monitor) during a mass outage.
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
 		select {
 		case p.notifyChan <- ev:
 		case <-ctx.Done():
 			p.droppedNotifications.Add(1)
 			p.logger.Warn("notification channel send aborted", "event", eventType, "error", ctx.Err())
+		case <-timer.C:
+			p.droppedNotifications.Add(1)
+			p.logger.Warn("notification channel full, dropped event after timeout", "event", eventType)
 		}
 		return
 	}

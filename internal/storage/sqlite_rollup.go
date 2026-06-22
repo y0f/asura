@@ -26,7 +26,7 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 		          MIN(response_time) AS min_rt,
 		          MAX(response_time) AS max_rt,
 		          SUM(CASE WHEN status='up' THEN 1 ELSE 0 END) AS up_count,
-		          SUM(CASE WHEN status IN ('down','degraded') THEN 1 ELSE 0 END) AS down_count,
+		          SUM(CASE WHEN status='down' THEN 1 ELSE 0 END) AS down_count,
 		          COUNT(*) AS total
 		   FROM check_results
 		   WHERE created_at >= ? AND created_at < ?

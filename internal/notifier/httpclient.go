@@ -37,12 +37,21 @@ func redactErr(err error) string {
 }
 
 func redactURLs(s string) string {
+	const punct = ".,;:)(\"'"
 	fields := strings.Fields(s)
 	for i, f := range fields {
-		trimmed := strings.TrimRight(f, ".,;:)\"'")
-		suffix := f[len(trimmed):]
-		if r, ok := redactURL(trimmed); ok {
-			fields[i] = r + suffix
+		// A *url.Error stringifies the URL wrapped in double quotes, e.g.
+		// `Get "https://host/p?token=x": ...`, so strip leading punctuation
+		// (the quote) as well as trailing, then re-attach both sides.
+		start, end := 0, len(f)
+		for start < end && strings.IndexByte(punct, f[start]) >= 0 {
+			start++
+		}
+		for end > start && strings.IndexByte(punct, f[end-1]) >= 0 {
+			end--
+		}
+		if r, ok := redactURL(f[start:end]); ok {
+			fields[i] = f[:start] + r + f[end:]
 		}
 	}
 	return strings.Join(fields, " ")

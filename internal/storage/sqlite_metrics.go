@@ -214,7 +214,7 @@ func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from,
 func (s *SQLiteStore) CountMonitorsByStatus(ctx context.Context) (up, down, degraded, paused int64, err error) {
 	err = s.readDB.QueryRowContext(ctx,
 		`SELECT
-		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='up' THEN 1 ELSE 0 END), 0),
+		   COALESCE(SUM(CASE WHEN m.enabled=1 AND COALESCE(ms.status,'') NOT IN ('down','degraded') THEN 1 ELSE 0 END), 0),
 		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='down' THEN 1 ELSE 0 END), 0),
 		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='degraded' THEN 1 ELSE 0 END), 0),
 		   COALESCE(SUM(CASE WHEN m.enabled=0 THEN 1 ELSE 0 END), 0)

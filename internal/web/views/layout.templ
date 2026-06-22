@@ -33,6 +33,23 @@ templ Layout(p LayoutParams) {
 		<link rel="preload" href={ p.BasePath + "/static/fonts/jetbrains-mono.woff2" } as="font" type="font/woff2" crossorigin/>
 		<link rel="stylesheet" href={ p.BasePath + "/static/tailwind.css?v=" + p.AssetVer }/>
 		<link rel="stylesheet" href={ p.BasePath + "/static/uplot.min.css" }/>
+		<!-- Reproduce the collapsed-sidebar layout before the deferred Alpine bundle
+		     boots, keyed on the nav-collapsed class the inline script above sets, so a
+		     cold load of a collapsed sidebar paints settled instead of expanding then
+		     snapping narrow. Visibility/width here must match the post-Alpine state. -->
+		<style>
+			[x-cloak] { display: none !important; }
+			@media (min-width: 768px) {
+				html.nav-collapsed .app-sidebar { width: 68px !important; }
+				html.nav-collapsed .app-sidebar [x-show="!collapsed"] { display: none !important; }
+				html.nav-collapsed .app-sidebar [x-show="collapsed"] { display: flex !important; }
+				html.nav-collapsed .app-sidebar .sidebar-brand,
+				html.nav-collapsed .app-sidebar .sidebar-search-btn,
+				html.nav-collapsed .app-sidebar .nav-link { justify-content: center; padding-left: 0; padding-right: 0; }
+				html.nav-collapsed .app-sidebar .sidebar-search-btn { height: 2rem; }
+				html.nav-collapsed .app-sidebar .sidebar-toggle svg { transform: rotate(180deg); }
+			}
+		</style>
 		<script src={ p.BasePath + "/static/uplot.iife.min.js" }></script>
 		<script src={ p.BasePath + "/static/htmx.min.js" }></script>
 		<script defer src={ p.BasePath + "/static/alpine.min.js" }></script>
@@ -179,16 +196,14 @@ templ Sidebar(p LayoutParams) {
 		<!-- Floating edge toggle: round button centred on the right border. -->
 		<button
 			@click="toggleCollapse()"
-			x-cloak
-			x-show="ready"
-			class="hidden md:flex absolute top-8 -right-3 z-50 h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-line-light bg-surface-100 text-muted-light shadow-sm shadow-black/40 transition-colors hover:border-brand/50 hover:text-white"
+			class="sidebar-toggle hidden md:flex absolute top-8 -right-3 z-50 h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-line-light bg-surface-100 text-muted-light shadow-sm shadow-black/40 transition-colors hover:border-brand/50 hover:text-white"
 			:title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
 			aria-label="Toggle sidebar"
 		>
 			<svg class="w-3.5 h-3.5 transition-transform duration-300" :class="collapsed && 'rotate-180'" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 		</button>
 		<!-- Brand -->
-		<div class="h-16 flex items-center shrink-0 px-4" :class="collapsed ? 'md:justify-center md:px-0' : 'justify-between'">
+		<div class="sidebar-brand h-16 flex items-center shrink-0 px-4" :class="collapsed ? 'md:justify-center md:px-0' : 'justify-between'">
 			<a href={ templ.SafeURL(p.BasePath + "/") } class="flex items-center" x-show="!collapsed">
 				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
 			</a>
@@ -208,7 +223,7 @@ templ Sidebar(p LayoutParams) {
 			<button
 				type="button"
 				@click="window.dispatchEvent(new CustomEvent('cmdk-open'))"
-				class="group flex h-9 w-full items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 text-[13px] text-muted transition-colors hover:border-line-light hover:text-muted-light"
+				class="sidebar-search-btn group flex h-9 w-full items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 text-[13px] text-muted transition-colors hover:border-line-light hover:text-muted-light"
 				:class="collapsed && 'md:h-8 md:justify-center md:px-0'"
 				:title="collapsed ? 'Search (Ctrl K)' : null"
 				aria-label="Open search"
@@ -220,7 +235,7 @@ templ Sidebar(p LayoutParams) {
 					x-show="!collapsed"
 					class="inline-flex h-5 items-center gap-1 rounded border border-line-light bg-surface-200/60 px-1.5 font-mono text-[10px] leading-none text-muted group-hover:text-muted-light"
 				>
-					<span x-text="mac ? '⌘' : 'Ctrl'"></span><span>K</span>
+					<span x-show="!mac">Ctrl</span><span x-cloak x-show="mac">⌘</span><span>K</span>
 				</kbd>
 			</button>
 		</div>

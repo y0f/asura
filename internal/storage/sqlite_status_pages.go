@@ -46,6 +46,8 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 		byDay[d.Date] = d
 	}
 
+	rawFrom := todayStart
+
 	if rollupEnd.After(from) {
 		rows, err := s.readDB.QueryContext(ctx,
 			`SELECT day, total, up_count, down_count
@@ -56,6 +58,7 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 		if err != nil {
 			return nil, fmt.Errorf("get daily uptime rollup: %w", err)
 		}
+		var maxRolled string
 		for rows.Next() {
 			var d DailyUptime
 			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
@@ -63,15 +66,25 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 				return nil, err
 			}
 			add(&d)
+			maxRolled = d.Date
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		rows.Close()
+		// Extend the raw fallback to cover recent days the rollup has not yet
+		// produced (e.g. yesterday before the rollup tick runs); otherwise those
+		// days would render with no data even though raw rows exist.
+		if maxRolled == "" {
+			rawFrom = from
+		} else if t, perr := time.Parse("2006-01-02", maxRolled); perr == nil {
+			if cand := t.AddDate(0, 0, 1); cand.Before(rawFrom) {
+				rawFrom = cand
+			}
+		}
 	}
 
-	rawFrom := todayStart
 	if rawFrom.Before(from) {
 		rawFrom = from
 	}

@@ -57,9 +57,10 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 			continue
 		}
 
-		// Re-fetch under the write path to avoid racing a ping that arrived
-		// between the expired-listing SELECT and this transition. If last_ping_at
-		// advanced, the monitor recovered and we must not mark it down.
+		// Re-read the latest committed heartbeat snapshot to avoid racing a ping
+		// that arrived between the expired-listing SELECT and this transition. In
+		// WAL mode committed pings are visible to the read pool, so if last_ping_at
+		// advanced the monitor recovered and we must not mark it down.
 		fresh, err := w.store.GetHeartbeatByMonitorID(ctx, hb.MonitorID)
 		if err != nil {
 			w.logger.Error("heartbeat watcher: re-fetch heartbeat", "error", err)
@@ -72,7 +73,10 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 		w.logger.Info("heartbeat expired", "monitor_id", hb.MonitorID)
 
 		// Mark heartbeat as down
-		w.store.UpdateHeartbeatStatus(ctx, hb.MonitorID, "down")
+		if err := w.store.UpdateHeartbeatStatus(ctx, hb.MonitorID, "down"); err != nil {
+			w.logger.Error("heartbeat watcher: mark down", "monitor_id", hb.MonitorID, "error", err)
+			continue
+		}
 
 		// Get monitor for incident creation
 		mon, err := w.store.GetMonitor(ctx, hb.MonitorID)
