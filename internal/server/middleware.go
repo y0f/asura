@@ -127,13 +127,22 @@ func isAllowedOrigin(origin string, allowed []string) bool {
 	return false
 }
 
-func bodyLimit(maxBytes int64) func(http.Handler) http.Handler {
+func bodyLimit(maxBytes int64, exemptPaths ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Body != nil {
+			if r.Body != nil && !isExemptPath(r.URL.Path, exemptPaths) {
 				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func isExemptPath(path string, exempt []string) bool {
+	for _, p := range exempt {
+		if path == p {
+			return true
+		}
+	}
+	return false
 }

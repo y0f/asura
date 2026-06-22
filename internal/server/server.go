@@ -65,7 +65,7 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 	if cfg.IsWebUIEnabled() {
 		handler = s.statusPageRouter(handler)
 	}
-	handler = bodyLimit(cfg.Server.MaxBodySize)(handler)
+	handler = bodyLimit(cfg.Server.MaxBodySize, s.p("/api/v1/agent/results"))(handler)
 	rl := httputil.NewRateLimiter(cfg.Server.RateLimitPerSec, cfg.Server.RateLimitBurst)
 	handler = rl.Middleware(cfg.TrustedNets(), writeError)(handler)
 	handler = cors(cfg.Server.CORSOrigins)(handler)
