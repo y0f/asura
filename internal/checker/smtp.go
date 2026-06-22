@@ -1,10 +1,12 @@
 package checker
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/smtp"
 	"strings"
@@ -52,6 +54,19 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 
 	host, _, _ := net.SplitHostPort(target)
 
+	if settings.ExpectBanner != "" {
+		buf := make([]byte, 512)
+		n, rerr := conn.Read(buf)
+		if rerr != nil {
+			return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("failed to read banner: %v", rerr)}, nil
+		}
+		if !strings.Contains(string(buf[:n]), settings.ExpectBanner) {
+			return &Result{Status: "down", ResponseTime: elapsed, Message: "banner mismatch"}, nil
+		}
+		// Replay the consumed greeting so smtp.NewClient still reads the 220 line.
+		conn = &prefixedConn{Conn: conn, r: io.MultiReader(bytes.NewReader(buf[:n]), conn)}
+	}
+
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("smtp handshake failed: %v", err)}, nil
@@ -79,3 +94,13 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 
 	return &Result{Status: "up", ResponseTime: elapsed, Message: "SMTP OK"}, nil
 }
+
+// prefixedConn replays bytes already read from the connection to the next
+// reader, so the SMTP greeting can be inspected for a banner match before
+// smtp.NewClient consumes it.
+type prefixedConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *prefixedConn) Read(b []byte) (int, error) { return c.r.Read(b) }
