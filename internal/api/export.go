@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/y0f/asura/internal/storage"
@@ -221,14 +220,12 @@ func redactMonitorSettings(raw json.RawMessage) json.RawMessage {
 			m[secret] = ""
 		}
 	}
-	// Custom request headers are applied verbatim by the HTTP checker, so they
-	// can carry credentials (Authorization, Cookie, API keys). Blank those values.
+	// Custom request headers are applied verbatim by the HTTP/WebSocket checkers
+	// and are user-supplied, so any of them may carry credentials. Blank every
+	// header value (the names are kept so an import round-trips structurally).
 	if hdrs, ok := m["headers"].(map[string]any); ok {
 		for hk := range hdrs {
-			switch strings.ToLower(hk) {
-			case "authorization", "proxy-authorization", "cookie", "x-api-key":
-				hdrs[hk] = ""
-			}
+			hdrs[hk] = ""
 		}
 	}
 	out, err := json.Marshal(m)

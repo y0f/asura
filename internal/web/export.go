@@ -16,8 +16,7 @@ import (
 func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 	lp := h.newLayoutParams(r, "Settings", "settings")
 	dbSize, _ := h.store.DBSize()
-	up, _, _, _, _ := h.store.CountMonitorsByStatus(r.Context())
-	total := up
+	total := int64(0)
 	if result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 1}); err == nil {
 		total = result.Total
 	}
@@ -35,6 +34,12 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
+	k := httputil.GetAPIKey(r.Context())
+	if k == nil || !k.SuperAdmin {
+		h.setFlash(w, "Vacuum requires super admin access")
+		h.redirect(w, r, "/settings")
+		return
+	}
 	if err := h.store.Vacuum(r.Context()); err != nil {
 		h.logger.Error("web: vacuum", "error", err)
 		h.setFlash(w, "Vacuum failed: "+err.Error())
