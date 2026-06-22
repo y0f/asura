@@ -250,29 +250,35 @@ func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storag
 		monitorIDs[m.ID] = true
 	}
 
-	incResult, err := store.ListIncidents(ctx, 0, "", "", storage.Pagination{Page: 1, PerPage: 20})
-	if err != nil || incResult == nil {
-		return []*storage.Incident{}
-	}
-
-	all, ok := incResult.Data.([]*storage.Incident)
-	if !ok {
-		return []*storage.Incident{}
-	}
-
 	cutoff := now.AddDate(0, 0, -7)
+	const wantIncidents = 10
+	const maxPages = 50
+
 	var filtered []*storage.Incident
-	for _, inc := range all {
-		if !monitorIDs[inc.MonitorID] {
-			continue
+	for page := 1; page <= maxPages; page++ {
+		incResult, err := store.ListIncidents(ctx, 0, "", "", storage.Pagination{Page: page, PerPage: 100})
+		if err != nil || incResult == nil {
+			break
 		}
-		if inc.Status == incident.StatusResolved && inc.ResolvedAt != nil && inc.ResolvedAt.Before(cutoff) {
-			continue
+		all, ok := incResult.Data.([]*storage.Incident)
+		if !ok || len(all) == 0 {
+			break
 		}
-		safe := *inc
-		safe.Cause = ""
-		filtered = append(filtered, &safe)
-		if len(filtered) >= 10 {
+		for _, inc := range all {
+			if !monitorIDs[inc.MonitorID] {
+				continue
+			}
+			if inc.Status == incident.StatusResolved && inc.ResolvedAt != nil && inc.ResolvedAt.Before(cutoff) {
+				continue
+			}
+			safe := *inc
+			safe.Cause = ""
+			filtered = append(filtered, &safe)
+			if len(filtered) >= wantIncidents {
+				return filtered
+			}
+		}
+		if page >= incResult.TotalPages {
 			break
 		}
 	}

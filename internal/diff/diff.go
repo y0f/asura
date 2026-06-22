@@ -5,13 +5,29 @@ import (
 	"strings"
 )
 
+const (
+	maxLCSCells = 4_000_000
+	maxLCSLines = 5000
+)
+
 // Compute returns a unified diff between old and new content using LCS.
+// For very large inputs the quadratic LCS is skipped in favor of a concise
+// summary to bound memory and CPU usage.
 func Compute(old, new string) string {
 	oldLines := splitLines(old)
 	newLines := splitLines(new)
 
+	if len(oldLines) > maxLCSLines || len(newLines) > maxLCSLines ||
+		len(oldLines)*len(newLines) > maxLCSCells {
+		return summaryDiff(oldLines, newLines)
+	}
+
 	lcs := lcsTable(oldLines, newLines)
 	return buildDiff(oldLines, newLines, lcs)
+}
+
+func summaryDiff(old, new []string) string {
+	return fmt.Sprintf("@@ content changed (%d lines -> %d lines) @@\n", len(old), len(new))
 }
 
 func splitLines(s string) []string {

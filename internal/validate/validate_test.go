@@ -77,9 +77,13 @@ func TestValidateMonitor(t *testing.T) {
 		{"resend interval negative", func(m *storage.Monitor) { m.ResendInterval = -1 }, "resend_interval must be non-negative"},
 		{"resend interval too high", func(m *storage.Monitor) { m.ResendInterval = 86401 }, "resend_interval must be at most 86400"},
 		{"invalid settings json", func(m *storage.Monitor) { m.Settings = json.RawMessage("not json") }, "valid JSON object"},
-		{"invalid assertions json", func(m *storage.Monitor) { m.Assertions = json.RawMessage("not json") }, "valid JSON array"},
+		{"invalid assertions json", func(m *storage.Monitor) { m.Assertions = json.RawMessage("not json") }, "condition set"},
+		{"legacy array assertions rejected", func(m *storage.Monitor) { m.Assertions = json.RawMessage(`[{"type":"status_code"}]`) }, "condition set"},
 		{"valid settings", func(m *storage.Monitor) { m.Settings = json.RawMessage(`{"method":"GET"}`) }, ""},
-		{"valid assertions", func(m *storage.Monitor) { m.Assertions = json.RawMessage(`[{"type":"status_code"}]`) }, ""},
+		{"empty assertions array", func(m *storage.Monitor) { m.Assertions = json.RawMessage(`[]`) }, ""},
+		{"valid assertions", func(m *storage.Monitor) {
+			m.Assertions = json.RawMessage(`{"operator":"and","groups":[{"operator":"and","conditions":[{"type":"status_code","operator":"eq","value":"200"}]}]}`)
+		}, ""},
 	}
 
 	for _, tt := range tests {
@@ -455,7 +459,9 @@ func TestValidateDockerSettings(t *testing.T) {
 	}{
 		{"valid container name", "my-container", `{}`, ""},
 		{"name from settings", "ignored", `{"container_name":"my-app"}`, ""},
+		{"dotted container name", "web.1", `{}`, ""},
 		{"invalid chars in name", "bad/name", `{}`, "invalid characters"},
+		{"path traversal in name", "a..b", `{}`, "invalid characters"},
 		{"path traversal in socket", "ok", `{"socket_path":"/../etc/shadow"}`, "path traversal"},
 		{"relative socket path", "ok", `{"socket_path":"var/run/docker.sock"}`, "absolute path"},
 		{"valid socket path", "ok", `{"socket_path":"/var/run/docker.sock"}`, ""},
@@ -661,7 +667,17 @@ func TestValidateHTTPSettingsOAuth2(t *testing.T) {
 				OAuth2ClientID:     "client-id",
 				OAuth2ClientSecret: "client-secret",
 			},
-			wantErr: "oauth2 token URL must be a valid HTTP(S) URL",
+			wantErr: "oauth2 token URL must be a valid HTTPS URL",
+		},
+		{
+			name: "plaintext http token URL rejected",
+			s: storage.HTTPSettings{
+				AuthMethod:         "oauth2",
+				OAuth2TokenURL:     "http://auth.example.com/token",
+				OAuth2ClientID:     "client-id",
+				OAuth2ClientSecret: "client-secret",
+			},
+			wantErr: "oauth2 token URL must be a valid HTTPS URL",
 		},
 		{
 			name: "missing client ID",

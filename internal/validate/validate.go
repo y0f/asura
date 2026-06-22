@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/cron"
 
 	"golang.org/x/net/html"
@@ -129,17 +130,42 @@ func validateMonitorJSON(m *storage.Monitor) error {
 			return fmt.Errorf("settings must be a valid JSON object")
 		}
 	}
-	if len(m.Assertions) > 0 && string(m.Assertions) != "[]" {
-		var a []any
-		if err := json.Unmarshal(m.Assertions, &a); err != nil {
-			return fmt.Errorf("assertions must be a valid JSON array")
-		}
+	if err := validateAssertions(m.Assertions); err != nil {
+		return err
 	}
 	if m.Type == "docker" {
 		return validateDockerSettings(m)
 	}
 	if m.Type == "http" {
 		return validateHTTPSettings(m)
+	}
+	return nil
+}
+
+// validateAssertions validates the monitor assertions JSON. New input must be a
+// ConditionSet object ({operator, groups}); the legacy empty array form ([]) is
+// still accepted since migration v21 wraps non-empty arrays into a ConditionSet.
+func validateAssertions(raw json.RawMessage) error {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "[]" || trimmed == "{}" || trimmed == "null" {
+		return nil
+	}
+	if trimmed[0] != '{' {
+		return fmt.Errorf("assertions must be a condition set object")
+	}
+	var cs assertion.ConditionSet
+	dec := json.NewDecoder(strings.NewReader(trimmed))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cs); err != nil {
+		return fmt.Errorf("assertions must be a valid condition set object")
+	}
+	if cs.Operator != "" && cs.Operator != "and" && cs.Operator != "or" {
+		return fmt.Errorf("assertions operator must be 'and' or 'or'")
+	}
+	for _, g := range cs.Groups {
+		if g.Operator != "" && g.Operator != "and" && g.Operator != "or" {
+			return fmt.Errorf("assertions group operator must be 'and' or 'or'")
+		}
 	}
 	return nil
 }
@@ -158,8 +184,8 @@ func validateHTTPSettings(m *storage.Monitor) error {
 			return fmt.Errorf("oauth2 token URL is required")
 		}
 		u, err := url.Parse(s.OAuth2TokenURL)
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
-			return fmt.Errorf("oauth2 token URL must be a valid HTTP(S) URL")
+		if err != nil || u.Scheme != "https" {
+			return fmt.Errorf("oauth2 token URL must be a valid HTTPS URL")
 		}
 		if s.OAuth2ClientID == "" {
 			return fmt.Errorf("oauth2 client ID is required")
@@ -212,7 +238,7 @@ func validateDockerSettings(m *storage.Monitor) error {
 	if name == "" {
 		name = m.Target
 	}
-	if strings.ContainsAny(name, "/\\..") {
+	if strings.ContainsAny(name, "/\\") || strings.Contains(name, "..") {
 		return fmt.Errorf("container name contains invalid characters")
 	}
 	if ds.SocketPath != "" {
@@ -377,7 +403,10 @@ var _reservedSlugs = map[string]bool{
 	"login": true, "logout": true, "monitors": true, "incidents": true,
 	"notifications": true, "maintenance": true, "logs": true,
 	"status-settings": true, "status-pages": true, "static": true, "api": true,
-	"groups": true,
+	"groups": true, "settings": true, "metrics": true, "events": true,
+	"proxies": true, "agents": true, "on-call": true, "tags": true,
+	"sla": true, "audit": true, "escalation-policies": true, "totp": true,
+	"status": true, "health": true, "badge": true,
 }
 
 func ValidateSlug(slug string) string {

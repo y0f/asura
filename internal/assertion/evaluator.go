@@ -6,8 +6,23 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+var _regexCache sync.Map
+
+func compileRegex(pattern string) (*regexp.Regexp, error) {
+	if cached, ok := _regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	_regexCache.Store(pattern, re)
+	return re, nil
+}
 
 func Evaluate(assertionsJSON json.RawMessage, statusCode int, body string,
 	headers map[string]string, responseTimeMs int64, certExpiry *int64, dnsRecords []string) AssertionResult {
@@ -42,7 +57,6 @@ func Evaluate(assertionsJSON json.RawMessage, statusCode int, body string,
 		Details:  allDetails,
 	}
 }
-
 
 func evalGroup(g ConditionGroup, statusCode int, body string,
 	headers map[string]string, responseTimeMs int64, certExpiry *int64, dnsRecords []string) AssertionResult {
@@ -155,7 +169,7 @@ func evalBodyContains(a Assertion, body string) AssertionDetail {
 }
 
 func evalBodyRegex(a Assertion, body string) AssertionDetail {
-	re, err := regexp.Compile(a.Value)
+	re, err := compileRegex(a.Value)
 	if err != nil {
 		return AssertionDetail{
 			Assertion: a, Pass: false,
@@ -319,7 +333,10 @@ func walkJSONPath(jsonStr string, path string) (any, error) {
 	current := root
 
 	for _, part := range parts {
-		key, idx, hasIdx := parsePathPart(part)
+		key, indices, err := parsePathPart(part)
+		if err != nil {
+			return nil, err
+		}
 
 		if key != "" {
 			obj, ok := current.(map[string]any)
@@ -333,7 +350,7 @@ func walkJSONPath(jsonStr string, path string) (any, error) {
 			current = val
 		}
 
-		if hasIdx {
+		for _, idx := range indices {
 			arr, ok := current.([]any)
 			if !ok {
 				return nil, fmt.Errorf("expected array at index %d", idx)
@@ -368,20 +385,35 @@ func splitPath(path string) []string {
 	return parts
 }
 
-// parsePathPart parses "name[0]" into ("name", 0, true) or "name" into ("name", 0, false)
-func parsePathPart(part string) (string, int, bool) {
+// parsePathPart parses "name[0][1]" into ("name", []int{0, 1}, nil) or
+// "name" into ("name", nil, nil). Malformed bracket segments return an error.
+func parsePathPart(part string) (string, []int, error) {
 	bracketIdx := strings.Index(part, "[")
 	if bracketIdx == -1 {
-		return part, 0, false
+		return part, nil, nil
 	}
 
 	key := part[:bracketIdx]
-	idxStr := part[bracketIdx+1 : len(part)-1]
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil {
-		return part, 0, false
+	rest := part[bracketIdx:]
+
+	var indices []int
+	for rest != "" {
+		if rest[0] != '[' {
+			return "", nil, fmt.Errorf("malformed path segment %q", part)
+		}
+		closeIdx := strings.IndexByte(rest, ']')
+		if closeIdx == -1 {
+			return "", nil, fmt.Errorf("malformed path segment %q: missing ']'", part)
+		}
+		idx, err := strconv.Atoi(rest[1:closeIdx])
+		if err != nil {
+			return "", nil, fmt.Errorf("malformed array index in %q", part)
+		}
+		indices = append(indices, idx)
+		rest = rest[closeIdx+1:]
 	}
-	return key, idx, true
+
+	return key, indices, nil
 }
 
 func compareInt(actual, expected int, op string) bool {

@@ -141,6 +141,65 @@ func TestWalkJSONPath(t *testing.T) {
 	}
 }
 
+func TestParsePathPart(t *testing.T) {
+	tests := []struct {
+		part    string
+		key     string
+		indices []int
+		wantErr bool
+	}{
+		{"name", "name", nil, false},
+		{"name[0]", "name", []int{0}, false},
+		{"a[1][2]", "a", []int{1, 2}, false},
+		{"[0]", "", []int{0}, false},
+		{"name[12", "", nil, true},
+		{"a[1]x", "", nil, true},
+		{"a[x]", "", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.part, func(t *testing.T) {
+			key, indices, err := parsePathPart(tt.part)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.part)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %v", tt.part, err)
+			}
+			if key != tt.key {
+				t.Fatalf("key = %q, want %q", key, tt.key)
+			}
+			if len(indices) != len(tt.indices) {
+				t.Fatalf("indices = %v, want %v", indices, tt.indices)
+			}
+			for i := range indices {
+				if indices[i] != tt.indices[i] {
+					t.Fatalf("indices = %v, want %v", indices, tt.indices)
+				}
+			}
+		})
+	}
+}
+
+func TestWalkJSONPathNested(t *testing.T) {
+	jsonStr := `{"matrix":[[10,20],[30,40]]}`
+
+	val, err := walkJSONPath(jsonStr, "matrix[1][0]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val.(float64) != 30 {
+		t.Fatalf("expected 30, got %v", val)
+	}
+
+	if _, err := walkJSONPath(jsonStr, "matrix[1"); err == nil {
+		t.Fatal("expected error for malformed path")
+	}
+}
+
 func TestConditionSetAND(t *testing.T) {
 	raw := cs("and",
 		group("and", Assertion{Type: "status_code", Operator: "eq", Value: "200"}),
