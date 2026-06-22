@@ -4,15 +4,19 @@ on:
   push:
     branches: [main]
     paths: ['docs/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Allow one concurrent deployment, but let in-progress production deploys
+# finish rather than cancelling them (a cancelled deploy reports as a failed
+# check on the superseding commit).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
