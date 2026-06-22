@@ -212,7 +212,7 @@ func (h *Handler) SetIncidentSeverity(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Severity string `json:"severity"`
 	}
-	if err := readJSON(r, &req); err != nil {
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

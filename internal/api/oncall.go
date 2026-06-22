@@ -20,7 +20,7 @@ func (h *Handler) ListOnCallRotations(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateOnCallRotation(w http.ResponseWriter, r *http.Request) {
 	var rot storage.OnCallRotation
-	if err := readJSON(r, &rot); err != nil {
+	if err := h.readJSON(r, &rot); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -59,7 +59,7 @@ func (h *Handler) UpdateOnCallRotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var rot storage.OnCallRotation
-	if err := readJSON(r, &rot); err != nil {
+	if err := h.readJSON(r, &rot); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

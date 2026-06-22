@@ -23,7 +23,7 @@ func (h *Handler) ListMaintenance(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateMaintenance(w http.ResponseWriter, r *http.Request) {
 	var mw storage.MaintenanceWindow
-	if err := readJSON(r, &mw); err != nil {
+	if err := h.readJSON(r, &mw); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -65,7 +65,7 @@ func (h *Handler) UpdateMaintenance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var mw storage.MaintenanceWindow
-	if err := readJSON(r, &mw); err != nil {
+	if err := h.readJSON(r, &mw); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

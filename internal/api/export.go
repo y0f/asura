@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/y0f/asura/internal/storage"
@@ -126,7 +127,7 @@ func BuildExportData(ctx context.Context, store storage.Store, redact bool) (*Ex
 	}
 	monitors := result.Data.([]*storage.Monitor)
 
-	exportMonitors := buildExportMonitors(ctx, store, monitors, groupMap, proxyMap, channelMap)
+	exportMonitors := buildExportMonitors(ctx, store, monitors, groupMap, proxyMap, channelMap, redact)
 	exportPages := buildExportStatusPages(ctx, store, monitors)
 	exportProxies := buildExportProxies(proxies, redact)
 	exportChannels := buildExportChannels(channels, redact)
@@ -148,7 +149,7 @@ func BuildExportData(ctx context.Context, store storage.Store, redact bool) (*Ex
 }
 
 func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*storage.Monitor,
-	groupMap, proxyMap, channelMap map[int64]string) []ExportMonitor {
+	groupMap, proxyMap, channelMap map[int64]string, redact bool) []ExportMonitor {
 	monIDs := make([]int64, len(monitors))
 	for i, m := range monitors {
 		monIDs[i] = m.ID
@@ -157,6 +158,10 @@ func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*s
 
 	var out []ExportMonitor
 	for _, m := range monitors {
+		settings := m.Settings
+		if redact {
+			settings = redactMonitorSettings(settings)
+		}
 		em := ExportMonitor{
 			Name:             m.Name,
 			Description:      m.Description,
@@ -165,7 +170,7 @@ func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*s
 			Interval:         m.Interval,
 			Timeout:          m.Timeout,
 			Enabled:          m.Enabled,
-			Settings:         m.Settings,
+			Settings:         settings,
 			Assertions:       m.Assertions,
 			TrackChanges:     m.TrackChanges,
 			FailureThreshold: m.FailureThreshold,
@@ -194,6 +199,41 @@ func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*s
 			})
 		}
 		out = append(out, em)
+	}
+	return out
+}
+
+var monitorSettingSecrets = []string{
+	"basic_auth_pass", "bearer_token", "oauth2_client_secret",
+	"mtls_client_key", "mtls_client_cert", "mtls_ca_cert", "password",
+}
+
+func redactMonitorSettings(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	for _, secret := range monitorSettingSecrets {
+		if _, ok := m[secret]; ok {
+			m[secret] = ""
+		}
+	}
+	// Custom request headers are applied verbatim by the HTTP checker, so they
+	// can carry credentials (Authorization, Cookie, API keys). Blank those values.
+	if hdrs, ok := m["headers"].(map[string]any); ok {
+		for hk := range hdrs {
+			switch strings.ToLower(hk) {
+			case "authorization", "proxy-authorization", "cookie", "x-api-key":
+				hdrs[hk] = ""
+			}
+		}
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return raw
 	}
 	return out
 }
@@ -591,7 +631,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var data ExportData
-	if err := readJSON(r, &data); err != nil {
+	if err := h.readJSON(r, &data); err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}

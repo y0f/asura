@@ -50,7 +50,7 @@ func (h *Handler) GetEscalationPolicy(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateEscalationPolicy(w http.ResponseWriter, r *http.Request) {
 	var ep storage.EscalationPolicy
-	if err := readJSON(r, &ep); err != nil {
+	if err := h.readJSON(r, &ep); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -94,7 +94,7 @@ func (h *Handler) UpdateEscalationPolicy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var ep storage.EscalationPolicy
-	if err := readJSON(r, &ep); err != nil {
+	if err := h.readJSON(r, &ep); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

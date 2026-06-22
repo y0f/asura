@@ -24,7 +24,7 @@ func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateNotification(w http.ResponseWriter, r *http.Request) {
 	var ch storage.NotificationChannel
-	if err := readJSON(r, &ch); err != nil {
+	if err := h.readJSON(r, &ch); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -64,7 +64,7 @@ func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ch storage.NotificationChannel
-	if err := readJSON(r, &ch); err != nil {
+	if err := h.readJSON(r, &ch); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

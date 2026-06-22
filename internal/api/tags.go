@@ -22,7 +22,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	var t storage.Tag
-	if err := readJSON(r, &t); err != nil {
+	if err := h.readJSON(r, &t); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -61,7 +61,7 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var t storage.Tag
-	if err := readJSON(r, &t); err != nil {
+	if err := h.readJSON(r, &t); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

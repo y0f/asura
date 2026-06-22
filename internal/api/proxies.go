@@ -41,7 +41,7 @@ func (h *Handler) GetProxy(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateProxy(w http.ResponseWriter, r *http.Request) {
 	var p storage.Proxy
-	if err := readJSON(r, &p); err != nil {
+	if err := h.readJSON(r, &p); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -80,7 +80,7 @@ func (h *Handler) UpdateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var p storage.Proxy
-	if err := readJSON(r, &p); err != nil {
+	if err := h.readJSON(r, &p); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
