@@ -37,17 +37,26 @@ func Code(secret []byte, t time.Time) string {
 
 // Validate checks a TOTP code against the secret with ±1 time step skew.
 func Validate(secret []byte, code string, t time.Time) bool {
+	_, ok := ValidateWithCounter(secret, code, t)
+	return ok
+}
+
+// ValidateWithCounter checks a TOTP code against the secret with ±1 time step
+// skew and reports which time-step counter matched. The returned counter
+// enables replay protection: callers can reject a code whose counter is not
+// strictly greater than the last accepted counter.
+func ValidateWithCounter(secret []byte, code string, t time.Time) (uint64, bool) {
 	if len(code) != codeDigits {
-		return false
+		return 0, false
 	}
 	counter := uint64(t.Unix()) / timeStep
 	for _, offset := range []uint64{counter - 1, counter, counter + 1} {
 		expected := hotp(secret, offset)
 		if subtle.ConstantTimeCompare([]byte(expected), []byte(code)) == 1 {
-			return true
+			return offset, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 // EncodeSecret returns the base32-encoded (no padding) string of a secret.

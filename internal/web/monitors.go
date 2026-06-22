@@ -712,6 +712,17 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	mon, channelIDs, monTags := h.parseMonitorForm(r)
 	mon.ID = id
 
+	// The edit form does not submit an enabled/paused field, so preserve the
+	// existing enabled state (and created_at) instead of letting parseMonitorForm's
+	// default flip a paused monitor back on. Enable/disable goes through Pause/Resume.
+	if existing, err := h.store.GetMonitor(r.Context(), id); err == nil && existing != nil {
+		mon.Enabled = existing.Enabled
+		mon.CreatedAt = existing.CreatedAt
+	} else {
+		h.redirect(w, r, "/monitors")
+		return
+	}
+
 	if err := validate.ValidateMonitor(mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())

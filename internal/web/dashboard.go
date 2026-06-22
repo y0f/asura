@@ -27,10 +27,13 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		typeFilter = ""
 	}
 
-	allMonitors := h.loadAllMonitors(ctx)
-	up, down, degraded, paused := countMonitorStats(allMonitors)
-	filtered := filterMonitorsByType(allMonitors, typeFilter)
-	displayMonitors, page, totalPages := paginate(filtered, page, perPage)
+	up, down, degraded, paused, err := h.store.CountMonitorsByStatus(ctx)
+	if err != nil {
+		h.logger.Error("web: count monitors by status", "error", err)
+	}
+	total := up + down + degraded + paused
+
+	displayMonitors, page, totalPages := h.loadMonitorPage(ctx, typeFilter, page, perPage)
 
 	incidentList := h.loadOpenIncidents(ctx)
 
@@ -58,11 +61,11 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		Incidents:     incidentList,
 		ResponseTimes: responseTimes,
 		Sparklines:    sparklines,
-		Total:         len(allMonitors),
-		Up:            up,
-		Down:          down,
-		Degraded:      degraded,
-		Paused:        paused,
+		Total:         int(total),
+		Up:            int(up),
+		Down:          int(down),
+		Degraded:      int(degraded),
+		Paused:        int(paused),
 		OpenIncidents: len(incidentList),
 		Requests24h:   requests24h,
 		Visitors24h:   visitors24h,
@@ -72,17 +75,21 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-func (h *Handler) loadAllMonitors(ctx context.Context) []*storage.Monitor {
-	result, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 1000})
+func (h *Handler) loadMonitorPage(ctx context.Context, typeFilter string, page, perPage int) ([]*storage.Monitor, int, int) {
+	result, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{Type: typeFilter}, storage.Pagination{Page: page, PerPage: perPage})
 	if err != nil {
 		h.logger.Error("web: list monitors", "error", err)
-		return nil
+		return nil, page, 1
 	}
 	if result == nil {
-		return nil
+		return nil, page, 1
 	}
 	ml, _ := result.Data.([]*storage.Monitor)
-	return ml
+	totalPages := result.TotalPages
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	return ml, result.Page, totalPages
 }
 
 func (h *Handler) loadOpenIncidents(ctx context.Context) []*storage.Incident {
@@ -108,52 +115,4 @@ func (h *Handler) loadRequestStats(ctx context.Context, now time.Time) (requests
 		return 0, 0
 	}
 	return stats.TotalRequests, stats.UniqueVisitors
-}
-
-func paginate[T any](items []T, page, perPage int) ([]T, int, int) {
-	total := len(items)
-	totalPages := (total + perPage - 1) / perPage
-	if totalPages < 1 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-	start := (page - 1) * perPage
-	end := start + perPage
-	if end > total {
-		end = total
-	}
-	return items[start:end], page, totalPages
-}
-
-func countMonitorStats(monitors []*storage.Monitor) (up, down, degraded, paused int) {
-	for _, m := range monitors {
-		if !m.Enabled {
-			paused++
-			continue
-		}
-		switch m.Status {
-		case "down":
-			down++
-		case "degraded":
-			degraded++
-		default:
-			up++
-		}
-	}
-	return
-}
-
-func filterMonitorsByType(monitors []*storage.Monitor, t string) []*storage.Monitor {
-	if t == "" {
-		return monitors
-	}
-	out := make([]*storage.Monitor, 0, len(monitors))
-	for _, m := range monitors {
-		if m.Type == t {
-			out = append(out, m)
-		}
-	}
-	return out
 }

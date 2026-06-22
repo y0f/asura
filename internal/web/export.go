@@ -45,7 +45,13 @@ func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
-	redact := r.URL.Query().Get("redact_secrets") == "true"
+	k := httputil.GetAPIKey(r.Context())
+	canExportSecrets := k != nil && k.HasPermission("monitors.write")
+
+	redact := true
+	if canExportSecrets && r.URL.Query().Get("redact_secrets") == "false" {
+		redact = false
+	}
 
 	data, err := api.BuildExportData(r.Context(), h.store, redact)
 	if err != nil {
