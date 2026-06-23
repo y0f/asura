@@ -8,6 +8,7 @@ on:
 
 env:
   TAILWIND_VERSION: "4.2.1"
+  TAILWIND_SHA256: "39e8d4e24b3c83b0a6e69e100a972fbc75d5fef8dce47b3ddac3cf92dea81fe3" # tailwindcss-linux-x64 v4.2.1
 
 jobs:
   tailwind:
@@ -33,6 +34,7 @@ jobs:
         if: steps.css-check.outputs.skip != 'true'
         run: |
           curl -sL -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
           chmod +x tailwindcss
 
       - name: Rebuild CSS
