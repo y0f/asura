@@ -16,7 +16,7 @@ func (s *SQLiteStore) IsMonitorOnStatusPage(ctx context.Context, monitorID int64
 		`SELECT EXISTS(
 			SELECT 1 FROM status_page_monitors spm
 			JOIN status_pages sp ON sp.id = spm.page_id
-			WHERE spm.monitor_id = ? AND sp.enabled = 1
+			WHERE spm.monitor_id = ? AND sp.enabled = 1 AND sp.password_hash = ''
 		)`, monitorID).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("is monitor on status page: %w", err)
