@@ -38,9 +38,8 @@ func (p NotificationHistoryParams) pageHref(page int) string {
 templ NotificationHistoryPage(p NotificationHistoryParams) {
 	@Layout(p.LayoutParams) {
 		<div>
-			<div class="flex items-center justify-between mb-5">
-				<h1 class="text-[15px] font-medium text-white">Notification History</h1>
-				<a href={ templ.SafeURL(p.BasePath + "/notifications") } class="text-[12px] text-muted hover:text-white transition-colors">&lt; Channels</a>
+			<div class="flex items-center justify-end mb-5">
+				<a href={ templ.SafeURL(p.BasePath + "/notifications") } class="text-xs text-muted hover:text-white transition-colors">&lt; Channels</a>
 			</div>
 			<form method="GET" action={ templ.SafeURL(p.BasePath + "/notifications/history") } class="flex flex-wrap items-center gap-2 mb-4">
 				<select name="channel_id" class="form-select-sm" onchange="this.form.submit()">
@@ -61,11 +60,11 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 					}
 				</select>
 				if p.Filter.ChannelID != 0 || p.Filter.Status != "" || p.Filter.EventType != "" {
-					<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="text-[11px] text-muted hover:text-white transition-colors">Clear</a>
+					<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="text-2xs text-muted hover:text-white transition-colors">Clear</a>
 				}
 			</form>
-			<div class="border border-line-light rounded-xl overflow-hidden">
-				if entries := p.entries(); len(entries) > 0 {
+			if entries := p.entries(); len(entries) > 0 {
+				<div class="panel">
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[700px]">
 							<thead>
@@ -81,13 +80,13 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 							<tbody class="divide-y divide-line">
 								for _, e := range entries {
 									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-2.5 text-[12px] text-muted tabular-nums font-mono whitespace-nowrap">{ TimeAgo(e.SentAt) }</td>
+										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono whitespace-nowrap">{ TimeAgo(e.SentAt) }</td>
 										<td class="px-4 py-2.5">
-											<div class="text-[12px] text-muted-light">{ e.ChannelName }</div>
-											<div class="text-[10px] text-muted">{ e.ChannelType }</div>
+											<div class="text-xs text-muted-light">{ e.ChannelName }</div>
+											<div class="text-2xs text-muted">{ e.ChannelType }</div>
 										</td>
-										<td class="px-4 py-2.5 text-[11px] font-mono text-muted-light">{ e.EventType }</td>
-										<td class="px-4 py-2.5 text-[12px] text-muted">
+										<td class="px-4 py-2.5 text-2xs font-mono text-muted-light">{ e.EventType }</td>
+										<td class="px-4 py-2.5 text-xs text-muted">
 											if e.MonitorName != "" {
 												{ e.MonitorName }
 											} else {
@@ -96,12 +95,12 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 										</td>
 										<td class="px-4 py-2.5">
 											if e.Status == "sent" {
-												<span class="text-[10px] font-medium px-1.5 py-px rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">sent</span>
+												<span class="badge badge-emerald">sent</span>
 											} else {
-												<span class="text-[10px] font-medium px-1.5 py-px rounded border bg-red-500/10 text-red-400 border-red-500/20">failed</span>
+												<span class="badge badge-red">failed</span>
 											}
 										</td>
-										<td class="px-4 py-2.5 text-[11px] text-red-400 font-mono max-w-[240px] truncate" title={ e.Error }>
+										<td class="px-4 py-2.5 text-2xs text-red-400 font-mono max-w-[240px] truncate" title={ e.Error }>
 											if e.Error != "" {
 												{ e.Error }
 											}
@@ -113,7 +112,7 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 					</div>
 					if p.Result != nil && p.Result.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">
+							<span class="text-2xs text-muted tabular-nums">
 								{ fmt.Sprintf("Page %d / %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total) }
 							</span>
 							<div class="flex gap-1">
@@ -126,13 +125,10 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 							</div>
 						</div>
 					}
-				} else {
-					<div class="px-4 py-16 text-center">
-						<svg class="w-6 h-6 mx-auto text-muted/20 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9"></path></svg>
-						<p class="text-muted text-[12px]">No notification history yet</p>
-					</div>
-				}
-			</div>
+				</div>
+			} else {
+				@EmptyState("No notification history yet", "", "")
+			}
 		</div>
 	}
 }

@@ -32,43 +32,40 @@ func formatBytes(b int64) string {
 
 templ SettingsPage(p SettingsParams) {
 	@Layout(p.LayoutParams) {
-		<div>
-			<div class="flex items-center justify-between mb-5">
-				<h1 class="text-[15px] font-medium text-white">Settings</h1>
-			</div>
-			<div class="border border-line-light rounded-xl bg-surface-50/40 p-5 mb-5">
-				<h2 class="text-[11px] text-muted uppercase tracking-widest mb-3">System Info</h2>
-				<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
+		<div class="max-w-5xl">
+			<div class="card card-pad mb-5">
+				<h2 class="text-sm font-semibold text-white mb-4">System Info</h2>
+				<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
 					<div>
-						<div class="text-muted mb-0.5">Version</div>
+						<div class="text-muted-light mb-0.5">Version</div>
 						<div class="text-white font-medium">{ p.AppVersion }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Go</div>
+						<div class="text-muted-light mb-0.5">Go</div>
 						<div class="text-white font-medium">{ runtime.Version() }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Uptime</div>
+						<div class="text-muted-light mb-0.5">Uptime</div>
 						<div class="text-white font-medium">{ p.Uptime }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Database</div>
+						<div class="text-muted-light mb-0.5">Database</div>
 						<div class="text-white font-medium">{ formatBytes(p.DBSizeBytes) }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Monitors</div>
+						<div class="text-muted-light mb-0.5">Monitors</div>
 						<div class="text-white font-medium">{ fmt.Sprint(p.MonitorCount) }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Workers</div>
+						<div class="text-muted-light mb-0.5">Workers</div>
 						<div class="text-white font-medium">{ fmt.Sprint(p.WorkerCount) }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Retention</div>
+						<div class="text-muted-light mb-0.5">Retention</div>
 						<div class="text-white font-medium">{ fmt.Sprintf("%d days", p.RetentionDays) }</div>
 					</div>
 					<div>
-						<div class="text-muted mb-0.5">Encryption</div>
+						<div class="text-muted-light mb-0.5">Encryption</div>
 						if p.EncryptionOn {
 							<div class="text-emerald-400 font-medium">Enabled</div>
 						} else {
@@ -78,55 +75,59 @@ templ SettingsPage(p SettingsParams) {
 				</div>
 			</div>
 			<div class="grid gap-5 md:grid-cols-2">
-				<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
-					<h2 class="text-[13px] font-medium text-white mb-1">Export Configuration</h2>
-					<p class="text-[12px] text-muted-light mb-4">Download all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a JSON file.</p>
+				<div class="card card-pad">
+					<h2 class="text-sm font-semibold text-white mb-1">Export Configuration</h2>
+					<p class="text-xs text-muted-light mb-4">Download all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a JSON file.</p>
 					<div class="flex items-center gap-2">
 						<a href={ templ.SafeURL(p.BasePath + "/settings/export") }
-							class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
+							class="btn-primary btn-press">
 							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
 							Export
 						</a>
 						<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true") }
-							class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-200 hover:bg-surface-200/80 text-white text-[12px] font-medium rounded transition-colors">
+							class="btn-secondary btn-press">
 							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
 							Export (redacted)
 						</a>
 					</div>
 				</div>
-				<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
-					<h2 class="text-[13px] font-medium text-white mb-1">Import Configuration</h2>
-					<p class="text-[12px] text-muted-light mb-4">Upload a previously exported JSON file to restore or merge configuration.</p>
-					<form action={ templ.SafeURL(p.BasePath + "/settings/import") } method="POST" enctype="multipart/form-data" class="space-y-3">
+				<div class="card card-pad">
+					<h2 class="text-sm font-semibold text-white mb-1">Import Configuration</h2>
+					<p class="text-xs text-muted-light mb-4">Upload a previously exported JSON file to restore or merge configuration.</p>
+					<form action={ templ.SafeURL(p.BasePath + "/settings/import") } method="POST" enctype="multipart/form-data" class="space-y-3" x-data="{ fileName: '' }">
 						<div>
-							<label class="form-label">Mode</label>
-							<select name="mode" class="form-select">
+							<label class="form-label" for="mode">Mode</label>
+							<select id="mode" name="mode" class="form-select">
 								<option value="merge">Merge (skip existing)</option>
 								<option value="replace">Replace (overwrite all)</option>
 							</select>
 						</div>
 						<div>
 							<label class="form-label">File</label>
-							<input type="file" name="file" accept=".json,application/json" required
-								class="block w-full text-[12px] text-muted-light file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[12px] file:font-medium file:bg-surface-200 file:text-white hover:file:bg-surface-200/80 file:cursor-pointer file:transition-colors"/>
+							<label class="flex items-center gap-3 cursor-pointer">
+								<span class="btn-secondary btn-press shrink-0">Choose file</span>
+								<span class="text-xs truncate" :class="fileName ? 'text-muted-light' : 'text-muted'" x-text="fileName || 'No file selected'"></span>
+								<input type="file" name="file" accept=".json,application/json" required class="sr-only"
+									@change="fileName = $event.target.files[0]?.name || ''"/>
+							</label>
 						</div>
-						<button type="submit" class="btn-primary">Import</button>
+						<button type="submit" class="btn-primary btn-press">Import</button>
 					</form>
 				</div>
-				<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
-					<h2 class="text-[13px] font-medium text-white mb-1">Database Maintenance</h2>
-					<p class="text-[12px] text-muted-light mb-4">
-						VACUUM reclaims unused space from deleted rows and rebuilds the database file.
-					</p>
-					<button type="button"
-						data-url={ p.BasePath + "/settings/vacuum" }
-						data-msg="Run VACUUM? This may take a moment for large databases."
-						@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-200 hover:bg-surface-200/80 text-white text-[12px] font-medium rounded transition-colors">
-						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-						Run VACUUM
-					</button>
-				</div>
+			</div>
+			<div class="card card-pad mt-5">
+				<h2 class="text-sm font-semibold text-white mb-1">Database Maintenance</h2>
+				<p class="text-xs text-muted-light mb-4">
+					VACUUM reclaims unused space from deleted rows and rebuilds the database file.
+				</p>
+				<button type="button"
+					data-url={ p.BasePath + "/settings/vacuum" }
+					data-msg="Run VACUUM? This may take a moment for large databases."
+					@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
+					class="btn-secondary btn-press">
+					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14a9 3 0 0 0 18 0V5"></path><path d="M3 12a9 3 0 0 0 18 0"></path></svg>
+					Run VACUUM
+				</button>
 			</div>
 		</div>
 	}

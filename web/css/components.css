@@ -1,0 +1,219 @@
+/* components.css - reusable component utilities + classes
+   These cascade across every page, so the design language lives here. Keep
+   page templates free of one-off sizing; reach for these utilities instead. */
+
+/* Surfaces 
+   .card   - the standard raised panel: fill + visible border + rounded.
+   .panel  - flush container (lists/tables) with a hairline border. */
+@utility card {
+  @apply bg-surface-50 border border-line rounded-card;
+}
+@utility panel {
+  @apply bg-surface-50/60 border border-line rounded-card overflow-hidden;
+}
+@utility card-pad { @apply p-5; }
+
+/* Section / eyebrow labels */
+@utility eyebrow { @apply text-2xs font-semibold text-muted uppercase tracking-[0.08em]; }
+@utility stat-label { @apply text-xs font-medium text-muted mb-1.5; }
+
+/* Form fields 
+   Sentence-case, medium-weight, readable labels (the old all-caps 10px gray
+   labels were the main reason the forms felt unintuitive). */
+@utility form-label { @apply block text-sm font-medium text-muted-light mb-1.5; }
+@utility form-label-sm { @apply block text-xs font-medium text-muted mb-1; }
+@utility form-hint { @apply text-xs text-muted mt-1.5 leading-relaxed; }
+
+@utility form-input {
+  @apply w-full px-3.5 py-2.5 bg-surface border border-line rounded-control text-white text-base placeholder-muted transition-colors;
+  @apply focus:outline-hidden focus:border-brand/60;
+}
+@utility form-select {
+  @apply w-full px-3.5 py-2.5 bg-surface border border-line rounded-control text-white text-base transition-colors;
+  @apply focus:outline-hidden focus:border-brand/60;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23828999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.7rem center; background-size: 1.05rem; padding-right: 2.25rem;
+}
+@utility form-select-sm {
+  @apply px-3 py-1.5 bg-surface border border-line rounded-control text-sm text-muted-light transition-colors cursor-pointer;
+  @apply focus:outline-hidden focus:border-brand/60;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23828999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 0.85rem; padding-right: 2rem;
+}
+@utility form-checkbox {
+  @apply w-4 h-4 rounded-[5px] border border-line-light bg-surface cursor-pointer transition-colors;
+  appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center;
+}
+
+/* Checkbox states (pseudo-elements can't live in @utility). */
+.form-checkbox::before {
+  content: ""; width: 0.6em; height: 0.6em; transform: scale(0);
+  transition: transform 0.12s ease-in-out;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  background-color: var(--color-brand-fg);
+}
+.form-checkbox:checked { background-color: var(--color-brand); border-color: var(--color-brand); }
+.form-checkbox:checked::before { transform: scale(1); }
+.form-checkbox:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px color-mix(in srgb, var(--color-brand) 50%, transparent); }
+
+/* Tables */
+@utility th { @apply px-4 py-3 text-2xs font-medium text-muted uppercase tracking-[0.05em]; }
+
+/* Filter / segmented tabs */
+@utility filter-tab { @apply px-3 py-1.5 text-xs font-medium border rounded-full transition-colors whitespace-nowrap; }
+@utility filter-active { @apply text-brand border-brand/40 bg-brand/10; }
+@utility filter-inactive { @apply text-muted border-line hover:text-muted-light hover:border-line-light; }
+
+/* Buttons 
+   Every variant is SELF-CONTAINED (size + colour), so it works on its own:
+     class="btn-primary"  / "btn-secondary" / "btn-danger" / "btn-success" / "btn-warning"
+   Add `btn-sm` for a compact size and `btn-press` for the press animation.
+   `btn` is the bare base (transparent) for the rare custom-coloured button.
+   Comfortable hit target ~ 38px tall. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-control select-none border border-transparent;
+}
+@utility btn-primary {
+  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-control select-none border border-transparent;
+  background-color: var(--color-brand-button);
+  color: var(--color-brand-fg);
+  transition: background-color 140ms ease, filter 140ms ease, transform 130ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@utility btn-secondary {
+  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-control select-none;
+  background-color: var(--color-surface-100);
+  border: 1px solid var(--color-line-light);
+  color: var(--color-muted-light);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 130ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@utility btn-danger {
+  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-control select-none;
+  background-color: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  color: rgb(248 113 113);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 130ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@utility btn-success {
+  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-control select-none;
+  background-color: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  color: rgb(52 211 153);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 130ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@utility btn-warning {
+  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-control select-none;
+  background-color: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: rgb(251 191 36);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 130ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover/active states (plain, after the @utility variants). */
+.btn-primary:hover { filter: brightness(0.92); }
+.btn-primary:active { transform: scale(0.97); filter: brightness(0.96); }
+.btn-secondary:hover { background-color: var(--color-surface-200); border-color: var(--color-muted); color: var(--color-white); }
+.btn-secondary:active { transform: scale(0.97); }
+.btn-danger:hover { background-color: rgba(248, 113, 113, 0.2); border-color: rgba(248, 113, 113, 0.5); }
+.btn-danger:active { transform: scale(0.97); }
+.btn-success:hover { background-color: rgba(52, 211, 153, 0.2); border-color: rgba(52, 211, 153, 0.5); }
+.btn-success:active { transform: scale(0.97); }
+.btn-warning:hover { background-color: rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.5); }
+.btn-warning:active { transform: scale(0.97); }
+html[data-theme="light"] .btn-success { color: rgb(4 120 87); }
+html[data-theme="light"] .btn-warning { color: rgb(161 98 7); }
+
+/* Compact size - UNLAYERED so its padding/gap beats the variant's default. */
+.btn-sm { gap: 0.375rem; padding: 0.5rem 0.75rem; font-size: var(--text-sm); }
+
+.btn-press { transition: transform 130ms cubic-bezier(0.4, 0, 0.2, 1), background-color 120ms ease, color 120ms ease, border-color 120ms ease; }
+.btn-press:active { transform: scale(0.96); }
+
+/* Icon action buttons (now clearly visible, comfortable target) */
+@utility icon-btn {
+  @apply inline-flex items-center justify-center rounded-control border border-transparent text-muted-light cursor-pointer;
+  width: 2.125rem; height: 2.125rem;
+  transition: transform 130ms cubic-bezier(0.4, 0, 0.2, 1), background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.icon-btn:hover { background-color: var(--color-surface-200); color: var(--color-white); border-color: var(--color-line); }
+.icon-btn:active { transform: scale(0.92); }
+
+/* Small inline row-action icon (table rows): visible by default, not a ghost. */
+@utility row-action {
+  @apply inline-flex items-center justify-center w-8 h-8 rounded-control text-muted transition-colors;
+}
+.row-action:hover { color: var(--color-white); background-color: var(--color-surface-200); }
+
+/* Badges / status pills */
+.badge {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  border-radius: 999px; padding: 0.2rem 0.6rem;
+  font-size: 11px; line-height: 1.4; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border: 1px solid transparent; white-space: nowrap; flex-shrink: 0;
+}
+.badge-blue { background-color: rgba(20, 132, 255, 0.14); color: rgb(96 165 250); border-color: rgba(20, 132, 255, 0.28); }
+.badge-emerald { background-color: rgba(52, 211, 153, 0.14); color: rgb(52 211 153); border-color: rgba(52, 211, 153, 0.26); }
+.badge-yellow { background-color: rgba(251, 191, 36, 0.14); color: rgb(251 191 36); border-color: rgba(251, 191, 36, 0.28); }
+.badge-red { background-color: rgba(248, 113, 113, 0.14); color: rgb(248 113 113); border-color: rgba(248, 113, 113, 0.28); }
+.badge-zinc { background-color: rgba(130, 137, 153, 0.16); color: var(--color-muted-light); border-color: rgba(130, 137, 153, 0.32); }
+
+html[data-theme="light"] .badge-blue { color: rgb(29 78 216); }
+html[data-theme="light"] .badge-emerald { color: rgb(4 120 87); }
+html[data-theme="light"] .badge-yellow { color: rgb(161 98 7); }
+html[data-theme="light"] .badge-red { color: rgb(185 28 28); }
+
+/* Animated toggle switch */
+.switch { display: inline-flex; align-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track {
+  position: relative; width: 42px; height: 24px; border-radius: 999px;
+  background: var(--color-surface-300); border: 1px solid var(--color-line-light);
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease; flex-shrink: 0;
+}
+.switch-dot {
+  position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 999px;
+  background: var(--color-muted-light);
+  transition: transform 160ms cubic-bezier(0.4, 0, 0.2, 1), background-color 160ms ease;
+}
+.switch input:checked + .switch-track {
+  background-image: linear-gradient(135deg, var(--color-brand), var(--color-brand-strong));
+  border-color: transparent; box-shadow: 0 0 14px -2px color-mix(in srgb, var(--color-brand) 55%, transparent);
+}
+.switch input:checked + .switch-track .switch-dot { transform: translateX(18px); background: #fff; }
+.switch input:disabled + .switch-track { opacity: 0.5; cursor: not-allowed; }
+/* The real checkbox is visually collapsed, so forward its focus ring to the track. */
+.switch input:focus-visible + .switch-track { box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px color-mix(in srgb, var(--color-brand) 55%, transparent); }
+
+/* Command palette */
+.cmdk-input:focus,
+.cmdk-input:focus-visible { box-shadow: none !important; outline: none !important; }
+.cmdk-hit { transition: background-color 120ms ease; }
+.cmdk-hit:hover { background-color: color-mix(in srgb, var(--color-surface-200) 70%, transparent); }
+.cmdk-hit.is-active { background-color: rgba(20, 132, 255, 0.12); }
+html[data-theme="light"] .cmdk-hit:hover { background-color: rgba(0, 112, 243, 0.06); }
+html[data-theme="light"] .cmdk-hit.is-active { background-color: rgba(0, 112, 243, 0.1); }
+
+/* Light-theme input contrast 
+   Inputs sit on white cards; tint their fill and strengthen the border so the
+   field reads as a distinct, tappable control rather than a faint outline. */
+html[data-theme="light"] .form-input,
+html[data-theme="light"] .form-select,
+html[data-theme="light"] .form-select-sm {
+  background-color: rgb(248 249 252);
+  border-color: var(--color-line-light);
+}
+html[data-theme="light"] .form-input:focus,
+html[data-theme="light"] .form-select:focus,
+html[data-theme="light"] .form-select-sm:focus {
+  background-color: #fff;
+  border-color: color-mix(in srgb, var(--color-brand) 60%, transparent);
+}
+
+/* Hide scrollbars on intentional horizontal scrollers (mobile tab strips). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }

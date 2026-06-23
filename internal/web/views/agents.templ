@@ -19,18 +19,16 @@ func agentOnline(a *storage.Agent) bool {
 templ AgentListPage(p AgentListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data="{showForm: false}">
-			<div class="flex items-center justify-between mb-5">
-				<h1 class="text-[15px] font-medium text-white">Agents</h1>
+			<div class="flex items-center justify-end mb-5">
 				if p.Perms["monitors.write"] {
-					<button @click="showForm = true"
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
-						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
+					<button @click="showForm = true" class="btn-primary btn-press">
+						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
 						New Agent
 					</button>
 				}
 			</div>
 			if len(p.Agents) > 0 {
-				<div class="border border-line-light rounded-xl overflow-hidden">
+				<div class="panel">
 					<table class="w-full">
 						<thead>
 							<tr class="border-b border-line text-left">
@@ -44,8 +42,8 @@ templ AgentListPage(p AgentListParams) {
 						<tbody class="divide-y divide-line">
 							for _, a := range p.Agents {
 								<tr class="hover:bg-surface-200/20 transition-colors">
-									<td class="px-4 py-3 text-[13px] text-white font-medium">{ a.Name }</td>
-									<td class="px-4 py-3 text-[12px] text-muted">
+									<td class="px-4 py-3 text-sm text-white font-medium">{ a.Name }</td>
+									<td class="px-4 py-3 text-xs text-muted">
 										if a.Location != "" {
 											{ a.Location }
 										} else {
@@ -54,17 +52,17 @@ templ AgentListPage(p AgentListParams) {
 									</td>
 									<td class="px-4 py-3">
 										if agentOnline(a) {
-											<span class="inline-flex items-center gap-1.5 text-[10px] font-medium px-1.5 py-px rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+											<span class="badge badge-emerald inline-flex items-center gap-1.5">
 												<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot"></span>
 												online
 											</span>
 										} else if a.LastHeartbeat != nil {
-											<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-red-500/10 text-red-400 border-red-500/20">offline</span>
+											<span class="badge badge-red">offline</span>
 										} else {
-											<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">never connected</span>
+											<span class="badge badge-zinc">never connected</span>
 										}
 									</td>
-									<td class="px-4 py-3 text-[12px] text-muted tabular-nums">
+									<td class="px-4 py-3 text-xs text-muted tabular-nums">
 										if a.LastHeartbeat != nil {
 											{ TimeAgo(*a.LastHeartbeat) }
 										} else {
@@ -82,28 +80,32 @@ templ AgentListPage(p AgentListParams) {
 					</table>
 				</div>
 			} else {
-				@EmptyState("No agents configured", "", "")
-				<div class="mt-4 border border-line-light rounded-xl p-4">
-					<p class="text-[12px] text-muted-light mb-2">Agents run checks from remote locations and report back to this server.</p>
-					<p class="text-[12px] text-muted">Create an agent, then run the agent binary on a remote server:</p>
-					<pre class="mt-2 text-[11px] text-muted-light bg-surface-200 rounded px-3 py-2 font-mono overflow-x-auto">asura-agent --server https://your-server.com --token &lt;agent-token&gt;</pre>
+				if p.Perms["monitors.write"] {
+					@EmptyStateModal("No agents yet", "showForm = true", "New Agent")
+				} else {
+					@EmptyState("No agents yet", "", "")
+				}
+				<div class="mt-4 card card-pad">
+					<p class="text-xs text-muted-light mb-2">Agents run checks from remote locations and report back to this server.</p>
+					<p class="text-xs text-muted">Create an agent, then run the agent binary on a remote server:</p>
+					<pre class="mt-2 text-2xs text-muted-light bg-surface-200 rounded-control px-3 py-2 font-mono overflow-x-auto">asura-agent --server https://your-server.com --token &lt;agent-token&gt;</pre>
 				</div>
 			}
 			@FormModal("showForm", "max-w-sm", "'New Agent'") {
 				<form method="POST" action={ templ.SafeURL(p.BasePath + "/agents") } class="space-y-3">
-						<div>
-							<label class="form-label">Name</label>
-							<input type="text" name="name" required placeholder="US-East, EU-West, etc." class="form-input"/>
-						</div>
-						<div>
-							<label class="form-label">Location</label>
-							<input type="text" name="location" placeholder="New York, Frankfurt, etc." class="form-input"/>
-						</div>
-						<div class="flex items-center gap-3 pt-1">
-							<button type="submit" class="btn-primary">Create</button>
-							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
-						</div>
-					</form>
+					<div>
+						<label class="form-label" for="name">Name</label>
+						<input id="name" type="text" name="name" required placeholder="US-East, EU-West, etc." class="form-input"/>
+					</div>
+					<div>
+						<label class="form-label" for="location">Location</label>
+						<input id="location" type="text" name="location" placeholder="New York, Frankfurt, etc." class="form-input"/>
+					</div>
+					<div class="flex items-center gap-3 pt-1">
+						<button type="submit" class="btn-primary btn-press">Create</button>
+						<button type="button" @click="showForm = false" class="btn-secondary btn-press">Cancel</button>
+					</div>
+				</form>
 			}
 		</div>
 	}

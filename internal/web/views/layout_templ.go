@@ -421,14 +421,14 @@ func Sidebar(p LayoutParams) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if p.Version != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div x-show=\"!collapsed\" class=\"shrink-0 -mt-3 mb-1 px-4 font-mono text-[10px] leading-none tabular-nums whitespace-nowrap overflow-hidden text-muted\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div x-show=\"!collapsed\" class=\"shrink-0 -mt-3 mb-1 px-4 font-mono text-2xs leading-none tabular-nums whitespace-nowrap overflow-hidden text-muted\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(p.Version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 219, Col: 165}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 219, Col: 162}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -439,7 +439,7 @@ func Sidebar(p LayoutParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<!-- Quick search (opens the command palette) --><div class=\"px-2.5 pt-1 pb-2.5 shrink-0\"><button type=\"button\" @click=\"window.dispatchEvent(new CustomEvent('cmdk-open'))\" class=\"sidebar-search-btn group flex h-9 w-full items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 text-[13px] text-muted transition-colors hover:border-line-light hover:text-muted-light\" :class=\"collapsed && 'md:h-8 md:justify-center md:px-0'\" :title=\"collapsed ? 'Search (Ctrl K)' : null\" aria-label=\"Open search\"><svg class=\"w-4 h-4 shrink-0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.35-4.35\"></path></svg> <span class=\"flex-1 text-left\" x-show=\"!collapsed\">Quick search…</span> <kbd x-data=\"{ mac: /Mac|iPhone|iPad/i.test((navigator.platform || '') + ' ' + navigator.userAgent) }\" x-show=\"!collapsed\" class=\"inline-flex h-5 items-center gap-1 rounded border border-line-light bg-surface-200/60 px-1.5 font-mono text-[10px] leading-none text-muted group-hover:text-muted-light\"><span x-show=\"!mac\">Ctrl</span><span x-cloak x-show=\"mac\">⌘</span><span>K</span></kbd></button></div><nav id=\"sidenav\" hx-boost=\"true\" hx-target=\"#content\" hx-select=\"#content\" hx-swap=\"outerHTML show:window:top\" hx-sync=\"this:replace\" class=\"flex-1 px-2.5 pt-1 pb-3 overflow-y-auto overflow-x-hidden\" :class=\"collapsed ? 'space-y-1' : 'space-y-3'\"><div class=\"space-y-0.5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<!-- Quick search (opens the command palette) --><div class=\"px-2.5 pt-1 pb-2.5 shrink-0\"><button type=\"button\" @click=\"window.dispatchEvent(new CustomEvent('cmdk-open'))\" class=\"sidebar-search-btn group flex h-9 w-full items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 text-sm text-muted transition-colors hover:border-line-light hover:text-muted-light\" :class=\"collapsed && 'md:h-8 md:justify-center md:px-0'\" :title=\"collapsed ? 'Search (Ctrl K)' : null\" aria-label=\"Open search\"><svg class=\"w-4 h-4 shrink-0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.35-4.35\"></path></svg> <span class=\"flex-1 text-left\" x-show=\"!collapsed\">Quick search…</span> <kbd x-data=\"{ mac: /Mac|iPhone|iPad/i.test((navigator.platform || '') + ' ' + navigator.userAgent) }\" x-show=\"!collapsed\" class=\"inline-flex h-5 items-center gap-1 rounded border border-line-light bg-surface-200/60 px-1.5 font-mono text-2xs leading-none text-muted group-hover:text-muted-light\"><span x-show=\"!mac\">Ctrl</span><span x-cloak x-show=\"mac\">⌘</span><span>K</span></kbd></button></div><nav id=\"sidenav\" hx-boost=\"true\" hx-target=\"#content\" hx-select=\"#content\" hx-swap=\"outerHTML show:window:top\" hx-sync=\"this:replace\" class=\"flex-1 px-2.5 pt-1 pb-3 overflow-y-auto overflow-x-hidden\" :class=\"collapsed ? 'space-y-1' : 'space-y-3'\"><div class=\"space-y-0.5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -954,14 +954,14 @@ func navGroup(title string) templ.Component {
 			templ_7745c5c3_Var41 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<div class=\"space-y-0.5\"><div x-show=\"!collapsed\" class=\"px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<div class=\"space-y-0.5\"><div x-show=\"!collapsed\" class=\"px-2.5 pt-2 pb-1 text-2xs font-semibold uppercase tracking-widest text-muted\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 310, Col: 122}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 310, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -1057,7 +1057,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, " class=\"nav-link group flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-normal transition-colors\" :class=\"collapsed && 'md:justify-center md:px-0'\"><span class=\"flex w-[18px] shrink-0 items-center justify-center\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, " class=\"nav-link group flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-sm font-normal transition-colors\" :class=\"collapsed && 'md:justify-center md:px-0'\"><span class=\"flex w-[18px] shrink-0 items-center justify-center\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1159,33 +1159,33 @@ func sidebarUser(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<span class=\"flex-1 truncate text-left text-[13px] font-medium text-muted-light\" x-show=\"!collapsed\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<span class=\"flex-1 truncate text-left text-sm font-medium text-muted-light\" x-show=\"!collapsed\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 363, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 363, Col: 122}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</span> <svg x-show=\"!collapsed\" class=\"w-4 h-4 shrink-0 text-muted group-hover:text-muted-light\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"5\" r=\"1\"></circle><circle cx=\"12\" cy=\"12\" r=\"1\"></circle><circle cx=\"12\" cy=\"19\" r=\"1\"></circle></svg></button><div x-show=\"open\" x-cloak @click.outside=\"open=false\" x-transition:enter=\"transition ease-out duration-120\" x-transition:enter-start=\"opacity-0 translate-y-1 scale-95\" x-transition:enter-end=\"opacity-100 translate-y-0 scale-100\" class=\"absolute bottom-full left-2 mb-2 w-56 origin-bottom rounded-xl border border-line bg-surface-50 p-1.5 shadow-2xl shadow-black/50 z-30\"><div class=\"px-2.5 py-2 border-b border-line mb-1\"><div class=\"text-[11px] text-muted\">Signed in as</div><div class=\"text-[13px] font-medium text-white truncate\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</span> <svg x-show=\"!collapsed\" class=\"w-4 h-4 shrink-0 text-muted group-hover:text-muted-light\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"5\" r=\"1\"></circle><circle cx=\"12\" cy=\"12\" r=\"1\"></circle><circle cx=\"12\" cy=\"19\" r=\"1\"></circle></svg></button><div x-show=\"open\" x-cloak @click.outside=\"open=false\" x-transition:enter=\"transition ease-out duration-120\" x-transition:enter-start=\"opacity-0 translate-y-1 scale-95\" x-transition:enter-end=\"opacity-100 translate-y-0 scale-100\" class=\"absolute bottom-full left-2 mb-2 w-56 origin-bottom rounded-xl border border-line bg-surface-50 p-1.5 shadow-2xl shadow-black/50 z-30\"><div class=\"px-2.5 py-2 border-b border-line mb-1\"><div class=\"text-2xs text-muted\">Signed in as</div><div class=\"text-sm font-medium text-white truncate\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 377, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 377, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</div></div><div class=\"flex items-center justify-between gap-2 px-2.5 py-1.5\"><span class=\"text-[13px] text-muted-light\">Theme</span><div class=\"flex items-center gap-0.5 rounded-lg border border-line bg-surface/50 p-0.5\"><button type=\"button\" @click=\"setTheme('light')\" :class=\"theme === 'light' ? 'bg-surface-200 text-white' : 'text-muted hover:text-muted-light'\" class=\"flex h-7 w-7 items-center justify-center rounded-md transition-colors\" title=\"Light\" aria-label=\"Light theme\" :aria-pressed=\"theme === 'light'\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><path d=\"M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41\"></path></svg></button> <button type=\"button\" @click=\"setTheme('dark')\" :class=\"theme === 'dark' ? 'bg-surface-200 text-white' : 'text-muted hover:text-muted-light'\" class=\"flex h-7 w-7 items-center justify-center rounded-md transition-colors\" title=\"Dark\" aria-label=\"Dark theme\" :aria-pressed=\"theme === 'dark'\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path></svg></button> <button type=\"button\" @click=\"setTheme('system')\" :class=\"theme === 'system' ? 'bg-surface-200 text-white' : 'text-muted hover:text-muted-light'\" class=\"flex h-7 w-7 items-center justify-center rounded-md transition-colors\" title=\"System\" aria-label=\"System theme\" :aria-pressed=\"theme === 'system'\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"></rect><path d=\"M8 21h8M12 17v4\"></path></svg></button></div></div><div class=\"h-px bg-line my-1\"></div><form method=\"POST\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</div></div><div class=\"flex items-center justify-between gap-2 px-2.5 py-1.5\"><span class=\"text-sm text-muted-light\">Theme</span><div class=\"flex items-center gap-0.5 rounded-lg border border-line bg-surface/50 p-0.5\"><button type=\"button\" @click=\"setTheme('light')\" :class=\"theme === 'light' ? 'bg-surface-200 text-white' : 'text-muted hover:text-muted-light'\" class=\"flex h-7 w-7 items-center justify-center rounded-md transition-colors\" title=\"Light\" aria-label=\"Light theme\" :aria-pressed=\"theme === 'light'\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><path d=\"M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41\"></path></svg></button> <button type=\"button\" @click=\"setTheme('dark')\" :class=\"theme === 'dark' ? 'bg-surface-200 text-white' : 'text-muted hover:text-muted-light'\" class=\"flex h-7 w-7 items-center justify-center rounded-md transition-colors\" title=\"Dark\" aria-label=\"Dark theme\" :aria-pressed=\"theme === 'dark'\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path></svg></button> <button type=\"button\" @click=\"setTheme('system')\" :class=\"theme === 'system' ? 'bg-surface-200 text-white' : 'text-muted hover:text-muted-light'\" class=\"flex h-7 w-7 items-center justify-center rounded-md transition-colors\" title=\"System\" aria-label=\"System theme\" :aria-pressed=\"theme === 'system'\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"></rect><path d=\"M8 21h8M12 17v4\"></path></svg></button></div></div><div class=\"h-px bg-line my-1\"></div><form method=\"POST\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1198,7 +1198,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\"><button class=\"flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-muted-light transition-colors hover:bg-red-500/10 hover:text-red-400\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"></line></svg> Sign out</button></form></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\"><button class=\"flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-light transition-colors hover:bg-red-500/10 hover:text-red-400\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"></line></svg> Sign out</button></form></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

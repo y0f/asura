@@ -48,7 +48,7 @@ function notifChannels(basePath) {
             this.formData.type = ch.type;
             this.formData.enabled = ch.enabled;
             this.formData.settings_json = JSON.stringify(ch.settings || {});
-            this.events = { created: false, resolved: false, acknowledged: false, reminder: false, changed: false };
+            this.events = { created: false, resolved: false, acknowledged: false, reminder: false, changed: false, certChanged: false };
             if (ch.events) {
                 ch.events.forEach(e => {
                     if (e === 'incident.created') this.events.created = true;

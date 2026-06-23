@@ -34,15 +34,14 @@ templ LoginPage(p LoginParams) {
 		<div class="w-full max-w-[280px]">
 			<div class="text-center mb-10">
 				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-5 mx-auto mb-3"/>
-				<p class="text-muted text-[11px] tracking-wider uppercase">Infrastructure Monitoring</p>
+				<p class="text-muted text-2xs tracking-wider uppercase">Infrastructure Monitoring</p>
 			</div>
 			if p.Error != "" {
-				<div class="mb-5 px-3 py-2 border border-red-500/15 rounded text-red-400 text-[12px]">{ p.Error }</div>
+				<div class="mb-5 px-3 py-2 border border-red-500/15 rounded-control text-red-400 text-xs">{ p.Error }</div>
 			}
 			<form method="POST" action={ templ.SafeURL(p.BasePath + "/login") } class="space-y-3">
-				<input type="password" name="api_key" placeholder="API key" required autofocus
-					class="w-full px-3 py-2.5 bg-surface-50 border border-line rounded text-white text-[13px] placeholder-muted focus:outline-hidden focus:border-brand/40 transition-colors"/>
-				<button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand/85 text-white text-[13px] font-medium rounded transition-colors">
+				<input type="password" name="api_key" placeholder="API key" aria-label="API key" required autofocus class="form-input"/>
+				<button type="submit" class="btn-primary btn-press w-full">
 					Sign in
 				</button>
 			</form>
@@ -61,21 +60,20 @@ templ TOTPPage(p TOTPParams) {
 		<div class="w-full max-w-[280px]">
 			<div class="text-center mb-10">
 				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-5 mx-auto mb-3"/>
-				<p class="text-muted text-[11px] tracking-wider uppercase">Two-Factor Authentication</p>
+				<p class="text-muted text-2xs tracking-wider uppercase">Two-Factor Authentication</p>
 			</div>
 			if p.Error != "" {
-				<div class="mb-5 px-3 py-2 border border-red-500/15 rounded text-red-400 text-[12px]">{ p.Error }</div>
+				<div class="mb-5 px-3 py-2 border border-red-500/15 rounded-control text-red-400 text-xs">{ p.Error }</div>
 			}
 			<form method="POST" action={ templ.SafeURL(p.BasePath + "/login/totp") } class="space-y-3">
 				<input type="hidden" name="challenge" value={ p.ChallengeToken }/>
-				<input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" required autofocus
-					class="w-full px-3 py-2.5 bg-surface-50 border border-line rounded text-white text-[13px] text-center tracking-[0.3em] placeholder-muted focus:outline-hidden focus:border-brand/40 transition-colors"/>
-				<button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand/85 text-white text-[13px] font-medium rounded transition-colors">
+				<input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Verification code" required autofocus class="form-input text-center tracking-[0.3em]"/>
+				<button type="submit" class="btn-primary btn-press w-full">
 					Verify
 				</button>
 			</form>
 			<div class="mt-4 text-center">
-				<a href={ templ.SafeURL(p.BasePath + "/login") } class="text-muted text-[11px] hover:text-white transition-colors">Use a different key</a>
+				<a href={ templ.SafeURL(p.BasePath + "/login") } class="text-muted text-2xs hover:text-white transition-colors">Use a different key</a>
 			</div>
 		</div>
 	</body>

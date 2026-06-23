@@ -14,18 +14,17 @@ type MaintenanceListParams struct {
 templ MaintenanceListPage(p MaintenanceListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data="{showForm: false, mode: ''}">
-			<div class="flex items-center justify-between mb-5">
-				<h1 class="text-[15px] font-medium text-white">Maintenance Windows</h1>
+			<div class="flex items-center justify-end mb-5">
 				if p.Perms["maintenance.write"] {
 					<button @click="showForm = true; mode = ''"
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
-						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
+						class="btn-primary btn-press">
+						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
 						New Window
 					</button>
 				}
 			</div>
 			if len(p.Windows) > 0 {
-				<div class="border border-line-light rounded-xl overflow-hidden">
+				<div class="panel">
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[640px]">
 							<thead>
@@ -39,12 +38,12 @@ templ MaintenanceListPage(p MaintenanceListParams) {
 							<tbody class="divide-y divide-line">
 								for _, w := range p.Windows {
 									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-3 text-[13px] text-white font-medium">{ w.Name }</td>
-										<td class="px-4 py-3 text-[12px] text-muted tabular-nums">
+										<td class="px-4 py-3 text-sm text-white font-medium">{ w.Name }</td>
+										<td class="px-4 py-3 text-xs text-muted tabular-nums">
 											if w.Recurring == "manual" {
 												<span class="text-muted-light">Manual</span>
 											} else if w.Recurring == "cron" {
-												<code class="text-[11px] bg-surface-200 px-1.5 py-0.5 rounded">{ w.CronExpr }</code>
+												<code class="text-2xs font-mono text-muted-light bg-surface-200 px-1.5 py-0.5 rounded-control border border-line">{ w.CronExpr }</code>
 												<span class="text-muted ml-1.5">({ fmt.Sprintf("%.0fm window", w.EndTime.Sub(w.StartTime).Minutes()) })</span>
 											} else if w.Recurring != "" {
 												<span class="text-muted-light capitalize">{ w.Recurring }</span>
@@ -56,14 +55,14 @@ templ MaintenanceListPage(p MaintenanceListParams) {
 										<td class="px-4 py-3">
 											if w.Recurring == "manual" {
 												if w.Active {
-													<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">active</span>
+													<span class="badge badge-yellow">active</span>
 												} else {
-													<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">inactive</span>
+													<span class="badge badge-zinc">inactive</span>
 												}
 											} else if w.Recurring != "" {
-												<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-brand/10 text-brand border-brand/20">recurring</span>
+												<span class="badge badge-blue">recurring</span>
 											} else {
-												<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">one-time</span>
+												<span class="badge badge-zinc">one-time</span>
 											}
 										</td>
 										<td class="px-4 py-3">
@@ -71,9 +70,9 @@ templ MaintenanceListPage(p MaintenanceListParams) {
 												if p.Perms["maintenance.write"] && w.Recurring == "manual" {
 													<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/maintenance/%d/toggle", p.BasePath, w.ID)) }>
 														if w.Active {
-															<button type="submit" class="text-[11px] text-amber-400 hover:text-amber-300 transition-colors">Stop</button>
+															<button type="submit" class="btn-warning btn-sm btn-press">Stop</button>
 														} else {
-															<button type="submit" class="text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors">Start</button>
+															<button type="submit" class="btn-success btn-sm btn-press">Start</button>
 														}
 													</form>
 												}
@@ -88,50 +87,52 @@ templ MaintenanceListPage(p MaintenanceListParams) {
 						</table>
 					</div>
 				</div>
+			} else if p.Perms["maintenance.write"] {
+				@EmptyStateModal("No maintenance windows yet", "showForm = true; mode = ''", "New Window")
 			} else {
-				@EmptyState("No maintenance windows", "", "")
+				@EmptyState("No maintenance windows yet", "", "")
 			}
 			@FormModal("showForm", "max-w-md", "'New Maintenance Window'") {
 				<form method="POST" action={ templ.SafeURL(p.BasePath + "/maintenance") } class="space-y-3">
+					<div>
+						<label class="form-label" for="name">Name</label>
+						<input id="name" type="text" name="name" required class="form-input"/>
+					</div>
+					<div>
+						<label class="form-label" for="recurring">Type</label>
+						<select id="recurring" name="recurring" x-model="mode" class="form-select">
+							<option value="">One-time</option>
+							<option value="manual">Manual (start/stop)</option>
+							<option value="cron">Cron Schedule</option>
+							<option value="daily">Daily</option>
+							<option value="weekly">Weekly</option>
+							<option value="monthly">Monthly</option>
+						</select>
+					</div>
+					<div x-show="mode !== 'manual'" x-cloak class="grid grid-cols-2 gap-3">
 						<div>
-							<label class="form-label">Name</label>
-							<input type="text" name="name" required class="form-input"/>
-						</div>
-						<div>
-							<label class="form-label">Type</label>
-							<select name="recurring" x-model="mode" class="form-select">
-								<option value="">One-time</option>
-								<option value="manual">Manual (start/stop)</option>
-								<option value="cron">Cron Schedule</option>
-								<option value="daily">Daily</option>
-								<option value="weekly">Weekly</option>
-								<option value="monthly">Monthly</option>
-							</select>
-						</div>
-						<div x-show="mode !== 'manual'" x-cloak class="grid grid-cols-2 gap-3">
-							<div>
-								<label class="form-label">Start</label>
-								<input type="datetime-local" name="start_time" :required="mode !== 'manual'" class="form-input"/>
-							</div>
-							<div>
-								<label class="form-label">End</label>
-								<input type="datetime-local" name="end_time" :required="mode !== 'manual'" class="form-input"/>
-							</div>
-						</div>
-						<div x-show="mode === 'cron'" x-cloak>
-							<label class="form-label">Cron Expression</label>
-							<input type="text" name="cron_expr" placeholder="0 2 * * *" class="form-input font-mono"/>
-							<p class="text-[10px] text-muted mt-1">minute hour day-of-month month day-of-week</p>
+							<label class="form-label" for="start_time">Start</label>
+							<input id="start_time" type="datetime-local" name="start_time" :required="mode !== 'manual'" class="form-input"/>
 						</div>
 						<div>
-							<label class="form-label">Monitor IDs (empty = all)</label>
-							<input type="text" name="monitor_ids" placeholder="1, 2, 3" class="form-input"/>
+							<label class="form-label" for="end_time">End</label>
+							<input id="end_time" type="datetime-local" name="end_time" :required="mode !== 'manual'" class="form-input"/>
 						</div>
-						<div class="flex items-center gap-3 pt-1">
-							<button type="submit" class="btn-primary">Create</button>
-							<button type="button" @click="showForm = false" class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</button>
-						</div>
-					</form>
+					</div>
+					<div x-show="mode === 'cron'" x-cloak>
+						<label class="form-label" for="cron_expr">Cron Expression</label>
+						<input id="cron_expr" type="text" name="cron_expr" placeholder="0 2 * * *" class="form-input font-mono"/>
+						<p class="form-hint">minute hour day-of-month month day-of-week</p>
+					</div>
+					<div>
+						<label class="form-label" for="monitor_ids">Monitor IDs (empty = all)</label>
+						<input id="monitor_ids" type="text" name="monitor_ids" placeholder="1, 2, 3" class="form-input"/>
+					</div>
+					<div class="flex items-center gap-3 pt-1">
+						<button type="submit" class="btn-primary btn-press">Create</button>
+						<button type="button" @click="showForm = false" class="btn-secondary btn-press">Cancel</button>
+					</div>
+				</form>
 			}
 		</div>
 	}

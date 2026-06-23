@@ -1,0 +1,92 @@
+/* tokens.css - design tokens (color ramp, type, theme remap)
+   Dark is the primary theme; its values live in @theme so they are the default.
+   The light theme remaps the same vars under html[data-theme="light"], so every
+   neutral utility (bg-surface, text-muted, border-line ...) re-themes at runtime.
+   Toggled by data-theme on <html>, resolved before first paint by a head script. */
+
+/* Map Tailwind's dark: variant onto data-theme so existing dark: utilities keep
+   working under the runtime theme switch. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  /* Brand (blue is the primary color) */
+  --color-brand: rgb(20 132 255);
+  --color-brand-strong: rgb(56 156 255);
+  --color-brand-fg: rgb(255 255 255);
+  --color-brand-button: rgb(0 108 236);
+  --color-chart-empty: rgb(38 43 54);
+
+  /* Neutral elevation ramp (cool-tinted, pairs with the blue brand) 
+     surface      = page canvas + recessed input fill
+     surface-50   = faint raised panel
+     surface-100  = card / panel fill
+     surface-200  = hover / raised control
+     surface-300  = strong control (switch track, kbd) */
+  --color-surface: rgb(10 11 14);
+  --color-surface-50: rgb(17 19 24);
+  --color-surface-100: rgb(23 25 31);
+  --color-surface-200: rgb(32 35 43);
+  --color-surface-300: rgb(45 49 60);
+
+  /* Borders (visible against the canvas, unlike the old near-black lines) */
+  --color-line: rgb(35 38 47);
+  --color-line-light: rgb(50 55 67);
+
+  /* Text 
+     white        = primary text (soft white, easier on the eyes than #fff)
+     muted-light  = high-emphasis secondary
+     muted        = secondary / form labels (AA-readable, was unreadably dim) */
+  --color-white: rgb(237 239 244);
+  --color-muted-light: rgb(179 185 200);
+  --color-muted: rgb(130 137 153);
+
+  --font-sans: "Inter", "system-ui", "-apple-system", "sans-serif";
+  --font-mono: "JetBrains Mono", "Menlo", "Consolas", "monospace";
+
+  /* Type scale 
+     One source of truth for every font size in the app. Templates reference the
+     named steps (text-2xs ... text-3xl) - never hand-typed text-[Npx]. Each step
+     carries its own line-height so vertical rhythm is consistent everywhere.
+       2xs 11  micro labels, kbd, meta        md  15  card titles, emphasis
+       xs  12  captions, table cells          lg  18  section headings
+       sm  13  body / secondary               xl  22  page headings
+       base 14 primary body / inputs          2xl 28  large stats
+                                               3xl 34  hero metrics */
+  --text-2xs: 11px;   --text-2xs--line-height: 1.45;
+  --text-xs: 12px;    --text-xs--line-height: 1.5;
+  --text-sm: 13px;    --text-sm--line-height: 1.55;
+  --text-base: 14px;  --text-base--line-height: 1.6;
+  --text-md: 15px;    --text-md--line-height: 1.5;
+  --text-lg: 18px;    --text-lg--line-height: 1.4;   --text-lg--letter-spacing: -0.01em;
+  --text-xl: 22px;    --text-xl--line-height: 1.3;   --text-xl--letter-spacing: -0.014em;
+  --text-2xl: 28px;   --text-2xl--line-height: 1.2;  --text-2xl--letter-spacing: -0.02em;
+  --text-3xl: 34px;   --text-3xl--line-height: 1.15; --text-3xl--letter-spacing: -0.022em;
+
+  /* Radii */
+  --radius-control: 8px;
+  --radius-card: 14px;
+}
+
+/* Light theme 
+   Cards are white and lift off a cool-gray canvas (the old light theme inverted
+   this, making cards darker than the page). */
+html[data-theme="light"] {
+  --color-brand: rgb(0 112 243);
+  --color-brand-strong: rgb(0 98 224);
+  --color-brand-fg: rgb(255 255 255);
+  --color-brand-button: rgb(0 112 243);
+  --color-chart-empty: rgb(224 228 235);
+
+  --color-surface: rgb(246 247 250);
+  --color-surface-50: rgb(255 255 255);
+  --color-surface-100: rgb(255 255 255);
+  --color-surface-200: rgb(240 242 246);
+  --color-surface-300: rgb(228 231 237);
+
+  --color-line: rgb(227 230 236);
+  --color-line-light: rgb(211 216 223);
+
+  --color-white: rgb(18 22 31);
+  --color-muted-light: rgb(53 60 75);
+  --color-muted: rgb(92 100 116);
+}

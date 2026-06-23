@@ -33,20 +33,23 @@ templ ConfirmModal() {
 				x-transition:leave="transition ease-in duration-100"
 				x-transition:leave-start="opacity-100 scale-100"
 				x-transition:leave-end="opacity-0 scale-95"
+				role="dialog"
+				aria-modal="true"
+				aria-describedby="confirm-msg"
 				class="modal-panel relative z-10 w-full max-w-sm border border-line-light rounded-xl bg-surface-100 p-5 shadow-2xl shadow-black/50"
 			>
-				<p class="text-[13px] text-muted-light mb-5" x-text="message"></p>
+				<p id="confirm-msg" class="text-sm text-muted-light mb-5" x-text="message"></p>
 				<div class="flex items-center justify-end gap-2">
 					<button
 						@click="open = false"
 						type="button"
-						class="btn-secondary btn-press px-3 py-1.5 text-[12px] rounded"
+						class="btn-secondary btn-sm btn-press"
 					>Cancel</button>
 					<template x-if="url">
 						<form method="POST" :action="url">
 							<button
 								type="submit"
-								class="btn-danger btn-press px-3 py-1.5 text-[12px] rounded"
+								class="btn-danger btn-sm btn-press"
 							>Confirm</button>
 						</form>
 					</template>
@@ -54,7 +57,7 @@ templ ConfirmModal() {
 						<button
 							type="button"
 							@click="callback(); open = false"
-							class="btn-danger btn-press px-3 py-1.5 text-[12px] rounded"
+							class="btn-danger btn-sm btn-press"
 						>Confirm</button>
 					</template>
 				</div>
@@ -73,13 +76,13 @@ templ Toast(kind, msg string) {
 		x-transition:leave="transition ease-in duration-150"
 		x-transition:leave-start="opacity-100 translate-x-0"
 		x-transition:leave-end="opacity-0 translate-x-2"
-		class={ "toast-in mb-6 px-4 py-2.5 border rounded-lg text-[13px] flex items-center justify-between",
+		class={ "toast-in mb-6 px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between",
 			templ.KV("border-emerald-500/15 bg-emerald-500/5 text-emerald-400", kind == "success"),
 			templ.KV("border-red-500/15 bg-red-500/5 text-red-400", kind == "error"),
 			templ.KV("border-amber-500/15 bg-amber-500/5 text-amber-400", kind == "warning") }
 	>
 		<span>{ msg }</span>
-		<button @click="show=false" class={ "ml-4 opacity-30 hover:opacity-100 transition-opacity",
+		<button type="button" @click="show=false" aria-label="Dismiss" class={ "ml-4 text-base leading-none opacity-70 hover:opacity-100 transition-opacity",
 			templ.KV("text-emerald-500", kind == "success"),
 			templ.KV("text-red-500", kind == "error"),
 			templ.KV("text-amber-500", kind == "warning") }>&times;</button>
@@ -103,19 +106,43 @@ templ DeleteButton(action, message string) {
 		data-url={ action }
 		data-msg={ message }
 		@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
-		class="inline-flex items-center text-muted hover:text-red-400 transition-colors"
+		class="inline-flex items-center justify-center w-8 h-8 rounded-control text-muted-light hover:text-red-400 hover:bg-red-500/10 transition-colors"
 		title="Delete"
+		aria-label="Delete"
 	>
-		<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+		<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
 	</button>
 }
 
+// EmptyState is a focused, centered placeholder for empty lists: an icon, the
+// message, and an optional primary call-to-action. It is intentionally narrow
+// (max-w-md) so it reads as a deliberate state, not a full-width void.
 templ EmptyState(message, actionHref, actionLabel string) {
-	<div class="border border-line-light rounded-xl bg-surface-50/40 px-4 py-12 text-center">
-		<p class="text-muted text-[13px] mb-3">{ message }</p>
+	<div class="card max-w-md mx-auto px-6 py-12 flex flex-col items-center text-center">
+		@emptyStateIcon()
+		<p class="text-base font-medium text-muted-light mb-4">{ message }</p>
 		if actionHref != "" {
-			<a href={ templ.SafeURL(actionHref) } class="text-[12px] text-brand hover:text-brand/80 transition-colors">{ actionLabel }</a>
+			<a href={ templ.SafeURL(actionHref) } class="btn-primary btn-press">{ actionLabel }</a>
 		}
+	</div>
+}
+
+// EmptyStateModal mirrors EmptyState exactly, but its CTA opens a create modal in
+// the surrounding Alpine scope (clickExpr, e.g. "showForm = true") instead of
+// linking to a route. Use it on pages whose create flow is a dialog.
+templ EmptyStateModal(message, clickExpr, actionLabel string) {
+	<div class="card max-w-md mx-auto px-6 py-12 flex flex-col items-center text-center">
+		@emptyStateIcon()
+		<p class="text-base font-medium text-muted-light mb-4">{ message }</p>
+		if actionLabel != "" {
+			<button type="button" @click={ clickExpr } class="btn-primary btn-press">{ actionLabel }</button>
+		}
+	</div>
+}
+
+templ emptyStateIcon() {
+	<div class="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-surface-200 text-muted">
+		<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-3H5a2 2 0 0 0-2 2z"></path></svg>
 	</div>
 }
 
@@ -137,10 +164,11 @@ templ FormModal(show, maxWidth, titleExpr string) {
 			@click.stop
 			role="dialog"
 			aria-modal="true"
+			aria-labelledby={ show + "-title" }
 			class={ "modal-panel relative w-full max-h-[85vh] overflow-y-auto rounded-xl border border-line-light bg-surface-100 shadow-2xl shadow-black/50", maxWidth }
 		>
 			<div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface-100 px-5 py-3.5">
-				<h3 class="text-[13px] font-semibold text-white" x-text={ titleExpr }></h3>
+				<h3 id={ show + "-title" } class="text-sm font-semibold text-white" x-text={ titleExpr }></h3>
 				<button type="button" @click={ show + " = false" } aria-label="Close" class="icon-btn -mr-2">
 					<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
 				</button>
@@ -152,27 +180,24 @@ templ FormModal(show, maxWidth, titleExpr string) {
 	</div>
 }
 
-templ FormCard(title string) {
-	<div class="border border-line-light rounded-xl bg-surface-50/40 p-5">
-		if title != "" {
-			<h2 class="text-[11px] text-muted uppercase tracking-widest mb-4">{ title }</h2>
-		}
-		{ children... }
-	</div>
-}
-
 // StatusPill renders the small bordered status badge used across dashboard,
 // incidents, status pages and monitor lists. The label shown is the status
 // string itself.
 templ StatusPill(status string) {
-	<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", StatusBg(status) }>{ status }</span>
+	<span class={ "inline-flex items-center text-2xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border", StatusBg(status) }>{ status }</span>
+}
+
+// SeverityPill matches StatusPill's shape so severity and status pills read as
+// one system when they sit side by side (incidents list/detail).
+templ SeverityPill(severity string) {
+	<span class={ "inline-flex items-center text-2xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border", SeverityBg(severity) }>{ severity }</span>
 }
 
 // ToolbarNewButton is the page-header "New X" primary action link reused across
 // list pages.
 templ ToolbarNewButton(href, label string) {
-	<a href={ templ.SafeURL(href) } class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors">
-		<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
+	<a href={ templ.SafeURL(href) } class="btn-primary btn-press">
+		<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
 		{ label }
 	</a>
 }
@@ -182,8 +207,8 @@ templ ToolbarNewButton(href, label string) {
 templ SearchInput(name, value, placeholder string) {
 	<div class="relative">
 		<svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-		<input type="text" name={ name } value={ value } placeholder={ placeholder }
-			class="w-48 pl-8 pr-3 py-1.5 bg-transparent border border-line rounded text-[12px] text-white placeholder-muted/50 focus:outline-hidden focus:border-brand/40 transition-colors"/>
+		<input type="text" name={ name } value={ value } placeholder={ placeholder } aria-label={ placeholder }
+			class="w-56 pl-9 pr-3 py-2 bg-surface border border-line rounded-control text-sm text-white placeholder-muted focus:outline-hidden focus:border-brand/60 transition-colors"/>
 	</div>
 }
 
@@ -192,11 +217,11 @@ templ SearchInput(name, value, placeholder string) {
 templ IncidentRow(basePath string, inc *storage.Incident) {
 	<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", basePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200/20 transition-colors">
 		<div class="flex items-center justify-between mb-1">
-			<span class="text-[13px] text-muted-light">{ inc.MonitorName }</span>
+			<span class="text-sm text-muted-light">{ inc.MonitorName }</span>
 			@StatusPill(inc.Status)
 		</div>
-		<div class="text-[11px] text-muted truncate">{ inc.Cause }</div>
-		<div class="text-[10px] text-muted/50 mt-0.5">{ TimeAgo(inc.StartedAt) }</div>
+		<div class="text-2xs text-muted truncate">{ inc.Cause }</div>
+		<div class="text-2xs text-muted mt-0.5">{ TimeAgo(inc.StartedAt) }</div>
 	</a>
 }
 
@@ -204,28 +229,28 @@ templ IncidentRow(basePath string, inc *storage.Incident) {
 // by the monitor list table and the group detail table. canWrite gates the
 // mutating actions.
 templ MonitorRowActions(basePath string, m *storage.Monitor, canWrite bool) {
-	<div class="flex items-center justify-end gap-2">
+	<div class="flex items-center justify-end gap-1">
 		if canWrite {
 			if m.Enabled {
 				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", basePath, m.ID)) } class="contents">
-					<button type="submit" class="inline-flex items-center text-muted hover:text-yellow-400 transition-colors" title="Pause">
-						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+					<button type="submit" class="inline-flex items-center justify-center w-8 h-8 rounded-control text-muted-light hover:text-yellow-400 hover:bg-yellow-500/10 transition-colors" title="Pause" aria-label="Pause monitor">
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
 					</button>
 				</form>
 			} else {
 				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", basePath, m.ID)) } class="contents">
-					<button type="submit" class="inline-flex items-center text-muted hover:text-emerald-400 transition-colors" title="Resume">
-						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+					<button type="submit" class="inline-flex items-center justify-center w-8 h-8 rounded-control text-muted-light hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors" title="Resume" aria-label="Resume monitor">
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
 					</button>
 				</form>
 			}
 		}
-		<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", basePath, m.ID)) } class="inline-flex items-center text-muted hover:text-white transition-colors" title="View">
-			<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+		<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", basePath, m.ID)) } class="inline-flex items-center justify-center w-8 h-8 rounded-control text-muted-light hover:text-white hover:bg-surface-200 transition-colors" title="View" aria-label="View monitor">
+			<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
 		</a>
 		if canWrite {
-			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", basePath, m.ID)) } class="inline-flex items-center text-muted hover:text-brand transition-colors" title="Edit">
-				<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
+			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", basePath, m.ID)) } class="inline-flex items-center justify-center w-8 h-8 rounded-control text-muted-light hover:text-white hover:bg-surface-200 transition-colors" title="Edit" aria-label="Edit monitor">
+				<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
 			</a>
 		}
 	</div>
@@ -244,16 +269,16 @@ templ MonitorListListener(basePath, targetID string) {
 // SettingText renders a labelled single-line text-ish input (text, url, etc.).
 templ SettingText(label, name, value, placeholder, inputType string) {
 	<div>
-		<label class="form-label">{ label }</label>
-		<input type={ inputType } name={ name } value={ value } placeholder={ placeholder } class="form-input"/>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input id={ name } type={ inputType } name={ name } value={ value } placeholder={ placeholder } class="form-input"/>
 	</div>
 }
 
 // SettingPassword renders a labelled password input.
 templ SettingPassword(label, name, value, placeholder string) {
 	<div>
-		<label class="form-label">{ label }</label>
-		<input type="password" name={ name } value={ value } placeholder={ placeholder } class="form-input"/>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input id={ name } type="password" name={ name } value={ value } placeholder={ placeholder } class="form-input"/>
 	</div>
 }
 
@@ -261,8 +286,8 @@ templ SettingPassword(label, name, value, placeholder string) {
 // passed verbatim; extraClass defaults handled by caller.
 templ SettingNumber(label, name, value, placeholder, min, max, extraClass string) {
 	<div>
-		<label class="form-label">{ label }</label>
-		<input type="number" name={ name } value={ value } placeholder={ placeholder } min={ min } max={ max } class={ "form-input tabular-nums", extraClass }/>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input id={ name } type="number" name={ name } value={ value } placeholder={ placeholder } min={ min } max={ max } class={ "form-input tabular-nums", extraClass }/>
 	</div>
 }
 
@@ -275,7 +300,7 @@ templ SettingCheckbox(label, name string, checked bool) {
 				checked
 			}
 			class="form-checkbox"/>
-		<span class="text-[12px] text-muted-light">{ label }</span>
+		<span class="text-xs text-muted-light">{ label }</span>
 	</label>
 }
 
@@ -290,10 +315,10 @@ templ HeaderListEditor(modelName, keyName, valName string) {
 				<div class="flex gap-2">
 					<input type="text" :name={ "'" + keyName + "'" } x-model="h.key" placeholder="Header Name" class="form-input flex-1"/>
 					<input type="text" :name={ "'" + valName + "'" } x-model="h.value" placeholder="Value" class="form-input flex-1"/>
-					<button type="button" @click={ modelName + ".splice(i, 1)" } class="px-2 text-red-400 hover:text-red-300 transition-colors text-[16px]">&times;</button>
+					<button type="button" @click={ modelName + ".splice(i, 1)" } aria-label="Remove row" title="Remove" class="px-2 text-red-400 hover:text-red-300 transition-colors text-md">&times;</button>
 				</div>
 			</template>
 		</div>
-		<button type="button" @click={ modelName + ".push({key:'', value:''})" } class="mt-2 text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Header</button>
+		<button type="button" @click={ modelName + ".push({key:'', value:''})" } class="mt-2 text-xs text-brand hover:text-brand/80 transition-colors">+ Add Header</button>
 	</div>
 }

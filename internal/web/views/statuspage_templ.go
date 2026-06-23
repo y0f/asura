@@ -316,14 +316,14 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 		if p.HasGroups {
 			for _, g := range p.Groups {
 				if g.Name != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<h2 class=\"text-[11px] font-medium text-muted uppercase tracking-widest mb-2 mt-6\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<h2 class=\"eyebrow text-muted-light mb-2.5 mt-7\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 127, Col: 98}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 127, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {
@@ -334,7 +334,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, " <div class=\"border border-line-light rounded-xl overflow-hidden divide-y divide-line mb-4\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, " <div class=\"card overflow-hidden divide-y divide-line mb-4\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -350,7 +350,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				}
 			}
 		} else if len(p.Monitors) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"border border-line-light rounded-xl overflow-hidden divide-y divide-line\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"card overflow-hidden divide-y divide-line\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -365,22 +365,22 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = EmptyState("No monitors configured", "", "").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = EmptyState("No monitors yet", "", "").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if p.Config != nil && p.Config.ShowIncidents && p.HasIncidents {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"mt-8\"><h2 class=\"text-[10px] font-medium text-muted uppercase tracking-widest mb-3\">Recent Incidents</h2><div class=\"border border-line-light rounded-xl overflow-hidden divide-y divide-line\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"mt-10\"><h2 class=\"eyebrow text-muted-light mb-3\">Recent Incidents</h2><div class=\"card overflow-hidden divide-y divide-line\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, inc := range p.Incidents {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"px-4 py-3\" style=\"background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)\"><div class=\"flex items-center justify-between\"><div class=\"flex items-center gap-2\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"px-5 py-4\"><div class=\"flex items-center justify-between gap-3\"><div class=\"flex items-center gap-2.5 min-w-0\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var15 = []any{"w-1.5 h-1.5 rounded-full", StatusDot(inc.Status)}
+				var templ_7745c5c3_Var15 = []any{"w-2 h-2 rounded-full shrink-0", StatusDot(inc.Status)}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var15...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -398,14 +398,14 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\"></span> <span class=\"text-[13px] text-white\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\"></span> <span class=\"text-base font-medium text-white truncate\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(inc.MonitorName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 153, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 153, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 				if templ_7745c5c3_Err != nil {
@@ -419,7 +419,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div class=\"mt-1.5 flex items-center gap-3 text-[11px] text-muted\"><span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div class=\"mt-2 flex items-center gap-3 text-xs text-muted\"><span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -466,14 +466,14 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 			}
 		}
 		if p.Message != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"mt-6 rounded-lg border border-brand/20 bg-brand/[0.04] px-4 py-3\"><p class=\"text-[13px] text-brand\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"mt-6 rounded-control border border-brand/20 bg-brand/[0.04] px-4 py-3\"><p class=\"text-sm text-brand\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(p.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 170, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 170, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -490,7 +490,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div class=\"mt-12 pt-5 border-t border-line flex items-center justify-center gap-1.5\"><span class=\"text-[11px] text-muted\">Powered by</span> <a href=\"https://github.com/y0f/asura\" target=\"_blank\" rel=\"noopener\" class=\"flex items-center\"><img src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div class=\"mt-12 pt-5 border-t border-line flex items-center justify-center gap-1.5\"><span class=\"text-2xs text-muted\">Powered by</span> <a href=\"https://github.com/y0f/asura\" target=\"_blank\" rel=\"noopener\" class=\"flex items-center\"><img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -503,7 +503,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" alt=\"Asura\" class=\"h-2\" style=\"margin-top:2px\"></a></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" alt=\"Asura\" class=\"h-4 object-contain\"></a></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -542,7 +542,7 @@ func statusSubscribeWidget(basePath, slug string) templ.Component {
 			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"mt-8\" x-data=\"{open: false, type: 'email'}\" x-cloak><div class=\"flex justify-center\"><button @click=\"open = !open\" class=\"inline-flex items-center gap-1.5 text-[11px] text-muted hover:text-muted-light transition-colors\"><svg class=\"w-3 h-3\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"></path><polyline points=\"22,6 12,13 2,6\"></polyline></svg> Subscribe to updates</button></div><div x-show=\"open\" x-transition class=\"mt-3 border border-line-light rounded-xl overflow-hidden\" style=\"background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)\"><form method=\"POST\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"mt-10\" x-data=\"{open: false, type: 'email'}\" x-cloak><div class=\"flex justify-center\"><button @click=\"open = !open\" class=\"btn-secondary btn-sm btn-press\"><svg class=\"w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"></path><polyline points=\"22,6 12,13 2,6\"></polyline></svg> Subscribe to updates</button></div><div x-show=\"open\" x-transition class=\"mt-4 card mx-auto max-w-sm\"><form method=\"POST\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -555,7 +555,7 @@ func statusSubscribeWidget(basePath, slug string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" class=\"p-4 space-y-3\"><div class=\"flex gap-2\"><button type=\"button\" @click=\"type = 'email'\" :class=\"type === 'email' ? 'bg-brand/10 text-brand border-brand/20' : 'bg-surface text-muted border-line hover:text-muted-light'\" class=\"flex-1 text-[11px] font-medium px-3 py-1.5 rounded border transition-colors\">Email</button> <button type=\"button\" @click=\"type = 'webhook'\" :class=\"type === 'webhook' ? 'bg-brand/10 text-brand border-brand/20' : 'bg-surface text-muted border-line hover:text-muted-light'\" class=\"flex-1 text-[11px] font-medium px-3 py-1.5 rounded border transition-colors\">Webhook</button></div><input type=\"hidden\" name=\"type\" :value=\"type\"><div x-show=\"type === 'email'\"><input type=\"email\" name=\"email\" placeholder=\"you@example.com\" class=\"form-input w-full text-[12px]\"></div><div x-show=\"type === 'webhook'\"><input type=\"url\" name=\"webhook_url\" placeholder=\"https://your-server.com/webhook\" class=\"form-input w-full text-[12px]\"></div><button type=\"submit\" class=\"w-full px-3 py-2 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors\">Subscribe</button><p x-show=\"type === 'email'\" class=\"text-[10px] text-muted text-center\">We'll send a confirmation email. No spam, ever.</p><p x-show=\"type === 'webhook'\" class=\"text-[10px] text-muted text-center\">We'll POST JSON events to your URL.</p></form></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" class=\"p-5 space-y-3.5\"><div class=\"flex gap-2\"><button type=\"button\" @click=\"type = 'email'\" :class=\"type === 'email' ? 'bg-brand/10 text-brand border-brand/30' : 'bg-surface text-muted border-line hover:text-muted-light'\" class=\"flex-1 text-sm font-medium px-3 py-2 rounded-control border transition-colors\">Email</button> <button type=\"button\" @click=\"type = 'webhook'\" :class=\"type === 'webhook' ? 'bg-brand/10 text-brand border-brand/30' : 'bg-surface text-muted border-line hover:text-muted-light'\" class=\"flex-1 text-sm font-medium px-3 py-2 rounded-control border transition-colors\">Webhook</button></div><input type=\"hidden\" name=\"type\" :value=\"type\"><div x-show=\"type === 'email'\"><input type=\"email\" name=\"email\" placeholder=\"you@example.com\" class=\"form-input w-full\"></div><div x-show=\"type === 'webhook'\"><input type=\"url\" name=\"webhook_url\" placeholder=\"https://your-server.com/webhook\" class=\"form-input w-full\"></div><button type=\"submit\" class=\"btn-primary btn-press w-full\">Subscribe</button><p x-show=\"type === 'email'\" class=\"text-xs text-muted text-center\">We'll send a confirmation email. No spam, ever.</p><p x-show=\"type === 'webhook'\" class=\"text-xs text-muted text-center\">We'll POST JSON events to your URL.</p></form></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -638,27 +638,27 @@ func SubscriberResultPage(p SubscriberResultParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<h1 class=\"text-[15px] font-medium text-white mb-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<h1 class=\"text-md font-medium text-white mb-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(p.Heading)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 248, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 248, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</h1><p class=\"text-[13px] text-muted mb-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</h1><p class=\"text-sm text-muted mb-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(p.Message)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 249, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 249, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -677,14 +677,14 @@ func SubscriberResultPage(p SubscriberResultParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" class=\"text-brand text-[12px] hover:underline\">Back to ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" class=\"text-brand text-xs hover:underline\">Back to ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 250, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 250, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 		if templ_7745c5c3_Err != nil {
@@ -758,20 +758,20 @@ func StatusPageAuthPage(p StatusPageAuthParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</head><body class=\"bg-surface text-muted-light font-sans min-h-screen antialiased flex items-center justify-center\"><div class=\"w-full max-w-xs px-4\"><div class=\"text-center mb-8\"><p class=\"text-[13px] text-white font-medium\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</head><body class=\"bg-surface text-muted-light font-sans min-h-screen antialiased flex items-center justify-center\"><div class=\"w-full max-w-xs px-4\"><div class=\"text-center mb-8\"><p class=\"text-sm text-white font-medium\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 267, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 267, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</p><p class=\"text-[12px] text-muted mt-1\">This status page is password protected</p></div><form method=\"POST\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</p><p class=\"text-xs text-muted mt-1\">This status page is password protected</p></div><form method=\"POST\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -789,12 +789,12 @@ func StatusPageAuthPage(p StatusPageAuthParams) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if p.Error != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<p class=\"text-[12px] text-red-400\">Incorrect password. Try again.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<p class=\"text-xs text-red-400\">Incorrect password. Try again.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<button type=\"submit\" class=\"btn-primary w-full\">Continue</button></form></div></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<button type=\"submit\" class=\"btn-primary btn-press w-full\">Continue</button></form></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -823,10 +823,10 @@ func statusOverallBanner(overall string) templ.Component {
 			templ_7745c5c3_Var36 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var37 = []any{"mb-8 rounded-lg border px-4 py-3.5 flex items-center gap-3",
-			templ.KV("border-emerald-500/20 bg-emerald-500/[0.04]", overall == "operational"),
-			templ.KV("border-yellow-500/20 bg-yellow-500/[0.04]", overall == "degraded"),
-			templ.KV("border-red-500/20 bg-red-500/[0.04]", overall != "operational" && overall != "degraded")}
+		var templ_7745c5c3_Var37 = []any{"mb-8 rounded-card border px-5 py-4 flex items-center gap-3",
+			templ.KV("border-emerald-500/25 bg-emerald-500/[0.06]", overall == "operational"),
+			templ.KV("border-yellow-500/25 bg-yellow-500/[0.06]", overall == "degraded"),
+			templ.KV("border-red-500/25 bg-red-500/[0.06]", overall != "operational" && overall != "degraded")}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var37...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -898,7 +898,7 @@ func statusOverallBanner(overall string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var43 = []any{"text-[13px] font-medium",
+		var templ_7745c5c3_Var43 = []any{"text-md font-semibold",
 			templ.KV("text-emerald-400", overall == "operational"),
 			templ.KV("text-yellow-400", overall == "degraded"),
 			templ.KV("text-red-400", overall != "operational" && overall != "degraded")}
@@ -968,24 +968,24 @@ func statusMonitorRow(mwu MonitorWithUptime) templ.Component {
 			templ_7745c5c3_Var45 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<div class=\"px-4 py-4\" style=\"background: color-mix(in srgb, var(--color-surface-50) 35%, transparent)\"><div class=\"flex items-center justify-between mb-3\"><span class=\"text-[13px] font-medium text-white\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<div class=\"px-5 py-4\"><div class=\"flex items-center justify-between gap-3 mb-3\"><span class=\"text-base font-medium text-white truncate min-w-0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(mwu.Monitor.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 319, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 319, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</span><div class=\"flex items-center gap-1.5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</span><div class=\"flex items-center gap-3 shrink-0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var47 = []any{"w-1.5 h-1.5 rounded-full", StatusDot(mwu.Monitor.Status)}
+		var templ_7745c5c3_Var47 = []any{"text-sm font-semibold tabular-nums", UptimeColor(mwu.Uptime90d)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var47...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -1003,7 +1003,20 @@ func statusMonitorRow(mwu MonitorWithUptime) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "\"></span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var49 string
+		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(mwu.UptimeLabel)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 321, Col: 102}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1011,7 +1024,7 @@ func statusMonitorRow(mwu MonitorWithUptime) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</div></div><div x-data=\"{tooltip: '', show: false, mx: 0, my: 0}\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</div></div><div x-data=\"{tooltip: '', show: false, mx: 0, my: 0}\"><div class=\"bg-line/40 rounded-control overflow-hidden [&>svg]:!h-5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1019,42 +1032,7 @@ func statusMonitorRow(mwu MonitorWithUptime) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "<div x-show=\"show\" x-cloak class=\"fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line rounded text-[11px] text-muted-light shadow-lg pointer-events-none whitespace-nowrap\" :style=\"`top: ${my - 40}px; left: ${mx}px`\" x-text=\"tooltip\"></div></div><div class=\"flex items-center justify-between mt-2\"><span class=\"text-[10px] text-muted\">90 days ago</span> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var49 = []any{"text-[11px] font-medium tabular-nums", UptimeColor(mwu.Uptime90d)}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var49...)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "<span class=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var50 string
-		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var49).String())
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 1, Col: 0}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var51 string
-		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(mwu.UptimeLabel)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/statuspage.templ`, Line: 334, Col: 103}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</span> <span class=\"text-[10px] text-muted\">Today</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</div><div x-show=\"show\" x-cloak class=\"fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-muted-light shadow-lg pointer-events-none whitespace-nowrap\" :style=\"`top: ${my - 40}px; left: ${mx}px`\" x-text=\"tooltip\"></div></div><div class=\"flex items-center justify-between mt-2.5\"><span class=\"text-2xs text-muted-light\">90 days ago</span> <span class=\"text-2xs text-muted-light\">Today</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

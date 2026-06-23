@@ -21,9 +21,8 @@
 
 ---
 
-![Web UI](assets/webpanel.png)
-![Monitor View](assets/monitorview.png)
-![Public Status Page](assets/statuspage.png)
+![Dashboard - live monitors, sparklines, active incidents](assets/webpanel.png)
+![Monitor detail - uptime, response-time chart, recent checks](assets/monitorview.png)
 
 ---
 

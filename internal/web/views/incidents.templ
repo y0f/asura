@@ -57,11 +57,11 @@ func incFilterClass(filter, current string) string {
 	if filter == current {
 		switch current {
 		case "open":
-			return "text-red-400 border-red-500/30 bg-red-500/[0.04]"
+			return "text-red-400 border-red-500/30 bg-red-500/10"
 		case "acknowledged":
-			return "text-yellow-400 border-yellow-500/30 bg-yellow-500/[0.04]"
+			return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10"
 		case "resolved":
-			return "text-emerald-400 border-emerald-500/30 bg-emerald-500/[0.04]"
+			return "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
 		}
 	}
 	return ""
@@ -70,25 +70,28 @@ func incFilterClass(filter, current string) string {
 templ IncidentListPage(p IncidentListParams) {
 	@Layout(p.LayoutParams) {
 		<div>
-			<h1 class="text-[15px] font-medium text-white mb-5">Incidents</h1>
-			<div class="flex gap-1.5 mb-3">
-				<a href={ templ.SafeURL(p.filterHref("")) }
-					class={ "filter-tab", templ.KV("filter-active", p.Filter == ""), templ.KV("filter-inactive", p.Filter != "") }>All</a>
-				for _, s := range []string{"open", "acknowledged", "resolved"} {
-					<a href={ templ.SafeURL(p.filterHref(s)) }
-						class={ "filter-tab", templ.KV(incFilterClass(p.Filter, s), p.Filter == s), templ.KV("filter-inactive", p.Filter != s) }>
-						{ capitalize(s) }
-					</a>
-				}
+			<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+				<div class="no-scrollbar overflow-x-auto -mx-1 px-1">
+					<div class="flex gap-1.5 w-max">
+						<a href={ templ.SafeURL(p.filterHref("")) }
+							class={ "filter-tab whitespace-nowrap shrink-0", templ.KV("filter-active", p.Filter == ""), templ.KV("filter-inactive", p.Filter != "") }>All</a>
+						for _, s := range []string{"open", "acknowledged", "resolved"} {
+							<a href={ templ.SafeURL(p.filterHref(s)) }
+								class={ "filter-tab whitespace-nowrap shrink-0", templ.KV(incFilterClass(p.Filter, s), p.Filter == s), templ.KV("filter-inactive", p.Filter != s) }>
+								{ capitalize(s) }
+							</a>
+						}
+					</div>
+				</div>
+				<form method="GET" action={ templ.SafeURL(p.BasePath + "/incidents") } class="shrink-0">
+					if p.Filter != "" {
+						<input type="hidden" name="status" value={ p.Filter }/>
+					}
+					@SearchInput("q", p.Search, "Search incidents...")
+				</form>
 			</div>
-			<form method="GET" action={ templ.SafeURL(p.BasePath + "/incidents") } class="mb-4">
-				if p.Filter != "" {
-					<input type="hidden" name="status" value={ p.Filter }/>
-				}
-				@SearchInput("q", p.Search, "Search incidents...")
-			</form>
-			<div class="border border-line-light rounded-xl overflow-hidden">
-				if incs := p.incidents(); len(incs) > 0 {
+			if incs := p.incidents(); len(incs) > 0 {
+				<div class="panel">
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[700px]">
 							<thead>
@@ -104,17 +107,17 @@ templ IncidentListPage(p IncidentListParams) {
 							</thead>
 							<tbody class="divide-y divide-line">
 								for _, inc := range incs {
-									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-3 text-[13px] text-white font-medium">{ inc.MonitorName }</td>
-										<td class="px-4 py-3"><span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", SeverityBg(inc.Severity) }>{ inc.Severity }</span></td>
+									<tr class="transition-colors">
+										<td class="px-4 py-3 text-sm text-white font-medium">{ inc.MonitorName }</td>
+										<td class="px-4 py-3">@SeverityPill(inc.Severity)</td>
 										<td class="px-4 py-3">@StatusPill(inc.Status)</td>
-										<td class="px-4 py-3 text-[12px] text-muted truncate max-w-[200px]" title={ inc.Cause }>{ inc.Cause }</td>
-										<td class="px-4 py-3 text-[12px] text-muted tabular-nums font-mono">{ IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</td>
-										<td class="px-4 py-3 text-[12px] text-muted/60">{ TimeAgo(inc.StartedAt) }</td>
+										<td class="px-4 py-3 text-xs text-muted max-w-0 w-full truncate" title={ inc.Cause }>{ inc.Cause }</td>
+										<td class="px-4 py-3 text-xs text-muted tabular-nums font-mono whitespace-nowrap">{ IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</td>
+										<td class="px-4 py-3 text-xs text-muted whitespace-nowrap">{ TimeAgo(inc.StartedAt) }</td>
 										<td class="px-4 py-3 text-right">
-											<div class="flex items-center justify-end gap-2">
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="text-muted hover:text-white transition-colors" title="View">
-													<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+											<div class="flex items-center justify-end gap-1">
+												<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="row-action" title="View" aria-label="View incident">
+													<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
 												</a>
 												if p.Perms["incidents.write"] {
 													@DeleteButton(fmt.Sprintf("%s/incidents/%d/delete", p.BasePath, inc.ID), "Delete this incident?")
@@ -128,7 +131,7 @@ templ IncidentListPage(p IncidentListParams) {
 					</div>
 					if p.Result != nil && p.Result.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">
+							<span class="text-2xs text-muted tabular-nums">
 								{ fmt.Sprintf("Page %d / %d · %d incidents", p.Result.Page, p.Result.TotalPages, p.Result.Total) }
 							</span>
 							<div class="flex gap-1">
@@ -140,18 +143,21 @@ templ IncidentListPage(p IncidentListParams) {
 								}
 							</div>
 						</div>
+					} else if p.Result != nil {
+						<div class="px-4 py-2.5 border-t border-line text-2xs text-muted tabular-nums">
+							{ fmt.Sprintf("%d incidents", p.Result.Total) }
+						</div>
 					}
-				} else {
-					<div class="px-4 py-16 text-center">
-						<svg class="w-6 h-6 mx-auto text-muted/20 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-						if p.Search != "" || p.Filter != "" {
-							<p class="text-muted text-[12px]">No incidents match your search</p>
-						} else {
-							<p class="text-muted text-[12px]">No incidents found</p>
-						}
-					</div>
-				}
-			</div>
+				</div>
+			} else {
+				<div class="py-12">
+					if p.Search != "" || p.Filter != "" {
+						@EmptyState("No incidents match your search", "", "")
+					} else {
+						@EmptyState("No incidents yet", "", "")
+					}
+				</div>
+			}
 		</div>
 	}
 }
@@ -161,16 +167,16 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 		<div>
 			<div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
 				<div>
-					<a href={ templ.SafeURL(p.BasePath + "/incidents") } class="inline-flex items-center gap-1 text-[11px] text-muted hover:text-muted-light transition-colors">
+					<a href={ templ.SafeURL(p.BasePath + "/incidents") } class="inline-flex items-center gap-1 text-2xs text-muted hover:text-muted-light transition-colors">
 						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 						Incidents
 					</a>
 					<div class="flex items-center gap-2.5 mt-1.5">
-						<h1 class="text-[17px] font-medium text-white">{ fmt.Sprintf("Incident #%d", p.Incident.ID) }</h1>
-						<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", SeverityBg(p.Incident.Severity) }>{ p.Incident.Severity }</span>
+						<h1 class="text-lg font-medium text-white">{ fmt.Sprintf("Incident #%d", p.Incident.ID) }</h1>
+						@SeverityPill(p.Incident.Severity)
 						@StatusPill(p.Incident.Status)
 					</div>
-					<div class="text-[11px] text-muted mt-1">
+					<div class="text-2xs text-muted mt-1">
 						{ p.Incident.MonitorName } · Started { TimeAgo(p.Incident.StartedAt) } · Duration { IncidentDuration(p.Incident.StartedAt, p.Incident.ResolvedAt) }
 					</div>
 				</div>
@@ -178,25 +184,25 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 					<div class="flex items-center gap-1.5 shrink-0">
 						if p.Incident.Status == "open" {
 							<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d/ack", p.BasePath, p.Incident.ID)) }>
-								<button type="submit" class="px-3 py-1.5 text-[12px] text-yellow-400 border border-yellow-500/20 rounded hover:bg-yellow-500/5 transition-colors">Acknowledge</button>
+								<button type="submit" class="btn-warning btn-press">Acknowledge</button>
 							</form>
 						}
 						if p.Incident.Status != "resolved" {
 							<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d/resolve", p.BasePath, p.Incident.ID)) }>
-								<button type="submit" class="px-3 py-1.5 text-[12px] text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/5 transition-colors">Resolve</button>
+								<button type="submit" class="btn-success btn-press">Resolve</button>
 							</form>
 						}
 						@DeleteButton(fmt.Sprintf("%s/incidents/%d/delete", p.BasePath, p.Incident.ID), "Delete this incident?")
 					</div>
 				}
 			</div>
-			<div class="border-l-2 border-l-red-500/40 border border-line rounded-r-lg px-4 py-3 mb-5">
+			<div class="card border-l-2 border-l-red-500/40 px-4 py-3 mb-5">
 				<div class="stat-label">Cause</div>
-				<div class="text-[13px] text-white">{ p.Incident.Cause }</div>
+				<div class="text-sm text-white">{ p.Incident.Cause }</div>
 			</div>
-			<div class="border border-line-light rounded-xl overflow-hidden">
+			<div class="panel">
 				<div class="px-4 py-2.5 border-b border-line">
-					<h2 class="text-[11px] text-muted uppercase tracking-widest">Timeline</h2>
+					<h2 class="eyebrow">Timeline</h2>
 				</div>
 				if len(p.Events) > 0 {
 					<div class="p-4">
@@ -208,15 +214,15 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 										<div class="w-px flex-1 bg-line mt-1"></div>
 									</div>
 									<div class="pb-4">
-										<div class="text-[13px] text-muted-light">{ ev.Message }</div>
-										<div class="text-[10px] text-muted/50 mt-0.5">{ TimeAgo(ev.CreatedAt) }</div>
+										<div class="text-sm text-muted-light">{ ev.Message }</div>
+										<div class="text-2xs text-muted mt-0.5">{ TimeAgo(ev.CreatedAt) }</div>
 									</div>
 								</div>
 							}
 						</div>
 					</div>
 				} else {
-					<div class="px-4 py-10 text-center text-muted text-[12px]">No events</div>
+					<div class="px-4 py-10 text-center text-xs text-muted">No events yet</div>
 				}
 			</div>
 		</div>

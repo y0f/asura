@@ -52,12 +52,12 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div x-data=\"{showForm: false, mode: ''}\"><div class=\"flex items-center justify-between mb-5\"><h1 class=\"text-[15px] font-medium text-white\">Maintenance Windows</h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div x-data=\"{showForm: false, mode: ''}\"><div class=\"flex items-center justify-end mb-5\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Perms["maintenance.write"] {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<button @click=\"showForm = true; mode = ''\" class=\"inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand/85 text-white text-[12px] font-medium rounded transition-colors\"><svg class=\"w-3 h-3\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\"><path d=\"M12 5v14m7-7H5\"></path></svg> New Window</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<button @click=\"showForm = true; mode = ''\" class=\"btn-primary btn-press\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5v14m7-7H5\"></path></svg> New Window</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -67,25 +67,25 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Windows) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"border border-line-light rounded-xl overflow-hidden\"><div class=\"overflow-x-auto\"><table class=\"w-full min-w-[640px]\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Schedule</th><th class=\"th\">Status</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"panel\"><div class=\"overflow-x-auto\"><table class=\"w-full min-w-[640px]\"><thead><tr class=\"border-b border-line text-left\"><th class=\"th\">Name</th><th class=\"th\">Schedule</th><th class=\"th\">Status</th><th class=\"th text-right\">Actions</th></tr></thead> <tbody class=\"divide-y divide-line\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, w := range p.Windows {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<tr class=\"hover:bg-surface-200/20 transition-colors\"><td class=\"px-4 py-3 text-[13px] text-white font-medium\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<tr class=\"hover:bg-surface-200/20 transition-colors\"><td class=\"px-4 py-3 text-sm text-white font-medium\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var3 string
 					templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(w.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 42, Col: 75}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 41, Col: 71}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td class=\"px-4 py-3 text-[12px] text-muted tabular-nums\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td class=\"px-4 py-3 text-xs text-muted tabular-nums\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -95,14 +95,14 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					} else if w.Recurring == "cron" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<code class=\"text-[11px] bg-surface-200 px-1.5 py-0.5 rounded\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<code class=\"text-2xs font-mono text-muted-light bg-surface-200 px-1.5 py-0.5 rounded-control border border-line\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var4 string
 						templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(w.CronExpr)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 47, Col: 87}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 46, Col: 138}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 						if templ_7745c5c3_Err != nil {
@@ -115,7 +115,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var5 string
 						templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.0fm window", w.EndTime.Sub(w.StartTime).Minutes()))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 48, Col: 112}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 47, Col: 112}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 						if templ_7745c5c3_Err != nil {
@@ -133,7 +133,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var6 string
 						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(w.Recurring)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 50, Col: 67}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 49, Col: 67}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {
@@ -146,7 +146,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var7 string
 						templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(w.StartTime.Format("15:04"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 51, Col: 83}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 50, Col: 83}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 						if templ_7745c5c3_Err != nil {
@@ -159,7 +159,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var8 string
 						templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(w.EndTime.Format("15:04"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 51, Col: 115}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 50, Col: 115}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 						if templ_7745c5c3_Err != nil {
@@ -177,7 +177,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var9 string
 						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(w.StartTime.Format("Jan 2, 15:04"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 53, Col: 83}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 52, Col: 83}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
@@ -190,7 +190,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var10 string
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(w.EndTime.Format("Jan 2, 15:04"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 53, Col: 122}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 52, Col: 122}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -207,23 +207,23 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 					}
 					if w.Recurring == "manual" {
 						if w.Active {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<span class=\"inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-amber-500/10 text-amber-400 border-amber-500/20\">active</span>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<span class=\"badge badge-yellow\">active</span>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						} else {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<span class=\"inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-gray-500/10 text-gray-400 border-gray-500/20\">inactive</span>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<span class=\"badge badge-zinc\">inactive</span>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						}
 					} else if w.Recurring != "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-brand/10 text-brand border-brand/20\">recurring</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"badge badge-blue\">recurring</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border bg-gray-500/10 text-gray-400 border-gray-500/20\">one-time</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"badge badge-zinc\">one-time</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -240,7 +240,7 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 						var templ_7745c5c3_Var11 templ.SafeURL
 						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/maintenance/%d/toggle", p.BasePath, w.ID)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 72, Col: 114}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 71, Col: 114}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 						if templ_7745c5c3_Err != nil {
@@ -251,12 +251,12 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 							return templ_7745c5c3_Err
 						}
 						if w.Active {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<button type=\"submit\" class=\"text-[11px] text-amber-400 hover:text-amber-300 transition-colors\">Stop</button>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<button type=\"submit\" class=\"btn-warning btn-sm btn-press\">Stop</button>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						} else {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<button type=\"submit\" class=\"text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors\">Start</button>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<button type=\"submit\" class=\"btn-success btn-sm btn-press\">Start</button>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -281,8 +281,13 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
+			} else if p.Perms["maintenance.write"] {
+				templ_7745c5c3_Err = EmptyStateModal("No maintenance windows yet", "showForm = true; mode = ''", "New Window").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			} else {
-				templ_7745c5c3_Err = EmptyState("No maintenance windows", "", "").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = EmptyState("No maintenance windows yet", "", "").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -306,13 +311,13 @@ func MaintenanceListPage(p MaintenanceListParams) templ.Component {
 				var templ_7745c5c3_Var13 templ.SafeURL
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/maintenance"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 95, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/maintenance.templ`, Line: 96, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"space-y-3\"><div><label class=\"form-label\">Name</label> <input type=\"text\" name=\"name\" required class=\"form-input\"></div><div><label class=\"form-label\">Type</label> <select name=\"recurring\" x-model=\"mode\" class=\"form-select\"><option value=\"\">One-time</option> <option value=\"manual\">Manual (start/stop)</option> <option value=\"cron\">Cron Schedule</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div x-show=\"mode !== 'manual'\" x-cloak class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\">Start</label> <input type=\"datetime-local\" name=\"start_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div><div><label class=\"form-label\">End</label> <input type=\"datetime-local\" name=\"end_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div></div><div x-show=\"mode === 'cron'\" x-cloak><label class=\"form-label\">Cron Expression</label> <input type=\"text\" name=\"cron_expr\" placeholder=\"0 2 * * *\" class=\"form-input font-mono\"><p class=\"text-[10px] text-muted mt-1\">minute hour day-of-month month day-of-week</p></div><div><label class=\"form-label\">Monitor IDs (empty = all)</label> <input type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"text-[13px] text-muted hover:text-muted-light transition-colors\">Cancel</button></div></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"space-y-3\"><div><label class=\"form-label\" for=\"name\">Name</label> <input id=\"name\" type=\"text\" name=\"name\" required class=\"form-input\"></div><div><label class=\"form-label\" for=\"recurring\">Type</label> <select id=\"recurring\" name=\"recurring\" x-model=\"mode\" class=\"form-select\"><option value=\"\">One-time</option> <option value=\"manual\">Manual (start/stop)</option> <option value=\"cron\">Cron Schedule</option> <option value=\"daily\">Daily</option> <option value=\"weekly\">Weekly</option> <option value=\"monthly\">Monthly</option></select></div><div x-show=\"mode !== 'manual'\" x-cloak class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\" for=\"start_time\">Start</label> <input id=\"start_time\" type=\"datetime-local\" name=\"start_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"end_time\">End</label> <input id=\"end_time\" type=\"datetime-local\" name=\"end_time\" :required=\"mode !== 'manual'\" class=\"form-input\"></div></div><div x-show=\"mode === 'cron'\" x-cloak><label class=\"form-label\" for=\"cron_expr\">Cron Expression</label> <input id=\"cron_expr\" type=\"text\" name=\"cron_expr\" placeholder=\"0 2 * * *\" class=\"form-input font-mono\"><p class=\"form-hint\">minute hour day-of-month month day-of-week</p></div><div><label class=\"form-label\" for=\"monitor_ids\">Monitor IDs (empty = all)</label> <input id=\"monitor_ids\" type=\"text\" name=\"monitor_ids\" placeholder=\"1, 2, 3\" class=\"form-input\"></div><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary btn-press\">Create</button> <button type=\"button\" @click=\"showForm = false\" class=\"btn-secondary btn-press\">Cancel</button></div></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

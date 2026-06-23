@@ -184,6 +184,15 @@ func (p MonitorDetailParams) changesPageHref(page int) string {
 	return href
 }
 
+func (p MonitorDetailParams) heatmapHasData() bool {
+	for _, d := range p.Heatmap {
+		if d.HasData {
+			return true
+		}
+	}
+	return false
+}
+
 func (p MonitorDetailParams) showPercentiles() bool {
 	switch p.Monitor.Type {
 	case "http", "tcp", "dns", "icmp", "websocket":
@@ -195,11 +204,11 @@ func (p MonitorDetailParams) showPercentiles() bool {
 func manualStatusBtnClass(status string) string {
 	switch status {
 	case "up":
-		return "text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/5"
+		return "btn-success"
 	case "degraded":
-		return "text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/5"
+		return "btn-warning"
 	default:
-		return "text-red-400 border-red-500/20 hover:bg-red-500/5"
+		return "btn-danger"
 	}
 }
 
@@ -218,7 +227,7 @@ templ manualStatusButton(basePath string, monitorID int64, status string) {
 	<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/status", basePath, monitorID)) }>
 		<input type="hidden" name="status" value={ status }/>
 		<input type="hidden" name="message" :value="msg"/>
-		<button type="submit" class={ "inline-flex items-center gap-1 px-2.5 py-1 text-[11px] border rounded transition-colors", manualStatusBtnClass(status) }>
+		<button type="submit" class={ "btn-sm btn-press", manualStatusBtnClass(status) }>
 			switch status {
 				case "up":
 					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -235,12 +244,6 @@ templ manualStatusButton(basePath string, monitorID int64, status string) {
 templ MonitorListPage(p MonitorListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data={ monitorListXData(p.monitorIDs()) }>
-			<div class="flex items-center justify-between mb-5">
-				<h1 class="text-[15px] font-medium text-white">Monitors</h1>
-				if p.Perms["monitors.write"] {
-					@ToolbarNewButton(p.BasePath+"/monitors/new", "New Monitor")
-				}
-			</div>
 			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="mb-4">
 				if p.Type != "" {
 					<input type="hidden" name="type" value={ p.Type }/>
@@ -269,27 +272,34 @@ templ MonitorListPage(p MonitorListParams) {
 						<option value="response_time" if p.SortParam == "response_time" { selected } >Response Time</option>
 					</select>
 					if p.Search != "" || p.StatusFilter != "" || p.GroupFilter != nil || p.SortParam != "" {
-						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="px-2.5 py-1 text-[12px] text-muted hover:text-muted-light transition-colors">Clear</a>
+						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="text-xs text-muted hover:text-muted-light transition-colors">Clear</a>
+					}
+					if p.Perms["monitors.write"] {
+						<div class="ml-auto">
+							@ToolbarNewButton(p.BasePath+"/monitors/new", "New Monitor")
+						</div>
 					}
 				</div>
 			</form>
-			<div class="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-				<a href={ templ.SafeURL(p.filterHref("")) }
-					class={ "filter-tab", templ.KV("filter-active", p.Type == "" && p.TagFilter == nil), templ.KV("filter-inactive", p.Type != "" || p.TagFilter != nil) }>All</a>
-				for _, t := range monitorTypes {
-					<a href={ templ.SafeURL(p.filterHref(t)) }
-						class={ "filter-tab", templ.KV("filter-active", p.Type == t), templ.KV("filter-inactive", p.Type != t) }>{ TypeLabel(t) }</a>
-				}
-				for _, tag := range p.AllTags {
-					<a href={ templ.SafeURL(p.tagFilterHref(tag.ID)) }
-						class={ "filter-tab inline-flex items-center gap-1", templ.KV("filter-active", p.TagFilter != nil && *p.TagFilter == tag.ID), templ.KV("filter-inactive", p.TagFilter == nil || *p.TagFilter != tag.ID) }>
-						<span class="inline-block w-1.5 h-1.5 rounded-full" style={ "background-color: " + tag.Color }></span>{ tag.Name }
-					</a>
-				}
+			<div class="no-scrollbar overflow-x-auto -mr-4 pr-4 mb-4">
+				<div class="flex gap-1.5 pb-1 w-max">
+					<a href={ templ.SafeURL(p.filterHref("")) }
+						class={ "filter-tab shrink-0 whitespace-nowrap", templ.KV("filter-active", p.Type == "" && p.TagFilter == nil), templ.KV("filter-inactive", p.Type != "" || p.TagFilter != nil) }>All</a>
+					for _, t := range monitorTypes {
+						<a href={ templ.SafeURL(p.filterHref(t)) }
+							class={ "filter-tab shrink-0 whitespace-nowrap", templ.KV("filter-active", p.Type == t), templ.KV("filter-inactive", p.Type != t) }>{ TypeLabel(t) }</a>
+					}
+					for _, tag := range p.AllTags {
+						<a href={ templ.SafeURL(p.tagFilterHref(tag.ID)) }
+							class={ "filter-tab inline-flex items-center gap-1 shrink-0 whitespace-nowrap", templ.KV("filter-active", p.TagFilter != nil && *p.TagFilter == tag.ID), templ.KV("filter-inactive", p.TagFilter == nil || *p.TagFilter != tag.ID) }>
+							<span class="inline-block w-1.5 h-1.5 rounded-full" style={ "background-color: " + tag.Color }></span>{ tag.Name }
+						</a>
+					}
+				</div>
 			</div>
 			if p.Perms["monitors.write"] {
-				<div x-show="selected.length > 0" x-cloak class="mb-3 px-4 py-2.5 border border-brand/30 bg-brand/5 rounded-lg flex items-center gap-3 flex-wrap">
-					<span class="text-[12px] text-white font-medium" x-text="selected.length + ' selected'"></span>
+				<div x-show="selected.length > 0" x-cloak class="mb-3 px-4 py-2.5 border border-brand/30 bg-brand/5 rounded-card flex items-center gap-3 flex-wrap">
+					<span class="text-xs text-white font-medium" x-text="selected.length + ' selected'"></span>
 					<form method="POST" action={ templ.SafeURL(p.BasePath + "/monitors/bulk") } x-ref="bulkForm" class="contents">
 						<template x-for="id in selected" :key="id">
 							<input type="hidden" name="ids[]" :value="id"/>
@@ -297,12 +307,12 @@ templ MonitorListPage(p MonitorListParams) {
 						<input type="hidden" name="action" :value="bulkAction"/>
 						<input type="hidden" name="group_id" :value="bulkGroupId"/>
 						<button type="button" @click="bulkAction='pause'; $nextTick(() => $refs.bulkForm.submit())"
-							class="px-2.5 py-1 text-[11px] text-yellow-400 border border-yellow-500/20 rounded hover:bg-yellow-500/5 transition-colors">Pause</button>
+							class="btn-sm btn-warning btn-press">Pause</button>
 						<button type="button" @click="bulkAction='resume'; $nextTick(() => $refs.bulkForm.submit())"
-							class="px-2.5 py-1 text-[11px] text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/5 transition-colors">Resume</button>
+							class="btn-sm btn-success btn-press">Resume</button>
 						if len(p.Groups) > 0 {
 							<select x-model="bulkGroupId" @change="if(bulkGroupId !== '') { bulkAction='set_group'; $nextTick(() => $refs.bulkForm.submit()) }"
-								class="px-2 py-1 text-[11px] bg-transparent border border-line rounded text-muted-light focus:border-brand/40 focus:outline-hidden">
+								class="form-select-sm">
 								<option value="">Set Group...</option>
 								<option value="0">No Group</option>
 								for _, g := range p.Groups {
@@ -311,8 +321,8 @@ templ MonitorListPage(p MonitorListParams) {
 							</select>
 						}
 						<button type="button" @click="$dispatch('confirm', {url: '', message: 'Delete ' + selected.length + ' monitors?', onConfirm: () => { bulkAction='delete'; $nextTick(() => $refs.bulkForm.submit()) }})"
-							class="px-2.5 py-1 text-[11px] text-red-400 border border-red-500/20 rounded hover:bg-red-500/5 transition-colors">Delete</button>
-						<button type="button" @click="selected = []" class="px-2 py-1 text-[11px] text-muted hover:text-muted-light transition-colors">Clear</button>
+							class="btn-sm btn-danger btn-press">Delete</button>
+						<button type="button" @click="selected = []" class="btn-sm btn-secondary btn-press">Clear</button>
 					</form>
 				</div>
 			}
@@ -321,24 +331,24 @@ templ MonitorListPage(p MonitorListParams) {
 				hx-on::before-request="refreshError = false"
 				hx-on::response-error="refreshError = true"
 				hx-on::send-error="refreshError = true"
-				class="relative border border-line-light rounded-xl overflow-hidden">
-				<div id="monitor-list-indicator" class="htmx-indicator absolute top-2 right-2 z-10 text-[10px] text-muted">Refreshing…</div>
-				<div x-show="refreshError" x-cloak class="absolute top-2 right-2 z-10 text-[10px] text-red-400">Refresh failed — retrying…</div>
+				class="relative panel">
+				<div id="monitor-list-indicator" class="htmx-indicator absolute top-2 right-2 z-10 text-2xs text-muted">Refreshing…</div>
+				<div x-show="refreshError" x-cloak class="absolute top-2 right-2 z-10 text-2xs text-red-400">Refresh failed — retrying…</div>
 				if ms := p.monitors(); len(ms) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[640px]">
 							<thead>
-								<tr class="border-b border-line text-left">
+								<tr class="border-b border-line text-left bg-surface-100/40">
 									if p.Perms["monitors.write"] {
 										<th class="th w-8">
 											<input type="checkbox" :checked="allSelected" @change="toggleAll()" aria-label="Select all monitors" class="form-checkbox"/>
 										</th>
 									}
 									<th class="th">Monitor</th>
-									<th class="th">Type</th>
-									<th class="th">Status</th>
-									<th class="th">Last Check</th>
-									<th class="th text-right">Actions</th>
+									<th class="th w-px whitespace-nowrap">Type</th>
+									<th class="th w-px whitespace-nowrap">Status</th>
+									<th class="th w-px whitespace-nowrap">Last Check</th>
+									<th class="th w-px whitespace-nowrap text-right">Actions</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-line">
@@ -349,13 +359,13 @@ templ MonitorListPage(p MonitorListParams) {
 												<input type="checkbox" :checked={ fmt.Sprintf("selected.includes(%d)", m.ID) } @change={ fmt.Sprintf("toggle(%d)", m.ID) } aria-label={ "Select " + m.Name } class="form-checkbox"/>
 											</td>
 										}
-										<td class="px-4 py-3">
+										<td class="px-4 py-3 min-w-0">
 											<div class="flex items-center gap-2 flex-wrap">
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="text-[13px] text-muted-light hover:text-white transition-colors font-medium">{ m.Name }</a>
+												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="text-sm text-muted-light hover:text-white transition-colors font-medium">{ m.Name }</a>
 												if tags := p.TagMap[m.ID]; len(tags) > 0 {
 													<div class="flex items-center gap-1">
 														for _, tag := range tags {
-															<span class="inline-flex items-center gap-1 px-1.5 py-px rounded text-[11px] border border-line" title={ tagTooltip(tag) }>
+															<span class="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-2xs border border-line" title={ tagTooltip(tag) }>
 																<span class="w-1.5 h-1.5 rounded-full" style={ "background-color: " + tag.Color }></span>
 																<span class="text-muted-light">{ tag.Name }</span>
 															</span>
@@ -363,22 +373,19 @@ templ MonitorListPage(p MonitorListParams) {
 													</div>
 												}
 											</div>
-											<div class="text-[11px] text-muted mt-0.5 truncate max-w-xs font-mono">{ m.Target }</div>
+											<div class="text-xs text-muted mt-0.5 truncate max-w-md font-mono">{ m.Target }</div>
 										</td>
 										<td class="px-4 py-3">
-											<span class="text-[10px] text-brand uppercase tracking-wider">{ TypeLabel(m.Type) }</span>
+											<span class="badge badge-zinc">{ TypeLabel(m.Type) }</span>
 										</td>
 										<td class="px-4 py-3">
-											<div class="flex items-center gap-2">
-												<div class={ "w-1.5 h-1.5 rounded-full", StatusDot(m.Status), templ.KV("animate-pulse-dot", m.Status == "down") }></div>
-												<span class={ "text-[12px]", StatusColor(m.Status) }>{ m.Status }</span>
-											</div>
+											@StatusPill(m.Status)
 										</td>
-										<td class="px-4 py-3 text-[12px] text-muted">
+										<td class="px-4 py-3 text-xs text-muted">
 											if m.LastCheckAt != nil {
 												{ TimeAgo(m.LastCheckAt) }
 											} else {
-												<span class="text-muted/40">—</span>
+												<span class="text-muted">—</span>
 											}
 										</td>
 										<td class="px-4 py-3 text-right">
@@ -391,7 +398,7 @@ templ MonitorListPage(p MonitorListParams) {
 					</div>
 					if p.Result != nil && p.Result.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">{ fmt.Sprintf("Page %d / %d · %d monitors", p.Result.Page, p.Result.TotalPages, p.Result.Total) }</span>
+							<span class="text-2xs text-muted tabular-nums">{ fmt.Sprintf("Page %d / %d · %d monitors", p.Result.Page, p.Result.TotalPages, p.Result.Total) }</span>
 							<div class="flex gap-1">
 								if p.Result.Page > 1 {
 									@PrevPageBtn(p.pageHref(p.Result.Page - 1))
@@ -403,13 +410,11 @@ templ MonitorListPage(p MonitorListParams) {
 						</div>
 					}
 				} else {
-					<div class="px-4 py-16 text-center">
+					<div class="px-4 py-12">
 						if p.Search != "" || p.Type != "" {
-							<p class="text-muted text-[13px] mb-2">No monitors match your search</p>
-							<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="text-[12px] text-brand hover:text-brand/80 transition-colors">Clear filters</a>
+							@EmptyState("No monitors match your filters", p.BasePath+"/monitors", "Clear filters")
 						} else {
-							<p class="text-muted text-[13px] mb-2">No monitors configured</p>
-							<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="text-[12px] text-brand hover:text-brand/80 transition-colors">Create your first monitor</a>
+							@EmptyState("No monitors yet", p.BasePath+"/monitors/new", "New Monitor")
 						}
 					</div>
 				}
@@ -428,52 +433,62 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			hx-on::response-error="refreshError = true"
 			hx-on::send-error="refreshError = true"
 			class="relative">
-			<div id="monitor-detail-indicator" class="htmx-indicator absolute top-0 right-0 z-10 text-[10px] text-muted">Refreshing…</div>
-			<div x-show="refreshError" x-cloak class="absolute top-0 right-0 z-10 text-[10px] text-red-400">Refresh failed — retrying…</div>
+			<div id="monitor-detail-indicator" class="htmx-indicator absolute top-0 right-0 z-10 text-2xs text-muted">Refreshing…</div>
+			<div x-show="refreshError" x-cloak class="absolute top-0 right-0 z-10 text-2xs text-red-400">Refresh failed — retrying…</div>
 			<div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
 				<div>
-					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="inline-flex items-center gap-1 text-[11px] text-muted hover:text-muted-light transition-colors">
+					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="inline-flex items-center gap-1 text-2xs text-muted hover:text-muted-light transition-colors">
 						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 						Monitors
 					</a>
 					<div class="flex items-center gap-2.5 mt-1.5">
-						<div class={ "w-2 h-2 rounded-full", StatusDot(p.Monitor.Status), templ.KV("animate-pulse-dot", p.Monitor.Status == "down") }></div>
-						<h1 class="text-[17px] font-medium text-white">{ p.Monitor.Name }</h1>
+						<h1 class="text-xl font-semibold text-white">{ p.Monitor.Name }</h1>
 						@StatusPill(p.Monitor.Status)
 						if !p.Monitor.Enabled {
-							<span class="text-[10px] tracking-wide px-1.5 py-px rounded border border-line text-muted">paused</span>
+							<span class="badge badge-zinc">Paused</span>
 						}
 					</div>
-					<div class="text-[11px] text-muted mt-1 ml-[18px] font-mono">{ TypeLabel(p.Monitor.Type) } · { p.Monitor.Target } · { fmt.Sprint(p.Monitor.Interval) }s interval · { fmt.Sprint(p.Monitor.Timeout) }s timeout</div>
+					<div class="text-xs text-muted mt-1.5 font-mono">{ TypeLabel(p.Monitor.Type) } · { p.Monitor.Target } · { fmt.Sprint(p.Monitor.Interval) }s interval · { fmt.Sprint(p.Monitor.Timeout) }s timeout</div>
 				</div>
 				if p.Perms["monitors.write"] {
-					<div class="flex items-center gap-1.5 shrink-0">
+					<div class="flex items-center gap-2 shrink-0">
 						if p.Monitor.Enabled {
 							<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, p.Monitor.ID)) }>
-								<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-muted border border-line rounded hover:text-yellow-400 hover:border-yellow-500/20 transition-colors">
+								<button type="submit" class="btn-sm btn-secondary btn-press">
 									<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
 									Pause
 								</button>
 							</form>
 						} else {
 							<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, p.Monitor.ID)) }>
-								<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/5 transition-colors">
+								<button type="submit" class="btn-sm btn-success btn-press">
 									<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
 									Resume
 								</button>
 							</form>
 						}
 						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/clone", p.BasePath, p.Monitor.ID)) }>
-							<button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-muted border border-line rounded hover:text-brand hover:border-brand/20 transition-colors">
+							<button type="submit" class="btn-sm btn-secondary btn-press">
 								<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
 								Clone
 							</button>
 						</form>
-						<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, p.Monitor.ID)) } class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-brand border border-brand/20 rounded hover:bg-brand/5 transition-colors">
+						<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, p.Monitor.ID)) } class="btn-sm btn-secondary btn-press">
 							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
 							Edit
 						</a>
-						@DeleteButton(fmt.Sprintf("%s/monitors/%d/delete", p.BasePath, p.Monitor.ID), "Delete this monitor?")
+						<button
+							type="button"
+							data-url={ fmt.Sprintf("%s/monitors/%d/delete", p.BasePath, p.Monitor.ID) }
+							data-msg="Delete this monitor?"
+							@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
+							class="btn-sm btn-danger btn-press"
+							aria-label="Delete this monitor"
+							title="Delete"
+						>
+							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+							Delete
+						</button>
 					</div>
 				}
 				if p.Monitor.Type == "manual" && p.Perms["monitors.write"] {
@@ -481,59 +496,61 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						@manualStatusButton(p.BasePath, p.Monitor.ID, "up")
 						@manualStatusButton(p.BasePath, p.Monitor.ID, "degraded")
 						@manualStatusButton(p.BasePath, p.Monitor.ID, "down")
-						<button type="button" @click="showMsg = !showMsg" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-muted border border-line rounded hover:text-white transition-colors">
+						<button type="button" @click="showMsg = !showMsg" class="btn-sm btn-secondary btn-press">
 							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 							<span x-text="showMsg ? 'Hide' : 'Message'"></span>
 						</button>
 						<div x-show="showMsg" x-cloak class="w-48">
-							<input type="text" x-model="msg" placeholder="Optional message" class="form-input text-[11px] py-1"/>
+							<input type="text" x-model="msg" placeholder="Optional message" class="form-input text-2xs py-1"/>
 						</div>
 					</div>
 				}
 			</div>
 			if p.OpenIncident != nil {
-				<div class="mb-5 px-4 py-2.5 border border-red-500/15 rounded text-[13px] text-red-400 flex items-center gap-2">
+				<div class="mb-5 px-4 py-2.5 border border-red-500/15 rounded-card text-sm text-red-400 flex items-center gap-2">
 					<svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 					Active incident: { p.OpenIncident.Cause }
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="text-red-400/80 hover:text-red-300 underline underline-offset-2 ml-1">View</a>
 				</div>
 			}
 			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-				<div class="border border-line-light rounded-xl px-4 py-3">
+				<div class="card px-4 py-3">
 					<div class="stat-label">Uptime 24h</div>
-					<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.Uptime24h) }>{ UptimeFmt(p.Uptime24h) }</div>
+					<div class={ "text-2xl font-semibold tabular-nums mt-0.5", UptimeColor(p.Uptime24h) }>{ UptimeFmt(p.Uptime24h) }</div>
 				</div>
-				<div class="border border-line-light rounded-xl px-4 py-3">
+				<div class="card px-4 py-3">
 					<div class="stat-label">Uptime 7d</div>
-					<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.Uptime7d) }>{ UptimeFmt(p.Uptime7d) }</div>
+					<div class={ "text-2xl font-semibold tabular-nums mt-0.5", UptimeColor(p.Uptime7d) }>{ UptimeFmt(p.Uptime7d) }</div>
 				</div>
-				<div class="border border-line-light rounded-xl px-4 py-3">
+				<div class="card px-4 py-3">
 					<div class="stat-label">Uptime 30d</div>
-					<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.Uptime30d) }>{ UptimeFmt(p.Uptime30d) }</div>
+					<div class={ "text-2xl font-semibold tabular-nums mt-0.5", UptimeColor(p.Uptime30d) }>{ UptimeFmt(p.Uptime30d) }</div>
 				</div>
-				<div class="border border-line-light rounded-xl px-4 py-3">
+				<div class="card px-4 py-3">
 					<div class="stat-label">Checks 24h</div>
-					<div class="text-lg font-semibold text-white tabular-nums">{ fmt.Sprint(p.TotalChecks) }</div>
+					<div class="text-2xl font-semibold text-white tabular-nums mt-0.5">{ fmt.Sprint(p.TotalChecks) }</div>
 					if p.TotalChecks > 0 {
 						<div class="flex items-center gap-2 mt-0.5">
-							<span class="text-[10px] text-emerald-400">{ fmt.Sprint(p.UpChecks) } up</span>
+							<span class="text-2xs text-emerald-400">{ fmt.Sprint(p.UpChecks) } up</span>
 							if p.DownChecks > 0 {
-								<span class="text-[10px] text-red-400">{ fmt.Sprint(p.DownChecks) } down</span>
+								<span class="text-2xs text-red-400">{ fmt.Sprint(p.DownChecks) } down</span>
 							}
 						</div>
 					}
 				</div>
 			</div>
 			if len(p.Heatmap) > 0 {
-				<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
-					<div class="flex items-center justify-between mb-2">
+				<div class="card px-4 py-3 mb-5">
+					<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
 						<div class="stat-label">365-Day Uptime</div>
-						<div class="flex items-center gap-3 text-[10px] text-muted">
-							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#34d399]"></span>100%</span>
-							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#fbbf24]"></span>&gt;99%</span>
-							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#f97316]"></span>&gt;95%</span>
-							<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-[#f87171]"></span>&lt;95%</span>
-						</div>
+						if p.heatmapHasData() {
+							<div class="flex items-center gap-3 text-2xs text-muted">
+								<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-emerald-400"></span>100%</span>
+								<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-yellow-400"></span>&gt;99%</span>
+								<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-orange-400"></span>&gt;95%</span>
+								<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-400"></span>&lt;95%</span>
+							</div>
+						}
 					</div>
 					<div class="overflow-x-auto">
 						@templ.Raw(HeatmapSVG(p.Heatmap))
@@ -541,32 +558,32 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			}
 			if p.SLA != nil {
-				<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
+				<div class="card px-4 py-3 mb-5">
 					<div class="flex items-center justify-between mb-2">
 						<div class="stat-label">SLA Target: { fmt.Sprintf("%.2f%%", p.SLA.Target) }</div>
 						if p.SLA.Breached {
-							<span class="inline-flex px-2 py-0.5 text-[10px] font-medium rounded border bg-red-500/10 text-red-400 border-red-500/20">Breached</span>
+							<span class="badge badge-red">Breached</span>
 						} else if p.SLA.BudgetRemainSecs <= p.SLA.BudgetTotalSecs/10 {
-							<span class="inline-flex px-2 py-0.5 text-[10px] font-medium rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">At Risk</span>
+							<span class="badge badge-yellow">At Risk</span>
 						} else {
-							<span class="inline-flex px-2 py-0.5 text-[10px] font-medium rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Healthy</span>
+							<span class="badge badge-emerald">Healthy</span>
 						}
 					</div>
 					<div class="grid grid-cols-3 gap-4">
 						<div>
-							<div class="text-[10px] text-muted mb-0.5">Current Month</div>
-							<div class={ "text-[14px] font-semibold font-mono tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
+							<div class="text-2xs text-muted mb-0.5">Current Month</div>
+							<div class={ "text-base font-semibold font-mono tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
 						</div>
 						<div>
-							<div class="text-[10px] text-muted mb-0.5">Error Budget Used</div>
-							<div class="text-[14px] font-semibold text-white font-mono tabular-nums">{ sla.FormatDuration(p.SLA.BudgetTotalSecs - p.SLA.BudgetRemainSecs) }</div>
+							<div class="text-2xs text-muted mb-0.5">Error Budget Used</div>
+							<div class="text-base font-semibold text-white font-mono tabular-nums">{ sla.FormatDuration(p.SLA.BudgetTotalSecs - p.SLA.BudgetRemainSecs) }</div>
 						</div>
 						<div>
-							<div class="text-[10px] text-muted mb-0.5">Budget Remaining</div>
+							<div class="text-2xs text-muted mb-0.5">Budget Remaining</div>
 							if p.SLA.Breached {
-								<div class="text-[14px] font-semibold text-red-400 font-mono tabular-nums">{ p.SLA.BudgetRemainHuman }</div>
+								<div class="text-base font-semibold text-red-400 font-mono tabular-nums">{ p.SLA.BudgetRemainHuman }</div>
 							} else {
-								<div class="text-[14px] font-semibold text-emerald-400 font-mono tabular-nums">{ p.SLA.BudgetRemainHuman }</div>
+								<div class="text-base font-semibold text-emerald-400 font-mono tabular-nums">{ p.SLA.BudgetRemainHuman }</div>
 							}
 						</div>
 					</div>
@@ -574,105 +591,126 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			}
 			if p.showPercentiles() {
 				<div class="grid grid-cols-3 gap-3 mb-5">
-					<div class="border border-line-light rounded-xl px-4 py-3">
+					<div class="card px-4 py-3">
 						<div class="stat-label">p50</div>
-						<div class="text-lg font-semibold text-white tabular-nums font-mono">{ FormatFloat(p.P50) }</div>
+						<div class="text-2xl font-semibold text-white tabular-nums font-mono mt-0.5">{ FormatFloat(p.P50) }</div>
 					</div>
-					<div class="border border-line-light rounded-xl px-4 py-3">
+					<div class="card px-4 py-3">
 						<div class="stat-label">p95</div>
-						<div class="text-lg font-semibold text-white tabular-nums font-mono">{ FormatFloat(p.P95) }</div>
+						<div class="text-2xl font-semibold text-white tabular-nums font-mono mt-0.5">{ FormatFloat(p.P95) }</div>
 					</div>
-					<div class="border border-line-light rounded-xl px-4 py-3">
+					<div class="card px-4 py-3">
 						<div class="stat-label">p99</div>
-						<div class="text-lg font-semibold text-white tabular-nums font-mono">{ FormatFloat(p.P99) }</div>
+						<div class="text-2xl font-semibold text-white tabular-nums font-mono mt-0.5">{ FormatFloat(p.P99) }</div>
 					</div>
 				</div>
 			}
 			<div id="response-chart" hx-preserve="true"
 				data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
-				class="border border-line-light rounded-xl px-4 py-3 mb-5"
+				class="card px-4 py-3 mb-5"
 				x-data="monitorChart()" x-init="init()" x-cloak>
 				<div class="flex items-center justify-between mb-3">
-					<h2 class="text-[11px] text-muted uppercase tracking-widest">Response Time</h2>
+					<h2 class="eyebrow">Response Time</h2>
 					<div class="flex gap-1">
 						<template x-for="r in ['1h','6h','24h','7d','30d']" :key="r">
 							<button @click="range = r; fetchData()"
 								:class="range === r ? 'text-brand bg-brand/[0.08] border-brand/20' : 'text-muted hover:text-muted-light border-line hover:border-line-light'"
-								class="px-2 py-0.5 text-[10px] border rounded transition-colors" x-text="r"></button>
+								class="px-2 py-0.5 text-2xs border rounded-md transition-colors" x-text="r"></button>
 						</template>
 					</div>
 				</div>
 				<div x-show="loading" class="h-[200px] flex items-center justify-center">
-					<div class="text-[11px] text-muted">Loading chart...</div>
+					<div class="text-2xs text-muted">Loading chart...</div>
 				</div>
 				<div x-show="!loading && !points.length" class="h-[200px] flex items-center justify-center">
-					<div class="text-[11px] text-muted">No data for this time range</div>
+					<div class="text-2xs text-muted">No data for this time range</div>
 				</div>
 				<div x-show="!loading && points.length" class="relative">
 					<div x-ref="chart"></div>
-					<div x-ref="tooltip" class="chart-tooltip absolute pointer-events-none bg-surface-100 border border-line rounded px-2 py-1.5 z-10" style="display:none">
-						<div class="tip-date text-[10px] text-muted"></div>
-						<div class="tip-value text-[12px] text-white font-mono"></div>
-						<div class="tip-status text-[10px] text-red-400" style="display:none"></div>
+					<div x-ref="tooltip" class="chart-tooltip absolute pointer-events-none bg-surface-100 border border-line rounded-md px-2 py-1.5 z-10" style="display:none">
+						<div class="tip-date text-2xs text-muted"></div>
+						<div class="tip-value text-xs text-white font-mono"></div>
+						<div class="tip-status text-2xs text-red-400" style="display:none"></div>
 					</div>
 				</div>
 			</div>
 			if p.LatestCheck != nil && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
-				<div class="border border-line-light rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
+				<div class="card px-4 py-3 mb-5 flex items-center justify-between">
 					<div>
 						<div class="stat-label">TLS Certificate</div>
-						<div class={ "text-[13px] font-medium", CertColor(p.LatestCheck.CertExpiry) }>{ fmt.Sprint(CertDays(p.LatestCheck.CertExpiry)) } days remaining</div>
+						<div class={ "text-sm font-medium", CertColor(p.LatestCheck.CertExpiry) }>{ fmt.Sprint(CertDays(p.LatestCheck.CertExpiry)) } days remaining</div>
 					</div>
-					<div class="text-[11px] text-muted font-mono">{ p.LatestCheck.CertExpiry.Format("2006-01-02") }</div>
+					<div class="text-2xs text-muted font-mono">{ p.LatestCheck.CertExpiry.Format("2006-01-02") }</div>
 				</div>
 			}
 			if p.LatestCheck != nil && p.Monitor.Type == "dns" {
 				if records := ParseDNS(p.LatestCheck.DNSRecords); len(records) > 0 {
-					<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
+					<div class="card px-4 py-3 mb-5">
 						<div class="stat-label mb-2">DNS Records</div>
 						<div class="space-y-0.5">
 							for _, rec := range records {
-								<div class="text-[12px] text-muted-light font-mono">{ rec }</div>
+								<div class="text-xs text-muted-light font-mono">{ rec }</div>
 							}
 						</div>
 					</div>
 				}
 			}
-			<div class="border border-line-light rounded-xl px-4 py-3 mb-5">
+			<div class="card px-4 py-3 mb-5">
 				<div class="stat-label mb-2">Configuration</div>
-				<div class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-[12px]">
-					<div><span class="text-muted">Interval</span> <span class="text-muted-light ml-1">{ fmt.Sprint(p.Monitor.Interval) }s</span></div>
-					<div><span class="text-muted">Timeout</span> <span class="text-muted-light ml-1">{ fmt.Sprint(p.Monitor.Timeout) }s</span></div>
-					<div><span class="text-muted">Fail threshold</span> <span class="text-muted-light ml-1">{ fmt.Sprint(p.Monitor.FailureThreshold) }</span></div>
-					<div><span class="text-muted">Success threshold</span> <span class="text-muted-light ml-1">{ fmt.Sprint(p.Monitor.SuccessThreshold) }</span></div>
-					<div>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 text-xs">
+					<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+						<span class="text-muted">Interval</span>
+						<span class="text-muted-light tabular-nums">{ fmt.Sprint(p.Monitor.Interval) }s</span>
+					</div>
+					<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+						<span class="text-muted">Timeout</span>
+						<span class="text-muted-light tabular-nums">{ fmt.Sprint(p.Monitor.Timeout) }s</span>
+					</div>
+					<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+						<span class="text-muted">Fail threshold</span>
+						<span class="text-muted-light tabular-nums">{ fmt.Sprint(p.Monitor.FailureThreshold) }</span>
+					</div>
+					<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+						<span class="text-muted">Success threshold</span>
+						<span class="text-muted-light tabular-nums">{ fmt.Sprint(p.Monitor.SuccessThreshold) }</span>
+					</div>
+					<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
 						<span class="text-muted">Enabled</span>
 						if p.Monitor.Enabled {
-							<span class="text-emerald-400 ml-1">yes</span>
+							<span class="text-emerald-400">yes</span>
 						} else {
-							<span class="text-muted ml-1">no</span>
+							<span class="text-muted">no</span>
 						}
 					</div>
 					if p.Monitor.TrackChanges {
-						<div><span class="text-muted">Track changes</span> <span class="text-brand ml-1">yes</span></div>
+						<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+							<span class="text-muted">Track changes</span>
+							<span class="text-brand">yes</span>
+						</div>
 					}
 					if p.Monitor.UpsideDown {
-						<div><span class="text-muted">Upside-down</span> <span class="text-yellow-400 ml-1">yes</span></div>
+						<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+							<span class="text-muted">Upside-down</span>
+							<span class="text-yellow-400">yes</span>
+						</div>
 					}
 					if p.Monitor.ResendInterval > 0 {
-						<div><span class="text-muted">Resend every</span> <span class="text-muted-light ml-1">{ fmt.Sprint(p.Monitor.ResendInterval) }s</span></div>
+						<div class="flex items-center justify-between gap-4 py-1 border-b border-line/60">
+							<span class="text-muted">Resend every</span>
+							<span class="text-muted-light tabular-nums">{ fmt.Sprint(p.Monitor.ResendInterval) }s</span>
+						</div>
 					}
 					if p.Monitor.Description != "" {
-						<div class="col-span-full">
+						<div class="md:col-span-2 pt-3">
 							<span class="text-muted block mb-2">Description</span>
 							<div class="leading-relaxed">@templ.Raw(RenderMarkdown(p.Monitor.Description))</div>
 						</div>
 					}
 					if len(p.Tags) > 0 {
-						<div class="col-span-full flex items-center gap-1.5">
+						<div class="md:col-span-2 flex items-center gap-1.5 flex-wrap pt-3">
 							<span class="text-muted">Tags</span>
 							for _, tag := range p.Tags {
-								<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-px rounded text-[11px] border border-line">
+								<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-px rounded-md text-2xs border border-line">
 									<span class="inline-block w-1.5 h-1.5 rounded-full" style={ "background-color: " + tag.Color }></span>
 									<span class="text-muted-light">{ tag.Name }</span>
 									if tag.Value != "" {
@@ -684,11 +722,11 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					}
 				</div>
 			</div>
-			<div class="border border-line-light rounded-xl mb-5 overflow-hidden">
+			<div class="panel mb-5">
 				<div class="px-4 py-2.5 border-b border-line flex items-center justify-between">
-					<h2 class="text-[11px] text-muted uppercase tracking-widest">Recent Checks</h2>
+					<h2 class="eyebrow">Recent Checks</h2>
 					if p.Checks != nil && p.Checks.Total > 0 {
-						<span class="text-[10px] text-muted/50 tabular-nums">{ fmt.Sprint(p.Checks.Total) } total</span>
+						<span class="text-2xs text-muted tabular-nums">{ fmt.Sprint(p.Checks.Total) } total</span>
 					}
 				</div>
 				if cks := p.checks(); len(cks) > 0 {
@@ -714,32 +752,32 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 										<td class="px-4 py-2">
 											<div class="flex items-center gap-2">
 												<div class={ "w-1.5 h-1.5 rounded-full", StatusDot(ck.Status) }></div>
-												<span class={ "text-[11px]", StatusColor(ck.Status) }>{ ck.Status }</span>
+												<span class={ "text-2xs", StatusColor(ck.Status) }>{ ck.Status }</span>
 											</div>
 										</td>
-										<td class="px-4 py-2 text-[11px] text-muted-light tabular-nums font-mono">{ FormatMs(ck.ResponseTime) }</td>
+										<td class="px-4 py-2 text-2xs text-muted-light tabular-nums font-mono">{ FormatMs(ck.ResponseTime) }</td>
 										if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
 											if ck.StatusCode != 0 {
-												<td class={ "px-4 py-2 text-[11px] tabular-nums font-mono", HttpStatusColor(ck.StatusCode) }>{ fmt.Sprint(ck.StatusCode) }</td>
+												<td class={ "px-4 py-2 text-2xs tabular-nums font-mono", HttpStatusColor(ck.StatusCode) }>{ fmt.Sprint(ck.StatusCode) }</td>
 											} else {
-												<td class="px-4 py-2 text-[11px] tabular-nums font-mono text-muted/30">—</td>
+												<td class="px-4 py-2 text-2xs tabular-nums font-mono text-muted">—</td>
 											}
 										}
 										if p.Monitor.Type == "tls" {
 											if ck.CertExpiry != nil {
-												<td class={ "px-4 py-2 text-[11px]", CertColor(ck.CertExpiry) }>{ fmt.Sprint(CertDays(ck.CertExpiry)) }d</td>
+												<td class={ "px-4 py-2 text-2xs", CertColor(ck.CertExpiry) }>{ fmt.Sprint(CertDays(ck.CertExpiry)) }d</td>
 											} else {
-												<td class="px-4 py-2 text-[11px] text-muted/30">—</td>
+												<td class="px-4 py-2 text-2xs text-muted">—</td>
 											}
 										}
-										<td class="px-4 py-2 text-[11px] text-muted truncate max-w-[200px]">
+										<td class="px-4 py-2 text-2xs text-muted truncate max-w-[200px]">
 											if ck.Message != "" {
 												{ ck.Message }
 											} else {
 												—
 											}
 										</td>
-										<td class="px-4 py-2 text-[11px] text-muted/60">{ TimeAgo(ck.CreatedAt) }</td>
+										<td class="px-4 py-2 text-2xs text-muted">{ TimeAgo(ck.CreatedAt) }</td>
 									</tr>
 								}
 							</tbody>
@@ -747,7 +785,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 					if p.Checks != nil && p.Checks.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">{ fmt.Sprintf("Page %d / %d", p.Checks.Page, p.Checks.TotalPages) }</span>
+							<span class="text-2xs text-muted tabular-nums">{ fmt.Sprintf("Page %d / %d", p.Checks.Page, p.Checks.TotalPages) }</span>
 							<div class="flex gap-1">
 								if p.Checks.Page > 1 {
 									@PrevPageBtn(p.checksPageHref(p.Checks.Page - 1))
@@ -759,32 +797,32 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						</div>
 					}
 				} else {
-					<div class="px-4 py-10 text-center text-muted text-[12px]">No check results yet</div>
+					<div class="px-4 py-10 text-center text-xs text-muted">No check results yet</div>
 				}
 			</div>
 			if chs := p.changes(); len(chs) > 0 {
-				<div class="border border-line-light rounded-xl overflow-hidden">
+				<div class="panel">
 					<div class="px-4 py-2.5 border-b border-line flex items-center justify-between">
-						<h2 class="text-[11px] text-muted uppercase tracking-widest">Content Changes</h2>
+						<h2 class="eyebrow">Content Changes</h2>
 						if p.Changes != nil && p.Changes.Total > 0 {
-							<span class="text-[10px] text-muted/50 tabular-nums">{ fmt.Sprint(p.Changes.Total) } total</span>
+							<span class="text-2xs text-muted tabular-nums">{ fmt.Sprint(p.Changes.Total) } total</span>
 						}
 					</div>
 					<div class="divide-y divide-line">
 						for _, ch := range chs {
 							<div class="px-4 py-2.5 flex items-center gap-3 min-w-0">
-								<span class="text-[10px] text-muted/60 whitespace-nowrap shrink-0 w-16">{ TimeAgo(ch.CreatedAt) }</span>
+								<span class="text-2xs text-muted whitespace-nowrap shrink-0 w-16">{ TimeAgo(ch.CreatedAt) }</span>
 								if ch.Diff != "" {
-									<code class="text-[11px] text-muted-light font-mono truncate">{ ch.Diff }</code>
+									<code class="text-2xs text-muted-light font-mono truncate">{ ch.Diff }</code>
 								} else {
-									<span class="text-[11px] text-muted/40">—</span>
+									<span class="text-2xs text-muted">—</span>
 								}
 							</div>
 						}
 					</div>
 					if p.Changes != nil && p.Changes.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">{ fmt.Sprintf("Page %d / %d", p.Changes.Page, p.Changes.TotalPages) }</span>
+							<span class="text-2xs text-muted tabular-nums">{ fmt.Sprintf("Page %d / %d", p.Changes.Page, p.Changes.TotalPages) }</span>
 							<div class="flex gap-1">
 								if p.Changes.Page > 1 {
 									@PrevPageBtn(p.changesPageHref(p.Changes.Page - 1))

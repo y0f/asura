@@ -8,7 +8,7 @@
 
 <p>Each endpoint requires a specific permission scope. A key's scopes come from its <code>role</code> (<code>admin</code> = all, <code>readonly</code> = the <code>.read</code> scopes) or from an explicit <code>permissions</code> list. The scopes are: <code>monitors.read</code>, <code>monitors.write</code>, <code>incidents.read</code>, <code>incidents.write</code>, <code>notifications.read</code>, <code>notifications.write</code>, <code>escalation_policies.read</code>, <code>escalation_policies.write</code>, <code>maintenance.read</code>, <code>maintenance.write</code>, and <code>metrics.read</code>. The permission required is noted per section below; read endpoints take the matching <code>.read</code> scope and writes take <code>.write</code>.</p>
 
-<h2>Health <span class="text-muted text-[11px] font-normal">(no auth)</span></h2>
+<h2>Health <span class="text-muted text-2xs font-normal">(no auth)</span></h2>
 
 <table>
   <thead>
@@ -19,7 +19,7 @@
   </tbody>
 </table>
 
-<h2>Heartbeat Ping <span class="text-muted text-[11px] font-normal">(no auth)</span></h2>
+<h2>Heartbeat Ping <span class="text-muted text-2xs font-normal">(no auth)</span></h2>
 
 <table>
   <thead>
@@ -32,7 +32,7 @@
 
 <p>Heartbeat (push) monitors expect periodic pings from your job or service. Hit this endpoint each time the job runs. The token is generated when the heartbeat monitor is created. Returns <code>{"status":"ok"}</code>; an unknown token returns <code>404</code>. No authentication is required so it can be called from anywhere (e.g. a cron job's curl).</p>
 
-<h2>Metrics <span class="text-muted text-[11px] font-normal">(read auth)</span></h2>
+<h2>Metrics <span class="text-muted text-2xs font-normal">(read auth)</span></h2>
 
 <table>
   <thead>

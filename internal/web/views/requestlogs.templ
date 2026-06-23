@@ -46,6 +46,17 @@ func (p RequestLogParams) groupFilterHref(group string) string {
 	return href
 }
 
+// clientIPHref filters to a specific client IP, preserving the range/group
+// filters but replacing (not appending to) any active IP filter.
+func (p RequestLogParams) clientIPHref(ip string) string {
+	href := fmt.Sprintf("%s/logs?range=%s", p.BasePath, p.TimeRange)
+	if p.Filter != "" {
+		href += "&group=" + p.Filter
+	}
+	href += "&ip=" + ip
+	return href
+}
+
 func (p RequestLogParams) pageHref(page int) string {
 	href := fmt.Sprintf("%s/logs?range=%s", p.BasePath, p.TimeRange)
 	if p.Filter != "" {
@@ -65,18 +76,17 @@ func (p RequestLogParams) ipFilterFormBase() string {
 templ RequestLogListPage(p RequestLogParams) {
 	@Layout(p.LayoutParams) {
 		<div>
-			<h1 class="text-[15px] font-medium text-white mb-5">Request Logs</h1>
 			if p.Stats != nil {
 				<div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-					<div class="border border-line-light rounded-xl px-4 py-3">
+					<div class="card px-4 py-3">
 						<div class="stat-label">Requests</div>
 						<div class="text-2xl font-semibold text-white tabular-nums">{ fmt.Sprint(p.Stats.TotalRequests) }</div>
 					</div>
-					<div class="border border-line-light rounded-xl px-4 py-3">
+					<div class="card px-4 py-3">
 						<div class="stat-label">Visitors</div>
 						<div class="text-2xl font-semibold text-muted-light tabular-nums">{ fmt.Sprint(p.Stats.UniqueVisitors) }</div>
 					</div>
-					<div class="border border-line-light rounded-xl px-4 py-3">
+					<div class="card px-4 py-3">
 						<div class="stat-label">Avg Latency</div>
 						<div class="text-2xl font-semibold text-muted-light tabular-nums">{ FormatMs(p.Stats.AvgLatencyMs) }</div>
 					</div>
@@ -118,8 +128,8 @@ templ RequestLogListPage(p RequestLogParams) {
 					</form>
 				}
 			</div>
-			<div class="border border-line-light rounded-xl overflow-hidden">
-				if logs := p.logs(); len(logs) > 0 {
+			if logs := p.logs(); len(logs) > 0 {
+				<div class="panel">
 					<div class="overflow-x-auto">
 						<table class="w-full min-w-[800px]">
 							<thead>
@@ -136,15 +146,15 @@ templ RequestLogListPage(p RequestLogParams) {
 							<tbody class="divide-y divide-line">
 								for _, log := range logs {
 									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-2.5 text-[12px] text-muted tabular-nums font-mono whitespace-nowrap">{ TimeAgo(log.CreatedAt) }</td>
-										<td class="px-4 py-2.5"><span class="text-[10px] font-medium tracking-wide px-1.5 py-px rounded border border-line text-muted-light">{ log.Method }</span></td>
-										<td class="px-4 py-2.5 text-[12px] text-muted-light font-mono truncate max-w-[250px]" title={ log.Path }>{ log.Path }</td>
-										<td class={ "px-4 py-2.5 text-[12px] font-mono tabular-nums", HttpStatusColor(log.StatusCode) }>{ fmt.Sprint(log.StatusCode) }</td>
-										<td class="px-4 py-2.5 text-[12px] text-muted tabular-nums font-mono">{ FormatMs(log.LatencyMs) }</td>
-										<td class="px-4 py-2.5 text-[11px] font-mono">
-											<a href={ templ.SafeURL(p.groupFilterHref(p.Filter) + "&ip=" + log.ClientIP) } class="text-muted hover:text-brand transition-colors">{ log.ClientIP }</a>
+										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono whitespace-nowrap">{ TimeAgo(log.CreatedAt) }</td>
+										<td class="px-4 py-2.5"><span class="badge badge-zinc">{ log.Method }</span></td>
+										<td class="px-4 py-2.5 text-xs text-muted-light font-mono truncate max-w-[250px]" title={ log.Path }>{ log.Path }</td>
+										<td class={ "px-4 py-2.5 text-xs font-mono tabular-nums", HttpStatusColor(log.StatusCode) }>{ fmt.Sprint(log.StatusCode) }</td>
+										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono">{ FormatMs(log.LatencyMs) }</td>
+										<td class="px-4 py-2.5 text-2xs font-mono">
+											<a href={ templ.SafeURL(p.clientIPHref(log.ClientIP)) } class="text-muted hover:text-brand transition-colors">{ log.ClientIP }</a>
 										</td>
-										<td class="px-4 py-2.5"><span class="text-[10px] font-medium tracking-wide px-1.5 py-px rounded border border-line text-muted">{ log.RouteGroup }</span></td>
+										<td class="px-4 py-2.5"><span class="badge badge-zinc">{ log.RouteGroup }</span></td>
 									</tr>
 								}
 							</tbody>
@@ -152,7 +162,7 @@ templ RequestLogListPage(p RequestLogParams) {
 					</div>
 					if p.Result != nil && p.Result.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">
+							<span class="text-2xs text-muted tabular-nums">
 								{ fmt.Sprintf("Page %d / %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total) }
 							</span>
 							<div class="flex gap-1">
@@ -165,13 +175,10 @@ templ RequestLogListPage(p RequestLogParams) {
 							</div>
 						</div>
 					}
-				} else {
-					<div class="px-4 py-16 text-center">
-						<svg class="w-6 h-6 mx-auto text-muted/20 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-						<p class="text-muted text-[12px]">No request logs found</p>
-					</div>
-				}
-			</div>
+				</div>
+			} else {
+				@EmptyState("No request logs yet", "", "")
+			}
 		</div>
 	}
 }

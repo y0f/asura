@@ -59,7 +59,7 @@
         <template x-for="item in navItems" :key="item.page">
           <a :href="'#' + item.page"
              :class="active === item.page ? 'bg-brand/10 text-brand border-brand/20' : 'text-muted-light hover:text-white hover:bg-surface-200/50 border-transparent'"
-             class="flex items-center gap-3 px-3 py-2 text-[13px] rounded-lg border transition-colors cursor-pointer"
+             class="flex items-center gap-3 px-3 py-2 text-sm rounded-lg border transition-colors cursor-pointer"
              @click="navigate(item.page); mobileOpen = false">
             <span x-html="item.icon" class="w-4 h-4 shrink-0"></span>
             <span x-text="item.label"></span>

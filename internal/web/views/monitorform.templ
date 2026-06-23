@@ -168,24 +168,24 @@ func intOrDefault(v, def int) string {
 templ MonitorFormPage(p MonitorFormParams) {
 	@Layout(p.LayoutParams) {
 		<div x-cloak x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled()) }>
-			<h1 class="text-[15px] font-medium text-white mb-5">{ p.Title }</h1>
 			<form method="POST"
 				if p.Monitor.ID != 0 {
 					action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Monitor.ID)) }
 				} else {
 					action={ templ.SafeURL(p.BasePath + "/monitors") }
 				}
-				class="max-w-4xl space-y-4">
-				@FormCard("") {
+				class="max-w-3xl mx-auto space-y-4 pb-28 md:pb-4">
+				<div class="card card-pad">
+					<h2 class="text-sm font-semibold text-white mb-4">General</h2>
 					<div class="space-y-4">
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label class="form-label">Name</label>
-								<input type="text" name="name" value={ p.Monitor.Name } required class="form-input" placeholder="My Website"/>
+								<label class="form-label" for="name">Name</label>
+								<input id="name" type="text" name="name" value={ p.Monitor.Name } required class="form-input" placeholder="My Website"/>
 							</div>
 							<div>
-								<label class="form-label">Type</label>
-								<select name="type" x-model="monitorType" class="form-select">
+								<label class="form-label" for="type">Type</label>
+								<select id="type" name="type" x-model="monitorType" class="form-select">
 									<optgroup label="Network">
 										<option value="http">HTTP(S)</option>
 										<option value="http_multi">HTTP Multi-Step</option>
@@ -219,47 +219,48 @@ templ MonitorFormPage(p MonitorFormParams) {
 							</div>
 						</div>
 						<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'" x-cloak>
-							<label class="form-label" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
-							<input type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
+							<label class="form-label" for="target" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
+							<input id="target" type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883'}[monitorType] || 'https://example.com'" class="form-input"/>
 						</div>
 						<div>
-							<label class="form-label">Description <span class="text-muted/50 font-normal">(optional)</span></label>
-							<textarea name="description" rows="2" maxlength="5000" placeholder="Runbook notes, context, links…" class="form-input resize-y">{ p.Monitor.Description }</textarea>
+							<label class="form-label" for="description">Description <span class="text-muted font-normal">(optional)</span></label>
+							<textarea id="description" name="description" rows="2" maxlength="5000" placeholder="Runbook notes, context, links…" class="form-input resize-y">{ p.Monitor.Description }</textarea>
 						</div>
 					</div>
-				}
+				</div>
 				<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'" x-cloak>
-					@FormCard("Check Schedule") {
+					<div class="card card-pad">
+						<h2 class="text-sm font-semibold text-white mb-4">Check Schedule</h2>
 						<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
 							<div>
-								<label class="form-label">Check every</label>
-								<div class="flex items-center gap-1.5">
-									<input type="number" name="interval" value={ intOrDefault(p.Monitor.Interval, 60) } min="5" max="86400" class="form-input tabular-nums flex-1"/>
-									<span class="text-[11px] text-muted shrink-0">sec</span>
+								<label class="form-label" for="interval">Check every</label>
+								<div class="relative">
+									<input id="interval" type="number" name="interval" value={ intOrDefault(p.Monitor.Interval, 60) } min="5" max="86400" class="form-input tabular-nums pr-10"/>
+									<span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-light">sec</span>
 								</div>
 							</div>
 							<div>
-								<label class="form-label">Timeout after</label>
-								<div class="flex items-center gap-1.5">
-									<input type="number" name="timeout" value={ intOrDefault(p.Monitor.Timeout, 10) } min="1" max="300" class="form-input tabular-nums flex-1"/>
-									<span class="text-[11px] text-muted shrink-0">sec</span>
+								<label class="form-label" for="timeout">Timeout after</label>
+								<div class="relative">
+									<input id="timeout" type="number" name="timeout" value={ intOrDefault(p.Monitor.Timeout, 10) } min="1" max="300" class="form-input tabular-nums pr-10"/>
+									<span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-light">sec</span>
 								</div>
 							</div>
 							<div>
-								<label class="form-label">Failures before alert</label>
-								<input type="number" name="failure_threshold" value={ intOrDefault(p.Monitor.FailureThreshold, 3) } min="1" class="form-input tabular-nums"/>
+								<label class="form-label" for="failure_threshold">Failures before alert</label>
+								<input id="failure_threshold" type="number" name="failure_threshold" value={ intOrDefault(p.Monitor.FailureThreshold, 3) } min="1" class="form-input tabular-nums"/>
 							</div>
 							<div>
-								<label class="form-label">Successes to recover</label>
-								<input type="number" name="success_threshold" value={ intOrDefault(p.Monitor.SuccessThreshold, 1) } min="1" class="form-input tabular-nums"/>
+								<label class="form-label" for="success_threshold">Successes to recover</label>
+								<input id="success_threshold" type="number" name="success_threshold" value={ intOrDefault(p.Monitor.SuccessThreshold, 1) } min="1" class="form-input tabular-nums"/>
 							</div>
 						</div>
-					}
+					</div>
 				</div>
-				<div class="border border-line-light rounded-xl p-5" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
+				<div class="card card-pad" x-show="monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'" x-cloak>
 					<div class="flex items-center justify-between mb-4">
-						<span class="text-[11px] text-muted uppercase tracking-widest">Settings</span>
-						<button type="button" @click="advancedSettings = !advancedSettings" class="text-[11px] text-brand hover:text-brand/80 transition-colors">
+						<h2 class="text-sm font-semibold text-white">Settings</h2>
+						<button type="button" @click="advancedSettings = !advancedSettings" class="text-2xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">
 							<span x-text="advancedSettings ? 'Form Mode' : 'Advanced (JSON)'"></span>
 						</button>
 					</div>
@@ -287,17 +288,17 @@ templ MonitorFormPage(p MonitorFormParams) {
 				</div>
 				@monitorAssertions(p)
 				<div x-data={ advancedSectionData(p) }>
-					<button type="button" @click="showAdvanced = !showAdvanced" :aria-expanded="showAdvanced ? 'true' : 'false'" aria-controls="routing-behavior-panel" class="flex items-center gap-2 w-full text-left px-1 py-1 group cursor-pointer">
-						<span class="text-[11px] text-muted-light/70 uppercase tracking-widest font-semibold group-hover:text-muted-light transition-colors">Routing &amp; Behavior</span>
-						<svg aria-hidden="true" class="w-3 h-3 text-muted-light/30 group-hover:text-muted-light/60 transition-transform" :class="showAdvanced && 'rotate-90'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+					<button type="button" @click="showAdvanced = !showAdvanced" :aria-expanded="showAdvanced ? 'true' : 'false'" aria-controls="routing-behavior-panel" aria-label="Toggle routing and behavior settings" class="flex items-center gap-2 w-full text-left px-2 py-2 rounded-control border-t border-line group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">
+						<span class="text-sm font-medium text-muted-light group-hover:text-white transition-colors">Routing &amp; behavior</span>
+						<svg aria-hidden="true" class="w-4 h-4 text-muted-light group-hover:text-white transition-transform" :class="showAdvanced && 'rotate-90'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
 					</button>
 					<div id="routing-behavior-panel" x-show="showAdvanced" x-cloak class="mt-4">
-						@FormCard("") {
+						<div class="card card-pad">
 							<div class="space-y-4">
 								if len(p.Groups) > 0 {
 									<div>
-										<label class="form-label">Group</label>
-										<select name="group_id" class="form-select">
+										<label class="form-label" for="group_id">Group</label>
+										<select id="group_id" name="group_id" class="form-select">
 											<option value="">No group</option>
 											for _, g := range p.Groups {
 												<option value={ fmt.Sprint(g.ID) }
@@ -317,7 +318,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 													<button type="button"
 														@click={ fmt.Sprintf("toggleTag(%d)", i) }
 														:class={ fmt.Sprintf("tags[%d].on ? 'border-brand/30 bg-brand/[0.06]' : 'border-line hover:border-line-light'", i) }
-														class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none">
+														class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs transition-colors cursor-pointer select-none">
 														<span class="w-1.5 h-1.5 rounded-full shrink-0" style={ "background-color: " + tag.Color }></span>
 														<span :class={ fmt.Sprintf("tags[%d].on ? 'text-white' : 'text-muted-light'", i) }>{ tag.Name }</span>
 													</button>
@@ -330,9 +331,9 @@ templ MonitorFormPage(p MonitorFormParams) {
 															<div class="flex items-center gap-2 rounded border border-line px-3 py-2">
 																<input type="hidden" name="tag_ids[]" :value="t.id"/>
 																<span class="w-1.5 h-1.5 rounded-full shrink-0" :style="'background-color:' + t.color"></span>
-																<span class="text-[11px] text-muted-light shrink-0" x-text="t.name"></span>
+																<span class="text-2xs text-muted-light shrink-0" x-text="t.name"></span>
 																<input type="text" name="tag_values[]" :value="t.val" @input="t.val = $event.target.value" placeholder="value (optional)"
-																	class="form-input py-1 text-[12px] flex-1 min-w-0"/>
+																	class="form-input py-1 text-xs flex-1 min-w-0"/>
 															</div>
 														</template>
 													</template>
@@ -340,13 +341,13 @@ templ MonitorFormPage(p MonitorFormParams) {
 											</template>
 										</div>
 									} else {
-										<p class="text-[12px] text-muted">No tags yet. <a href={ templ.SafeURL(p.BasePath + "/tags") } class="text-brand hover:text-brand/80 transition-colors">Create tags</a> to label monitors.</p>
+										<p class="text-xs text-muted">No tags yet. <a href={ templ.SafeURL(p.BasePath + "/tags") } class="text-brand hover:text-brand/80 transition-colors">Create tags</a> to label monitors.</p>
 									}
 								</div>
 								if len(p.Proxies) > 0 {
 									<div>
-										<label class="form-label">Proxy</label>
-										<select name="proxy_id" class="form-select">
+										<label class="form-label" for="proxy_id">Proxy</label>
+										<select id="proxy_id" name="proxy_id" class="form-select">
 											<option value="">No proxy</option>
 											for _, px := range p.Proxies {
 												<option value={ fmt.Sprint(px.ID) }
@@ -360,10 +361,10 @@ templ MonitorFormPage(p MonitorFormParams) {
 								if len(p.NotificationChannels) > 0 {
 									<div>
 										<label class="form-label">Notification Channels</label>
-										<p class="text-[10px] text-muted mb-2">Leave all unchecked to use all channels.</p>
+										<p class="text-2xs text-muted mb-2">Leave all unchecked to use all channels.</p>
 										<div class="flex flex-wrap gap-1.5">
 											for _, ch := range p.NotificationChannels {
-												<label class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer select-none has-checked:border-brand/30 has-checked:bg-brand/[0.06] border-line hover:border-line-light">
+												<label class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs transition-colors cursor-pointer select-none has-checked:border-brand/30 has-checked:bg-brand/[0.06] border-line hover:border-line-light">
 													<input type="checkbox" name="notification_channel_ids[]" value={ fmt.Sprint(ch.ID) }
 														if InSlice(ch.ID, p.SelectedChannelIDs) {
 															checked
@@ -378,8 +379,8 @@ templ MonitorFormPage(p MonitorFormParams) {
 								}
 								if len(p.EscalationPolicies) > 0 {
 									<div>
-										<label class="form-label">Escalation Policy</label>
-										<select name="escalation_policy_id" class="form-select">
+										<label class="form-label" for="escalation_policy_id">Escalation Policy</label>
+										<select id="escalation_policy_id" name="escalation_policy_id" class="form-select">
 											<option value="">None</option>
 											for _, ep := range p.EscalationPolicies {
 												<option value={ fmt.Sprint(ep.ID) }
@@ -391,8 +392,8 @@ templ MonitorFormPage(p MonitorFormParams) {
 									</div>
 								}
 								<div>
-									<label class="form-label">SLA Target (%)</label>
-									<select name="sla_target" class="form-select">
+									<label class="form-label" for="sla_target">SLA Target (%)</label>
+									<select id="sla_target" name="sla_target" class="form-select">
 										<option value="0" if p.Monitor.SLATarget == 0 { selected }>None</option>
 										<option value="99" if p.Monitor.SLATarget == 99 { selected }>99%</option>
 										<option value="99.5" if p.Monitor.SLATarget == 99.5 { selected }>99.5%</option>
@@ -402,19 +403,19 @@ templ MonitorFormPage(p MonitorFormParams) {
 									</select>
 								</div>
 								<div>
-									<label class="form-label">Anomaly Detection</label>
-									<select name="anomaly_sensitivity" class="form-select">
+									<label class="form-label" for="anomaly_sensitivity">Anomaly Detection</label>
+									<select id="anomaly_sensitivity" name="anomaly_sensitivity" class="form-select">
 										<option value="off" if p.Monitor.AnomalySensitivity == "" || p.Monitor.AnomalySensitivity == "off" { selected }>Off</option>
 										<option value="low" if p.Monitor.AnomalySensitivity == "low" { selected }>Low (3 sigma)</option>
 										<option value="medium" if p.Monitor.AnomalySensitivity == "medium" { selected }>Medium (2 sigma)</option>
 										<option value="high" if p.Monitor.AnomalySensitivity == "high" { selected }>High (1.5 sigma)</option>
 									</select>
-									<p class="text-[10px] text-muted mt-1">Mark as degraded when response time exceeds the rolling baseline</p>
+									<p class="text-2xs text-muted mt-1">Mark as degraded when response time exceeds the rolling baseline</p>
 								</div>
 								<div>
-									<label class="form-label">Resend Notification Interval (s)</label>
-									<input type="number" name="resend_interval" value={ fmt.Sprint(p.Monitor.ResendInterval) } min="0" placeholder="0 = disabled" class="form-input max-w-[200px] tabular-nums"/>
-									<p class="text-[10px] text-muted mt-1">Resend notification every N seconds while down (0 = disabled)</p>
+									<label class="form-label" for="resend_interval">Resend Notification Interval (s)</label>
+									<input id="resend_interval" type="number" name="resend_interval" value={ fmt.Sprint(p.Monitor.ResendInterval) } min="0" placeholder="0 = disabled" class="form-input max-w-[200px] tabular-nums"/>
+									<p class="text-2xs text-muted mt-1">Resend notification every N seconds while down (0 = disabled)</p>
 								</div>
 								<div class="flex items-center flex-wrap gap-5">
 									@SettingCheckbox("Track changes", "track_changes", p.Monitor.TrackChanges)
@@ -422,11 +423,11 @@ templ MonitorFormPage(p MonitorFormParams) {
 									@SettingCheckbox("Enable for agents", "agent_enabled", p.Monitor.AgentEnabled)
 								</div>
 							</div>
-						}
+						</div>
 					</div>
 				</div>
-				<div class="flex items-center gap-3">
-					<button type="submit" class="btn-primary px-5">
+				<div class="sticky bottom-0 inset-x-0 z-10 flex items-center gap-3 -mx-5 px-5 py-3 mt-2 border-t border-line bg-surface/95 backdrop-blur md:static md:mx-0 md:px-0 md:py-0 md:border-0 md:bg-transparent md:backdrop-blur-none">
+					<button type="submit" class="btn-primary btn-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">
 						if p.Monitor.ID != 0 {
 							Update
 						} else {
@@ -439,7 +440,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 						} else {
 							href={ templ.SafeURL(p.BasePath + "/monitors") }
 						}
-						class="text-[13px] text-muted hover:text-muted-light transition-colors">Cancel</a>
+						class="btn-secondary btn-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">Cancel</a>
 				</div>
 			</form>
 		</div>
@@ -450,8 +451,8 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'http'" x-cloak class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<label class="form-label">Method</label>
-				<select name="settings_method" x-model="httpMethod" class="form-select">
+				<label class="form-label" for="settings_method">Method</label>
+				<select id="settings_method" name="settings_method" x-model="httpMethod" class="form-select">
 					<option value="GET">GET</option>
 					<option value="POST">POST</option>
 					<option value="PUT">PUT</option>
@@ -462,8 +463,8 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				</select>
 			</div>
 			<div>
-				<label class="form-label">Expected Status</label>
-				<input type="number" name="settings_expected_status"
+				<label class="form-label" for="settings_expected_status">Expected Status</label>
+				<input id="settings_expected_status" type="number" name="settings_expected_status"
 					if p.HTTP.ExpectedStatus != 0 {
 						value={ fmt.Sprint(p.HTTP.ExpectedStatus) }
 					}
@@ -472,8 +473,8 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 		</div>
 		<div x-show="httpMethod === 'POST' || httpMethod === 'PUT' || httpMethod === 'PATCH'" x-cloak class="space-y-4">
 			<div>
-				<label class="form-label">Body Encoding</label>
-				<select name="settings_body_encoding" class="form-select">
+				<label class="form-label" for="settings_body_encoding">Body Encoding</label>
+				<select id="settings_body_encoding" name="settings_body_encoding" class="form-select">
 					<option value="json" selected?={ p.HTTP.BodyEncoding == "json" }>JSON</option>
 					<option value="xml" selected?={ p.HTTP.BodyEncoding == "xml" }>XML</option>
 					<option value="form" selected?={ p.HTTP.BodyEncoding == "form" }>Form</option>
@@ -481,15 +482,15 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				</select>
 			</div>
 			<div>
-				<label class="form-label">Body</label>
-				<textarea name="settings_body" rows="3" placeholder="Request body" class="form-input font-mono resize-y">{ p.HTTP.Body }</textarea>
+				<label class="form-label" for="settings_body">Body</label>
+				<textarea id="settings_body" name="settings_body" rows="3" placeholder="Request body" class="form-input font-mono resize-y">{ p.HTTP.Body }</textarea>
 			</div>
 		</div>
 		@HeaderListEditor("httpHeaders", "settings_header_key[]", "settings_header_value[]")
 		<div class="space-y-3">
 			<div>
-				<label class="form-label">Authentication</label>
-				<select name="settings_auth_method" x-model="authMethod" class="form-select">
+				<label class="form-label" for="settings_auth_method">Authentication</label>
+				<select id="settings_auth_method" name="settings_auth_method" x-model="authMethod" class="form-select">
 					<option value="none">None</option>
 					<option value="basic">Basic Auth</option>
 					<option value="bearer">Bearer Token</option>
@@ -511,12 +512,12 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				</div>
 				<div class="grid grid-cols-2 gap-4">
 					<div>
-						<label class="form-label">Scopes <span class="text-muted/50 font-normal">(optional)</span></label>
-						<input type="text" name="settings_oauth2_scopes" value={ p.HTTP.OAuth2Scopes } placeholder="read write" class="form-input"/>
+						<label class="form-label" for="settings_oauth2_scopes">Scopes <span class="text-muted font-normal">(optional)</span></label>
+						<input id="settings_oauth2_scopes" type="text" name="settings_oauth2_scopes" value={ p.HTTP.OAuth2Scopes } placeholder="read write" class="form-input"/>
 					</div>
 					<div>
-						<label class="form-label">Audience <span class="text-muted/50 font-normal">(optional)</span></label>
-						<input type="text" name="settings_oauth2_audience" value={ p.HTTP.OAuth2Audience } placeholder="https://api.example.com" class="form-input"/>
+						<label class="form-label" for="settings_oauth2_audience">Audience <span class="text-muted font-normal">(optional)</span></label>
+						<input id="settings_oauth2_audience" type="text" name="settings_oauth2_audience" value={ p.HTTP.OAuth2Audience } placeholder="https://api.example.com" class="form-input"/>
 					</div>
 				</div>
 			</div>
@@ -528,28 +529,28 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 						checked
 					}
 					class="form-checkbox"/>
-				<span class="text-[12px] text-muted-light">Mutual TLS (mTLS)</span>
+				<span class="text-xs text-muted-light">Mutual TLS (mTLS)</span>
 			</label>
 			<div x-show="mtlsEnabled" x-cloak class="space-y-3">
 				<div>
-					<label class="form-label">Client Certificate <span class="text-muted/50 font-normal">(PEM)</span></label>
-					<textarea name="settings_mtls_client_cert" rows="4" placeholder="-----BEGIN CERTIFICATE-----" class="form-input font-mono text-[12px] resize-y">{ p.HTTP.MTLSClientCert }</textarea>
+					<label class="form-label" for="settings_mtls_client_cert">Client Certificate <span class="text-muted font-normal">(PEM)</span></label>
+					<textarea id="settings_mtls_client_cert" name="settings_mtls_client_cert" rows="4" placeholder="-----BEGIN CERTIFICATE-----" class="form-input font-mono text-xs resize-y">{ p.HTTP.MTLSClientCert }</textarea>
 				</div>
 				<div>
-					<label class="form-label">Client Key <span class="text-muted/50 font-normal">(PEM)</span></label>
-					<textarea name="settings_mtls_client_key" rows="4" placeholder="-----BEGIN PRIVATE KEY-----" class="form-input font-mono text-[12px] resize-y">{ p.HTTP.MTLSClientKey }</textarea>
+					<label class="form-label" for="settings_mtls_client_key">Client Key <span class="text-muted font-normal">(PEM)</span></label>
+					<textarea id="settings_mtls_client_key" name="settings_mtls_client_key" rows="4" placeholder="-----BEGIN PRIVATE KEY-----" class="form-input font-mono text-xs resize-y">{ p.HTTP.MTLSClientKey }</textarea>
 				</div>
 				<div>
-					<label class="form-label">CA Certificate <span class="text-muted/50 font-normal">(optional, PEM)</span></label>
-					<textarea name="settings_mtls_ca_cert" rows="3" placeholder="-----BEGIN CERTIFICATE-----" class="form-input font-mono text-[12px] resize-y">{ p.HTTP.MTLSCACert }</textarea>
-					<p class="text-[10px] text-muted mt-1">Custom CA for self-signed server certificates</p>
+					<label class="form-label" for="settings_mtls_ca_cert">CA Certificate <span class="text-muted font-normal">(optional, PEM)</span></label>
+					<textarea id="settings_mtls_ca_cert" name="settings_mtls_ca_cert" rows="3" placeholder="-----BEGIN CERTIFICATE-----" class="form-input font-mono text-xs resize-y">{ p.HTTP.MTLSCACert }</textarea>
+					<p class="text-2xs text-muted mt-1">Custom CA for self-signed server certificates</p>
 				</div>
 			</div>
 		</div>
 		<div>
-			<label class="form-label">Max Redirects</label>
-			<input type="number" name="settings_max_redirects" value={ fmt.Sprint(p.MaxRedirects) } min="0" max="30" class="form-input max-w-[200px] tabular-nums"/>
-			<p class="text-[10px] text-muted mt-1">0 = don't follow redirects</p>
+			<label class="form-label" for="settings_max_redirects">Max Redirects</label>
+			<input id="settings_max_redirects" type="number" name="settings_max_redirects" value={ fmt.Sprint(p.MaxRedirects) } min="0" max="30" class="form-input max-w-[200px] tabular-nums"/>
+			<p class="text-2xs text-muted mt-1">0 = don't follow redirects</p>
 		</div>
 		<div class="flex items-center flex-wrap gap-5">
 			@SettingCheckbox("Ignore TLS/SSL errors", "settings_skip_tls_verify", p.HTTP.SkipTLSVerify)
@@ -569,8 +570,8 @@ templ monitorDNSSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'dns'" x-cloak class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<label class="form-label">Record Type</label>
-				<select name="settings_record_type" class="form-select">
+				<label class="form-label" for="settings_record_type">Record Type</label>
+				<select id="settings_record_type" name="settings_record_type" class="form-select">
 					<option value="A" selected?={ p.DNS.RecordType == "A" }>A</option>
 					<option value="AAAA" selected?={ p.DNS.RecordType == "AAAA" }>AAAA</option>
 					<option value="CNAME" selected?={ p.DNS.RecordType == "CNAME" }>CNAME</option>
@@ -581,8 +582,8 @@ templ monitorDNSSettings(p MonitorFormParams) {
 				</select>
 			</div>
 			<div>
-				<label class="form-label">DNS Server</label>
-				<input type="text" name="settings_dns_server" value={ p.DNS.Server } placeholder="Optional (e.g. 8.8.8.8)" class="form-input"/>
+				<label class="form-label" for="settings_dns_server">DNS Server</label>
+				<input id="settings_dns_server" type="text" name="settings_dns_server" value={ p.DNS.Server } placeholder="Optional (e.g. 8.8.8.8)" class="form-input"/>
 			</div>
 		</div>
 	</div>
@@ -606,9 +607,9 @@ templ monitorCommandSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'command'" x-cloak class="space-y-4">
 		@SettingText("Command", "settings_command", p.Cmd.Command, "/usr/bin/check-health", "text")
 		<div>
-			<label class="form-label">Arguments</label>
-			<input type="text" name="settings_args" value={ p.cmdArgsStr() } placeholder="--verbose, --timeout=5" class="form-input"/>
-			<p class="text-[10px] text-muted mt-1">Comma-separated</p>
+			<label class="form-label" for="settings_args">Arguments</label>
+			<input id="settings_args" type="text" name="settings_args" value={ p.cmdArgsStr() } placeholder="--verbose, --timeout=5" class="form-input"/>
+			<p class="text-2xs text-muted mt-1">Comma-separated</p>
 		</div>
 	</div>
 }
@@ -616,14 +617,14 @@ templ monitorCommandSettings(p MonitorFormParams) {
 templ monitorDockerSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'docker'" x-cloak class="space-y-4">
 		<div>
-			<label class="form-label">Container Name / ID</label>
-			<input type="text" name="settings_container_name" value={ p.Docker.ContainerName } placeholder="my-container or abc123def" class="form-input"/>
-			<p class="text-[10px] text-muted mt-1">Overrides target if set</p>
+			<label class="form-label" for="settings_container_name">Container Name / ID</label>
+			<input id="settings_container_name" type="text" name="settings_container_name" value={ p.Docker.ContainerName } placeholder="my-container or abc123def" class="form-input"/>
+			<p class="text-2xs text-muted mt-1">Overrides target if set</p>
 		</div>
 		<div>
-			<label class="form-label">Docker Socket Path</label>
-			<input type="text" name="settings_socket_path" value={ p.Docker.SocketPath } placeholder="/var/run/docker.sock" class="form-input"/>
-			<p class="text-[10px] text-muted mt-1">Default: /var/run/docker.sock</p>
+			<label class="form-label" for="settings_socket_path">Docker Socket Path</label>
+			<input id="settings_socket_path" type="text" name="settings_socket_path" value={ p.Docker.SocketPath } placeholder="/var/run/docker.sock" class="form-input"/>
+			<p class="text-2xs text-muted mt-1">Default: /var/run/docker.sock</p>
 		</div>
 		<div class="flex items-center flex-wrap gap-5">
 			@SettingCheckbox("Check container health status", "settings_check_health", p.Docker.CheckHealth)
@@ -634,9 +635,9 @@ templ monitorDockerSettings(p MonitorFormParams) {
 templ monitorDomainSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'domain'" x-cloak class="space-y-4">
 		<div>
-			<label class="form-label">Warning Days Before Expiry</label>
-			<input type="number" name="settings_domain_warn_days" value={ intOrDefault(p.Domain.WarnDaysBefore, 30) } min="1" max="365" class="form-input max-w-[200px] tabular-nums"/>
-			<p class="text-[10px] text-muted mt-1">Mark as degraded when domain expires within this many days</p>
+			<label class="form-label" for="settings_domain_warn_days">Warning Days Before Expiry</label>
+			<input id="settings_domain_warn_days" type="number" name="settings_domain_warn_days" value={ intOrDefault(p.Domain.WarnDaysBefore, 30) } min="1" max="365" class="form-input max-w-[200px] tabular-nums"/>
+			<p class="text-2xs text-muted mt-1">Mark as degraded when domain expires within this many days</p>
 		</div>
 	</div>
 }
@@ -644,9 +645,9 @@ templ monitorDomainSettings(p MonitorFormParams) {
 templ monitorGRPCSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'grpc'" x-cloak class="space-y-4">
 		<div>
-			<label class="form-label">Service Name</label>
-			<input type="text" name="settings_grpc_service" value={ p.GRPC.ServiceName } placeholder="Leave empty for overall health" class="form-input"/>
-			<p class="text-[10px] text-muted mt-1">gRPC service to check (empty = all services)</p>
+			<label class="form-label" for="settings_grpc_service">Service Name</label>
+			<input id="settings_grpc_service" type="text" name="settings_grpc_service" value={ p.GRPC.ServiceName } placeholder="Leave empty for overall health" class="form-input"/>
+			<p class="text-2xs text-muted mt-1">gRPC service to check (empty = all services)</p>
 		</div>
 		<div class="flex items-center flex-wrap gap-5">
 			@SettingCheckbox("Use TLS", "settings_grpc_tls", p.GRPC.UseTLS)
@@ -673,28 +674,31 @@ templ monitorMQTTSettings(p MonitorFormParams) {
 }
 
 templ monitorAssertions(p MonitorFormParams) {
-	<div class="border border-line-light rounded-xl p-5">
+	<div class="card card-pad">
 		<div class="flex items-center justify-between mb-4">
-			<span class="text-[11px] text-muted uppercase tracking-widest">Conditions</span>
-			<button type="button" @click="advancedAssertions = !advancedAssertions" class="text-[11px] text-brand hover:text-brand/80 transition-colors">
+			<h2 class="text-sm font-semibold text-white">Conditions</h2>
+			<button type="button" x-show="conditions.groups.length > 0 || advancedAssertions" @click="advancedAssertions = !advancedAssertions" class="text-2xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">
 				<span x-text="advancedAssertions ? 'Form Mode' : 'Advanced (JSON)'"></span>
 			</button>
 		</div>
 		<input type="hidden" name="assertions_mode" :value="advancedAssertions ? 'json' : 'form'"/>
 		<div x-show="advancedAssertions" x-cloak>
-			<textarea name="assertions_json" rows="8" placeholder="{}" class="form-input font-mono text-[12px] resize-y">{ p.AssertionsRaw }</textarea>
+			<textarea name="assertions_json" rows="8" placeholder="{}" class="form-input font-mono text-xs resize-y">{ p.AssertionsRaw }</textarea>
 		</div>
 		<div x-show="!advancedAssertions">
 			<input type="hidden" name="group_count" :value="conditions.groups.length"/>
 			<input type="hidden" name="condition_set_operator" :value="conditions.operator"/>
-			<div x-show="conditions.groups.length === 0" class="text-[12px] text-muted py-2">No conditions configured</div>
+			<div x-show="conditions.groups.length === 0" class="flex flex-col items-center gap-3 text-center">
+				<div class="px-4 py-10 text-center text-xs text-muted">No conditions yet</div>
+				<button type="button" @click="addGroup()" class="btn-secondary btn-sm btn-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">+ Add Group</button>
+			</div>
 			<div class="space-y-1">
 				<template x-for="(g, gi) in conditions.groups" :key="gi">
 					<div>
 						<!-- AND/OR connector between groups -->
 						<div x-show="gi > 0" class="flex items-center gap-2 my-2">
 							<div class="flex-1 border-t border-line/30"></div>
-							<select x-model="conditions.operator" class="form-select py-0.5 px-2 text-[11px] font-medium w-20">
+							<select x-model="conditions.operator" class="form-select py-0.5 px-2 text-2xs font-medium w-20">
 								<option value="and">AND</option>
 								<option value="or">OR</option>
 							</select>
@@ -703,17 +707,17 @@ templ monitorAssertions(p MonitorFormParams) {
 						<!-- Per-group hidden structural inputs -->
 						<input type="hidden" :name="'group_' + gi + '_operator'" :value="g.operator"/>
 						<input type="hidden" :name="'group_' + gi + '_count'" :value="g.conditions.length"/>
-						<div class="border border-line/60 rounded-lg overflow-hidden">
+						<div class="panel overflow-hidden">
 							<div class="flex items-center justify-between px-3 py-2 bg-surface-200/40 border-b border-line/40">
 								<div class="flex items-center gap-2">
-									<span class="text-[11px] text-muted">Match</span>
-									<select x-model="g.operator" class="form-select py-0.5 px-2 text-[11px] font-medium w-20">
+									<span class="text-2xs text-muted">Match</span>
+									<select x-model="g.operator" class="form-select py-0.5 px-2 text-2xs font-medium w-20">
 										<option value="and">ALL</option>
 										<option value="or">ANY</option>
 									</select>
-									<span class="text-[11px] text-muted">conditions</span>
+									<span class="text-2xs text-muted">conditions</span>
 								</div>
-								<button type="button" @click="conditions.groups.splice(gi, 1)" class="text-muted hover:text-red-400 transition-colors" title="Remove group">
+								<button type="button" @click="conditions.groups.splice(gi, 1)" class="row-action hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50" title="Remove group" aria-label="Remove group">
 									<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 								</button>
 							</div>
@@ -721,7 +725,7 @@ templ monitorAssertions(p MonitorFormParams) {
 								<template x-for="(c, ci) in g.conditions" :key="ci">
 									<div class="flex items-start gap-2">
 										<div class="flex-1 grid grid-cols-2 gap-1.5">
-											<select :name="'group_' + gi + '_type_' + ci" x-model="c.type" class="form-select py-1.5 text-[12px]">
+											<select :name="'group_' + gi + '_type_' + ci" x-model="c.type" class="form-select py-1.5 text-xs">
 												<option value="status_code">Status Code</option>
 												<option value="body_contains">Body Contains</option>
 												<option value="body_regex">Body Regex</option>
@@ -731,36 +735,36 @@ templ monitorAssertions(p MonitorFormParams) {
 												<option value="cert_expiry">Cert Expiry (days)</option>
 												<option value="dns_record">DNS Record</option>
 											</select>
-											<select :name="'group_' + gi + '_operator_' + ci" x-model="c.operator" class="form-select py-1.5 text-[12px]">
+											<select :name="'group_' + gi + '_operator_' + ci" x-model="c.operator" class="form-select py-1.5 text-xs">
 												<template x-for="op in operatorsFor(c.type)" :key="op[0]">
 													<option :value="op[0]" x-text="op[1]"></option>
 												</template>
 											</select>
 											<div x-show="needsTarget(c.type)">
-												<input type="text" :name="'group_' + gi + '_target_' + ci" x-model="c.target" placeholder="Header name or JSON path" class="form-input py-1.5 text-[12px]"/>
+												<input type="text" :name="'group_' + gi + '_target_' + ci" x-model="c.target" placeholder="Header name or JSON path" class="form-input py-1.5 text-xs"/>
 											</div>
 											<div x-show="needsValue(c.operator)" :class="needsTarget(c.type) ? '' : 'col-span-2'">
-												<input type="text" :name="'group_' + gi + '_value_' + ci" x-model="c.value" placeholder="Expected value" class="form-input py-1.5 text-[12px]"/>
+												<input type="text" :name="'group_' + gi + '_value_' + ci" x-model="c.value" placeholder="Expected value" class="form-input py-1.5 text-xs"/>
 											</div>
 										</div>
 										<div class="flex items-center gap-2 pt-1.5 shrink-0">
 											<label class="flex items-center gap-1 cursor-pointer" title="Soft: mark as degraded instead of down">
 												<input type="checkbox" :name="'group_' + gi + '_degraded_' + ci" value="on" :checked="c.degraded" @change="c.degraded = $event.target.checked" class="form-checkbox w-3 h-3"/>
-												<span class="text-[11px] text-muted">soft</span>
+												<span class="text-2xs text-muted">soft</span>
 											</label>
-											<button type="button" @click="g.conditions.splice(ci, 1)" class="text-muted hover:text-red-400 transition-colors" title="Remove condition">
+											<button type="button" @click="g.conditions.splice(ci, 1)" class="row-action hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50" title="Remove condition" aria-label="Remove condition">
 												<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 											</button>
 										</div>
 									</div>
 								</template>
-								<button type="button" @click="g.conditions.push(newCond())" class="text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Condition</button>
+								<button type="button" @click="g.conditions.push(newCond())" class="text-xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">+ Add Condition</button>
 							</div>
 						</div>
 					</div>
 				</template>
 			</div>
-			<button type="button" @click="addGroup()" class="mt-3 text-[12px] text-brand hover:text-brand/80 transition-colors">+ Add Group</button>
+			<button type="button" x-show="conditions.groups.length > 0" @click="addGroup()" class="mt-3 text-xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">+ Add Group</button>
 		</div>
 	</div>
 }
@@ -769,17 +773,17 @@ templ monitorSMTPSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'smtp'" x-cloak class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<label class="form-label">Port</label>
-				<input type="number" name="settings_smtp_port"
+				<label class="form-label" for="settings_smtp_port">Port</label>
+				<input id="settings_smtp_port" type="number" name="settings_smtp_port"
 					if p.SMTP.Port != 0 {
 						value={ fmt.Sprint(p.SMTP.Port) }
 					}
 					placeholder="25" min="1" max="65535" class="form-input tabular-nums"/>
-				<p class="text-[10px] text-muted mt-1">25 (plain), 465 (SMTPS), 587 (submission)</p>
+				<p class="text-2xs text-muted mt-1">25 (plain), 465 (SMTPS), 587 (submission)</p>
 			</div>
 			<div>
-				<label class="form-label">Expected Banner</label>
-				<input type="text" name="settings_smtp_expect_banner" value={ p.SMTP.ExpectBanner } placeholder="Optional" class="form-input"/>
+				<label class="form-label" for="settings_smtp_expect_banner">Expected Banner</label>
+				<input id="settings_smtp_expect_banner" type="text" name="settings_smtp_expect_banner" value={ p.SMTP.ExpectBanner } placeholder="Optional" class="form-input"/>
 			</div>
 		</div>
 		@SettingCheckbox("Require STARTTLS", "settings_smtp_starttls", p.SMTP.STARTTLS)
@@ -789,9 +793,9 @@ templ monitorSMTPSettings(p MonitorFormParams) {
 templ monitorSSHSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'ssh'" x-cloak class="space-y-4">
 		<div>
-			<label class="form-label">Expected Host Key Fingerprint</label>
-			<input type="text" name="settings_ssh_fingerprint" value={ p.SSH.ExpectedFingerprint } placeholder="Optional SHA-256 hex fingerprint" class="form-input font-mono"/>
-			<p class="text-[10px] text-muted mt-1">Leave empty to accept any host key</p>
+			<label class="form-label" for="settings_ssh_fingerprint">Expected Host Key Fingerprint</label>
+			<input id="settings_ssh_fingerprint" type="text" name="settings_ssh_fingerprint" value={ p.SSH.ExpectedFingerprint } placeholder="Optional SHA-256 hex fingerprint" class="form-input font-mono"/>
+			<p class="text-2xs text-muted mt-1">Leave empty to accept any host key</p>
 		</div>
 	</div>
 }
@@ -808,7 +812,7 @@ templ monitorPostgreSQLSettings(p MonitorFormParams) {
 			@SettingText("Username", "settings_pg_username", p.PostgreSQL.Username, "postgres", "text")
 			@SettingText("Database", "settings_pg_database", p.PostgreSQL.Database, "postgres", "text")
 		</div>
-		<p class="text-[10px] text-muted">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p>
+		<p class="text-2xs text-muted">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p>
 	</div>
 }
 

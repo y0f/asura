@@ -50,52 +50,53 @@ func (p AuditLogParams) filterHref(timeRange, action, entity string) string {
 	return href
 }
 
-func auditActionColor(action string) string {
+// auditBadgeVariant maps an audit action to a shared .badge-* variant by semantic
+// group (create/positive, destroy, mutate, auth-success, auth-failure, neutral) so
+// every action - including high-frequency ones like login_success/logout - gets an
+// intentional color instead of falling through to an un-themed default.
+func auditBadgeVariant(action string) string {
 	switch action {
-	case "create", "clone":
-		return "text-emerald-400 border-emerald-500/20 bg-emerald-500/[0.06]"
-	case "delete":
-		return "text-red-400 border-red-500/20 bg-red-500/[0.06]"
-	case "update":
-		return "text-blue-400 border-blue-500/20 bg-blue-500/[0.06]"
-	case "pause":
-		return "text-yellow-400 border-yellow-500/20 bg-yellow-500/[0.06]"
-	case "resume":
-		return "text-emerald-400 border-emerald-500/20 bg-emerald-500/[0.06]"
+	case "create", "clone", "resume", "resolve", "import", "login_success":
+		return "badge-emerald"
+	case "delete", "login_failed":
+		return "badge-red"
+	case "update", "export":
+		return "badge-blue"
+	case "pause", "acknowledge":
+		return "badge-yellow"
+	case "logout":
+		return "badge-zinc"
 	default:
-		return "text-muted border-line bg-surface-200/30"
+		return "badge-zinc"
 	}
 }
 
 templ AuditLogPage(p AuditLogParams) {
 	@Layout(p.LayoutParams) {
 		<div>
-			<h1 class="text-[15px] font-medium text-white mb-5">Audit Log</h1>
 			<div class="flex flex-wrap items-center gap-3 mb-3">
-				<div class="flex gap-1.5">
-					for _, tr := range []string{"24h", "7d", "30d"} {
-						<a href={ templ.SafeURL(p.filterHref(tr, p.Filter.Action, p.Filter.Entity)) }
-							class={ "filter-tab", templ.KV("filter-active", p.TimeRange == tr), templ.KV("filter-inactive", p.TimeRange != tr) }>
-							{ tr }
-						</a>
-					}
+				<div class="overflow-x-auto no-scrollbar -mx-1 px-1">
+					<div class="flex gap-1.5">
+						for _, tr := range []string{"24h", "7d", "30d"} {
+							<a href={ templ.SafeURL(p.filterHref(tr, p.Filter.Action, p.Filter.Entity)) }
+								class={ "filter-tab shrink-0", templ.KV("filter-active", p.TimeRange == tr), templ.KV("filter-inactive", p.TimeRange != tr) }>
+								{ tr }
+							</a>
+						}
+					</div>
 				</div>
 				<div class="h-4 w-px bg-line"></div>
 				<form method="GET" action={ templ.SafeURL(p.BasePath + "/audit") } class="flex items-center gap-2">
 					<input type="hidden" name="range" value={ p.TimeRange }/>
 					<select name="action" onchange="this.form.submit()"
-						class={ "form-select px-2.5 py-1 text-[11px] border rounded transition-colors focus:outline-hidden",
-							templ.KV("text-brand border-brand/30 bg-brand/[0.04]", p.Filter.Action != ""),
-							templ.KV("text-muted border-line bg-surface hover:text-muted-light", p.Filter.Action == "") }>
+						class={ "form-select-sm", templ.KV("text-brand border-brand/30", p.Filter.Action != "") }>
 						<option value="">All actions</option>
 						for _, a := range []string{"create", "update", "delete", "pause", "resume", "clone", "acknowledge", "resolve", "export", "import"} {
 							<option value={ a } selected?={ p.Filter.Action == a }>{ a }</option>
 						}
 					</select>
 					<select name="entity" onchange="this.form.submit()"
-						class={ "form-select px-2.5 py-1 text-[11px] border rounded transition-colors focus:outline-hidden",
-							templ.KV("text-brand border-brand/30 bg-brand/[0.04]", p.Filter.Entity != ""),
-							templ.KV("text-muted border-line bg-surface hover:text-muted-light", p.Filter.Entity == "") }>
+						class={ "form-select-sm", templ.KV("text-brand border-brand/30", p.Filter.Entity != "") }>
 						<option value="">All entities</option>
 						for _, e := range []string{"monitor", "monitor_group", "incident", "notification_channel", "maintenance_window", "proxy", "status_page", "tag", "config"} {
 							<option value={ e } selected?={ p.Filter.Entity == e }>{ e }</option>
@@ -104,55 +105,52 @@ templ AuditLogPage(p AuditLogParams) {
 				</form>
 				if p.Filter.Action != "" || p.Filter.Entity != "" {
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/audit?range=%s", p.BasePath, p.TimeRange)) }
-						class="text-[11px] text-muted hover:text-muted-light transition-colors">
+						class="text-2xs text-muted hover:text-muted-light transition-colors">
 						Clear filters
 					</a>
 				}
 				if p.Result != nil {
-					<span class="text-[11px] text-muted ml-auto">{ fmt.Sprintf("%d entries", p.Result.Total) }</span>
+					<span class="text-2xs text-muted ml-auto">{ fmt.Sprintf("%d entries", p.Result.Total) }</span>
 				}
 			</div>
-			<div class="border border-line-light rounded-xl overflow-hidden">
-				if entries := p.entries(); len(entries) > 0 {
+			if entries := p.entries(); len(entries) > 0 {
+				<div class="panel max-w-5xl">
 					<div class="overflow-x-auto">
-						<table class="w-full min-w-[700px]">
+						<table class="w-full min-w-[640px]">
 							<thead>
 								<tr class="border-b border-line text-left">
 									<th class="th">Time</th>
 									<th class="th">Action</th>
 									<th class="th">Entity</th>
-									<th class="th">ID</th>
 									<th class="th">API Key</th>
-									<th class="th">Detail</th>
+									<th class="th text-right">Detail</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-line">
 								for _, e := range entries {
-									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-2.5 text-[12px] text-muted tabular-nums font-mono whitespace-nowrap" title={ e.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }>{ TimeAgo(e.CreatedAt) }</td>
+									<tr class="transition-colors">
+										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono whitespace-nowrap" title={ e.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }>{ TimeAgo(e.CreatedAt) }</td>
 										<td class="px-4 py-2.5">
-											<span class={ "text-[10px] font-medium tracking-wide px-1.5 py-px rounded border", auditActionColor(e.Action) }>{ e.Action }</span>
+											<span class={ "badge", auditBadgeVariant(e.Action) }>{ e.Action }</span>
 										</td>
-										<td class="px-4 py-2.5 text-[12px] text-muted-light font-mono">{ e.Entity }</td>
-										<td class="px-4 py-2.5 text-[12px] text-muted tabular-nums font-mono">
+										<td class="px-4 py-2.5 text-xs text-muted-light font-mono whitespace-nowrap">
+											{ e.Entity }
 											if e.EntityID > 0 {
-												{ fmt.Sprint(e.EntityID) }
-											} else {
-												<span class="text-muted/40">—</span>
+												<span class="text-muted">{ fmt.Sprintf("#%d", e.EntityID) }</span>
 											}
 										</td>
-										<td class="px-4 py-2.5 text-[12px] text-muted font-mono">
+										<td class="px-4 py-2.5 text-xs text-muted font-mono">
 											if e.APIKeyName != "" {
 												{ e.APIKeyName }
 											} else {
-												<span class="text-muted/40">—</span>
+												<span class="text-muted">-</span>
 											}
 										</td>
-										<td class="px-4 py-2.5 text-[12px] text-muted font-mono truncate max-w-[200px]">
+										<td class="px-4 py-2.5 text-xs text-muted font-mono text-right">
 											if e.Detail != "" {
-												<span title={ e.Detail }>{ e.Detail }</span>
+												<span class="inline-block truncate max-w-[280px] align-bottom" title={ e.Detail }>{ e.Detail }</span>
 											} else {
-												<span class="text-muted/40">—</span>
+												<span class="text-muted">-</span>
 											}
 										</td>
 									</tr>
@@ -162,7 +160,7 @@ templ AuditLogPage(p AuditLogParams) {
 					</div>
 					if p.Result != nil && p.Result.TotalPages > 1 {
 						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-[11px] text-muted tabular-nums">
+							<span class="text-2xs text-muted tabular-nums">
 								{ fmt.Sprintf("Page %d / %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total) }
 							</span>
 							<div class="flex gap-1">
@@ -175,13 +173,10 @@ templ AuditLogPage(p AuditLogParams) {
 							</div>
 						</div>
 					}
-				} else {
-					<div class="px-4 py-16 text-center">
-						<svg class="w-6 h-6 mx-auto text-muted/20 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-						<p class="text-muted text-[12px]">No audit entries found</p>
-					</div>
-				}
-			</div>
+				</div>
+			} else {
+				@EmptyState("No audit entries yet", "", "")
+			}
 		</div>
 	}
 }

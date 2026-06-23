@@ -341,7 +341,7 @@ func RenderMarkdown(text string) string {
 		if len(pendingLines) == 0 {
 			return
 		}
-		buf.WriteString(`<p class="mb-2 text-[13px] text-muted-light leading-relaxed">`)
+		buf.WriteString(`<p class="mb-2 text-sm text-muted-light leading-relaxed">`)
 		buf.WriteString(mdInline(strings.Join(pendingLines, "\n")))
 		buf.WriteString("</p>")
 		pendingLines = nil
@@ -358,7 +358,7 @@ func RenderMarkdown(text string) string {
 	for _, line := range lines {
 		if strings.HasPrefix(line, "```") {
 			if inCodeBlock {
-				buf.WriteString(`<pre class="text-[12px] bg-surface-100 border border-line rounded p-3 overflow-x-auto mb-2"><code>`)
+				buf.WriteString(`<pre class="text-xs bg-surface-100 border border-line rounded p-3 overflow-x-auto mb-2"><code>`)
 				buf.WriteString(html.EscapeString(codeBuf.String()))
 				buf.WriteString("</code></pre>")
 				codeBuf.Reset()
@@ -382,26 +382,26 @@ func RenderMarkdown(text string) string {
 		case strings.HasPrefix(line, "### "):
 			flushPara()
 			flushList()
-			buf.WriteString(`<h3 class="text-[13px] font-semibold text-white mt-4 mb-1">`)
+			buf.WriteString(`<h3 class="text-sm font-semibold text-white mt-4 mb-1">`)
 			buf.WriteString(mdInline(line[4:]))
 			buf.WriteString("</h3>")
 		case strings.HasPrefix(line, "## "):
 			flushPara()
 			flushList()
-			buf.WriteString(`<h2 class="text-[14px] font-semibold text-white mt-4 mb-1">`)
+			buf.WriteString(`<h2 class="text-base font-semibold text-white mt-4 mb-1">`)
 			buf.WriteString(mdInline(line[3:]))
 			buf.WriteString("</h2>")
 		case strings.HasPrefix(line, "# "):
 			flushPara()
 			flushList()
-			buf.WriteString(`<h1 class="text-[15px] font-semibold text-white mt-4 mb-2">`)
+			buf.WriteString(`<h1 class="text-md font-semibold text-white mt-4 mb-2">`)
 			buf.WriteString(mdInline(line[2:]))
 			buf.WriteString("</h1>")
 		case strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* "):
 			flushPara()
 			if !inList || listTag != "ul" {
 				flushList()
-				buf.WriteString(`<ul class="list-disc list-inside mb-2 space-y-0.5 text-[13px] text-muted-light">`)
+				buf.WriteString(`<ul class="list-disc list-inside mb-2 space-y-0.5 text-sm text-muted-light">`)
 				inList = true
 				listTag = "ul"
 			}
@@ -413,7 +413,7 @@ func RenderMarkdown(text string) string {
 				flushPara()
 				if !inList || listTag != "ol" {
 					flushList()
-					buf.WriteString(`<ol class="list-decimal list-inside mb-2 space-y-0.5 text-[13px] text-muted-light">`)
+					buf.WriteString(`<ol class="list-decimal list-inside mb-2 space-y-0.5 text-sm text-muted-light">`)
 					inList = true
 					listTag = "ol"
 				}
@@ -433,7 +433,7 @@ func RenderMarkdown(text string) string {
 	flushPara()
 	flushList()
 	if inCodeBlock {
-		buf.WriteString(`<pre class="text-[12px] bg-surface-100 border border-line rounded p-3 overflow-x-auto mb-2"><code>`)
+		buf.WriteString(`<pre class="text-xs bg-surface-100 border border-line rounded p-3 overflow-x-auto mb-2"><code>`)
 		buf.WriteString(html.EscapeString(codeBuf.String()))
 		buf.WriteString("</code></pre>")
 	}
@@ -462,7 +462,7 @@ func mdInline(s string) string {
 		switch {
 		case c == '`' && i+1 < len(s):
 			if j := strings.Index(s[i+1:], "`"); j >= 0 {
-				buf.WriteString(`<code class="text-[12px] bg-surface-100 border border-line rounded px-1">`)
+				buf.WriteString(`<code class="text-xs bg-surface-100 border border-line rounded px-1">`)
 				buf.WriteString(html.EscapeString(s[i+1 : i+1+j]))
 				buf.WriteString("</code>")
 				i += j + 2
@@ -565,7 +565,7 @@ type HeatmapDay struct {
 
 func heatmapColor(pct float64, hasData bool) string {
 	if !hasData {
-		return "#1f2937"
+		return "var(--color-chart-empty)"
 	}
 	if pct >= 99.995 {
 		return "#34d399"
@@ -597,7 +597,7 @@ func HeatmapSVG(days []HeatmapDay) string {
 	h := 7 * step
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg width="%d" height="%d" xmlns="http://www.w3.org/2000/svg">`, w, h)
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" preserveAspectRatio="xMidYMid meet" style="width:100%%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">`, w, h)
 	for _, d := range days {
 		x := d.Week * step
 		y := d.Weekday * step

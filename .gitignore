@@ -30,3 +30,7 @@ __debug_bin*
 
 # OS
 .DS_Store
+
+# Local dev / test scratch (screenshots, local server config, Playwright junctions)
+/.testrun/
+/node_modules/

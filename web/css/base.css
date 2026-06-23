@@ -1,0 +1,142 @@
+/* base.css - element-level base styles, theme plumbing, focus, scrollbars */
+
+html {
+  color-scheme: dark;
+  scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
+}
+html[data-theme="light"] { color-scheme: light; }
+
+[x-cloak] { display: none !important; }
+
+/* Every enabled button / role-button is clickable. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+label.switch,
+summary { cursor: pointer; }
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  letter-spacing: -0.006em;
+  color: var(--color-muted-light);
+  /* A whisper of brand-blue depth over the near-black canvas, so the page has
+     atmosphere without diluting the dark identity. */
+  background:
+    radial-gradient(1200px 560px at 86% -14%, rgba(20, 132, 255, 0.06), transparent 60%),
+    radial-gradient(900px 460px at -10% 110%, rgba(20, 132, 255, 0.035), transparent 56%),
+    var(--color-surface);
+  background-attachment: fixed;
+}
+html[data-theme="light"] body {
+  background:
+    radial-gradient(1100px 520px at 88% -16%, rgba(0, 112, 243, 0.05), transparent 60%),
+    var(--color-surface);
+}
+
+/* Headings inherit the primary text colour by default. */
+h1, h2, h3, h4 { color: var(--color-white); letter-spacing: -0.01em; }
+
+/* Tabular figures for stats / money / metrics. */
+.tabular, td, th, .font-mono { font-variant-numeric: tabular-nums; }
+
+/* Pre-paint collapsed-nav state 
+   Reproduces the collapsed sidebar layout before Alpine boots, so a cold load
+   of a collapsed sidebar paints settled instead of expanding then snapping. */
+@media (min-width: 768px) {
+  html.nav-collapsed .app-sidebar { width: 68px; }
+  html.nav-collapsed .app-sidebar [x-show="!collapsed"] { display: none !important; }
+  html.nav-collapsed .app-sidebar nav a { justify-content: center; padding-left: 0; padding-right: 0; }
+}
+
+/* Sidebar link state (driven by aria-current so hx-boost can re-mark) */
+#sidenav .nav-link { color: var(--color-muted-light); }
+#sidenav .nav-link:hover { color: var(--color-white); background-color: color-mix(in srgb, var(--color-surface-200) 60%, transparent); }
+#sidenav .nav-link[aria-current="page"] { color: var(--color-brand); background-color: color-mix(in srgb, var(--color-brand) 11%, transparent); }
+#sidenav .nav-icon { color: var(--color-muted); }
+#sidenav .nav-link:hover .nav-icon { color: var(--color-white); }
+#sidenav .nav-link[aria-current="page"] .nav-icon { color: var(--color-brand); }
+#sidenav .nav-chevron { color: var(--color-muted); transition: color 120ms ease; opacity: 0; }
+#sidenav .nav-link:hover .nav-chevron,
+#sidenav .nav-link[aria-current="page"] .nav-chevron { color: var(--color-muted-light); opacity: 1; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-300);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-surface-300) 60%, var(--color-muted-light)); }
+* { scrollbar-width: thin; scrollbar-color: var(--color-surface-300) transparent; }
+::selection { background: rgba(20, 132, 255, 0.22); color: var(--color-white); }
+
+/* Focus ring (brand blue, gap reads as a halo not a glow) */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px color-mix(in srgb, var(--color-brand) 60%, transparent);
+}
+
+/* Tables */
+@media (max-width: 767px) {
+  main table {
+    display: block; max-width: 100%; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; white-space: nowrap;
+  }
+}
+table thead th { font-weight: 500; letter-spacing: 0.04em; }
+table tbody tr { transition: background-color 140ms ease; }
+table tbody tr:hover { background-color: color-mix(in srgb, var(--color-surface-200) 45%, transparent); }
+
+/* uPlot chart theming */
+.u-wrap { background: transparent !important; }
+.u-cursor-x, .u-cursor-y { border-color: var(--color-muted) !important; }
+.u-hz .u-cursor-x, .u-vt .u-cursor-y { border-right-style: dashed !important; border-bottom-style: dashed !important; }
+
+/* Motion */
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+.animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+@keyframes vModalIn { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.modal-panel { animation: vModalIn 170ms cubic-bezier(0.21, 1.02, 0.73, 1); }
+@keyframes vFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-backdrop { animation: vFadeIn 130ms ease-out; backdrop-filter: blur(5px); }
+@keyframes vToastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.toast-in { animation: vToastIn 180ms ease-out both; }
+.htmx-indicator { opacity: 0; transition: opacity 120ms ease-in; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+
+a, button, input, select, textarea, [role="button"] {
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Light-mode status-text contrast on pastel fills */
+html[data-theme="light"] .text-emerald-400 { color: rgb(4 120 87); }
+html[data-theme="light"] .text-red-400 { color: rgb(185 28 28); }
+html[data-theme="light"] .text-yellow-400 { color: rgb(161 98 7); }
+html[data-theme="light"] .text-amber-400 { color: rgb(180 83 9); }
+html[data-theme="light"] .text-orange-400 { color: rgb(194 65 12); }
+html[data-theme="light"] .text-gray-400 { color: rgb(75 85 99); }
+html[data-theme="light"] .text-gray-500 { color: rgb(55 65 81); }
+html[data-theme="light"] .text-blue-400 { color: rgb(29 78 216); }
+html[data-theme="light"] [class*="shadow-black"] { --tw-shadow-color: rgba(18, 22, 31, 0.1) !important; }
