@@ -1895,7 +1895,7 @@ func monitorSSHSettings(p MonitorFormParams) templ.Component {
 			templ_7745c5c3_Var63 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "<div x-show=\"monitorType === 'ssh'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_ssh_fingerprint\">Expected Host Key Fingerprint</label> <input id=\"settings_ssh_fingerprint\" type=\"text\" name=\"settings_ssh_fingerprint\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "<div x-show=\"monitorType === 'ssh'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_ssh_fingerprint\">Expected Banner Fingerprint (SHA-256)</label> <input id=\"settings_ssh_fingerprint\" type=\"text\" name=\"settings_ssh_fingerprint\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1908,7 +1908,7 @@ func monitorSSHSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "\" placeholder=\"Optional SHA-256 hex fingerprint\" class=\"form-input font-mono\"><p class=\"text-2xs text-muted mt-1\">Leave empty to accept any host key</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "\" placeholder=\"Optional SHA-256 hex fingerprint\" class=\"form-input font-mono\"><p class=\"text-2xs text-muted mt-1\">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

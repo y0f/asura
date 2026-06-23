@@ -793,9 +793,9 @@ templ monitorSMTPSettings(p MonitorFormParams) {
 templ monitorSSHSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'ssh'" x-cloak class="space-y-4">
 		<div>
-			<label class="form-label" for="settings_ssh_fingerprint">Expected Host Key Fingerprint</label>
+			<label class="form-label" for="settings_ssh_fingerprint">Expected Banner Fingerprint (SHA-256)</label>
 			<input id="settings_ssh_fingerprint" type="text" name="settings_ssh_fingerprint" value={ p.SSH.ExpectedFingerprint } placeholder="Optional SHA-256 hex fingerprint" class="form-input font-mono"/>
-			<p class="text-2xs text-muted mt-1">Leave empty to accept any host key</p>
+			<p class="text-2xs text-muted mt-1">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p>
 		</div>
 	</div>
 }
