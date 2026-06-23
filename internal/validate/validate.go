@@ -577,6 +577,12 @@ func sanitizeHTML(input string) string {
 					!strings.HasPrefix(valLower, "#") {
 					continue
 				}
+				if key == "style" {
+					val = sanitizeCSSDeclarations(val)
+					if val == "" {
+						continue
+					}
+				}
 				buf.WriteByte(' ')
 				buf.WriteString(key)
 				buf.WriteString(`="`)
