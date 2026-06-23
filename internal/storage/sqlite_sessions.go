@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -96,9 +97,13 @@ func (s *SQLiteStore) ListAuditLog(ctx context.Context, f AuditLogFilter, p Pagi
 
 func (s *SQLiteStore) CreateTOTPKey(ctx context.Context, key *TOTPKey) error {
 	now := formatTime(time.Now())
+	secret, err := s.encryptSettings(key.Secret)
+	if err != nil {
+		return fmt.Errorf("encrypt totp secret: %w", err)
+	}
 	res, err := s.writeDB.ExecContext(ctx,
 		`INSERT INTO totp_keys (api_key_name, secret, created_at) VALUES (?, ?, ?)`,
-		key.APIKeyName, key.Secret, now)
+		key.APIKeyName, secret, now)
 	if err != nil {
 		return err
 	}
@@ -116,6 +121,9 @@ func (s *SQLiteStore) GetTOTPKey(ctx context.Context, apiKeyName string) (*TOTPK
 		Scan(&key.ID, &key.APIKeyName, &key.Secret, &createdAt)
 	if err != nil {
 		return nil, err
+	}
+	if key.Secret, err = s.decryptSettings(key.Secret); err != nil {
+		return nil, fmt.Errorf("decrypt totp secret: %w", err)
 	}
 	key.CreatedAt = parseTime(createdAt)
 	return &key, nil
