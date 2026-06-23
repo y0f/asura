@@ -110,7 +110,7 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 func (h *Handler) renderComponent(w http.ResponseWriter, r *http.Request, c templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "+h.cspFrameDirective)
+		"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "+h.cspFrameDirective)
 	if err := c.Render(r.Context(), w); err != nil {
 		h.logger.Error("templ render", "error", err)
 	}
