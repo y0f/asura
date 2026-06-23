@@ -161,7 +161,7 @@ auth:
       role: "admin"
   session:
     lifetime: 24h
-    cookie_secure: false  # Set to true after configuring TLS via reverse proxy
+    cookie_secure: true  # Secure cookies; set false only for direct HTTP access without a TLS reverse proxy
 
 monitor:
   workers: 10
