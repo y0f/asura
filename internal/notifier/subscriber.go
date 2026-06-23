@@ -175,41 +175,53 @@ func (n *SubscriberNotifier) sendSubscriberEmail(ctx context.Context, sub *stora
 
 	switch n.smtp.TLSMode {
 	case "smtps":
-		return n.sendSMTPS(addr, host, []string{sub.Email}, msgBytes)
+		return n.sendSMTPS(ctx, addr, host, []string{sub.Email}, msgBytes)
 	case "none":
-		return n.sendPlain(addr, host, []string{sub.Email}, msgBytes)
+		return n.sendPlain(ctx, addr, host, []string{sub.Email}, msgBytes)
 	default:
-		return smtp.SendMail(addr, n.smtpAuth(host), n.smtp.From, []string{sub.Email}, msgBytes)
+		return n.sendSTARTTLS(ctx, addr, host, []string{sub.Email}, msgBytes)
 	}
 }
 
-func (n *SubscriberNotifier) smtpAuth(host string) smtp.Auth {
-	if n.smtp.Username != "" {
-		return smtp.PlainAuth("", n.smtp.Username, n.smtp.Password, host)
-	}
-	return nil
-}
-
-func (n *SubscriberNotifier) sendSMTPS(addr, host string, rcpt []string, msg []byte) error {
-	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: host})
+func (n *SubscriberNotifier) sendSMTPS(ctx context.Context, addr, host string, rcpt []string, msg []byte) error {
+	conn, err := dialSMTP(ctx, addr, n.allowPrivate)
 	if err != nil {
 		return fmt.Errorf("smtps dial: %w", err)
 	}
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
+	tconn := tls.Client(conn, &tls.Config{ServerName: host})
+	if err := tconn.HandshakeContext(ctx); err != nil {
 		conn.Close()
+		return fmt.Errorf("smtps handshake: %w", err)
+	}
+	client, err := smtp.NewClient(tconn, host)
+	if err != nil {
+		tconn.Close()
 		return fmt.Errorf("smtps client: %w", err)
 	}
 	defer client.Close()
 	return n.sendViaClient(client, rcpt, msg)
 }
 
-func (n *SubscriberNotifier) sendPlain(addr, host string, rcpt []string, msg []byte) error {
-	client, err := smtp.Dial(addr)
+func (n *SubscriberNotifier) sendPlain(ctx context.Context, addr, host string, rcpt []string, msg []byte) error {
+	client, err := newSMTPClient(ctx, addr, host, n.allowPrivate)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
 	defer client.Close()
+	return n.sendViaClient(client, rcpt, msg)
+}
+
+func (n *SubscriberNotifier) sendSTARTTLS(ctx context.Context, addr, host string, rcpt []string, msg []byte) error {
+	client, err := newSMTPClient(ctx, addr, host, n.allowPrivate)
+	if err != nil {
+		return fmt.Errorf("smtp dial: %w", err)
+	}
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+			return fmt.Errorf("starttls: %w", err)
+		}
+	}
 	return n.sendViaClient(client, rcpt, msg)
 }
 
@@ -388,10 +400,10 @@ func (n *SubscriberNotifier) SendConfirmationEmail(ctx context.Context, sub *sto
 
 	switch n.smtp.TLSMode {
 	case "smtps":
-		return n.sendSMTPS(addr, host, []string{sub.Email}, msgBytes)
+		return n.sendSMTPS(ctx, addr, host, []string{sub.Email}, msgBytes)
 	case "none":
-		return n.sendPlain(addr, host, []string{sub.Email}, msgBytes)
+		return n.sendPlain(ctx, addr, host, []string{sub.Email}, msgBytes)
 	default:
-		return smtp.SendMail(addr, n.smtpAuth(host), n.smtp.From, []string{sub.Email}, msgBytes)
+		return n.sendSTARTTLS(ctx, addr, host, []string{sub.Email}, msgBytes)
 	}
 }

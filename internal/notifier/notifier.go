@@ -43,7 +43,7 @@ func NewDispatcher(store storage.Store, logger *slog.Logger, allowPrivateTargets
 		sem:     make(chan struct{}, maxConcurrentSends),
 	}
 	d.RegisterSender(&WebhookSender{AllowPrivate: allowPrivateTargets})
-	d.RegisterSender(&EmailSender{})
+	d.RegisterSender(&EmailSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&TelegramSender{})
 	d.RegisterSender(&DiscordSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&SlackSender{AllowPrivate: allowPrivateTargets})

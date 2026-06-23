@@ -6,11 +6,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
+	"github.com/y0f/asura/internal/safenet"
 	"github.com/y0f/asura/internal/storage"
 )
+
+const smtpDialTimeout = 15 * time.Second
+
+// dialSMTP opens a TCP connection to a mail server with a bounded timeout and,
+// unless allowPrivate is set, refuses to connect to private/reserved IPs so a
+// configured SMTP host cannot be used to probe internal services.
+func dialSMTP(ctx context.Context, addr string, allowPrivate bool) (net.Conn, error) {
+	d := &net.Dialer{
+		Timeout: smtpDialTimeout,
+		Control: safenet.MaybeDialControl(allowPrivate),
+	}
+	return d.DialContext(ctx, "tcp", addr)
+}
+
+// newSMTPClient dials addr and wraps it in an SMTP client, closing the
+// connection if the client greeting fails.
+func newSMTPClient(ctx context.Context, addr, host string, allowPrivate bool) (*smtp.Client, error) {
+	conn, err := dialSMTP(ctx, addr, allowPrivate)
+	if err != nil {
+		return nil, err
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return client, nil
+}
 
 type EmailSettings struct {
 	Host     string   `json:"host"`
@@ -24,7 +55,9 @@ type EmailSettings struct {
 	TLSMode  string   `json:"tls_mode,omitempty"` // none, starttls (default), smtps
 }
 
-type EmailSender struct{}
+type EmailSender struct {
+	AllowPrivate bool
+}
 
 func (s *EmailSender) Type() string { return "email" }
 
@@ -62,41 +95,53 @@ func (s *EmailSender) Send(ctx context.Context, channel *storage.NotificationCha
 
 	switch settings.TLSMode {
 	case "smtps":
-		return sendSMTPS(addr, host, settings, allRcpt, msgBytes)
+		return sendSMTPS(ctx, addr, host, settings, allRcpt, msgBytes, s.AllowPrivate)
 	case "none":
-		return sendPlain(addr, host, settings, allRcpt, msgBytes)
+		return sendPlain(ctx, addr, host, settings, allRcpt, msgBytes, s.AllowPrivate)
 	default:
-		return smtp.SendMail(addr, smtpAuth(settings, host), settings.From, allRcpt, msgBytes)
+		return sendSTARTTLS(ctx, addr, host, settings, allRcpt, msgBytes, s.AllowPrivate)
 	}
 }
 
-func smtpAuth(s EmailSettings, host string) smtp.Auth {
-	if s.Username != "" {
-		return smtp.PlainAuth("", s.Username, s.Password, host)
-	}
-	return nil
-}
-
-func sendSMTPS(addr, host string, s EmailSettings, rcpt []string, msg []byte) error {
-	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: host})
+func sendSMTPS(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte, allowPrivate bool) error {
+	conn, err := dialSMTP(ctx, addr, allowPrivate)
 	if err != nil {
 		return fmt.Errorf("smtps dial failed: %w", err)
 	}
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
+	tconn := tls.Client(conn, &tls.Config{ServerName: host})
+	if err := tconn.HandshakeContext(ctx); err != nil {
 		conn.Close()
+		return fmt.Errorf("smtps handshake failed: %w", err)
+	}
+	client, err := smtp.NewClient(tconn, host)
+	if err != nil {
+		tconn.Close()
 		return fmt.Errorf("smtps client: %w", err)
 	}
 	defer client.Close()
 	return sendViaClient(client, s, rcpt, msg)
 }
 
-func sendPlain(addr, host string, s EmailSettings, rcpt []string, msg []byte) error {
-	client, err := smtp.Dial(addr)
+func sendPlain(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte, allowPrivate bool) error {
+	client, err := newSMTPClient(ctx, addr, host, allowPrivate)
 	if err != nil {
 		return fmt.Errorf("smtp dial failed: %w", err)
 	}
 	defer client.Close()
+	return sendViaClient(client, s, rcpt, msg)
+}
+
+func sendSTARTTLS(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte, allowPrivate bool) error {
+	client, err := newSMTPClient(ctx, addr, host, allowPrivate)
+	if err != nil {
+		return fmt.Errorf("smtp dial failed: %w", err)
+	}
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+			return fmt.Errorf("starttls failed: %w", err)
+		}
+	}
 	return sendViaClient(client, s, rcpt, msg)
 }
 

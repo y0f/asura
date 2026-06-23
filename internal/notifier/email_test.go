@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -281,8 +282,8 @@ func TestEmailSenderSendPlain(t *testing.T) {
 		EventType: "test",
 	}
 
-	sender := &EmailSender{}
-	if err := sender.Send(nil, ch, payload); err != nil {
+	sender := &EmailSender{AllowPrivate: true}
+	if err := sender.Send(context.Background(), ch, payload); err != nil {
 		t.Fatalf("Send() error: %v", err)
 	}
 
