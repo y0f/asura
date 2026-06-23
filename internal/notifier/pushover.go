@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -48,7 +47,7 @@ func (s *PushoverSender) Send(ctx context.Context, channel *storage.Notification
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(false)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("pushover request failed: %w", err)

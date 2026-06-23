@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -83,7 +82,7 @@ func opsgeniePost(ctx context.Context, url, apiKey string, data map[string]any) 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "GenieKey "+apiKey)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(false)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("opsgenie request failed: %w", err)

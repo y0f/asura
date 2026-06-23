@@ -55,7 +55,7 @@ func (s *PagerDutySender) Send(ctx context.Context, channel *storage.Notificatio
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(false)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("pagerduty request failed: %w", err)

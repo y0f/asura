@@ -8,7 +8,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -47,7 +46,7 @@ func (s *TelegramSender) Send(ctx context.Context, channel *storage.Notification
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(false)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("telegram request failed: %w", err)
