@@ -53,12 +53,20 @@ version_ge() {
 install_go() {
     info "Installing Go ${GO_VERSION} (${GOARCH})..."
     TARBALL="go${GO_VERSION}.linux-${GOARCH}.tar.gz"
+
+    local expected_sha
+    case "$GOARCH" in
+        amd64) expected_sha="dea9ca38a0b852a74e81c26134671af7c0fbe65d81b0dc1c5bfe22cf7d4c8858" ;;
+        arm64) expected_sha="c3fa6d16ffa261091a5617145553c71d21435ce547e44cc6dfb7470865527cc7" ;;
+        *)     error "No pinned Go checksum for ${GOARCH}" ;;
+    esac
+
     curl -fsSL "https://go.dev/dl/${TARBALL}" -o "/tmp/${TARBALL}"
 
-    # Verify download before removing existing install
-    if ! tar -tzf "/tmp/${TARBALL}" >/dev/null 2>&1; then
+    # Verify authenticity against the pinned SHA-256 before extracting as root
+    if ! echo "${expected_sha}  /tmp/${TARBALL}" | sha256sum -c - >/dev/null 2>&1; then
         rm -f "/tmp/${TARBALL}"
-        error "Downloaded tarball is corrupt"
+        error "Go tarball checksum mismatch for ${TARBALL} — refusing to install"
     fi
 
     rm -rf /usr/local/go
