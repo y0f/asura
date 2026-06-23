@@ -37,6 +37,17 @@ type Pipeline struct {
 	droppedNotifications atomic.Int64
 	lastNotified         sync.Map // map[int64]time.Time — tracks last resend per monitor
 	lastSLABreach        sync.Map // map[int64]time.Time — tracks last SLA breach alert per monitor
+	statusLocks          sync.Map // map[int64]*sync.Mutex — serializes status read-modify-write per monitor
+}
+
+// lockMonitorStatus serializes the monitor_status read-modify-write for a
+// single monitor so concurrent writers (the local worker and remote agent
+// result handlers) cannot lose counter increments. It returns the unlock func.
+func (p *Pipeline) lockMonitorStatus(monitorID int64) func() {
+	mu, _ := p.statusLocks.LoadOrStore(monitorID, &sync.Mutex{})
+	m := mu.(*sync.Mutex)
+	m.Lock()
+	return m.Unlock
 }
 
 // NotificationEvent is emitted when something noteworthy happens.
@@ -150,6 +161,9 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	}
 
 	now := time.Now()
+	unlock := p.lockMonitorStatus(mon.ID)
+	defer unlock()
+
 	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
 	if err != nil {
 		p.logger.Warn("get monitor status, using defaults", "monitor_id", mon.ID, "error", err)
@@ -214,6 +228,9 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 // It updates monitor status, processes incidents, and emits notifications.
 func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor, cr *storage.CheckResult) {
 	now := time.Now()
+	unlock := p.lockMonitorStatus(mon.ID)
+	defer unlock()
+
 	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
 	if err != nil {
 		status = &storage.MonitorStatus{MonitorID: mon.ID}
