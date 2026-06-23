@@ -47,7 +47,7 @@ func (c *TLSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 	}).DialContext
 
 	dialFn := baseDial
-	if socks := ProxyDialer(monitor.ProxyURL, baseDial); socks != nil {
+	if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 		dialFn = socks
 	}
 

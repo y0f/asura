@@ -46,7 +46,7 @@ func (c *MQTTChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	baseDial := (&net.Dialer{Timeout: timeout, Control: safenet.MaybeDialControl(c.AllowPrivate)}).DialContext
 
 	dialFn := baseDial
-	if socks := ProxyDialer(monitor.ProxyURL, baseDial); socks != nil {
+	if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 		dialFn = socks
 	}
 

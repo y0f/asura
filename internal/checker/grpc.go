@@ -47,7 +47,7 @@ func (c *GRPCChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	}).DialContext
 
 	dialFn := baseDial
-	if socks := ProxyDialer(monitor.ProxyURL, baseDial); socks != nil {
+	if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 		dialFn = socks
 	}
 

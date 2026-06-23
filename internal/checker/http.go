@@ -95,7 +95,13 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 		TLSClientConfig:   tlsCfg,
 		DisableKeepAlives: true,
 	}
-	applyHTTPProxy(transport, monitor.ProxyURL, baseDial)
+	applyHTTPProxy(transport, monitor.ProxyURL, baseDial, c.AllowPrivate)
+
+	if pu := HTTPProxyURL(monitor.ProxyURL); pu != nil {
+		if err := validateProxyTarget(ctx, req.URL.Host, c.AllowPrivate); err != nil {
+			return &Result{Status: "down", Message: err.Error()}, nil
+		}
+	}
 
 	client := &http.Client{
 		Transport:     transport,
@@ -119,11 +125,11 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	return buildHTTPResult(resp, elapsed, settings)
 }
 
-func applyHTTPProxy(transport *http.Transport, proxyURL string, baseDial func(context.Context, string, string) (net.Conn, error)) {
+func applyHTTPProxy(transport *http.Transport, proxyURL string, baseDial func(context.Context, string, string) (net.Conn, error), allowPrivate bool) {
 	if proxyURL == "" {
 		return
 	}
-	if socks := ProxyDialer(proxyURL, baseDial); socks != nil {
+	if socks := ProxyDialer(proxyURL, baseDial, allowPrivate); socks != nil {
 		transport.DialContext = socks
 	} else if pu := HTTPProxyURL(proxyURL); pu != nil {
 		transport.Proxy = http.ProxyURL(pu)

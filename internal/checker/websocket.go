@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -39,9 +40,14 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 
 	transport := &http.Transport{DialContext: baseDial}
 	if monitor.ProxyURL != "" {
-		if socks := ProxyDialer(monitor.ProxyURL, baseDial); socks != nil {
+		if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 			transport.DialContext = socks
 		} else if pu := HTTPProxyURL(monitor.ProxyURL); pu != nil {
+			if u, perr := url.Parse(monitor.Target); perr == nil {
+				if err := validateProxyTarget(ctx, u.Host, c.AllowPrivate); err != nil {
+					return &Result{Status: "down", Message: err.Error()}, nil
+				}
+			}
 			transport.Proxy = http.ProxyURL(pu)
 		}
 	}
