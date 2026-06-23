@@ -95,7 +95,11 @@ func (n *SubscriberNotifier) notifyPageSubscribers(ctx context.Context, sp *stor
 
 	for _, sub := range subs {
 		sub := sub
-		n.sem <- struct{}{}
+		select {
+		case n.sem <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		go func() {
 			defer func() { <-n.sem }()
 
