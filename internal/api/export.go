@@ -600,7 +600,7 @@ func importStatusPages(ctx context.Context, ic *importCtx, pages []ExportStatusP
 }
 
 func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
-	redact := r.URL.Query().Get("redact_secrets") == "true"
+	redact := r.URL.Query().Get("redact_secrets") != "false"
 
 	data, err := BuildExportData(r.Context(), h.store, redact)
 	if err != nil {
