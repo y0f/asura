@@ -1,8 +1,12 @@
 package api
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -217,6 +221,11 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sp.PasswordHash != "" && !statusPageAuthValid(r, sp.ID, sp.PasswordHash) {
+		writeError(w, http.StatusUnauthorized, "status page is password protected")
+		return
+	}
+
 	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
 	if err != nil {
 		h.logger.Error("public status page: list monitors", "error", err)
@@ -269,4 +278,16 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		"monitors":       result,
 		"incidents":      incidents,
 	})
+}
+
+// statusPageAuthValid reports whether the request carries a valid status-page
+// auth cookie, matching the value set by the web auth handler.
+func statusPageAuthValid(r *http.Request, pageID int64, passwordHash string) bool {
+	c, err := r.Cookie(fmt.Sprintf("sp_auth_%d", pageID))
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256([]byte(passwordHash + ":sp-auth"))
+	expected := hex.EncodeToString(sum[:])
+	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(expected)) == 1
 }
