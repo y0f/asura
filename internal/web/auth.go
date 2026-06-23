@@ -70,7 +70,12 @@ func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 			}))
 			return
 		}
-		token := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		token, err := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		if err != nil {
+			h.logger.Error("create totp challenge", "error", err)
+			h.renderComponent(w, r, views.LoginPage(views.LoginParams{BasePath: h.cfg.Server.BasePath, Error: "Internal error"}))
+			return
+		}
 		h.renderComponent(w, r, views.TOTPPage(views.TOTPParams{
 			BasePath:       h.cfg.Server.BasePath,
 			ChallengeToken: token,
@@ -96,9 +101,11 @@ type totpChallenge struct {
 	createdAt  time.Time
 }
 
-func (h *Handler) createTOTPChallenge(apiKeyName, keyHash, ip string) string {
+func (h *Handler) createTOTPChallenge(apiKeyName, keyHash, ip string) (string, error) {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
 	token := hex.EncodeToString(b)
 
 	h.totpMu.Lock()
@@ -109,7 +116,7 @@ func (h *Handler) createTOTPChallenge(apiKeyName, keyHash, ip string) string {
 		createdAt:  time.Now(),
 	}
 	h.totpMu.Unlock()
-	return token
+	return token, nil
 }
 
 func (h *Handler) consumeTOTPChallenge(token string) *totpChallenge {
@@ -189,7 +196,12 @@ func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
 	matchedCounter, ok := totp.ValidateWithCounter(secret, code, time.Now())
 	if !ok {
 		h.auditLogin("login_totp_failed", apiKey.Name, ip)
-		newToken := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		newToken, err := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		if err != nil {
+			h.logger.Error("create totp challenge", "error", err)
+			h.renderComponent(w, r, views.LoginPage(views.LoginParams{BasePath: h.cfg.Server.BasePath, Error: "Internal error"}))
+			return
+		}
 		h.renderComponent(w, r, views.TOTPPage(views.TOTPParams{
 			BasePath:       h.cfg.Server.BasePath,
 			Error:          "Invalid code. Please try again.",
@@ -209,7 +221,12 @@ func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if !fresh {
 		h.auditLogin("login_totp_replay", apiKey.Name, ip)
-		newToken := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		newToken, err := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)
+		if err != nil {
+			h.logger.Error("create totp challenge", "error", err)
+			h.renderComponent(w, r, views.LoginPage(views.LoginParams{BasePath: h.cfg.Server.BasePath, Error: "Internal error"}))
+			return
+		}
 		h.renderComponent(w, r, views.TOTPPage(views.TOTPParams{
 			BasePath:       h.cfg.Server.BasePath,
 			Error:          "This code has already been used. Wait for a new code.",
