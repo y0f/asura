@@ -84,6 +84,7 @@ func sendSMTPS(addr, host string, s EmailSettings, rcpt []string, msg []byte) er
 	}
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
+		conn.Close()
 		return fmt.Errorf("smtps client: %w", err)
 	}
 	defer client.Close()

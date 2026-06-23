@@ -197,6 +197,7 @@ func (n *SubscriberNotifier) sendSMTPS(addr, host string, rcpt []string, msg []b
 	}
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
+		conn.Close()
 		return fmt.Errorf("smtps client: %w", err)
 	}
 	defer client.Close()
