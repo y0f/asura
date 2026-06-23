@@ -175,7 +175,7 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mon, err := h.store.GetMonitor(r.Context(), res.MonitorID)
-		if err != nil || mon == nil || !mon.Enabled {
+		if err != nil || mon == nil || !mon.Enabled || !mon.AgentEnabled {
 			continue
 		}
 		if !agentEligibleTypes[mon.Type] {
