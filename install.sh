@@ -4,8 +4,8 @@ set -euo pipefail
 # Asura – one-command VPS installer
 # Usage: sudo bash install.sh
 
-GO_VERSION="1.24.0"
-GO_MIN_VERSION="1.24"
+GO_VERSION="1.25.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/asura"
 DATA_DIR="/var/lib/asura"
@@ -48,6 +48,17 @@ version_ge() {
     printf '%s\n%s\n' "$2" "$1" | sort -V -C
 }
 
+# ── Required Go version ───────────────────────────────────────────
+
+# Derive the minimum from go.mod so the pin below can never silently drift
+# behind what the module actually requires.
+GO_MIN_VERSION=$(grep -oP '^go \K\d+\.\d+(\.\d+)?' "${SCRIPT_DIR}/go.mod" 2>/dev/null || true)
+[[ -z "$GO_MIN_VERSION" ]] && error "Could not read the required Go version from ${SCRIPT_DIR}/go.mod"
+
+if ! version_ge "$GO_VERSION" "$GO_MIN_VERSION"; then
+    error "Pinned Go ${GO_VERSION} is older than go.mod requires (${GO_MIN_VERSION}) — bump GO_VERSION and its checksums in this script"
+fi
+
 # ── Install Go if missing or too old ─────────────────────────────
 
 install_go() {
@@ -56,8 +67,8 @@ install_go() {
 
     local expected_sha
     case "$GOARCH" in
-        amd64) expected_sha="dea9ca38a0b852a74e81c26134671af7c0fbe65d81b0dc1c5bfe22cf7d4c8858" ;;
-        arm64) expected_sha="c3fa6d16ffa261091a5617145553c71d21435ce547e44cc6dfb7470865527cc7" ;;
+        amd64) expected_sha="2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613" ;;
+        arm64) expected_sha="05de75d6994a2783699815ee553bd5a9327d8b79991de36e38b66862782f54ae" ;;
         *)     error "No pinned Go checksum for ${GOARCH}" ;;
     esac
 
@@ -92,12 +103,13 @@ export PATH="/usr/local/go/bin:$PATH"
 
 # ── Build ──────────────────────────────────────────────────────────
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION=$(git -C "$SCRIPT_DIR" describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 info "Building asura ${VERSION} from ${SCRIPT_DIR}..."
 cd "$SCRIPT_DIR"
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o asura ./cmd/asura
+# GOTOOLCHAIN=local keeps the build on the toolchain we just checksum-verified.
+# Without it Go silently downloads a different toolchain, bypassing the pin above.
+GOTOOLCHAIN=local CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o asura ./cmd/asura
 install -m 755 asura "${INSTALL_DIR}/asura"
 rm -f asura
 info "Binary installed to ${INSTALL_DIR}/asura"
