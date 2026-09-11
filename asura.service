@@ -3,6 +3,8 @@ Description=Asura Uptime Monitor
 Documentation=https://github.com/y0f/Asura
 After=network-online.target
 Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
@@ -12,8 +14,6 @@ ExecStart=/usr/local/bin/asura -config /etc/asura/config.yaml
 WorkingDirectory=/var/lib/asura
 Restart=always
 RestartSec=5
-StartLimitBurst=5
-StartLimitIntervalSec=60
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=asura
