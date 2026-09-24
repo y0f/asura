@@ -129,7 +129,7 @@ func (h *Handler) StatusPageCreate(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
 	if err == nil && existing != nil {
-		h.setFlash(w, "Slug already in use")
+		h.setError(w, "Slug already in use")
 		h.redirect(w, r, "/status-pages/new")
 		return
 	}
@@ -207,7 +207,7 @@ func (h *Handler) StatusPageUpdate(w http.ResponseWriter, r *http.Request) {
 
 	slugOwner, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
 	if err == nil && slugOwner != nil && slugOwner.ID != id {
-		h.setFlash(w, "Slug already in use")
+		h.setError(w, "Slug already in use")
 		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
 		return
 	}

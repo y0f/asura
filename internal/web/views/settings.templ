@@ -7,13 +7,13 @@ import (
 
 type SettingsParams struct {
 	LayoutParams
-	DBSizeBytes    int64
-	AppVersion     string
-	Uptime         string
-	MonitorCount   int64
-	WorkerCount    int
-	RetentionDays  int
-	EncryptionOn   bool
+	DBSizeBytes   int64
+	AppVersion    string
+	Uptime        string
+	MonitorCount  int64
+	WorkerCount   int
+	RetentionDays int
+	EncryptionOn  bool
 }
 
 func formatBytes(b int64) string {
@@ -32,7 +32,8 @@ func formatBytes(b int64) string {
 templ settingsFact(label string) {
 	<div class="py-2">
 		<dt class="text-xs text-muted">{ label }</dt>
-		<dd class="text-sm text-white font-medium mt-0.5">{ children... }</dd>
+		<dd class="text-sm text-white font-medium mt-0.5">{ children... }
+</dd>
 	</div>
 }
 
@@ -74,7 +75,7 @@ templ SettingsPage(p SettingsParams) {
 				</dl>
 			</section>
 			if p.Can("monitors.write") {
-				<div class="grid gap-6 md:grid-cols-2">
+				<div class={ "grid gap-6", templ.KV("md:grid-cols-2", p.SuperAdmin) }>
 					<section class="card card-pad" aria-labelledby="export-title">
 						<h2 id="export-title" class="text-lg font-semibold">Export</h2>
 						<p class="subtitle mt-1 mb-4">Download monitors, groups, proxies, notification channels, maintenance windows and status pages as JSON.</p>
@@ -83,36 +84,53 @@ templ SettingsPage(p SettingsParams) {
 							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false") } class="btn-secondary">Export with secrets</a>
 						</div>
 					</section>
-					<section class="card card-pad" aria-labelledby="import-title">
-						<h2 id="import-title" class="text-lg font-semibold">Import</h2>
-						<p class="subtitle mt-1 mb-4">Restore or merge a previously exported file.</p>
-						<form action={ templ.SafeURL(p.BasePath + "/settings/import") } method="POST" enctype="multipart/form-data" class="space-y-4"
-							x-data="{ fileName: '', mode: 'merge' }"
-							@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace mode deletes the current configuration before importing. Continue?', onConfirm: () => { $el.dataset.confirmed = '1'; $el.requestSubmit() } }) }">
-							<div>
-								<label class="form-label" for="import-mode">Mode</label>
-								<select id="import-mode" name="mode" x-model="mode" class="form-select">
-									<option value="merge">Merge: keep existing, skip duplicates</option>
-									<option value="replace">Replace: overwrite everything</option>
-								</select>
-							</div>
-							<div>
-								<label class="form-label" for="import-file">File</label>
-								<input id="import-file" type="file" name="file" accept=".json,application/json" required
-									class="block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer"/>
-							</div>
-							<button type="submit" class="btn-primary">Import</button>
-						</form>
-					</section>
+					if p.SuperAdmin {
+						<section class="card card-pad" aria-labelledby="import-title">
+							<h2 id="import-title" class="text-lg font-semibold">Import</h2>
+							<p class="subtitle mt-1 mb-4">Restore or merge a previously exported file.</p>
+							<form
+								action={ templ.SafeURL(p.BasePath + "/settings/import") }
+								method="POST"
+								enctype="multipart/form-data"
+								class="space-y-4"
+								x-data="{ fileName: '', mode: 'merge' }"
+								@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace mode deletes the current configuration before importing. Continue?', onConfirm: () => { $el.dataset.confirmed = '1'; $el.requestSubmit() } }) }"
+							>
+								<div>
+									<label class="form-label" for="import-mode">Mode</label>
+									<select id="import-mode" name="mode" x-model="mode" class="form-select">
+										<option value="merge">Merge: keep existing, skip duplicates</option>
+										<option value="replace">Replace: overwrite everything</option>
+									</select>
+								</div>
+								<div>
+									<label class="form-label" for="import-file">File</label>
+									<input
+										id="import-file"
+										type="file"
+										name="file"
+										accept=".json,application/json"
+										required
+										class="block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer"
+									/>
+								</div>
+								<button type="submit" class="btn-primary">Import</button>
+							</form>
+						</section>
+					}
 				</div>
+			}
+			if p.SuperAdmin {
 				<section class="card card-pad" aria-labelledby="db-title">
 					<h2 id="db-title" class="text-lg font-semibold">Database</h2>
 					<p class="subtitle mt-1 mb-4">VACUUM reclaims space left by deleted rows and rebuilds the database file. Large databases can take a while.</p>
-					<button type="button"
+					<button
+						type="button"
 						data-url={ p.BasePath + "/settings/vacuum" }
 						data-msg="Run VACUUM now? Writes pause until it finishes."
 						@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
-						class="btn-secondary">Run VACUUM</button>
+						class="btn-secondary"
+					>Run VACUUM</button>
 				</section>
 			}
 		</div>

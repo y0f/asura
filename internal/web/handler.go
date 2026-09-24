@@ -64,8 +64,10 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 
 func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.LayoutParams {
 	perms := make(map[string]bool)
+	superAdmin := false
 	if k := httputil.GetAPIKey(r.Context()); k != nil {
 		perms = k.PermissionMap()
+		superAdmin = k.SuperAdmin
 	}
 	toastKind, toastMsg := "", ""
 	if c, err := r.Cookie("toast"); err == nil {
@@ -79,14 +81,15 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 		}
 	}
 	return views.LayoutParams{
-		Title:     title,
-		Active:    active,
-		Username:  httputil.GetAPIKeyName(r.Context()),
-		Perms:     perms,
-		Version:   h.version,
-		ToastKind: toastKind,
-		ToastMsg:  toastMsg,
-		BasePath:  h.cfg.Server.BasePath,
+		Title:      title,
+		Active:     active,
+		Username:   httputil.GetAPIKeyName(r.Context()),
+		Perms:      perms,
+		SuperAdmin: superAdmin,
+		Version:    h.version,
+		ToastKind:  toastKind,
+		ToastMsg:   toastMsg,
+		BasePath:   h.cfg.Server.BasePath,
 	}
 }
 

@@ -618,8 +618,25 @@ func HeatmapSVG(days []HeatmapDay) string {
 	return b.String()
 }
 
-// absTime formats a time (or *time.Time) as an absolute UTC timestamp for
-// tooltips and <time datetime>. It returns "" for nil or unsupported values.
+// isoTime formats a time (or *time.Time) as RFC 3339 UTC for the machine
+// readable <time datetime> attribute. It returns "" for nil or unsupported
+// values.
+func isoTime(t any) string {
+	switch v := t.(type) {
+	case time.Time:
+		return v.UTC().Format(time.RFC3339)
+	case *time.Time:
+		if v == nil {
+			return ""
+		}
+		return v.UTC().Format(time.RFC3339)
+	default:
+		return ""
+	}
+}
+
+// absTime formats a time (or *time.Time) as a readable absolute UTC timestamp
+// for tooltips. It returns "" for nil or unsupported values.
 func absTime(t any) string {
 	switch v := t.(type) {
 	case time.Time:

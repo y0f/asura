@@ -895,7 +895,7 @@ func (h *Handler) MonitorSetManualStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	if mon.Type != "manual" {
-		h.setFlash(w, "Status can only be set on manual monitors")
+		h.setError(w, "Status can only be set on manual monitors")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 		return
 	}
@@ -981,7 +981,7 @@ func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 	action := r.FormValue("action")
 	ids := parseIDList(r.Form["ids[]"])
 	if len(ids) == 0 {
-		h.setFlash(w, "No monitors selected")
+		h.setError(w, "No monitors selected")
 		h.redirect(w, r, "/monitors")
 		return
 	}

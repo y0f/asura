@@ -26,7 +26,7 @@ func testLayout(title string, write bool) LayoutParams {
 			perms[p] = true
 		}
 	}
-	return LayoutParams{Title: title, Username: "admin", Perms: perms, Version: "test"}
+	return LayoutParams{Title: title, Username: "admin", Perms: perms, Version: "test", SuperAdmin: write}
 }
 
 func fixtureMonitor() *storage.Monitor {
@@ -209,6 +209,33 @@ func TestSettingsExportLinks(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "/settings/export?redact_secrets=false") || !strings.Contains(out, "/settings/export?redact_secrets=true") {
 		t.Fatal("export buttons do not request explicit redaction modes")
+	}
+}
+
+func TestSettingsImportNeedsSuperAdmin(t *testing.T) {
+	lp := testLayout("Settings", true)
+	lp.SuperAdmin = false
+	var buf bytes.Buffer
+	if err := SettingsPage(SettingsParams{LayoutParams: lp}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "/settings/import") || strings.Contains(out, "/settings/vacuum") {
+		t.Fatal("import or vacuum shown to a key that is not super admin")
+	}
+	if !strings.Contains(out, "/settings/export") {
+		t.Fatal("export hidden from a key with monitors.write")
+	}
+}
+
+func TestTimeElementsUseRFC3339(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var buf bytes.Buffer
+	if err := RelTime(ts).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `datetime="2026-01-02T03:04:05Z"`) {
+		t.Fatalf("unexpected <time>: %s", buf.String())
 	}
 }
 

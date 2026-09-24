@@ -36,7 +36,7 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
 	if k == nil || !k.SuperAdmin {
-		h.setFlash(w, "Vacuum requires super admin access")
+		h.setError(w, "Vacuum requires super admin access")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
 	if k == nil || !k.SuperAdmin {
-		h.setFlash(w, "Import requires admin access")
+		h.setError(w, "Import requires admin access")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -112,7 +112,7 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data.Version != 1 {
-		h.setFlash(w, "Unsupported export version")
+		h.setError(w, "Unsupported export version")
 		h.redirect(w, r, "/settings")
 		return
 	}

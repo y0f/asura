@@ -195,7 +195,7 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 										<span class={ "inline-flex items-center gap-1.5 text-sm shrink-0", StatusColor(inc.Status) }><span class={ "dot", StatusDot(inc.Status) }></span>{ publicIncidentStatus(inc.Status) }</span>
 									</div>
 									<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-										<time datetime={ absTime(inc.StartedAt) }>{ inc.StartedAt.UTC().Format("Jan 2, 15:04 UTC") }</time>
+										<time datetime={ isoTime(inc.StartedAt) }>{ inc.StartedAt.UTC().Format("Jan 2, 15:04 UTC") }</time>
 										if inc.ResolvedAt != nil {
 											<span>Resolved after { IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</span>
 										}

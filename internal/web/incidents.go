@@ -89,7 +89,7 @@ func (h *Handler) IncidentAck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if inc.Status != incident.StatusOpen {
-		h.setFlash(w, "Incident is not open")
+		h.setError(w, "Incident is not open")
 		h.redirect(w, r, "/incidents/"+r.PathValue("id"))
 		return
 	}

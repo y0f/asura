@@ -36,7 +36,7 @@ func (h *Handler) TagCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil {
-		h.setFlash(w, "Tag name already in use")
+		h.setError(w, "Tag name already in use")
 		h.redirect(w, r, "/tags")
 		return
 	}
@@ -76,7 +76,7 @@ func (h *Handler) TagUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil && existing.ID != id {
-		h.setFlash(w, "Tag name already in use")
+		h.setError(w, "Tag name already in use")
 		h.redirect(w, r, "/tags")
 		return
 	}

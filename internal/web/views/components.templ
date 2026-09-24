@@ -298,7 +298,7 @@ templ MonitorRowActions(basePath string, m *storage.Monitor, canWrite bool) {
 // and to assistive technology.
 templ RelTime(t any) {
 	if abs := absTime(t); abs != "" {
-		<time datetime={ abs } title={ abs }>{ TimeAgo(t) }</time>
+		<time datetime={ isoTime(t) } title={ abs }>{ TimeAgo(t) }</time>
 	} else {
 		{ TimeAgo(t) }
 	}

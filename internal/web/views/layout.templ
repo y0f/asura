@@ -5,6 +5,9 @@ type LayoutParams struct {
 	Active    string
 	Username  string
 	Perms     map[string]bool
+	// SuperAdmin gates actions that need more than a permission (import,
+	// database maintenance).
+	SuperAdmin bool
 	Version   string
 	ToastKind string
 	ToastMsg  string

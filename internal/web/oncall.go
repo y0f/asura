@@ -43,7 +43,7 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(channelIDs) == 0 {
-		h.setFlash(w, "Select at least one channel")
+		h.setError(w, "Select at least one channel")
 		h.redirect(w, r, "/on-call")
 		return
 	}
