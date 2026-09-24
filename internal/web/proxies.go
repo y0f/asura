@@ -40,8 +40,12 @@ func (h *Handler) ProxyForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := "New Proxy"
+	passwordStored := false
 	if proxy != nil {
 		title = "Edit Proxy"
+		// Never write the stored password into the page.
+		passwordStored = proxy.AuthPass != ""
+		proxy.AuthPass = ""
 	} else {
 		proxy = &storage.Proxy{
 			Protocol: "http",
@@ -52,8 +56,9 @@ func (h *Handler) ProxyForm(w http.ResponseWriter, r *http.Request) {
 
 	lp := h.newLayoutParams(r, title, "proxies")
 	h.renderComponent(w, r, views.ProxyFormPage(views.ProxyFormParams{
-		LayoutParams: lp,
-		Proxy:        proxy,
+		LayoutParams:   lp,
+		Proxy:          proxy,
+		PasswordStored: passwordStored,
 	}))
 }
 
@@ -94,21 +99,27 @@ func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 
 	p := parseProxyForm(r)
 	p.ID = id
-	// The password field is rendered blank; blank means keep the stored one.
-	if p.AuthPass == "" && p.AuthUser != "" {
-		if existing, err := h.store.GetProxy(r.Context(), id); err == nil && existing != nil {
-			p.AuthPass = existing.AuthPass
-		}
+	var storedPass string
+	if existing, err := h.store.GetProxy(r.Context(), id); err == nil && existing != nil {
+		storedPass = existing.AuthPass
 	}
 
 	if err := validate.ValidateProxy(p); err != nil {
 		lp := h.newLayoutParams(r, "Edit Proxy", "proxies")
 		lp.Error = err.Error()
 		h.renderComponent(w, r, views.ProxyFormPage(views.ProxyFormParams{
-			LayoutParams: lp,
-			Proxy:        p,
+			LayoutParams:   lp,
+			Proxy:          p,
+			PasswordStored: storedPass != "",
 		}))
 		return
+	}
+
+	// The password field is rendered blank: blank keeps the stored password,
+	// "Remove saved value" clears it. Applied after validation so a re-shown
+	// form never contains the stored password.
+	if p.AuthPass == "" && r.FormValue("clear_auth_pass") != "on" {
+		p.AuthPass = storedPass
 	}
 
 	if err := h.store.UpdateProxy(r.Context(), p); err != nil {

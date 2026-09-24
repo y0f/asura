@@ -66,7 +66,7 @@ func pages(write bool) map[string]templ.Component {
 		"audit":          AuditLogPage(AuditLogParams{LayoutParams: lp("Audit Log"), TimeRange: "24h", Result: paged([]*storage.AuditEntry{{Action: "create", Entity: "monitor", EntityID: 1, CreatedAt: time.Now()}})}),
 		"agents":         AgentListPage(AgentListParams{LayoutParams: lp("Agents"), ServerURL: "http://localhost", Agents: []*storage.Agent{{ID: 1, Name: "eu"}}, NewAgentName: "eu", NewAgentToken: "tok"}),
 		"proxies":        ProxyListPage(ProxyListParams{LayoutParams: lp("Proxies"), Proxies: []*storage.Proxy{{ID: 1, Name: "p", Protocol: "http", Host: "h", Port: 8080}}}),
-		"proxy-form":     ProxyFormPage(ProxyFormParams{LayoutParams: lp("Edit Proxy"), Proxy: &storage.Proxy{ID: 1, Name: "p", AuthUser: "u", AuthPass: "hunter2"}}),
+		"proxy-form":     ProxyFormPage(ProxyFormParams{LayoutParams: lp("Edit Proxy"), Proxy: &storage.Proxy{ID: 1, Name: "p", AuthUser: "u"}, PasswordStored: true}),
 		"status-pages":   StatusPageListPage(StatusPageListParams{LayoutParams: lp("Status Pages"), Pages: []*storage.StatusPage{{ID: 1, Title: "Status", Slug: "status", Enabled: true}}}),
 		"status-form":    StatusPageFormPage(StatusPageFormParams{LayoutParams: lp("Status Page"), Monitors: []*storage.Monitor{m}, Assigned: map[int64]bool{}, AssignedData: map[int64]storage.StatusPageMonitor{}}),
 		"settings":       SettingsPage(SettingsParams{LayoutParams: lp("Settings")}),

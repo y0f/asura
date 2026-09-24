@@ -34,6 +34,36 @@ var NotificationSecretKeys = map[string][]string{
 	"gotify":     {"app_token"},
 }
 
+// NotificationRequiredSecrets lists the secret keys a channel cannot work
+// without. They can be replaced but not removed.
+var NotificationRequiredSecrets = map[string][]string{
+	"telegram":   {"bot_token"},
+	"discord":    {"webhook_url"},
+	"slack":      {"webhook_url"},
+	"teams":      {"webhook_url"},
+	"googlechat": {"webhook_url"},
+	"pagerduty":  {"routing_key"},
+	"opsgenie":   {"api_key"},
+	"pushover":   {"user_key", "app_token"},
+	"matrix":     {"access_token"},
+	"gotify":     {"app_token"},
+}
+
+// MissingRequiredSecret returns the first required secret key that is empty in
+// the channel's settings, or "" when all are present.
+func MissingRequiredSecret(ch *storage.NotificationChannel) string {
+	var m map[string]any
+	if err := json.Unmarshal(ch.Settings, &m); err != nil {
+		return ""
+	}
+	for _, k := range NotificationRequiredSecrets[ch.Type] {
+		if v, _ := m[k].(string); v == "" {
+			return k
+		}
+	}
+	return ""
+}
+
 // RedactSettings blanks the given keys in a settings JSON object. It returns the
 // redacted JSON and the set of keys that held a value.
 func RedactSettings(raw json.RawMessage, keys []string) (json.RawMessage, map[string]bool) {
@@ -60,7 +90,8 @@ func RedactSettings(raw json.RawMessage, keys []string) (json.RawMessage, map[st
 
 // MergeSecrets copies each secret key from old into updated when updated
 // leaves it empty, so a blank secret field means "keep the stored value".
-func MergeSecrets(updated, old json.RawMessage, keys []string) json.RawMessage {
+// Keys listed in clear are left empty, which is how a stored secret is removed.
+func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]bool) json.RawMessage {
 	if len(old) == 0 || len(keys) == 0 {
 		return updated
 	}
@@ -76,6 +107,9 @@ func MergeSecrets(updated, old json.RawMessage, keys []string) json.RawMessage {
 	}
 	changed := false
 	for _, k := range keys {
+		if clear[k] {
+			continue
+		}
 		pv, _ := prev[k].(string)
 		nv, _ := next[k].(string)
 		if nv == "" && pv != "" {
@@ -91,6 +125,21 @@ func MergeSecrets(updated, old json.RawMessage, keys []string) json.RawMessage {
 		return updated
 	}
 	return out
+}
+
+// StoredSecrets reports which of the given secret keys hold a value in raw.
+func StoredSecrets(raw json.RawMessage, keys []string) map[string]bool {
+	_, set := RedactSettings(raw, keys)
+	return set
+}
+
+// ClearSet reads the "Remove saved value" checkboxes from a submitted form.
+func ClearSet(values []string) map[string]bool {
+	m := make(map[string]bool, len(values))
+	for _, v := range values {
+		m[v] = true
+	}
+	return m
 }
 
 // channelEditData is what the notifications page hands to the edit dialog:

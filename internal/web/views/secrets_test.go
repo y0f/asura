@@ -25,7 +25,7 @@ func TestRedactSettings(t *testing.T) {
 func TestMergeSecretsKeepsStoredWhenBlank(t *testing.T) {
 	old := json.RawMessage(`{"bearer_token":"s3cret","method":"GET"}`)
 	upd := json.RawMessage(`{"bearer_token":"","method":"POST"}`)
-	got := MergeSecrets(upd, old, MonitorSecretKeys["http"])
+	got := MergeSecrets(upd, old, MonitorSecretKeys["http"], nil)
 	var m map[string]string
 	if err := json.Unmarshal(got, &m); err != nil {
 		t.Fatal(err)
@@ -38,9 +38,33 @@ func TestMergeSecretsKeepsStoredWhenBlank(t *testing.T) {
 func TestMergeSecretsReplacesWhenProvided(t *testing.T) {
 	old := json.RawMessage(`{"password":"old"}`)
 	upd := json.RawMessage(`{"password":"new"}`)
-	got := MergeSecrets(upd, old, MonitorSecretKeys["redis"])
+	got := MergeSecrets(upd, old, MonitorSecretKeys["redis"], nil)
 	if string(got) != string(upd) {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestMergeSecretsClearRemovesStored(t *testing.T) {
+	old := json.RawMessage(`{"password":"old"}`)
+	upd := json.RawMessage(`{"password":""}`)
+	got := MergeSecrets(upd, old, MonitorSecretKeys["redis"], map[string]bool{"password": true})
+	if strings.Contains(string(got), "old") {
+		t.Fatalf("cleared secret was restored: %s", got)
+	}
+}
+
+func TestMissingRequiredSecret(t *testing.T) {
+	ch := &storage.NotificationChannel{Type: "discord", Settings: json.RawMessage(`{"webhook_url":""}`)}
+	if MissingRequiredSecret(ch) != "webhook_url" {
+		t.Fatal("empty webhook_url not reported")
+	}
+	ch.Settings = json.RawMessage(`{"webhook_url":"https://x"}`)
+	if MissingRequiredSecret(ch) != "" {
+		t.Fatal("present webhook_url reported missing")
+	}
+	ch = &storage.NotificationChannel{Type: "email", Settings: json.RawMessage(`{"host":"h"}`)}
+	if MissingRequiredSecret(ch) != "" {
+		t.Fatal("optional email password treated as required")
 	}
 }
 

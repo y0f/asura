@@ -619,6 +619,8 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 		}
 		lp.Title = "Edit " + mon.Name
 		fd := monitorToFormData(mon)
+		fd.SecretsStored = views.StoredSecrets(mon.Settings, views.MonitorSecretKeys[mon.Type])
+		blankMonitorSecrets(fd)
 		fd.Groups = groups
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
@@ -714,6 +716,9 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 
 	mon, channelIDs, monTags := h.parseMonitorForm(r)
 	mon.ID = id
+	var storedSecrets map[string]bool
+	var existingSettings json.RawMessage
+	sameType := false
 
 	// The edit form does not submit an enabled/paused field, so preserve the
 	// existing enabled state (and created_at) instead of letting parseMonitorForm's
@@ -721,9 +726,10 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	if existing, err := h.store.GetMonitor(r.Context(), id); err == nil && existing != nil {
 		mon.Enabled = existing.Enabled
 		mon.CreatedAt = existing.CreatedAt
-		// Secret fields are rendered empty; blank means keep the stored value.
-		if mon.Type == existing.Type {
-			mon.Settings = views.MergeSecrets(mon.Settings, existing.Settings, views.MonitorSecretKeys[mon.Type])
+		sameType = existing.Type == mon.Type
+		if sameType {
+			storedSecrets = views.StoredSecrets(existing.Settings, views.MonitorSecretKeys[mon.Type])
+			existingSettings = existing.Settings
 		}
 		// Multi-step settings have no form editor; never let a form-mode save
 		// replace stored steps with nothing.
@@ -744,6 +750,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 		lp.Error = err.Error()
 		fd := monitorToFormData(mon)
+		fd.SecretsStored = storedSecrets
 		keepRawJSON(r, fd)
 		fd.Groups = groups
 		fd.NotificationChannels = channels
@@ -756,6 +763,14 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Secret fields are rendered empty: a blank field keeps the stored value
+	// and "Remove saved value" clears it. Merged only after validation, so a
+	// re-shown form never contains a stored secret.
+	submittedSettings := mon.Settings
+	if sameType {
+		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, views.MonitorSecretKeys[mon.Type], views.ClearSet(r.Form["clear_secrets"]))
+	}
+
 	if err := h.store.UpdateMonitor(r.Context(), mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
@@ -765,7 +780,9 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("web: update monitor", "error", err)
 		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 		lp.Error = "Failed to update monitor"
+		mon.Settings = submittedSettings
 		fd := monitorToFormData(mon)
+		fd.SecretsStored = storedSecrets
 		fd.Groups = groups
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
@@ -1118,6 +1135,17 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 	}
 
 	return mon, parseIDList(r.Form["notification_channel_ids[]"]), monTags
+}
+
+// blankMonitorSecrets clears stored secret values from form data so they are
+// never written into the edit page. MonitorSecretKeys lists the same fields.
+func blankMonitorSecrets(fd *views.MonitorFormParams) {
+	fd.HTTP.BasicAuthPass = ""
+	fd.HTTP.BearerToken = ""
+	fd.HTTP.OAuth2ClientSecret = ""
+	fd.HTTP.MTLSClientKey = ""
+	fd.MQTT.Password = ""
+	fd.Redis.Password = ""
 }
 
 // validateMonitorForm rejects invalid JSON typed in the advanced editors before

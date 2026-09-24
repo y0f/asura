@@ -219,7 +219,11 @@ templ notifWebhookFields() {
 		</div>
 		<div>
 			<label class="form-label" for="notif_webhook_secret">Secret</label>
-			<input id="notif_webhook_secret" type="password" autocomplete="off" name="notif_webhook_secret" x-model="webhook.secret" :placeholder="secretsSet.includes('secret') ? 'Saved. Leave blank to keep it.' : 'Optional HMAC-SHA256 secret'" class="form-input"/>
+			<input id="notif_webhook_secret" type="password" autocomplete="off" name="notif_webhook_secret" x-model="webhook.secret" :placeholder="kept('secret') ? 'Saved. Leave blank to keep it.' : 'Optional HMAC-SHA256 secret'" class="form-input"/>
+			<label x-show="kept('secret')" class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+				<input type="checkbox" name="clear_secrets" value="secret" :disabled="!kept('secret')" class="form-checkbox"/>
+				Remove saved value
+			</label>
 		</div>
 	</div>
 }
@@ -228,7 +232,7 @@ templ notifTelegramFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'telegram'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_telegram_bot_token">Bot Token</label>
-			<input id="notif_telegram_bot_token" type="password" autocomplete="off" name="notif_telegram_bot_token" x-model="telegram.bot_token" :required="!advancedNotifSettings && formData.type === 'telegram' && !secretsSet.includes('bot_token')" :placeholder="secretsSet.includes('bot_token') ? 'Saved. Leave blank to keep it.' : '123456:ABC-DEF1234...'" class="form-input"/>
+			<input id="notif_telegram_bot_token" type="password" autocomplete="off" name="notif_telegram_bot_token" x-model="telegram.bot_token" :required="!advancedNotifSettings && formData.type === 'telegram' && !kept('bot_token')" :placeholder="kept('bot_token') ? 'Saved. Leave blank to keep it.' : '123456:ABC-DEF1234...'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_telegram_chat_id">Chat ID</label>
@@ -241,7 +245,7 @@ templ notifDiscordFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'discord'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_discord_webhook_url">Webhook URL</label>
-			<input id="notif_discord_webhook_url" type="url" name="notif_discord_webhook_url" x-model="discord.webhook_url" :required="!advancedNotifSettings && formData.type === 'discord' && !secretsSet.includes('webhook_url')" :placeholder="secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://discord.com/api/webhooks/...'" class="form-input"/>
+			<input id="notif_discord_webhook_url" type="url" name="notif_discord_webhook_url" x-model="discord.webhook_url" :required="!advancedNotifSettings && formData.type === 'discord' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://discord.com/api/webhooks/...'" class="form-input"/>
 		</div>
 	</div>
 }
@@ -250,7 +254,7 @@ templ notifSlackFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'slack'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_slack_webhook_url">Webhook URL</label>
-			<input id="notif_slack_webhook_url" type="url" name="notif_slack_webhook_url" x-model="slack.webhook_url" :required="!advancedNotifSettings && formData.type === 'slack' && !secretsSet.includes('webhook_url')" :placeholder="secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://hooks.slack.com/services/...'" class="form-input"/>
+			<input id="notif_slack_webhook_url" type="url" name="notif_slack_webhook_url" x-model="slack.webhook_url" :required="!advancedNotifSettings && formData.type === 'slack' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://hooks.slack.com/services/...'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_slack_channel">Channel</label>
@@ -278,7 +282,11 @@ templ notifEmailFields() {
 			</div>
 			<div>
 				<label class="form-label" for="notif_email_password">Password</label>
-				<input id="notif_email_password" type="password" name="notif_email_password" x-model="email.password" :placeholder="secretsSet.includes('password') ? 'Saved. Leave blank to keep it.' : 'SMTP password'" class="form-input"/>
+				<input id="notif_email_password" type="password" name="notif_email_password" x-model="email.password" :placeholder="kept('password') ? 'Saved. Leave blank to keep it.' : 'SMTP password'" class="form-input"/>
+			<label x-show="kept('password')" class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+				<input type="checkbox" name="clear_secrets" value="password" :disabled="!kept('password')" class="form-checkbox"/>
+				Remove saved value
+			</label>
 			</div>
 		</div>
 		<div>
@@ -348,7 +356,7 @@ templ notifTeamsFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'teams'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_teams_webhook_url">Webhook URL</label>
-			<input id="notif_teams_webhook_url" type="url" name="notif_teams_webhook_url" x-model="teams.webhook_url" :required="!advancedNotifSettings && formData.type === 'teams' && !secretsSet.includes('webhook_url')" :placeholder="secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://outlook.office.com/webhook/...'" class="form-input"/>
+			<input id="notif_teams_webhook_url" type="url" name="notif_teams_webhook_url" x-model="teams.webhook_url" :required="!advancedNotifSettings && formData.type === 'teams' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://outlook.office.com/webhook/...'" class="form-input"/>
 		</div>
 	</div>
 }
@@ -357,7 +365,7 @@ templ notifPagerdutyFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'pagerduty'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_pagerduty_routing_key">Routing Key</label>
-			<input id="notif_pagerduty_routing_key" type="password" autocomplete="off" name="notif_pagerduty_routing_key" x-model="pagerduty.routing_key" :required="!advancedNotifSettings && formData.type === 'pagerduty' && !secretsSet.includes('routing_key')" :placeholder="secretsSet.includes('routing_key') ? 'Saved. Leave blank to keep it.' : 'Events API v2 integration key'" class="form-input"/>
+			<input id="notif_pagerduty_routing_key" type="password" autocomplete="off" name="notif_pagerduty_routing_key" x-model="pagerduty.routing_key" :required="!advancedNotifSettings && formData.type === 'pagerduty' && !kept('routing_key')" :placeholder="kept('routing_key') ? 'Saved. Leave blank to keep it.' : 'Events API v2 integration key'" class="form-input"/>
 			<p class="form-hint">From your PagerDuty service integration</p>
 		</div>
 	</div>
@@ -367,7 +375,7 @@ templ notifOpsgenieFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'opsgenie'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_opsgenie_api_key">API Key</label>
-			<input id="notif_opsgenie_api_key" type="password" autocomplete="off" name="notif_opsgenie_api_key" x-model="opsgenie.api_key" :required="!advancedNotifSettings && formData.type === 'opsgenie' && !secretsSet.includes('api_key')" :placeholder="secretsSet.includes('api_key') ? 'Saved. Leave blank to keep it.' : 'Opsgenie API integration key'" class="form-input"/>
+			<input id="notif_opsgenie_api_key" type="password" autocomplete="off" name="notif_opsgenie_api_key" x-model="opsgenie.api_key" :required="!advancedNotifSettings && formData.type === 'opsgenie' && !kept('api_key')" :placeholder="kept('api_key') ? 'Saved. Leave blank to keep it.' : 'Opsgenie API integration key'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_opsgenie_region">Region</label>
@@ -383,11 +391,11 @@ templ notifPushoverFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'pushover'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_pushover_user_key">User Key</label>
-			<input id="notif_pushover_user_key" type="text" name="notif_pushover_user_key" x-model="pushover.user_key" :required="!advancedNotifSettings && formData.type === 'pushover' && !secretsSet.includes('user_key')" :placeholder="secretsSet.includes('user_key') ? 'Saved. Leave blank to keep it.' : 'Your Pushover user key'" class="form-input"/>
+			<input id="notif_pushover_user_key" type="text" name="notif_pushover_user_key" x-model="pushover.user_key" :required="!advancedNotifSettings && formData.type === 'pushover' && !kept('user_key')" :placeholder="kept('user_key') ? 'Saved. Leave blank to keep it.' : 'Your Pushover user key'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_pushover_app_token">App Token</label>
-			<input id="notif_pushover_app_token" type="password" autocomplete="off" name="notif_pushover_app_token" x-model="pushover.app_token" :required="!advancedNotifSettings && formData.type === 'pushover' && !secretsSet.includes('app_token')" :placeholder="secretsSet.includes('app_token') ? 'Saved. Leave blank to keep it.' : 'Your Pushover application token'" class="form-input"/>
+			<input id="notif_pushover_app_token" type="password" autocomplete="off" name="notif_pushover_app_token" x-model="pushover.app_token" :required="!advancedNotifSettings && formData.type === 'pushover' && !kept('app_token')" :placeholder="kept('app_token') ? 'Saved. Leave blank to keep it.' : 'Your Pushover application token'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_pushover_priority">Priority</label>
@@ -415,7 +423,7 @@ templ notifGooglechatFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'googlechat'" x-cloak class="space-y-3">
 		<div>
 			<label class="form-label" for="notif_googlechat_webhook_url">Webhook URL</label>
-			<input id="notif_googlechat_webhook_url" type="url" name="notif_googlechat_webhook_url" x-model="googlechat.webhook_url" :required="!advancedNotifSettings && formData.type === 'googlechat' && !secretsSet.includes('webhook_url')" :placeholder="secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://chat.googleapis.com/v1/spaces/.../messages?key=...'" class="form-input"/>
+			<input id="notif_googlechat_webhook_url" type="url" name="notif_googlechat_webhook_url" x-model="googlechat.webhook_url" :required="!advancedNotifSettings && formData.type === 'googlechat' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://chat.googleapis.com/v1/spaces/.../messages?key=...'" class="form-input"/>
 		</div>
 	</div>
 }
@@ -428,7 +436,7 @@ templ notifMatrixFields() {
 		</div>
 		<div>
 			<label class="form-label" for="notif_matrix_access_token">Access Token</label>
-			<input id="notif_matrix_access_token" type="password" autocomplete="off" name="notif_matrix_access_token" x-model="matrix.access_token" :required="!advancedNotifSettings && formData.type === 'matrix' && !secretsSet.includes('access_token')" :placeholder="secretsSet.includes('access_token') ? 'Saved. Leave blank to keep it.' : 'syt_...'" class="form-input"/>
+			<input id="notif_matrix_access_token" type="password" autocomplete="off" name="notif_matrix_access_token" x-model="matrix.access_token" :required="!advancedNotifSettings && formData.type === 'matrix' && !kept('access_token')" :placeholder="kept('access_token') ? 'Saved. Leave blank to keep it.' : 'syt_...'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_matrix_room_id">Room ID</label>
@@ -445,7 +453,7 @@ templ notifGotifyFields() {
 		</div>
 		<div>
 			<label class="form-label" for="notif_gotify_app_token">App Token</label>
-			<input id="notif_gotify_app_token" type="password" autocomplete="off" name="notif_gotify_app_token" x-model="gotify.app_token" :required="!advancedNotifSettings && formData.type === 'gotify' && !secretsSet.includes('app_token')" :placeholder="secretsSet.includes('app_token') ? 'Saved. Leave blank to keep it.' : 'Application token from Gotify'" class="form-input"/>
+			<input id="notif_gotify_app_token" type="password" autocomplete="off" name="notif_gotify_app_token" x-model="gotify.app_token" :required="!advancedNotifSettings && formData.type === 'gotify' && !kept('app_token')" :placeholder="kept('app_token') ? 'Saved. Leave blank to keep it.' : 'Application token from Gotify'" class="form-input"/>
 		</div>
 		<div>
 			<label class="form-label" for="notif_gotify_priority">Priority</label>

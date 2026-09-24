@@ -14,6 +14,9 @@ type ProxyListParams struct {
 type ProxyFormParams struct {
 	LayoutParams
 	Proxy *storage.Proxy
+	// PasswordStored is true when the proxy already has a password on the
+	// server. Proxy.AuthPass then only ever holds a freshly submitted value.
+	PasswordStored bool
 }
 
 templ ProxyListPage(p ProxyListParams) {
@@ -109,11 +112,17 @@ templ ProxyFormPage(p ProxyFormParams) {
 					</div>
 					<div>
 						<label class="form-label" for="auth_pass">Password <span class="text-muted font-normal">(optional)</span></label>
-						<input id="auth_pass" type="password" name="auth_pass" autocomplete="new-password"
-							if p.Proxy.AuthPass != "" {
+						<input id="auth_pass" type="password" name="auth_pass" value={ p.Proxy.AuthPass } autocomplete="new-password"
+							if p.PasswordStored && p.Proxy.AuthPass == "" {
 								placeholder="Saved. Leave blank to keep it."
 							}
 							class="form-input"/>
+						if p.PasswordStored {
+							<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+								<input type="checkbox" name="clear_auth_pass" class="form-checkbox"/>
+								Remove saved value
+							</label>
+						}
 					</div>
 				</div>
 				<label class="flex items-center gap-2 cursor-pointer">

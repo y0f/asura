@@ -337,20 +337,33 @@ templ SettingText(label, name, value, placeholder, inputType string) {
 	</div>
 }
 
-// SettingPassword renders a labelled secret input. The stored value is never
-// written into the page: when one exists the field is empty and says so, and
-// submitting it blank keeps the stored value.
-templ SettingPassword(label, name, stored, placeholder string) {
+// SettingPassword renders a labelled secret input. A value already stored on
+// the server is never written into the page: the field shows a "saved" hint,
+// submitting it blank keeps the stored value, and a checkbox removes it. value
+// is only ever what the user just submitted (re-shown after a validation error).
+templ SettingPassword(label, name, key, value string, stored bool, placeholder string) {
 	<div>
 		<label class="form-label" for={ name }>{ label }</label>
-		<input id={ name } type="password" name={ name } autocomplete="new-password"
-			if stored != "" {
+		<input id={ name } type="password" name={ name } value={ value } autocomplete="new-password"
+			if stored && value == "" {
 				placeholder="Saved. Leave blank to keep it."
 			} else {
 				placeholder={ placeholder }
 			}
 			class="form-input"/>
+		if stored {
+			@ClearSecretCheckbox(key)
+		}
 	</div>
+}
+
+// ClearSecretCheckbox lets the user remove a stored secret, since a blank
+// secret field means "keep the stored value".
+templ ClearSecretCheckbox(key string) {
+	<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+		<input type="checkbox" name="clear_secrets" value={ key } class="form-checkbox"/>
+		Remove saved value
+	</label>
 }
 
 // SettingNumber renders a labelled number input. value/min/max/extraClass are

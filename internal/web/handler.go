@@ -31,6 +31,8 @@ type Handler struct {
 	loginRL            *httputil.RateLimiter
 	totpMu             sync.Mutex
 	totpChallenges     map[string]*totpChallenge
+	revealMu           sync.Mutex
+	agentReveals       map[string]agentReveal
 	done               chan struct{}
 }
 

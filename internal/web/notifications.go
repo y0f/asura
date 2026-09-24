@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 
-	if err := validate.ValidateNotificationChannel(ch); err != nil {
+	if err := validateChannelForm(ch); err != nil {
 		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
 		return
@@ -56,12 +57,14 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 	ch.ID = id
 
-	// Secret fields are sent to the browser blank; blank means keep.
+	// Secret fields are sent to the browser blank: a blank field keeps the
+	// stored value (only while the type is unchanged) and "Remove saved value"
+	// clears it.
 	if existing, err := h.store.GetNotificationChannel(r.Context(), id); err == nil && existing != nil && existing.Type == ch.Type {
-		ch.Settings = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type])
+		ch.Settings = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type], views.ClearSet(r.Form["clear_secrets"]))
 	}
 
-	if err := validate.ValidateNotificationChannel(ch); err != nil {
+	if err := validateChannelForm(ch); err != nil {
 		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
 		return
@@ -76,6 +79,18 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 
 	h.setFlash(w, "Notification channel updated")
 	h.redirect(w, r, "/notifications")
+}
+
+// validateChannelForm adds the web form's own check to the shared validation:
+// a channel must not be saved without the secret it needs to deliver.
+func validateChannelForm(ch *storage.NotificationChannel) error {
+	if err := validate.ValidateNotificationChannel(ch); err != nil {
+		return err
+	}
+	if k := views.MissingRequiredSecret(ch); k != "" {
+		return fmt.Errorf("%s is required for %s channels", strings.ReplaceAll(k, "_", " "), ch.Type)
+	}
+	return nil
 }
 
 func (h *Handler) NotificationDelete(w http.ResponseWriter, r *http.Request) {
