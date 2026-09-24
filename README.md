@@ -94,7 +94,7 @@ Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#
 
 ## Stack
 
-Go 1.25+, stdlib `net/http`, SQLite via `modernc.org/sqlite` (pure Go, zero CGO), [templ](https://templ.guide/), HTMX, Alpine.js, Tailwind CSS v4.
+Go 1.26+, stdlib `net/http`, SQLite via `modernc.org/sqlite` (pure Go, zero CGO), [templ](https://templ.guide/), HTMX, Alpine.js, Tailwind CSS v4.
 
 ## License
 
