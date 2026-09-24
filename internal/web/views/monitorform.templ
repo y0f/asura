@@ -81,6 +81,14 @@ func (p MonitorFormParams) httpMethodOrDefault() string {
 	return "GET"
 }
 
+// storedSecret reports whether a secret key is stored for monitorType. Stored
+// secrets belong to the monitor's saved type (MQTT and Redis share the
+// "password" key), and are only kept on save while the type is unchanged, so
+// another type's field never claims to be saved.
+func (p MonitorFormParams) storedSecret(monitorType, key string) bool {
+	return p.Monitor != nil && p.Monitor.Type == monitorType && p.SecretsStored[key]
+}
+
 func (p MonitorFormParams) mtlsEnabled() bool {
 	return p.HTTP.MTLSEnabled
 }
@@ -514,16 +522,16 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 			</div>
 			<div x-show="authMethod === 'basic'" x-cloak class="grid grid-cols-2 gap-4">
 				@SettingText("Username", "settings_basic_auth_user", p.HTTP.BasicAuthUser, "", "text")
-				@SettingPassword("Password", "settings_basic_auth_pass", "basic_auth_pass", p.HTTP.BasicAuthPass, p.SecretsStored["basic_auth_pass"], "")
+				@SettingPassword("Password", "settings_basic_auth_pass", "basic_auth_pass", p.HTTP.BasicAuthPass, p.storedSecret("http", "basic_auth_pass"), "")
 			</div>
 			<div x-show="authMethod === 'bearer'" x-cloak>
-				@SettingPassword("Token", "settings_bearer_token", "bearer_token", p.HTTP.BearerToken, p.SecretsStored["bearer_token"], "")
+				@SettingPassword("Token", "settings_bearer_token", "bearer_token", p.HTTP.BearerToken, p.storedSecret("http", "bearer_token"), "")
 			</div>
 			<div x-show="authMethod === 'oauth2'" x-cloak class="space-y-3">
 				@SettingText("Token URL", "settings_oauth2_token_url", p.HTTP.OAuth2TokenURL, "https://auth.example.com/oauth/token", "url")
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					@SettingText("Client ID", "settings_oauth2_client_id", p.HTTP.OAuth2ClientID, "", "text")
-					@SettingPassword("Client Secret", "settings_oauth2_client_secret", "oauth2_client_secret", p.HTTP.OAuth2ClientSecret, p.SecretsStored["oauth2_client_secret"], "")
+					@SettingPassword("Client Secret", "settings_oauth2_client_secret", "oauth2_client_secret", p.HTTP.OAuth2ClientSecret, p.storedSecret("http", "oauth2_client_secret"), "")
 				</div>
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
@@ -554,13 +562,13 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				<div>
 					<label class="form-label" for="settings_mtls_client_key">Client Key <span class="text-muted font-normal">(PEM)</span></label>
 					<textarea id="settings_mtls_client_key" name="settings_mtls_client_key" rows="4"
-						if p.SecretsStored["mtls_client_key"] && p.HTTP.MTLSClientKey == "" {
+						if p.storedSecret("http", "mtls_client_key") && p.HTTP.MTLSClientKey == "" {
 							placeholder="Saved. Leave blank to keep it."
 						} else {
 							placeholder="-----BEGIN PRIVATE KEY-----"
 						}
 						class="form-input font-mono text-xs resize-y">{ p.HTTP.MTLSClientKey }</textarea>
-					if p.SecretsStored["mtls_client_key"] {
+					if p.storedSecret("http", "mtls_client_key") {
 						@ClearSecretCheckbox("mtls_client_key")
 					}
 				</div>
@@ -688,7 +696,7 @@ templ monitorMQTTSettings(p MonitorFormParams) {
 		</div>
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			@SettingText("Username", "settings_mqtt_username", p.MQTT.Username, "Optional", "text")
-			@SettingPassword("Password", "settings_mqtt_password", "password", p.MQTT.Password, p.SecretsStored["password"], "Optional")
+			@SettingPassword("Password", "settings_mqtt_password", "password", p.MQTT.Password, p.storedSecret("mqtt", "password"), "Optional")
 		</div>
 		@SettingText("Expected Message", "settings_mqtt_expect", p.MQTT.ExpectMessage, "Optional message content to expect", "text")
 		<div class="flex items-center flex-wrap gap-5">
@@ -827,7 +835,7 @@ templ monitorSSHSettings(p MonitorFormParams) {
 
 templ monitorRedisSettings(p MonitorFormParams) {
 	<div x-show="monitorType === 'redis'" x-cloak class="space-y-4">
-		@SettingPassword("Password", "settings_redis_password", "password", p.Redis.Password, p.SecretsStored["password"], "Optional")
+		@SettingPassword("Password", "settings_redis_password", "password", p.Redis.Password, p.storedSecret("redis", "password"), "Optional")
 	</div>
 }
 

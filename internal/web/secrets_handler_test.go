@@ -195,3 +195,57 @@ func TestAgentCreateRedirectsAndRevealsOnce(t *testing.T) {
 }
 
 func strconvI(v int64) string { return strconv.FormatInt(v, 10) }
+
+func TestMonitorUpdateKeepsRequiredOAuthSecret(t *testing.T) {
+	h, store := storeHandler(t)
+	mon := &storage.Monitor{Name: "API", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true,
+		FailureThreshold: 1, SuccessThreshold: 1,
+		Settings: json.RawMessage(`{"auth_method":"oauth2","oauth2_token_url":"https://auth.example.com/token","oauth2_client_id":"id","oauth2_client_secret":"s3cret"}`)}
+	if err := store.CreateMonitor(context.Background(), mon); err != nil {
+		t.Fatal(err)
+	}
+	id := strconvI(mon.ID)
+	form := httpMonitorForm("", url.Values{
+		"name":                          {"API renamed"},
+		"settings_auth_method":          {"oauth2"},
+		"settings_oauth2_token_url":     {"https://auth.example.com/token"},
+		"settings_oauth2_client_id":     {"id"},
+		"settings_oauth2_client_secret": {""},
+	})
+	w := httptest.NewRecorder()
+	r := adminRequest("POST", "/monitors/"+id, form)
+	r.SetPathValue("id", id)
+	h.MonitorUpdate(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("saving with the secret left blank failed (%d): %s", w.Code, w.Body.String())
+	}
+	got, _ := store.GetMonitor(context.Background(), mon.ID)
+	if got.Name != "API renamed" || !strings.Contains(string(got.Settings), `"oauth2_client_secret":"s3cret"`) {
+		t.Fatalf("unexpected saved monitor: %s %s", got.Name, got.Settings)
+	}
+}
+
+func TestStoredSecretHintIsScopedToSavedType(t *testing.T) {
+	h, store := storeHandler(t)
+	mon := &storage.Monitor{Name: "Broker", Type: "mqtt", Target: "broker:1883", Interval: 60, Timeout: 10, Enabled: true,
+		FailureThreshold: 1, SuccessThreshold: 1, Settings: json.RawMessage(`{"password":"pw"}`)}
+	if err := store.CreateMonitor(context.Background(), mon); err != nil {
+		t.Fatal(err)
+	}
+	id := strconvI(mon.ID)
+	w := httptest.NewRecorder()
+	r := adminRequest("GET", "/monitors/"+id+"/edit", nil)
+	r.SetPathValue("id", id)
+	h.MonitorForm(w, r)
+	body := w.Body.String()
+	redis := body[strings.Index(body, `id="settings_redis_password"`):]
+	redis = redis[:strings.Index(redis, ">")]
+	if strings.Contains(redis, "Saved") {
+		t.Fatal("Redis password claims to be saved although the stored password belongs to MQTT")
+	}
+	mqtt := body[strings.Index(body, `id="settings_mqtt_password"`):]
+	mqtt = mqtt[:strings.Index(mqtt, ">")]
+	if !strings.Contains(mqtt, "Saved") {
+		t.Fatal("MQTT password should say it is saved")
+	}
+}

@@ -741,6 +741,15 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Secret fields are rendered empty: a blank field keeps the stored value
+	// and "Remove saved value" clears it. Validation runs on the merged
+	// settings (a kept secret still satisfies "required"), but a re-shown form
+	// is built from what was submitted, so it never contains a stored secret.
+	submittedSettings := mon.Settings
+	if sameType {
+		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, views.MonitorSecretKeys[mon.Type], views.ClearSet(r.Form["clear_secrets"]))
+	}
+
 	if err := validateMonitorForm(r, mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
@@ -749,6 +758,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 		lp.Error = err.Error()
+		mon.Settings = submittedSettings
 		fd := monitorToFormData(mon)
 		fd.SecretsStored = storedSecrets
 		keepRawJSON(r, fd)
@@ -761,14 +771,6 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		fd.SelectedTags = monTags
 		h.renderMonitorForm(w, r, lp, fd)
 		return
-	}
-
-	// Secret fields are rendered empty: a blank field keeps the stored value
-	// and "Remove saved value" clears it. Merged only after validation, so a
-	// re-shown form never contains a stored secret.
-	submittedSettings := mon.Settings
-	if sameType {
-		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, views.MonitorSecretKeys[mon.Type], views.ClearSet(r.Form["clear_secrets"]))
 	}
 
 	if err := h.store.UpdateMonitor(r.Context(), mon); err != nil {
