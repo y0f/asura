@@ -676,6 +676,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		lp := h.newLayoutParams(r, "New Monitor", "monitors")
 		lp.Error = "Failed to create monitor"
 		fd := monitorToFormData(mon)
+		keepRawJSON(r, fd)
 		fd.Groups = groups
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
@@ -785,6 +786,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		mon.Settings = submittedSettings
 		fd := monitorToFormData(mon)
 		fd.SecretsStored = storedSecrets
+		keepRawJSON(r, fd)
 		fd.Groups = groups
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies

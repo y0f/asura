@@ -134,3 +134,15 @@ func TestPublicOverallWording(t *testing.T) {
 		t.Errorf("two of three down: got %q", l)
 	}
 }
+
+func TestDashboardSummaryWording(t *testing.T) {
+	if got := (DashboardParams{Total: 3, Paused: 3}).summary(); strings.Contains(got, "everything is up") {
+		t.Errorf("all paused: %q", got)
+	}
+	if got := (DashboardParams{Total: 2, Up: 2}).summary(); !strings.Contains(got, "everything is up") {
+		t.Errorf("all up: %q", got)
+	}
+	if got := (DashboardParams{Total: 3, Up: 2, Down: 1}).summary(); strings.Contains(got, "everything is up") || !strings.Contains(got, "1 down") {
+		t.Errorf("one down: %q", got)
+	}
+}

@@ -249,3 +249,25 @@ func TestStoredSecretHintIsScopedToSavedType(t *testing.T) {
 		t.Fatal("MQTT password should say it is saved")
 	}
 }
+
+func TestNotificationInvalidJSONDoesNotWipeSettings(t *testing.T) {
+	h, store := storeHandler(t)
+	ch := &storage.NotificationChannel{Name: "TG", Type: "telegram", Enabled: true,
+		Settings: json.RawMessage(`{"bot_token":"tok","chat_id":"-100"}`), Events: []string{"incident.created"}}
+	if err := store.CreateNotificationChannel(context.Background(), ch); err != nil {
+		t.Fatal(err)
+	}
+	id := strconvI(ch.ID)
+	for _, raw := range []string{`{"bot_token":"","chat_id":"-100"`, ``, `null`} {
+		form := url.Values{"name": {"TG"}, "type": {"telegram"}, "enabled": {"on"}, "notif_settings_mode": {"json"},
+			"settings_json": {raw}, "event_incident_created": {"on"}}
+		w := httptest.NewRecorder()
+		r := adminRequest("POST", "/notifications/"+id, form)
+		r.SetPathValue("id", id)
+		h.NotificationUpdate(w, r)
+		got, _ := store.GetNotificationChannel(context.Background(), ch.ID)
+		if !strings.Contains(string(got.Settings), `"chat_id":"-100"`) {
+			t.Fatalf("settings JSON %q wiped the channel: %s", raw, got.Settings)
+		}
+	}
+}

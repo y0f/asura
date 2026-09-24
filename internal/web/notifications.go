@@ -31,6 +31,11 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 
+	if err := notificationJSONError(r); err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/notifications")
+		return
+	}
 	if err := validateChannelForm(ch); err != nil {
 		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
@@ -57,6 +62,14 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 	ch.ID = id
 
+	// Reject a bad JSON editor submission before merging, otherwise the stored
+	// secrets alone would pass "settings is required" and wipe everything else.
+	if err := notificationJSONError(r); err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/notifications")
+		return
+	}
+
 	// Secret fields are sent to the browser blank: a blank field keeps the
 	// stored value (only while the type is unchanged) and "Remove saved value"
 	// clears it.
@@ -79,6 +92,23 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 
 	h.setFlash(w, "Notification channel updated")
 	h.redirect(w, r, "/notifications")
+}
+
+// notificationJSONError rejects an empty or invalid "Edit as JSON" submission,
+// which parseNotificationForm would otherwise turn into empty settings.
+func notificationJSONError(r *http.Request) error {
+	if r.FormValue("notif_settings_mode") != "json" {
+		return nil
+	}
+	raw := strings.TrimSpace(r.FormValue("settings_json"))
+	if raw == "" {
+		return fmt.Errorf("settings JSON is required")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil || obj == nil {
+		return fmt.Errorf("settings JSON must be a valid JSON object")
+	}
+	return nil
 }
 
 // validateChannelForm adds the web form's own check to the shared validation:

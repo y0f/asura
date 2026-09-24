@@ -76,7 +76,7 @@ func (p DashboardParams) summary() string {
 	if p.Paused > 0 {
 		parts = append(parts, fmt.Sprintf("%d paused", p.Paused))
 	}
-	if p.Down == 0 && p.Degraded == 0 && p.Total > 0 {
+	if p.Total > 0 && p.Up == p.Total {
 		parts = append(parts, "everything is up")
 	}
 	return strings.Join(parts, " · ")
