@@ -19,8 +19,9 @@
 /* Scan the templ views for utility usage. */
 @source "../internal/web/views";
 
-/* Status colours are chosen at runtime in Go (helpers.go), so safelist them. */
-@source inline("bg-emerald-500 bg-yellow-500 bg-red-500 bg-orange-500 bg-emerald-400 bg-red-400 bg-yellow-400 bg-orange-400 bg-gray-500 text-emerald-400 text-red-400 text-yellow-400 text-orange-400 text-gray-500 text-gray-400 text-blue-400 bg-emerald-500/10 bg-red-500/10 bg-yellow-500/10 bg-orange-500/10 bg-blue-500/10 bg-gray-500/10 border-emerald-500/20 border-red-500/20 border-yellow-500/20 border-orange-500/20 border-blue-500/20 border-gray-500/20 bg-muted/20 badge-blue badge-emerald badge-red badge-yellow badge-zinc");
+/* Status tones are chosen at runtime in Go (helpers.go builds "text-" + tone),
+   so the tone utilities are listed here for the scanner. */
+@source inline("text-ok text-warn text-major text-crit text-info text-muted bg-ok bg-warn bg-major bg-crit bg-info bg-muted border-ok/50 border-warn/50 border-major/50 border-crit/50 badge-blue badge-emerald badge-red badge-yellow badge-orange badge-zinc");
 
 /* Design system (modular layers) */
 @import "./css/tokens.css";

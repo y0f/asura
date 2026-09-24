@@ -3,6 +3,7 @@ function notifChannels(basePath) {
         basePath: basePath,
         showForm: false,
         editId: 0,
+        secretsSet: [],
         advancedNotifSettings: false,
         formData: { name: '', type: 'webhook', enabled: true, settings_json: '{}' },
         events: { created: true, resolved: true, acknowledged: false, reminder: true, changed: false, certChanged: false },
@@ -24,6 +25,7 @@ function notifChannels(basePath) {
         },
         resetForm() {
             this.editId = 0;
+            this.secretsSet = [];
             this.advancedNotifSettings = false;
             this.formData = { name: '', type: 'webhook', enabled: true, settings_json: '{}' };
             this.events = { created: true, resolved: true, acknowledged: false, reminder: true, changed: false, certChanged: false };
@@ -44,6 +46,7 @@ function notifChannels(basePath) {
         editChannel(ch) {
             this.resetForm();
             this.editId = ch.id;
+            this.secretsSet = ch.secrets_set || [];
             this.formData.name = ch.name;
             this.formData.type = ch.type;
             this.formData.enabled = ch.enabled;

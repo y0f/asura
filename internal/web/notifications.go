@@ -31,14 +31,14 @@ func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 
 	if err := validate.ValidateNotificationChannel(ch); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
 		return
 	}
 
 	if err := h.store.CreateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("web: create notification", "error", err)
-		h.setFlash(w, "Failed to create channel")
+		h.setError(w, "Failed to create channel")
 		h.redirect(w, r, "/notifications")
 		return
 	}
@@ -56,15 +56,20 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 	ch.ID = id
 
+	// Secret fields are sent to the browser blank; blank means keep.
+	if existing, err := h.store.GetNotificationChannel(r.Context(), id); err == nil && existing != nil && existing.Type == ch.Type {
+		ch.Settings = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type])
+	}
+
 	if err := validate.ValidateNotificationChannel(ch); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
 		return
 	}
 
 	if err := h.store.UpdateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("web: update notification", "error", err)
-		h.setFlash(w, "Failed to update channel")
+		h.setError(w, "Failed to update channel")
 		h.redirect(w, r, "/notifications")
 		return
 	}
@@ -94,7 +99,7 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	}
 	ch, err := h.store.GetNotificationChannel(r.Context(), id)
 	if err != nil {
-		h.setFlash(w, "Channel not found")
+		h.setError(w, "Channel not found")
 		h.redirect(w, r, "/notifications")
 		return
 	}
@@ -107,7 +112,7 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.notifier.SendTest(ch, testInc); err != nil {
-		h.setFlash(w, "Test failed: "+err.Error())
+		h.setError(w, "Test failed: "+err.Error())
 	} else {
 		h.setFlash(w, "Test notification sent")
 	}

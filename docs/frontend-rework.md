@@ -596,3 +596,67 @@ No user-visible change.
 3. **Default theme:** `system` (recommended) or keep `dark`.
 4. **CRUD rule in step 7:** is the modal/page split above acceptable, or should everything be a
    page?
+
+---
+
+## 4. Progress on this branch
+
+After the audit, this branch implemented a first large slice of the plan. The target look is
+flat and dense:
+
+- Inter on a near-black neutral ramp (`#101010` canvas, `#181818` cards, `#242424`/`#323232`
+  borders) with 1px borders, 4px radii and 32px controls
+- bold page headings with a muted subtitle
+- one accent: yellow for active and focus states in dark, violet for the filled primary button
+  and in light
+- colour otherwise reserved for status
+
+`web/README.md` describes the design system as built.
+
+### Done
+
+| Plan step | What landed |
+|---|---|
+| 0 | New `generated` CI job: fails when `*_templ.go`, `tailwind.css` or `docs.css` are stale. Rebuild trigger now covers `web/css/`, view Go files and docs (F-14). `make css` also builds the docs CSS. `internal/web/views/render_test.go` renders all 27 pages (write and read-only keys) and asserts: one `<h1>`, labelled controls, named buttons and links, no password values, no write actions for read-only keys. |
+| 1 | Fixed: F-01, F-02, F-04, F-05, F-06, F-07, F-08, F-10, F-11, F-13, F-15, F-16, F-17, F-18, F-19 (renamed to "Go to…"), F-20. See the list below the table. |
+| 2 | F-12. Stored secrets are no longer rendered: monitor auth, OAuth and mTLS secrets, MQTT and Redis passwords, proxy password, and notification channel tokens and webhook URLs. Fields say "Saved. Leave blank to keep it." and handlers merge blanks with the stored value (`views/secrets.go`, tested). The JSON editors show redacted settings. |
+| 3 (partial) | Status wording and status/uptime colours come from `StatusTone`, `StatusLabel`, `UptimeTone` and `slaState`. Filter and pager URLs are built with `url.Values`. Audit filters cover every action and entity actually written. |
+| 4 | Semantic tone tokens (`ok`, `warn`, `major`, `crit`, `info`) with light remaps. No palette classes or hex colours remain in templates, Go helpers or chart JS. Paused is neutral. Legend and SVG colours match. |
+| 5 | `PageHeader`, `StatCard`, `Pager`, `RelTime`, `ToolbarNewButtonClick` and a dot-and-label `StatusPill`. One badge system, one row-action style. Every page was rewritten onto them, which removes the duplicate `<h1>`s and the four back-link styles. |
+| 8 (partial) | Skip link. The mobile drawer is `inert` while closed and closes with Escape. Desktop topbar removed (the sidebar carries the brand). All static assets are content-hashed. htmx and uPlot are deferred. |
+| 9 (partial) | Dialogs: initial focus (FormModal) and focus return (ConfirmModal), `alertdialog` with an accessible name. Toasts are a fixed live region (`role=status`, or `role=alert` for errors). Keyboard-reachable channel checkboxes. `aria-pressed` on toggles. Labels on every filter and condition-builder control. `<time>` with absolute UTC on hover. Text summary for the public uptime bars. On-call "on call now" is shown in text. |
+| 10 (partial) | Removed the global `main table {display:block}` hack. Monitor and incident tables drop secondary columns on small screens. Forms and stat grids collapse to one column. The 19 type pills are now a Type select. Stat values shrink on phones. |
+| 11 | Removed the body glows, public noise and glow layers, glass blur, gradient switch, press-scale animation, nav chevrons, uppercase eyebrows and the indigo tag default. The dashboard leads with problems (sorted by status) and a one-line summary; the request and visitor tiles are gone. Wordmark instead of the GIF logo. Rewritten copy. |
+| 12 (partial) | Public status page: visitor wording (Operational, Degraded, Outage, Partial/Major outage), follows the OS theme, absolute incident times, labelled subscribe form with `aria-pressed`, cache-busted CSS. |
+
+Correctness fixes from step 1:
+
+- **Toasts (F-01):** failures now show as persistent error toasts, and raw vacuum errors are no
+  longer echoed.
+- **Agent token (F-02):** shown once in a panel with a copy button.
+- **Invalid JSON (F-04):** rejected with an error, and the typed text is kept.
+- **Multi-step monitors (F-03):** JSON-only in the form, and a form-mode save never drops stored
+  steps.
+- **Refresh and reliability (F-05, F-11, F-13):** the chart initialises once, the manual-status
+  input survives auto-refresh, and all static assets are cache-busted.
+- **Lists (F-06, F-07, F-08):** correct empty states, filters are preserved and escaped, and the
+  group detail page paginates.
+- **Permissions (F-10):** write controls are hidden from read-only keys.
+- **Public page and SLA (F-15, F-16):** partial vs major outage wording, and one SLA and uptime
+  threshold set.
+- **Other:** import-replace asks for confirmation (F-17), no double "Paused" (F-18), the palette
+  reads "Go to…" (F-19), and `capitalize` is rune-safe (F-20).
+
+### Still open
+
+- **F-09:** there are no edit flows for maintenance windows, on-call rotations or agents, and no
+  monitor picker for maintenance (step 7).
+- **Step 6:** Alpine state is still assembled in Go strings for the tag, group, escalation and
+  monitor-form dialogs.
+- **Step 7:** field-level validation errors (HTTP 422 with per-field messages) and pending-state
+  submit buttons.
+- **Step 8:** app-wide `hx-boost`, pausing polling while the user is typing, SSE reconnect with
+  backoff, and a server-side search for the palette.
+- **Step 9:** focus trapping inside dialogs and the mobile drawer.
+- **Step 12:** a separate, smaller CSS bundle for the public page.
+- **Step 13:** generating the docs theme from `web/css/tokens.css` (D-08).

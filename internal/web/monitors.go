@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,7 +41,8 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 
 	fd.SettingsJSON = "{}"
 	if len(mon.Settings) > 0 {
-		fd.SettingsJSON = string(mon.Settings)
+		redacted, _ := views.RedactSettings(mon.Settings, views.MonitorSecretKeys[mon.Type])
+		fd.SettingsJSON = string(redacted)
 	}
 	fd.AssertionsRaw = "{}"
 	if len(mon.Assertions) > 0 {
@@ -641,7 +643,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 
 	h.applyMonitorDefaults(mon)
 
-	if err := validate.ValidateMonitor(mon); err != nil {
+	if err := validateMonitorForm(r, mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
@@ -650,6 +652,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		lp := h.newLayoutParams(r, "New Monitor", "monitors")
 		lp.Error = err.Error()
 		fd := monitorToFormData(mon)
+		keepRawJSON(r, fd)
 		fd.Groups = groups
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
@@ -718,12 +721,21 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	if existing, err := h.store.GetMonitor(r.Context(), id); err == nil && existing != nil {
 		mon.Enabled = existing.Enabled
 		mon.CreatedAt = existing.CreatedAt
+		// Secret fields are rendered empty; blank means keep the stored value.
+		if mon.Type == existing.Type {
+			mon.Settings = views.MergeSecrets(mon.Settings, existing.Settings, views.MonitorSecretKeys[mon.Type])
+		}
+		// Multi-step settings have no form editor; never let a form-mode save
+		// replace stored steps with nothing.
+		if mon.Type == "http_multi" && len(mon.Settings) == 0 && existing.Type == "http_multi" {
+			mon.Settings = existing.Settings
+		}
 	} else {
 		h.redirect(w, r, "/monitors")
 		return
 	}
 
-	if err := validate.ValidateMonitor(mon); err != nil {
+	if err := validateMonitorForm(r, mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
@@ -732,6 +744,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 		lp.Error = err.Error()
 		fd := monitorToFormData(mon)
+		keepRawJSON(r, fd)
 		fd.Groups = groups
 		fd.NotificationChannels = channels
 		fd.Proxies = proxies
@@ -809,7 +822,7 @@ func (h *Handler) MonitorPause(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.store.SetMonitorEnabled(r.Context(), id, false); err != nil {
 		h.logger.Error("web: pause monitor", "error", err)
-		h.setFlash(w, "Failed to pause monitor")
+		h.setError(w, "Failed to pause monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 		return
 	}
@@ -828,7 +841,7 @@ func (h *Handler) MonitorResume(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.store.SetMonitorEnabled(r.Context(), id, true); err != nil {
 		h.logger.Error("web: resume monitor", "error", err)
-		h.setFlash(w, "Failed to resume monitor")
+		h.setError(w, "Failed to resume monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 		return
 	}
@@ -848,14 +861,14 @@ func (h *Handler) MonitorSetManualStatus(w http.ResponseWriter, r *http.Request)
 
 	status := r.FormValue("status")
 	if status != "up" && status != "down" && status != "degraded" {
-		h.setFlash(w, "Invalid status")
+		h.setError(w, "Invalid status")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 		return
 	}
 
 	mon, err := h.store.GetMonitor(r.Context(), id)
 	if err != nil {
-		h.setFlash(w, "Monitor not found")
+		h.setError(w, "Monitor not found")
 		h.redirect(w, r, "/monitors")
 		return
 	}
@@ -886,7 +899,7 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	src, err := h.store.GetMonitor(ctx, id)
 	if err != nil {
-		h.setFlash(w, "Monitor not found")
+		h.setError(w, "Monitor not found")
 		h.redirect(w, r, "/monitors")
 		return
 	}
@@ -915,7 +928,7 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.CreateMonitor(ctx, clone); err != nil {
 		h.logger.Error("web: clone monitor", "error", err)
-		h.setFlash(w, "Failed to clone monitor")
+		h.setError(w, "Failed to clone monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 		return
 	}
@@ -959,7 +972,7 @@ func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 	case "pause":
 		if _, err := h.store.BulkSetMonitorsEnabled(ctx, ids, false); err != nil {
 			h.logger.Error("web: bulk pause", "error", err)
-			h.setFlash(w, "Failed to pause monitors")
+			h.setError(w, "Failed to pause monitors")
 			h.redirect(w, r, "/monitors")
 			return
 		}
@@ -967,7 +980,7 @@ func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 	case "resume":
 		if _, err := h.store.BulkSetMonitorsEnabled(ctx, ids, true); err != nil {
 			h.logger.Error("web: bulk resume", "error", err)
-			h.setFlash(w, "Failed to resume monitors")
+			h.setError(w, "Failed to resume monitors")
 			h.redirect(w, r, "/monitors")
 			return
 		}
@@ -975,7 +988,7 @@ func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 	case "delete":
 		if _, err := h.store.BulkDeleteMonitors(ctx, ids); err != nil {
 			h.logger.Error("web: bulk delete", "error", err)
-			h.setFlash(w, "Failed to delete monitors")
+			h.setError(w, "Failed to delete monitors")
 			h.redirect(w, r, "/monitors")
 			return
 		}
@@ -989,13 +1002,13 @@ func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := h.store.BulkSetMonitorGroup(ctx, ids, gid); err != nil {
 			h.logger.Error("web: bulk set group", "error", err)
-			h.setFlash(w, "Failed to update monitors")
+			h.setError(w, "Failed to update monitors")
 			h.redirect(w, r, "/monitors")
 			return
 		}
 		msg = strconv.Itoa(len(ids)) + " monitors updated"
 	default:
-		h.setFlash(w, "Invalid action")
+		h.setError(w, "Invalid action")
 		h.redirect(w, r, "/monitors")
 		return
 	}
@@ -1105,6 +1118,33 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 	}
 
 	return mon, parseIDList(r.Form["notification_channel_ids[]"]), monTags
+}
+
+// validateMonitorForm rejects invalid JSON typed in the advanced editors before
+// the normal monitor validation runs. Without this, invalid JSON was silently
+// dropped and saved as empty settings or conditions.
+func validateMonitorForm(r *http.Request, mon *storage.Monitor) error {
+	for _, f := range []struct{ prefix, label string }{{"settings", "Settings"}, {"assertions", "Conditions"}} {
+		if r.FormValue(f.prefix+"_mode") != "json" {
+			continue
+		}
+		raw := strings.TrimSpace(r.FormValue(f.prefix + "_json"))
+		if raw != "" && !json.Valid([]byte(raw)) {
+			return fmt.Errorf("%s JSON is not valid JSON", f.label)
+		}
+	}
+	return validate.ValidateMonitor(mon)
+}
+
+// keepRawJSON puts the user's JSON editor text back into a re-rendered form so a
+// validation error does not discard what they typed.
+func keepRawJSON(r *http.Request, fd *views.MonitorFormParams) {
+	if r.FormValue("settings_mode") == "json" {
+		fd.SettingsJSON = r.FormValue("settings_json")
+	}
+	if r.FormValue("assertions_mode") == "json" {
+		fd.AssertionsRaw = r.FormValue("assertions_json")
+	}
 }
 
 func parseJSONOrForm(r *http.Request, prefix string, formFn func(*http.Request) json.RawMessage) json.RawMessage {

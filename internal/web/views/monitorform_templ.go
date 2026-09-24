@@ -166,6 +166,13 @@ func advancedSectionData(p MonitorFormParams) string {
 	return "{showAdvanced: " + show + "}"
 }
 
+func (p MonitorFormParams) header() PageHeaderParams {
+	if p.Monitor.ID != 0 {
+		return PageHeaderParams{Title: "Edit monitor", Subtitle: p.Monitor.Name, BackHref: fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Monitor.ID), BackLabel: p.Monitor.Name}
+	}
+	return PageHeaderParams{Title: "New monitor", Subtitle: "Pick what to check and how often.", BackHref: p.BasePath + "/monitors", BackLabel: "Monitors"}
+}
+
 func intOrDefault(v, def int) string {
 	if v != 0 {
 		return fmt.Sprint(v)
@@ -206,20 +213,24 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div x-cloak x-data=\"")
+			templ_7745c5c3_Err = PageHeader(p.header()).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <div x-cloak x-data=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 170, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 178, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><form method=\"POST\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" x-effect=\"if (monitorType === 'http_multi') advancedSettings = true\"><form method=\"POST\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -231,7 +242,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				var templ_7745c5c3_Var4 templ.SafeURL
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Monitor.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 173, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 182, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -249,7 +260,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				var templ_7745c5c3_Var5 templ.SafeURL
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/monitors"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 175, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 184, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -260,14 +271,14 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " class=\"max-w-3xl mx-auto space-y-4 pb-28 md:pb-4\"><div class=\"card card-pad\"><h2 class=\"text-sm font-semibold text-white mb-4\">General</h2><div class=\"space-y-4\"><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"name\">Name</label> <input id=\"name\" type=\"text\" name=\"name\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " class=\"max-w-3xl space-y-6 pb-24 md:pb-4\"><div class=\"card card-pad\"><h2 class=\"text-lg font-semibold mb-4\">General</h2><div class=\"space-y-4\"><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"name\">Name</label> <input id=\"name\" type=\"text\" name=\"name\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Monitor.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 184, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 193, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -280,33 +291,33 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Monitor.Target)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 223, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 232, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" :placeholder=\"{http:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883'}[monitorType] || 'https://example.com'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"description\">Description <span class=\"text-muted font-normal\">(optional)</span></label> <textarea id=\"description\" name=\"description\" rows=\"2\" maxlength=\"5000\" placeholder=\"Runbook notes, context, links…\" class=\"form-input resize-y\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" :placeholder=\"{http:'https://example.com', http_multi:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883', smtp:'mail.example.com', ssh:'host:22', redis:'host:6379', postgresql:'host:5432', udp:'host:port'}[monitorType] || 'https://example.com'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"description\">Description <span class=\"text-muted font-normal\">(optional)</span></label> <textarea id=\"description\" name=\"description\" rows=\"2\" maxlength=\"5000\" placeholder=\"Runbook notes, context, links…\" class=\"form-input resize-y\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(p.Monitor.Description)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 227, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 236, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</textarea></div></div></div><div x-show=\"monitorType !== 'heartbeat' && monitorType !== 'manual'\" x-cloak><div class=\"card card-pad\"><h2 class=\"text-sm font-semibold text-white mb-4\">Check Schedule</h2><div class=\"grid grid-cols-2 md:grid-cols-4 gap-4\"><div><label class=\"form-label\" for=\"interval\">Check every</label><div class=\"relative\"><input id=\"interval\" type=\"number\" name=\"interval\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</textarea></div></div></div><div x-show=\"monitorType !== 'heartbeat' && monitorType !== 'manual'\" x-cloak><div class=\"card card-pad\"><h2 class=\"text-lg font-semibold mb-4\">Schedule</h2><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"interval\">Check every</label><div class=\"relative\"><input id=\"interval\" type=\"number\" name=\"interval\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrDefault(p.Monitor.Interval, 60))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 238, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 247, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -319,7 +330,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrDefault(p.Monitor.Timeout, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 245, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 254, Col: 101}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -332,7 +343,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrDefault(p.Monitor.FailureThreshold, 3))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 251, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 260, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -345,26 +356,26 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrDefault(p.Monitor.SuccessThreshold, 1))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 255, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 264, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" min=\"1\" class=\"form-input tabular-nums\"></div></div></div></div><div class=\"card card-pad\" x-show=\"monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'\" x-cloak><div class=\"flex items-center justify-between mb-4\"><h2 class=\"text-sm font-semibold text-white\">Settings</h2><button type=\"button\" @click=\"advancedSettings = !advancedSettings\" class=\"text-2xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\"><span x-text=\"advancedSettings ? 'Form Mode' : 'Advanced (JSON)'\"></span></button></div><input type=\"hidden\" name=\"settings_mode\" :value=\"advancedSettings ? 'json' : 'form'\"><div x-show=\"advancedSettings\" x-cloak><textarea name=\"settings_json\" rows=\"8\" placeholder=\"{}\" class=\"form-input font-mono resize-y\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" min=\"1\" class=\"form-input tabular-nums\"></div></div></div></div><div class=\"card card-pad\" x-show=\"monitorType !== 'heartbeat' && monitorType !== 'icmp' && monitorType !== 'manual'\" x-cloak><div class=\"flex items-center justify-between mb-4\"><h2 class=\"text-lg font-semibold\">Settings</h2><button type=\"button\" x-show=\"monitorType !== 'http_multi'\" @click=\"advancedSettings = !advancedSettings\" class=\"btn-secondary btn-sm\"><span x-text=\"advancedSettings ? 'Use form' : 'Edit as JSON'\">Edit as JSON</span></button></div><input type=\"hidden\" name=\"settings_mode\" :value=\"advancedSettings ? 'json' : 'form'\"><div x-show=\"advancedSettings\" x-cloak><label class=\"sr-only\" for=\"settings_json\">Settings (JSON)</label> <textarea id=\"settings_json\" name=\"settings_json\" rows=\"8\" placeholder=\"{}\" class=\"form-input font-mono text-xs resize-y\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(p.SettingsJSON)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 269, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 279, Col: 144}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</textarea></div><div x-show=\"!advancedSettings\" class=\"space-y-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</textarea><p x-show=\"monitorType === 'http_multi'\" class=\"form-hint\">Multi-step HTTP checks are configured as JSON: a <code class=\"font-mono\">steps</code> array of requests run in order.</p></div><div x-show=\"!advancedSettings\" class=\"space-y-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -443,13 +454,13 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(advancedSectionData(p))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 290, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 301, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"><button type=\"button\" @click=\"showAdvanced = !showAdvanced\" :aria-expanded=\"showAdvanced ? 'true' : 'false'\" aria-controls=\"routing-behavior-panel\" aria-label=\"Toggle routing and behavior settings\" class=\"flex items-center gap-2 w-full text-left px-2 py-2 rounded-control border-t border-line group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\"><span class=\"text-sm font-medium text-muted-light group-hover:text-white transition-colors\">Routing &amp; behavior</span> <svg aria-hidden=\"true\" class=\"w-4 h-4 text-muted-light group-hover:text-white transition-transform\" :class=\"showAdvanced && 'rotate-90'\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"9 18 15 12 9 6\"></polyline></svg></button><div id=\"routing-behavior-panel\" x-show=\"showAdvanced\" x-cloak class=\"mt-4\"><div class=\"card card-pad\"><div class=\"space-y-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"><button type=\"button\" @click=\"showAdvanced = !showAdvanced\" :aria-expanded=\"showAdvanced ? 'true' : 'false'\" aria-controls=\"routing-behavior-panel\" aria-label=\"Toggle routing and behavior settings\" class=\"flex items-center gap-2 w-full text-left py-2 group cursor-pointer\"><span class=\"text-lg font-semibold text-white\">Routing &amp; behaviour</span> <svg aria-hidden=\"true\" class=\"w-4 h-4 text-muted group-hover:text-white transition-transform\" :class=\"showAdvanced && 'rotate-90'\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polyline points=\"9 18 15 12 9 6\"></polyline></svg></button><div id=\"routing-behavior-panel\" x-show=\"showAdvanced\" x-cloak class=\"mt-4\"><div class=\"card card-pad\"><div class=\"space-y-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -466,7 +477,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(g.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 304, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 315, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 					if templ_7745c5c3_Err != nil {
@@ -489,7 +500,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 307, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 318, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
@@ -505,7 +516,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div><label class=\"form-label\">Tags</label> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div><div class=\"form-label\">Tags</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -517,7 +528,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(tagSelectorData(p))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 315, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 326, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 				if templ_7745c5c3_Err != nil {
@@ -535,7 +546,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var18 string
 					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("toggleTag(%d)", i))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 319, Col: 54}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 330, Col: 54}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 					if templ_7745c5c3_Err != nil {
@@ -546,48 +557,48 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var19 string
-					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags[%d].on ? 'border-brand/30 bg-brand/[0.06]' : 'border-line hover:border-line-light'", i))
+					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags[%d].on ? 'border-brand text-white' : 'border-line-light text-muted-light'", i))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 320, Col: 128}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 331, Col: 119}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" class=\"inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs transition-colors cursor-pointer select-none\"><span class=\"w-1.5 h-1.5 rounded-full shrink-0\" style=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" :aria-pressed=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var20 string
-					templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("background-color: " + tag.Color)
+					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags[%d].on", i))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 322, Col: 102}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 332, Col: 59}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\"></span> <span :class=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"inline-flex items-center gap-2 rounded-control border px-2 h-8 text-sm cursor-pointer select-none hover:bg-surface-200\"><span class=\"dot\" style=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var21 string
-					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("tags[%d].on ? 'text-white' : 'text-muted-light'", i))
+					templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("background-color: " + tag.Color)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 323, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 334, Col: 72}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\"></span> <span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(tag.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 323, Col: 107}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 335, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {
@@ -598,25 +609,25 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div><template x-if=\"tags.some(t => t.on)\"><div class=\"mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2\"><template x-for=\"(t, i) in tags\" :key=\"t.id\"><template x-if=\"t.on\"><div class=\"flex items-center gap-2 rounded border border-line px-3 py-2\"><input type=\"hidden\" name=\"tag_ids[]\" :value=\"t.id\"> <span class=\"w-1.5 h-1.5 rounded-full shrink-0\" :style=\"'background-color:' + t.color\"></span> <span class=\"text-2xs text-muted-light shrink-0\" x-text=\"t.name\"></span> <input type=\"text\" name=\"tag_values[]\" :value=\"t.val\" @input=\"t.val = $event.target.value\" placeholder=\"value (optional)\" class=\"form-input py-1 text-xs flex-1 min-w-0\"></div></template></template></div></template></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div><template x-if=\"tags.some(t => t.on)\"><div class=\"mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2\"><template x-for=\"(t, i) in tags\" :key=\"t.id\"><template x-if=\"t.on\"><div class=\"flex items-center gap-2 rounded-control border border-line-light px-2 py-1.5\"><input type=\"hidden\" name=\"tag_ids[]\" :value=\"t.id\"> <span class=\"w-1.5 h-1.5 rounded-full shrink-0\" :style=\"'background-color:' + t.color\"></span> <span class=\"text-sm text-white shrink-0\" x-text=\"t.name\"></span> <input type=\"text\" name=\"tag_values[]\" :value=\"t.val\" @input=\"t.val = $event.target.value\" placeholder=\"value (optional)\" :aria-label=\"'Value for tag ' + t.name\" class=\"form-input h-7 text-xs flex-1 min-w-0\"></div></template></template></div></template></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<p class=\"text-xs text-muted\">No tags yet. <a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<p class=\"text-sm text-muted\">No tags yet. <a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var23 templ.SafeURL
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/tags"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 344, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 356, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" class=\"text-brand hover:text-brand/80 transition-colors\">Create tags</a> to label monitors.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" class=\"text-white underline underline-offset-2\">Create tags</a> to label monitors.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -638,7 +649,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var24 string
 					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(px.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 353, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 365, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 					if templ_7745c5c3_Err != nil {
@@ -661,7 +672,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s (%s://%s:%d)", px.Name, px.Protocol, px.Host, px.Port))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 356, Col: 87}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 368, Col: 87}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 					if templ_7745c5c3_Err != nil {
@@ -678,19 +689,19 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				}
 			}
 			if len(p.NotificationChannels) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div><label class=\"form-label\">Notification Channels</label><p class=\"text-2xs text-muted mb-2\">Leave all unchecked to use all channels.</p><div class=\"flex flex-wrap gap-1.5\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div><div class=\"form-label\">Notification channels</div><p class=\"form-hint mt-0 mb-2\">Leave all unchecked to notify every channel.</p><div class=\"flex flex-wrap gap-1.5\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, ch := range p.NotificationChannels {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<label class=\"inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs transition-colors cursor-pointer select-none has-checked:border-brand/30 has-checked:bg-brand/[0.06] border-line hover:border-line-light\"><input type=\"checkbox\" name=\"notification_channel_ids[]\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<label class=\"inline-flex items-center gap-2 rounded-control border border-line-light px-2 h-8 text-sm cursor-pointer select-none hover:bg-surface-200 has-checked:border-brand has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand\"><input type=\"checkbox\" name=\"notification_channel_ids[]\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(ch.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 368, Col: 95}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 380, Col: 95}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 					if templ_7745c5c3_Err != nil {
@@ -706,33 +717,33 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, " class=\"hidden\"> <span class=\"text-muted-light\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, " class=\"form-checkbox\"> <span class=\"text-white\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var27 string
 					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 373, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 385, Col: 47}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</span> <span class=\"text-muted\">(")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</span> <span class=\"text-muted\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var28 string
 					templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 374, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 386, Col: 47}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, ")</span></label>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</span></label>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -755,7 +766,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var29 string
 					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(ep.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 386, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 398, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 					if templ_7745c5c3_Err != nil {
@@ -778,7 +789,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					var templ_7745c5c3_Var30 string
 					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s (%d steps)", ep.Name, len(ep.Steps)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 389, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 401, Col: 69}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 					if templ_7745c5c3_Err != nil {
@@ -894,20 +905,20 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, ">High (1.5 sigma)</option></select><p class=\"text-2xs text-muted mt-1\">Mark as degraded when response time exceeds the rolling baseline</p></div><div><label class=\"form-label\" for=\"resend_interval\">Resend Notification Interval (s)</label> <input id=\"resend_interval\" type=\"number\" name=\"resend_interval\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, ">High (1.5 sigma)</option></select><p class=\"form-hint\">Mark as degraded when response time exceeds the rolling baseline</p></div><div><label class=\"form-label\" for=\"resend_interval\">Resend Notification Interval (s)</label> <input id=\"resend_interval\" type=\"number\" name=\"resend_interval\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.Monitor.ResendInterval))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 417, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 429, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\" min=\"0\" placeholder=\"0 = disabled\" class=\"form-input max-w-[200px] tabular-nums\"><p class=\"text-2xs text-muted mt-1\">Resend notification every N seconds while down (0 = disabled)</p></div><div class=\"flex items-center flex-wrap gap-5\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\" min=\"0\" placeholder=\"0 = disabled\" class=\"form-input sm:max-w-[200px] tabular-nums\"><p class=\"form-hint\">Resend notification every N seconds while down (0 = disabled)</p></div><div class=\"flex items-center flex-wrap gap-5\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -923,17 +934,17 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</div></div></div></div></div><div class=\"sticky bottom-0 inset-x-0 z-10 flex items-center gap-3 -mx-5 px-5 py-3 mt-2 border-t border-line bg-surface/95 backdrop-blur md:static md:mx-0 md:px-0 md:py-0 md:border-0 md:bg-transparent md:backdrop-blur-none\"><button type=\"submit\" class=\"btn-primary btn-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</div></div></div></div></div><div class=\"sticky bottom-0 z-10 flex items-center gap-2 py-3 border-t border-line bg-surface md:static md:py-0 md:border-0 md:bg-transparent\"><button type=\"submit\" class=\"btn-primary\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Monitor.ID != 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "Update")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "Save changes")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "Create")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "Create monitor")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -950,7 +961,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				var templ_7745c5c3_Var32 templ.SafeURL
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Monitor.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 439, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 451, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -968,7 +979,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 				var templ_7745c5c3_Var33 templ.SafeURL
 				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/monitors"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 441, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 453, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 				if templ_7745c5c3_Err != nil {
@@ -979,7 +990,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, " class=\"btn-secondary btn-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\">Cancel</a></div></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, " class=\"btn-secondary\">Cancel</a></div></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1014,7 +1025,7 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 			templ_7745c5c3_Var34 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "<div x-show=\"monitorType === 'http'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_method\">Method</label> <select id=\"settings_method\" name=\"settings_method\" x-model=\"httpMethod\" class=\"form-select\"><option value=\"GET\">GET</option> <option value=\"POST\">POST</option> <option value=\"PUT\">PUT</option> <option value=\"PATCH\">PATCH</option> <option value=\"DELETE\">DELETE</option> <option value=\"HEAD\">HEAD</option> <option value=\"OPTIONS\">OPTIONS</option></select></div><div><label class=\"form-label\" for=\"settings_expected_status\">Expected Status</label> <input id=\"settings_expected_status\" type=\"number\" name=\"settings_expected_status\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "<div x-show=\"monitorType === 'http'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_method\">Method</label> <select id=\"settings_method\" name=\"settings_method\" x-model=\"httpMethod\" class=\"form-select\"><option value=\"GET\">GET</option> <option value=\"POST\">POST</option> <option value=\"PUT\">PUT</option> <option value=\"PATCH\">PATCH</option> <option value=\"DELETE\">DELETE</option> <option value=\"HEAD\">HEAD</option> <option value=\"OPTIONS\">OPTIONS</option></select></div><div><label class=\"form-label\" for=\"settings_expected_status\">Expected Status</label> <input id=\"settings_expected_status\" type=\"number\" name=\"settings_expected_status\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1026,7 +1037,7 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.HTTP.ExpectedStatus))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 469, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 481, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 			if templ_7745c5c3_Err != nil {
@@ -1084,7 +1095,7 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(p.HTTP.Body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 486, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 498, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 		if templ_7745c5c3_Err != nil {
@@ -1126,7 +1137,7 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "<div class=\"grid grid-cols-2 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "<div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1138,14 +1149,14 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "</div><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_oauth2_scopes\">Scopes <span class=\"text-muted font-normal\">(optional)</span></label> <input id=\"settings_oauth2_scopes\" type=\"text\" name=\"settings_oauth2_scopes\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "</div><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_oauth2_scopes\">Scopes <span class=\"text-muted font-normal\">(optional)</span></label> <input id=\"settings_oauth2_scopes\" type=\"text\" name=\"settings_oauth2_scopes\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.HTTP.OAuth2Scopes)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 516, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 528, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -1158,7 +1169,7 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.HTTP.OAuth2Audience)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 520, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 532, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -1174,59 +1185,61 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, " class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Mutual TLS (mTLS)</span></label><div x-show=\"mtlsEnabled\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"settings_mtls_client_cert\">Client Certificate <span class=\"text-muted font-normal\">(PEM)</span></label> <textarea id=\"settings_mtls_client_cert\" name=\"settings_mtls_client_cert\" rows=\"4\" placeholder=\"-----BEGIN CERTIFICATE-----\" class=\"form-input font-mono text-xs resize-y\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, " class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Mutual TLS (mTLS)</span></label><div x-show=\"mtlsEnabled\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"settings_mtls_client_cert\">Client Certificate <span class=\"text-muted font-normal\">(PEM)</span></label> <textarea id=\"settings_mtls_client_cert\" name=\"settings_mtls_client_cert\" rows=\"4\" placeholder=\"-----BEGIN CERTIFICATE-----\" class=\"form-input font-mono text-xs resize-y\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(p.HTTP.MTLSClientCert)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 537, Col: 199}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 549, Col: 199}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "</textarea></div><div><label class=\"form-label\" for=\"settings_mtls_client_key\">Client Key <span class=\"text-muted font-normal\">(PEM)</span></label> <textarea id=\"settings_mtls_client_key\" name=\"settings_mtls_client_key\" rows=\"4\" placeholder=\"-----BEGIN PRIVATE KEY-----\" class=\"form-input font-mono text-xs resize-y\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "</textarea></div><div><label class=\"form-label\" for=\"settings_mtls_client_key\">Client Key <span class=\"text-muted font-normal\">(PEM)</span></label> <textarea id=\"settings_mtls_client_key\" name=\"settings_mtls_client_key\" rows=\"4\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if p.HTTP.MTLSClientKey != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, " placeholder=\"Saved. Leave blank to keep it.\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, " placeholder=\"-----BEGIN PRIVATE KEY-----\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, " class=\"form-input font-mono text-xs resize-y\"></textarea></div><div><label class=\"form-label\" for=\"settings_mtls_ca_cert\">CA Certificate <span class=\"text-muted font-normal\">(optional, PEM)</span></label> <textarea id=\"settings_mtls_ca_cert\" name=\"settings_mtls_ca_cert\" rows=\"3\" placeholder=\"-----BEGIN CERTIFICATE-----\" class=\"form-input font-mono text-xs resize-y\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var40 string
-		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(p.HTTP.MTLSClientKey)
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(p.HTTP.MTLSCACert)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 541, Col: 196}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 563, Col: 187}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "</textarea></div><div><label class=\"form-label\" for=\"settings_mtls_ca_cert\">CA Certificate <span class=\"text-muted font-normal\">(optional, PEM)</span></label> <textarea id=\"settings_mtls_ca_cert\" name=\"settings_mtls_ca_cert\" rows=\"3\" placeholder=\"-----BEGIN CERTIFICATE-----\" class=\"form-input font-mono text-xs resize-y\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</textarea><p class=\"form-hint\">Custom CA for self-signed server certificates</p></div></div></div><div><label class=\"form-label\" for=\"settings_max_redirects\">Max Redirects</label> <input id=\"settings_max_redirects\" type=\"number\" name=\"settings_max_redirects\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var41 string
-		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(p.HTTP.MTLSCACert)
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.MaxRedirects))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 545, Col: 187}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 570, Col: 116}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "</textarea><p class=\"text-2xs text-muted mt-1\">Custom CA for self-signed server certificates</p></div></div></div><div><label class=\"form-label\" for=\"settings_max_redirects\">Max Redirects</label> <input id=\"settings_max_redirects\" type=\"number\" name=\"settings_max_redirects\" value=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var42 string
-		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.MaxRedirects))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 552, Col: 116}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "\" min=\"0\" max=\"30\" class=\"form-input max-w-[200px] tabular-nums\"><p class=\"text-2xs text-muted mt-1\">0 = don't follow redirects</p></div><div class=\"flex items-center flex-wrap gap-5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "\" min=\"0\" max=\"30\" class=\"form-input sm:max-w-[200px] tabular-nums\"><p class=\"form-hint\">0 = don't follow redirects</p></div><div class=\"flex items-center flex-wrap gap-5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1238,7 +1251,7 @@ func monitorHTTPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1262,12 +1275,12 @@ func monitorTCPSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var43 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var43 == nil {
-			templ_7745c5c3_Var43 = templ.NopComponent
+		templ_7745c5c3_Var42 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var42 == nil {
+			templ_7745c5c3_Var42 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "<div x-show=\"monitorType === 'tcp'\" x-cloak class=\"space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "<div x-show=\"monitorType === 'tcp'\" x-cloak class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1279,7 +1292,7 @@ func monitorTCPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1303,95 +1316,95 @@ func monitorDNSSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var44 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var44 == nil {
-			templ_7745c5c3_Var44 = templ.NopComponent
+		templ_7745c5c3_Var43 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var43 == nil {
+			templ_7745c5c3_Var43 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "<div x-show=\"monitorType === 'dns'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_record_type\">Record Type</label> <select id=\"settings_record_type\" name=\"settings_record_type\" class=\"form-select\"><option value=\"A\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "<div x-show=\"monitorType === 'dns'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_record_type\">Record Type</label> <select id=\"settings_record_type\" name=\"settings_record_type\" class=\"form-select\"><option value=\"A\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.DNS.RecordType == "A" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, ">A</option> <option value=\"AAAA\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if p.DNS.RecordType == "AAAA" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, ">AAAA</option> <option value=\"CNAME\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, ">A</option> <option value=\"AAAA\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.DNS.RecordType == "CNAME" {
+		if p.DNS.RecordType == "AAAA" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, ">CNAME</option> <option value=\"MX\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, ">AAAA</option> <option value=\"CNAME\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.DNS.RecordType == "MX" {
+		if p.DNS.RecordType == "CNAME" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, ">MX</option> <option value=\"TXT\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, ">CNAME</option> <option value=\"MX\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.DNS.RecordType == "TXT" {
+		if p.DNS.RecordType == "MX" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, ">TXT</option> <option value=\"NS\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, ">MX</option> <option value=\"TXT\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.DNS.RecordType == "NS" {
+		if p.DNS.RecordType == "TXT" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, ">NS</option> <option value=\"SOA\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, ">TXT</option> <option value=\"NS\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.DNS.RecordType == "SOA" {
+		if p.DNS.RecordType == "NS" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, ">SOA</option></select></div><div><label class=\"form-label\" for=\"settings_dns_server\">DNS Server</label> <input id=\"settings_dns_server\" type=\"text\" name=\"settings_dns_server\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, ">NS</option> <option value=\"SOA\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var45 string
-		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.DNS.Server)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 586, Col: 95}
+		if p.DNS.RecordType == "SOA" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, ">SOA</option></select></div><div><label class=\"form-label\" for=\"settings_dns_server\">DNS Server</label> <input id=\"settings_dns_server\" type=\"text\" name=\"settings_dns_server\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "\" placeholder=\"Optional (e.g. 8.8.8.8)\" class=\"form-input\"></div></div></div>")
+		var templ_7745c5c3_Var44 string
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.DNS.Server)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 604, Col: 95}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "\" placeholder=\"Optional (e.g. 8.8.8.8)\" class=\"form-input\"></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1415,20 +1428,20 @@ func monitorTLSSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var46 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var46 == nil {
-			templ_7745c5c3_Var46 = templ.NopComponent
+		templ_7745c5c3_Var45 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var45 == nil {
+			templ_7745c5c3_Var45 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "<div x-show=\"monitorType === 'tls'\" x-cloak class=\"space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "<div x-show=\"monitorType === 'tls'\" x-cloak class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = SettingNumber("Warning Days Before Expiry", "settings_warn_days_before", intOrDefault(p.TLS.WarnDaysBefore, 30), "", "1", "365", "max-w-[200px]").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = SettingNumber("Warning Days Before Expiry", "settings_warn_days_before", intOrDefault(p.TLS.WarnDaysBefore, 30), "", "1", "365", "sm:max-w-[200px]").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1452,12 +1465,12 @@ func monitorWSSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var47 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var47 == nil {
-			templ_7745c5c3_Var47 = templ.NopComponent
+		templ_7745c5c3_Var46 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var46 == nil {
+			templ_7745c5c3_Var46 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "<div x-show=\"monitorType === 'websocket'\" x-cloak class=\"space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "<div x-show=\"monitorType === 'websocket'\" x-cloak class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1473,7 +1486,7 @@ func monitorWSSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1497,12 +1510,12 @@ func monitorCommandSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var48 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var48 == nil {
-			templ_7745c5c3_Var48 = templ.NopComponent
+		templ_7745c5c3_Var47 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var47 == nil {
+			templ_7745c5c3_Var47 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "<div x-show=\"monitorType === 'command'\" x-cloak class=\"space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "<div x-show=\"monitorType === 'command'\" x-cloak class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1510,20 +1523,20 @@ func monitorCommandSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "<div><label class=\"form-label\" for=\"settings_args\">Arguments</label> <input id=\"settings_args\" type=\"text\" name=\"settings_args\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "<div><label class=\"form-label\" for=\"settings_args\">Arguments</label> <input id=\"settings_args\" type=\"text\" name=\"settings_args\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var49 string
-		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.cmdArgsStr())
+		var templ_7745c5c3_Var48 string
+		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.cmdArgsStr())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 611, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 629, Col: 84}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "\" placeholder=\"--verbose, --timeout=5\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Comma-separated</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "\" placeholder=\"--verbose, --timeout=5\" class=\"form-input\"><p class=\"form-hint\">Comma-separated</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1547,38 +1560,38 @@ func monitorDockerSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var50 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var50 == nil {
-			templ_7745c5c3_Var50 = templ.NopComponent
+		templ_7745c5c3_Var49 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var49 == nil {
+			templ_7745c5c3_Var49 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "<div x-show=\"monitorType === 'docker'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_container_name\">Container Name / ID</label> <input id=\"settings_container_name\" type=\"text\" name=\"settings_container_name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "<div x-show=\"monitorType === 'docker'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_container_name\">Container Name / ID</label> <input id=\"settings_container_name\" type=\"text\" name=\"settings_container_name\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var50 string
+		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Docker.ContainerName)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 639, Col: 112}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "\" placeholder=\"my-container or abc123def\" class=\"form-input\"><p class=\"form-hint\">Overrides target if set</p></div><div><label class=\"form-label\" for=\"settings_socket_path\">Docker Socket Path</label> <input id=\"settings_socket_path\" type=\"text\" name=\"settings_socket_path\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var51 string
-		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Docker.ContainerName)
+		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Docker.SocketPath)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 621, Col: 112}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 644, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "\" placeholder=\"my-container or abc123def\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Overrides target if set</p></div><div><label class=\"form-label\" for=\"settings_socket_path\">Docker Socket Path</label> <input id=\"settings_socket_path\" type=\"text\" name=\"settings_socket_path\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var52 string
-		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Docker.SocketPath)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 626, Col: 103}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "\" placeholder=\"/var/run/docker.sock\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Default: /var/run/docker.sock</p></div><div class=\"flex items-center flex-wrap gap-5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "\" placeholder=\"/var/run/docker.sock\" class=\"form-input\"><p class=\"form-hint\">Default: /var/run/docker.sock</p></div><div class=\"flex items-center flex-wrap gap-5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1586,7 +1599,7 @@ func monitorDockerSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1610,25 +1623,25 @@ func monitorDomainSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var53 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var53 == nil {
-			templ_7745c5c3_Var53 = templ.NopComponent
+		templ_7745c5c3_Var52 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var52 == nil {
+			templ_7745c5c3_Var52 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "<div x-show=\"monitorType === 'domain'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_domain_warn_days\">Warning Days Before Expiry</label> <input id=\"settings_domain_warn_days\" type=\"number\" name=\"settings_domain_warn_days\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "<div x-show=\"monitorType === 'domain'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_domain_warn_days\">Warning Days Before Expiry</label> <input id=\"settings_domain_warn_days\" type=\"number\" name=\"settings_domain_warn_days\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var54 string
-		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrDefault(p.Domain.WarnDaysBefore, 30))
+		var templ_7745c5c3_Var53 string
+		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrDefault(p.Domain.WarnDaysBefore, 30))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 639, Col: 137}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 657, Col: 137}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "\" min=\"1\" max=\"365\" class=\"form-input max-w-[200px] tabular-nums\"><p class=\"text-2xs text-muted mt-1\">Mark as degraded when domain expires within this many days</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "\" min=\"1\" max=\"365\" class=\"form-input sm:max-w-[200px] tabular-nums\"><p class=\"form-hint\">Mark as degraded when domain expires within this many days</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1652,25 +1665,25 @@ func monitorGRPCSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var55 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var55 == nil {
-			templ_7745c5c3_Var55 = templ.NopComponent
+		templ_7745c5c3_Var54 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var54 == nil {
+			templ_7745c5c3_Var54 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "<div x-show=\"monitorType === 'grpc'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_grpc_service\">Service Name</label> <input id=\"settings_grpc_service\" type=\"text\" name=\"settings_grpc_service\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "<div x-show=\"monitorType === 'grpc'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_grpc_service\">Service Name</label> <input id=\"settings_grpc_service\" type=\"text\" name=\"settings_grpc_service\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var56 string
-		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.GRPC.ServiceName)
+		var templ_7745c5c3_Var55 string
+		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.GRPC.ServiceName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 649, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 667, Col: 104}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "\" placeholder=\"Leave empty for overall health\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">gRPC service to check (empty = all services)</p></div><div class=\"flex items-center flex-wrap gap-5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "\" placeholder=\"Leave empty for overall health\" class=\"form-input\"><p class=\"form-hint\">gRPC service to check (empty = all services)</p></div><div class=\"flex items-center flex-wrap gap-5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1682,7 +1695,7 @@ func monitorGRPCSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1706,12 +1719,12 @@ func monitorMQTTSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var57 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var57 == nil {
-			templ_7745c5c3_Var57 = templ.NopComponent
+		templ_7745c5c3_Var56 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var56 == nil {
+			templ_7745c5c3_Var56 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "<div x-show=\"monitorType === 'mqtt'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-2 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "<div x-show=\"monitorType === 'mqtt'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1723,7 +1736,7 @@ func monitorMQTTSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "</div><div class=\"grid grid-cols-2 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "</div><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1735,7 +1748,7 @@ func monitorMQTTSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1743,7 +1756,7 @@ func monitorMQTTSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "<div class=\"flex items-center flex-wrap gap-5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "<div class=\"flex items-center flex-wrap gap-5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1751,7 +1764,7 @@ func monitorMQTTSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1775,25 +1788,25 @@ func monitorAssertions(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var58 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var58 == nil {
-			templ_7745c5c3_Var58 = templ.NopComponent
+		templ_7745c5c3_Var57 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var57 == nil {
+			templ_7745c5c3_Var57 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "<div class=\"card card-pad\"><div class=\"flex items-center justify-between mb-4\"><h2 class=\"text-sm font-semibold text-white\">Conditions</h2><button type=\"button\" x-show=\"conditions.groups.length > 0 || advancedAssertions\" @click=\"advancedAssertions = !advancedAssertions\" class=\"text-2xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\"><span x-text=\"advancedAssertions ? 'Form Mode' : 'Advanced (JSON)'\"></span></button></div><input type=\"hidden\" name=\"assertions_mode\" :value=\"advancedAssertions ? 'json' : 'form'\"><div x-show=\"advancedAssertions\" x-cloak><textarea name=\"assertions_json\" rows=\"8\" placeholder=\"{}\" class=\"form-input font-mono text-xs resize-y\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "<div class=\"card card-pad\"><div class=\"flex items-center justify-between mb-4\"><h2 class=\"text-lg font-semibold\">Conditions</h2><button type=\"button\" x-show=\"conditions.groups.length > 0 || advancedAssertions\" @click=\"advancedAssertions = !advancedAssertions\" class=\"btn-secondary btn-sm\"><span x-text=\"advancedAssertions ? 'Use form' : 'Edit as JSON'\">Edit as JSON</span></button></div><input type=\"hidden\" name=\"assertions_mode\" :value=\"advancedAssertions ? 'json' : 'form'\"><div x-show=\"advancedAssertions\" x-cloak><label class=\"sr-only\" for=\"assertions_json\">Conditions (JSON)</label> <textarea id=\"assertions_json\" name=\"assertions_json\" rows=\"8\" placeholder=\"{}\" class=\"form-input font-mono text-xs resize-y\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var59 string
-		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(p.AssertionsRaw)
+		var templ_7745c5c3_Var58 string
+		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(p.AssertionsRaw)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 686, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 705, Col: 146}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "</textarea></div><div x-show=\"!advancedAssertions\"><input type=\"hidden\" name=\"group_count\" :value=\"conditions.groups.length\"> <input type=\"hidden\" name=\"condition_set_operator\" :value=\"conditions.operator\"><div x-show=\"conditions.groups.length === 0\" class=\"flex flex-col items-center gap-3 text-center\"><div class=\"px-4 py-10 text-center text-xs text-muted\">No conditions yet</div><button type=\"button\" @click=\"addGroup()\" class=\"btn-secondary btn-sm btn-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\">+ Add Group</button></div><div class=\"space-y-1\"><template x-for=\"(g, gi) in conditions.groups\" :key=\"gi\"><div><!-- AND/OR connector between groups --><div x-show=\"gi > 0\" class=\"flex items-center gap-2 my-2\"><div class=\"flex-1 border-t border-line/30\"></div><select x-model=\"conditions.operator\" class=\"form-select py-0.5 px-2 text-2xs font-medium w-20\"><option value=\"and\">AND</option> <option value=\"or\">OR</option></select><div class=\"flex-1 border-t border-line/30\"></div></div><!-- Per-group hidden structural inputs --><input type=\"hidden\" :name=\"'group_' + gi + '_operator'\" :value=\"g.operator\"> <input type=\"hidden\" :name=\"'group_' + gi + '_count'\" :value=\"g.conditions.length\"><div class=\"panel overflow-hidden\"><div class=\"flex items-center justify-between px-3 py-2 bg-surface-200/40 border-b border-line/40\"><div class=\"flex items-center gap-2\"><span class=\"text-2xs text-muted\">Match</span> <select x-model=\"g.operator\" class=\"form-select py-0.5 px-2 text-2xs font-medium w-20\"><option value=\"and\">ALL</option> <option value=\"or\">ANY</option></select> <span class=\"text-2xs text-muted\">conditions</span></div><button type=\"button\" @click=\"conditions.groups.splice(gi, 1)\" class=\"row-action hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\" title=\"Remove group\" aria-label=\"Remove group\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div><div class=\"p-3 space-y-2\"><template x-for=\"(c, ci) in g.conditions\" :key=\"ci\"><div class=\"flex items-start gap-2\"><div class=\"flex-1 grid grid-cols-2 gap-1.5\"><select :name=\"'group_' + gi + '_type_' + ci\" x-model=\"c.type\" class=\"form-select py-1.5 text-xs\"><option value=\"status_code\">Status Code</option> <option value=\"body_contains\">Body Contains</option> <option value=\"body_regex\">Body Regex</option> <option value=\"json_path\">JSON Path</option> <option value=\"header\">Header</option> <option value=\"response_time\">Response Time (ms)</option> <option value=\"cert_expiry\">Cert Expiry (days)</option> <option value=\"dns_record\">DNS Record</option></select> <select :name=\"'group_' + gi + '_operator_' + ci\" x-model=\"c.operator\" class=\"form-select py-1.5 text-xs\"><template x-for=\"op in operatorsFor(c.type)\" :key=\"op[0]\"><option :value=\"op[0]\" x-text=\"op[1]\"></option></template></select><div x-show=\"needsTarget(c.type)\"><input type=\"text\" :name=\"'group_' + gi + '_target_' + ci\" x-model=\"c.target\" placeholder=\"Header name or JSON path\" class=\"form-input py-1.5 text-xs\"></div><div x-show=\"needsValue(c.operator)\" :class=\"needsTarget(c.type) ? '' : 'col-span-2'\"><input type=\"text\" :name=\"'group_' + gi + '_value_' + ci\" x-model=\"c.value\" placeholder=\"Expected value\" class=\"form-input py-1.5 text-xs\"></div></div><div class=\"flex items-center gap-2 pt-1.5 shrink-0\"><label class=\"flex items-center gap-1 cursor-pointer\" title=\"Soft: mark as degraded instead of down\"><input type=\"checkbox\" :name=\"'group_' + gi + '_degraded_' + ci\" value=\"on\" :checked=\"c.degraded\" @change=\"c.degraded = $event.target.checked\" class=\"form-checkbox w-3 h-3\"> <span class=\"text-2xs text-muted\">soft</span></label> <button type=\"button\" @click=\"g.conditions.splice(ci, 1)\" class=\"row-action hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\" title=\"Remove condition\" aria-label=\"Remove condition\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div></div></template><button type=\"button\" @click=\"g.conditions.push(newCond())\" class=\"text-xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\">+ Add Condition</button></div></div></div></template></div><button type=\"button\" x-show=\"conditions.groups.length > 0\" @click=\"addGroup()\" class=\"mt-3 text-xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\">+ Add Group</button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "</textarea></div><div x-show=\"!advancedAssertions\"><input type=\"hidden\" name=\"group_count\" :value=\"conditions.groups.length\"> <input type=\"hidden\" name=\"condition_set_operator\" :value=\"conditions.operator\"><div x-show=\"conditions.groups.length === 0\" class=\"flex flex-wrap items-center justify-between gap-3\"><p class=\"text-sm text-muted\">No conditions. The check passes when the target responds successfully.</p><button type=\"button\" @click=\"addGroup()\" class=\"btn-secondary btn-sm\">Add condition group</button></div><div class=\"space-y-1\"><template x-for=\"(g, gi) in conditions.groups\" :key=\"gi\"><div><!-- AND/OR connector between groups --><div x-show=\"gi > 0\" class=\"flex items-center gap-2 my-2\"><div class=\"flex-1 border-t border-line\"></div><select x-model=\"conditions.operator\" aria-label=\"Combine groups with\" class=\"form-select-sm h-7 w-24\"><option value=\"and\">AND</option> <option value=\"or\">OR</option></select><div class=\"flex-1 border-t border-line\"></div></div><!-- Per-group hidden structural inputs --><input type=\"hidden\" :name=\"'group_' + gi + '_operator'\" :value=\"g.operator\"> <input type=\"hidden\" :name=\"'group_' + gi + '_count'\" :value=\"g.conditions.length\"><div class=\"panel overflow-hidden\"><div class=\"flex items-center justify-between px-3 py-2 border-b border-line\"><div class=\"flex items-center gap-2\"><span class=\"text-sm text-muted\">Match</span> <select x-model=\"g.operator\" aria-label=\"Group match mode\" class=\"form-select-sm h-7 w-24\"><option value=\"and\">ALL</option> <option value=\"or\">ANY</option></select> <span class=\"text-sm text-muted\">of these conditions</span></div><button type=\"button\" @click=\"conditions.groups.splice(gi, 1)\" class=\"row-action hover:text-crit\" title=\"Remove group\" aria-label=\"Remove group\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div><div class=\"p-3 space-y-2\"><template x-for=\"(c, ci) in g.conditions\" :key=\"ci\"><div class=\"flex items-start gap-2\"><div class=\"flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2\"><select :name=\"'group_' + gi + '_type_' + ci\" x-model=\"c.type\" aria-label=\"Condition\" class=\"form-select h-8\"><option value=\"status_code\">Status Code</option> <option value=\"body_contains\">Body Contains</option> <option value=\"body_regex\">Body Regex</option> <option value=\"json_path\">JSON Path</option> <option value=\"header\">Header</option> <option value=\"response_time\">Response Time (ms)</option> <option value=\"cert_expiry\">Cert Expiry (days)</option> <option value=\"dns_record\">DNS Record</option></select> <select :name=\"'group_' + gi + '_operator_' + ci\" x-model=\"c.operator\" aria-label=\"Operator\" class=\"form-select h-8\"><template x-for=\"op in operatorsFor(c.type)\" :key=\"op[0]\"><option :value=\"op[0]\" x-text=\"op[1]\"></option></template></select><div x-show=\"needsTarget(c.type)\"><input type=\"text\" :name=\"'group_' + gi + '_target_' + ci\" x-model=\"c.target\" placeholder=\"Header name or JSON path\" aria-label=\"Header name or JSON path\" class=\"form-input h-8\"></div><div x-show=\"needsValue(c.operator)\" :class=\"needsTarget(c.type) ? '' : 'col-span-2'\"><input type=\"text\" :name=\"'group_' + gi + '_value_' + ci\" x-model=\"c.value\" placeholder=\"Expected value\" aria-label=\"Expected value\" class=\"form-input h-8\"></div></div><div class=\"flex items-center gap-2 pt-1.5 shrink-0\"><label class=\"flex items-center gap-1 cursor-pointer\" title=\"Mark the monitor degraded instead of down when this fails\"><input type=\"checkbox\" :name=\"'group_' + gi + '_degraded_' + ci\" value=\"on\" :checked=\"c.degraded\" @change=\"c.degraded = $event.target.checked\" class=\"form-checkbox\"> <span class=\"text-sm text-muted\">Degrade only</span></label> <button type=\"button\" @click=\"g.conditions.splice(ci, 1)\" class=\"row-action hover:text-crit\" title=\"Remove condition\" aria-label=\"Remove condition\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div></div></template><button type=\"button\" @click=\"g.conditions.push(newCond())\" class=\"btn-secondary btn-sm\">Add condition</button></div></div></div></template></div><button type=\"button\" x-show=\"conditions.groups.length > 0\" @click=\"addGroup()\" class=\"btn-secondary btn-sm mt-3\">Add condition group</button></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1817,48 +1830,48 @@ func monitorSMTPSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var60 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var60 == nil {
-			templ_7745c5c3_Var60 = templ.NopComponent
+		templ_7745c5c3_Var59 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var59 == nil {
+			templ_7745c5c3_Var59 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "<div x-show=\"monitorType === 'smtp'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_smtp_port\">Port</label> <input id=\"settings_smtp_port\" type=\"number\" name=\"settings_smtp_port\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "<div x-show=\"monitorType === 'smtp'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_smtp_port\">Port</label> <input id=\"settings_smtp_port\" type=\"number\" name=\"settings_smtp_port\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.SMTP.Port != 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, " value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, " value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var61 string
-			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.SMTP.Port))
+			var templ_7745c5c3_Var60 string
+			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.SMTP.Port))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 779, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 798, Col: 37}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, " placeholder=\"25\" min=\"1\" max=\"65535\" class=\"form-input tabular-nums\"><p class=\"text-2xs text-muted mt-1\">25 (plain), 465 (SMTPS), 587 (submission)</p></div><div><label class=\"form-label\" for=\"settings_smtp_expect_banner\">Expected Banner</label> <input id=\"settings_smtp_expect_banner\" type=\"text\" name=\"settings_smtp_expect_banner\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, " placeholder=\"25\" min=\"1\" max=\"65535\" class=\"form-input tabular-nums\"><p class=\"form-hint\">25 (plain), 465 (SMTPS), 587 (submission)</p></div><div><label class=\"form-label\" for=\"settings_smtp_expect_banner\">Expected Banner</label> <input id=\"settings_smtp_expect_banner\" type=\"text\" name=\"settings_smtp_expect_banner\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var62 string
-		templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.SMTP.ExpectBanner)
+		var templ_7745c5c3_Var61 string
+		templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.SMTP.ExpectBanner)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 786, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 805, Col: 118}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "\" placeholder=\"Optional\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "\" placeholder=\"Optional\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1866,7 +1879,7 @@ func monitorSMTPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1890,25 +1903,25 @@ func monitorSSHSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var63 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var63 == nil {
-			templ_7745c5c3_Var63 = templ.NopComponent
+		templ_7745c5c3_Var62 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var62 == nil {
+			templ_7745c5c3_Var62 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "<div x-show=\"monitorType === 'ssh'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_ssh_fingerprint\">Expected Banner Fingerprint (SHA-256)</label> <input id=\"settings_ssh_fingerprint\" type=\"text\" name=\"settings_ssh_fingerprint\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<div x-show=\"monitorType === 'ssh'\" x-cloak class=\"space-y-4\"><div><label class=\"form-label\" for=\"settings_ssh_fingerprint\">Expected Banner Fingerprint (SHA-256)</label> <input id=\"settings_ssh_fingerprint\" type=\"text\" name=\"settings_ssh_fingerprint\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var64 string
-		templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.SSH.ExpectedFingerprint)
+		var templ_7745c5c3_Var63 string
+		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.SSH.ExpectedFingerprint)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 797, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 816, Col: 117}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "\" placeholder=\"Optional SHA-256 hex fingerprint\" class=\"form-input font-mono\"><p class=\"text-2xs text-muted mt-1\">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "\" placeholder=\"Optional SHA-256 hex fingerprint\" class=\"form-input font-mono\"><p class=\"form-hint\">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1932,12 +1945,12 @@ func monitorRedisSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var65 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var65 == nil {
-			templ_7745c5c3_Var65 = templ.NopComponent
+		templ_7745c5c3_Var64 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var64 == nil {
+			templ_7745c5c3_Var64 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<div x-show=\"monitorType === 'redis'\" x-cloak class=\"space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "<div x-show=\"monitorType === 'redis'\" x-cloak class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1945,7 +1958,7 @@ func monitorRedisSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1969,12 +1982,12 @@ func monitorPostgreSQLSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var66 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var66 == nil {
-			templ_7745c5c3_Var66 = templ.NopComponent
+		templ_7745c5c3_Var65 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var65 == nil {
+			templ_7745c5c3_Var65 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "<div x-show=\"monitorType === 'postgresql'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-2 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "<div x-show=\"monitorType === 'postgresql'\" x-cloak class=\"space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1986,7 +1999,7 @@ func monitorPostgreSQLSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "</div><p class=\"text-2xs text-muted\">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "</div><p class=\"form-hint\">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2010,12 +2023,12 @@ func monitorUDPSettings(p MonitorFormParams) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var67 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var67 == nil {
-			templ_7745c5c3_Var67 = templ.NopComponent
+		templ_7745c5c3_Var66 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var66 == nil {
+			templ_7745c5c3_Var66 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "<div x-show=\"monitorType === 'udp'\" x-cloak class=\"space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "<div x-show=\"monitorType === 'udp'\" x-cloak class=\"space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2027,7 +2040,7 @@ func monitorUDPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

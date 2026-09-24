@@ -74,7 +74,7 @@ func (h *Handler) ProxyCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.CreateProxy(r.Context(), p); err != nil {
 		h.logger.Error("web: create proxy", "error", err)
-		h.setFlash(w, "Failed to create proxy")
+		h.setError(w, "Failed to create proxy")
 		h.redirect(w, r, "/proxies")
 		return
 	}
@@ -94,6 +94,12 @@ func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 
 	p := parseProxyForm(r)
 	p.ID = id
+	// The password field is rendered blank; blank means keep the stored one.
+	if p.AuthPass == "" && p.AuthUser != "" {
+		if existing, err := h.store.GetProxy(r.Context(), id); err == nil && existing != nil {
+			p.AuthPass = existing.AuthPass
+		}
+	}
 
 	if err := validate.ValidateProxy(p); err != nil {
 		lp := h.newLayoutParams(r, "Edit Proxy", "proxies")
@@ -107,7 +113,7 @@ func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.UpdateProxy(r.Context(), p); err != nil {
 		h.logger.Error("web: update proxy", "error", err)
-		h.setFlash(w, "Failed to update proxy")
+		h.setError(w, "Failed to update proxy")
 		h.redirect(w, r, "/proxies")
 		return
 	}
@@ -126,7 +132,7 @@ func (h *Handler) ProxyDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.DeleteProxy(r.Context(), id); err != nil {
 		h.logger.Error("web: delete proxy", "error", err)
-		h.setFlash(w, "Failed to delete proxy")
+		h.setError(w, "Failed to delete proxy")
 		h.redirect(w, r, "/proxies")
 		return
 	}

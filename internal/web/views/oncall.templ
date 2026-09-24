@@ -24,93 +24,89 @@ func channelName(channels []*storage.NotificationChannel, id int64) string {
 templ OnCallListPage(p OnCallListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data="{showForm: false, showOverride: false, overrideId: 0}">
-			if p.Perms["notifications.write"] {
-				<div class="flex items-center justify-end mb-5">
-					<button @click="showForm = true" class="btn-primary btn-press">
-						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
-						New Rotation
-					</button>
-				</div>
+			@PageHeader(PageHeaderParams{Title: "On-Call", Subtitle: "Rotate which notification channel is paged, daily or weekly."}) {
+				if p.Can("notifications.write") {
+					@ToolbarNewButtonClick("showForm = true", "New rotation")
+				}
 			}
 			if len(p.Rotations) > 0 {
-				<div class="space-y-3">
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 					for _, rot := range p.Rotations {
-						<div class="card p-4">
-							<div class="flex items-center justify-between mb-3">
-								<div class="flex items-center gap-2">
-									<span class="text-sm text-white font-medium">{ rot.Name }</span>
-									<span class="badge badge-zinc">{ rot.Period }</span>
+						<div class="card card-pad">
+							<div class="flex items-center justify-between gap-3 mb-3">
+								<div class="flex items-center gap-2 min-w-0">
+									<h2 class="text-md font-semibold truncate">{ rot.Name }</h2>
+									<span class="badge">{ capitalize(rot.Period) }</span>
 								</div>
-								<div class="flex items-center gap-2">
-									if p.Perms["notifications.write"] {
-										<button type="button"
-											@click={ fmt.Sprintf("overrideId = %d; showOverride = true", rot.ID) }
-											class="icon-btn"
-											title="Override"
-											aria-label="Override">
-											<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3L3 16"></path><path d="M3 21v-5h5"></path></svg>
-										</button>
+								if p.Can("notifications.write") {
+									<div class="flex items-center gap-1 shrink-0">
+										<button type="button" @click={ fmt.Sprintf("overrideId = %d; showOverride = true", rot.ID) } class="btn-secondary btn-sm">Override</button>
 										@DeleteButton(fmt.Sprintf("%s/on-call/%d/delete", p.BasePath, rot.ID), "Delete this rotation?")
-									}
-								</div>
-							</div>
-							<div class="flex flex-wrap gap-1.5 mb-2">
-								for i, chID := range rot.ChannelIDs {
-									<span class={ "badge",
-										templ.KV("badge-blue", i == rot.CurrentIndex%len(rot.ChannelIDs)),
-										templ.KV("badge-zinc", i != rot.CurrentIndex%len(rot.ChannelIDs)) }>
-										{ channelName(p.Channels, chID) }
-									</span>
+									</div>
 								}
 							</div>
+							<ol class="space-y-1">
+								for i, chID := range rot.ChannelIDs {
+									<li class="flex items-center gap-2 text-sm">
+										<span class="w-5 text-right text-muted tabular-nums">{ fmt.Sprint(i + 1) }.</span>
+										if i == rot.CurrentIndex%len(rot.ChannelIDs) {
+											<span class="text-white font-medium">{ channelName(p.Channels, chID) }</span>
+											<span class="badge badge-emerald">On call now</span>
+										} else {
+											<span class="text-muted-light">{ channelName(p.Channels, chID) }</span>
+										}
+									</li>
+								}
+							</ol>
 							if rot.OverrideChannelID != nil && rot.OverrideUntil != nil {
-								<div class="text-2xs text-yellow-400 mt-1">
-									Override active: { channelName(p.Channels, *rot.OverrideChannelID) } until { rot.OverrideUntil.Format("Jan 2, 15:04") }
-								</div>
+								<p class="mt-3 text-sm text-warn">
+									Override: { channelName(p.Channels, *rot.OverrideChannelID) } until { rot.OverrideUntil.UTC().Format("Jan 2, 15:04") } UTC
+								</p>
 							}
 						</div>
 					}
 				</div>
-			} else if p.Perms["notifications.write"] {
-				@EmptyStateModal("No on-call rotations yet", "showForm = true", "New Rotation")
+			} else if p.Can("notifications.write") {
+				@EmptyStateModal("No on-call rotations yet.", "showForm = true", "Create a rotation")
 			} else {
-				@EmptyState("No on-call rotations yet", "", "")
+				@EmptyState("No on-call rotations yet.", "", "")
 			}
-			@FormModal("showForm", "max-w-sm", "'New On-Call Rotation'") {
-				<form method="POST" action={ templ.SafeURL(p.BasePath + "/on-call") } class="space-y-3">
+			@FormModal("showForm", "max-w-md", "'New rotation'") {
+				<form method="POST" action={ templ.SafeURL(p.BasePath + "/on-call") } class="space-y-4">
 					<div>
-						<label class="form-label" for="name">Name</label>
-						<input id="name" type="text" name="name" required placeholder="Primary On-Call" class="form-input"/>
+						<label class="form-label" for="rot-name">Name</label>
+						<input id="rot-name" type="text" name="name" required placeholder="Primary on-call" class="form-input"/>
 					</div>
 					<div>
-						<label class="form-label" for="period">Rotation Period</label>
+						<label class="form-label" for="period">Rotates</label>
 						<select id="period" name="period" class="form-select">
 							<option value="daily">Daily</option>
 							<option value="weekly">Weekly</option>
 						</select>
 					</div>
-					<div>
-						<label class="form-label">Channels (in rotation order)</label>
-						<div class="space-y-1.5 max-h-48 overflow-y-auto">
+					<fieldset>
+						<legend class="form-label">Channels in the rotation</legend>
+						<div class="space-y-2 max-h-48 overflow-y-auto">
 							for _, ch := range p.Channels {
 								<label class="flex items-center gap-2 cursor-pointer">
 									<input type="checkbox" name="channel_ids[]" value={ fmt.Sprint(ch.ID) } class="form-checkbox"/>
-									<span class="text-xs text-muted-light">{ ch.Name }</span>
-									<span class="text-2xs text-muted">({ ch.Type })</span>
+									<span class="text-sm text-white">{ ch.Name }</span>
+									<span class="text-sm text-muted">{ ch.Type }</span>
 								</label>
 							}
 						</div>
-					</div>
-					<div class="flex items-center gap-3 pt-1">
-						<button type="submit" class="btn-primary btn-press">Create</button>
-						<button type="button" @click="showForm = false" class="btn-secondary btn-press">Cancel</button>
+						<p class="form-hint">Channels take turns in the order they are listed.</p>
+					</fieldset>
+					<div class="flex items-center gap-2 pt-1">
+						<button type="submit" class="btn-primary">Create rotation</button>
+						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
 					</div>
 				</form>
 			}
-			@FormModal("showOverride", "max-w-sm", "'Set Override'") {
-				<form method="POST" action={ templ.SafeURL(p.BasePath + "/on-call/") } @submit="$el.action = $el.dataset.base + overrideId + '/override'" data-base={ p.BasePath + "/on-call/" } class="space-y-3">
+			@FormModal("showOverride", "max-w-md", "'Override on-call'") {
+				<form method="POST" :action={ fmt.Sprintf("'%s/on-call/' + overrideId + '/override'", JSEscapeString(p.BasePath)) } class="space-y-4">
 					<div>
-						<label class="form-label" for="override_channel_id">Override Channel</label>
+						<label class="form-label" for="override_channel_id">Channel</label>
 						<select id="override_channel_id" name="override_channel_id" class="form-select">
 							<option value="">Clear override</option>
 							for _, ch := range p.Channels {
@@ -121,10 +117,11 @@ templ OnCallListPage(p OnCallListParams) {
 					<div>
 						<label class="form-label" for="override_until">Until</label>
 						<input id="override_until" type="datetime-local" name="override_until" class="form-input"/>
+						<p class="form-hint">UTC.</p>
 					</div>
-					<div class="flex items-center gap-3 pt-1">
-						<button type="submit" class="btn-primary btn-press">Save</button>
-						<button type="button" @click="showOverride = false" class="btn-secondary btn-press">Cancel</button>
+					<div class="flex items-center gap-2 pt-1">
+						<button type="submit" class="btn-primary">Save override</button>
+						<button type="button" @click="showOverride = false" class="btn-secondary">Cancel</button>
 					</div>
 				</form>
 			}

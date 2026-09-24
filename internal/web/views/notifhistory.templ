@@ -2,6 +2,8 @@ package views
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -22,113 +24,93 @@ func (p NotificationHistoryParams) entries() []*storage.NotificationHistory {
 }
 
 func (p NotificationHistoryParams) pageHref(page int) string {
-	href := fmt.Sprintf("%s/notifications/history?page=%d", p.BasePath, page)
+	q := url.Values{}
+	q.Set("page", strconv.Itoa(page))
 	if p.Filter.ChannelID > 0 {
-		href += fmt.Sprintf("&channel_id=%d", p.Filter.ChannelID)
+		q.Set("channel_id", strconv.FormatInt(p.Filter.ChannelID, 10))
 	}
 	if p.Filter.Status != "" {
-		href += "&status=" + p.Filter.Status
+		q.Set("status", p.Filter.Status)
 	}
 	if p.Filter.EventType != "" {
-		href += "&event_type=" + p.Filter.EventType
+		q.Set("event_type", p.Filter.EventType)
 	}
-	return href
+	return p.BasePath + "/notifications/history?" + q.Encode()
 }
+
+var notificationEventTypes = []string{"incident.created", "incident.resolved", "incident.acknowledged", "incident.reminder", "content.changed", "cert.changed", "test"}
 
 templ NotificationHistoryPage(p NotificationHistoryParams) {
 	@Layout(p.LayoutParams) {
-		<div>
-			<div class="flex items-center justify-end mb-5">
-				<a href={ templ.SafeURL(p.BasePath + "/notifications") } class="text-xs text-muted hover:text-white transition-colors">&lt; Channels</a>
-			</div>
-			<form method="GET" action={ templ.SafeURL(p.BasePath + "/notifications/history") } class="flex flex-wrap items-center gap-2 mb-4">
-				<select name="channel_id" class="form-select-sm" onchange="this.form.submit()">
-					<option value="">All channels</option>
-					for _, ch := range p.Channels {
-						<option value={ fmt.Sprint(ch.ID) } selected?={ ch.ID == p.Filter.ChannelID }>{ ch.Name }</option>
-					}
-				</select>
-				<select name="status" class="form-select-sm" onchange="this.form.submit()">
-					<option value="">All statuses</option>
-					<option value="sent" selected?={ p.Filter.Status == "sent" }>Sent</option>
-					<option value="failed" selected?={ p.Filter.Status == "failed" }>Failed</option>
-				</select>
-				<select name="event_type" class="form-select-sm" onchange="this.form.submit()">
-					<option value="">All events</option>
-					for _, et := range []string{"incident.created", "incident.resolved", "incident.reminder", "incident.acknowledged", "content.changed", "cert.changed", "test"} {
-						<option value={ et } selected?={ p.Filter.EventType == et }>{ et }</option>
-					}
-				</select>
-				if p.Filter.ChannelID != 0 || p.Filter.Status != "" || p.Filter.EventType != "" {
-					<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="text-2xs text-muted hover:text-white transition-colors">Clear</a>
+		@PageHeader(PageHeaderParams{Title: "Notification History", Subtitle: "Every notification Asura tried to send, and whether it was delivered.", BackHref: p.BasePath + "/notifications", BackLabel: "Notifications"})
+		<form method="GET" action={ templ.SafeURL(p.BasePath + "/notifications/history") } class="flex flex-wrap items-center gap-2 mb-4">
+			<select name="channel_id" class="form-select-sm" onchange="this.form.submit()" aria-label="Channel">
+				<option value="">All channels</option>
+				for _, ch := range p.Channels {
+					<option value={ fmt.Sprint(ch.ID) } selected?={ ch.ID == p.Filter.ChannelID }>{ ch.Name }</option>
 				}
-			</form>
-			if entries := p.entries(); len(entries) > 0 {
-				<div class="panel">
-					<div class="overflow-x-auto">
-						<table class="w-full min-w-[700px]">
-							<thead>
-								<tr class="border-b border-line text-left">
-									<th class="th">Time</th>
-									<th class="th">Channel</th>
-									<th class="th">Event</th>
-									<th class="th">Monitor</th>
-									<th class="th">Status</th>
-									<th class="th">Error</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-line">
-								for _, e := range entries {
-									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono whitespace-nowrap">{ TimeAgo(e.SentAt) }</td>
-										<td class="px-4 py-2.5">
-											<div class="text-xs text-muted-light">{ e.ChannelName }</div>
-											<div class="text-2xs text-muted">{ e.ChannelType }</div>
-										</td>
-										<td class="px-4 py-2.5 text-2xs font-mono text-muted-light">{ e.EventType }</td>
-										<td class="px-4 py-2.5 text-xs text-muted">
-											if e.MonitorName != "" {
-												{ e.MonitorName }
-											} else {
-												—
-											}
-										</td>
-										<td class="px-4 py-2.5">
-											if e.Status == "sent" {
-												<span class="badge badge-emerald">sent</span>
-											} else {
-												<span class="badge badge-red">failed</span>
-											}
-										</td>
-										<td class="px-4 py-2.5 text-2xs text-red-400 font-mono max-w-[240px] truncate" title={ e.Error }>
-											if e.Error != "" {
-												{ e.Error }
-											}
-										</td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
-					if p.Result != nil && p.Result.TotalPages > 1 {
-						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-2xs text-muted tabular-nums">
-								{ fmt.Sprintf("Page %d / %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total) }
-							</span>
-							<div class="flex gap-1">
-								if p.Result.Page > 1 {
-									@PrevPageBtn(p.pageHref(p.Result.Page - 1))
-								}
-								if p.Result.Page < p.Result.TotalPages {
-									@NextPageBtn(p.pageHref(p.Result.Page + 1))
-								}
-							</div>
-						</div>
-					}
-				</div>
-			} else {
-				@EmptyState("No notification history yet", "", "")
+			</select>
+			<select name="status" class="form-select-sm" onchange="this.form.submit()" aria-label="Delivery status">
+				<option value="">All results</option>
+				<option value="sent" selected?={ p.Filter.Status == "sent" }>Sent</option>
+				<option value="failed" selected?={ p.Filter.Status == "failed" }>Failed</option>
+			</select>
+			<select name="event_type" class="form-select-sm" onchange="this.form.submit()" aria-label="Event">
+				<option value="">All events</option>
+				for _, et := range notificationEventTypes {
+					<option value={ et } selected?={ p.Filter.EventType == et }>{ eventLabel(et) }</option>
+				}
+			</select>
+			<noscript><button type="submit" class="btn-secondary btn-sm">Apply</button></noscript>
+			if p.Filter.ChannelID != 0 || p.Filter.Status != "" || p.Filter.EventType != "" {
+				<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="text-sm text-muted hover:text-white px-1">Clear</a>
 			}
-		</div>
+		</form>
+		if entries := p.entries(); len(entries) > 0 {
+			<div class="panel">
+				<div class="overflow-x-auto">
+					<table class="w-full min-w-[720px]">
+						<thead>
+							<tr class="border-b border-line">
+								<th class="th">Time</th>
+								<th class="th">Channel</th>
+								<th class="th">Event</th>
+								<th class="th">Monitor</th>
+								<th class="th">Result</th>
+								<th class="th">Error</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-line">
+							for _, e := range entries {
+								<tr>
+									<td class="px-4 py-2.5 text-sm text-muted whitespace-nowrap">@RelTime(e.SentAt)</td>
+									<td class="px-4 py-2.5">
+										<div class="text-sm text-white">{ e.ChannelName }</div>
+										<div class="text-xs text-muted">{ channelTypeLabel(e.ChannelType) }</div>
+									</td>
+									<td class="px-4 py-2.5 text-sm text-muted-light whitespace-nowrap">{ eventLabel(e.EventType) }</td>
+									<td class="px-4 py-2.5 text-sm text-muted-light">
+										if e.MonitorName != "" {
+											{ e.MonitorName }
+										} else {
+											<span class="text-muted">—</span>
+										}
+									</td>
+									<td class="px-4 py-2.5">@StatusPill(e.Status)</td>
+									<td class="px-4 py-2.5 text-xs text-crit font-mono max-w-[260px] truncate" title={ e.Error }>{ e.Error }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				if p.Result != nil && p.Result.TotalPages > 1 {
+					@Pager(p.Result.Page, p.Result.TotalPages, fmt.Sprintf("Page %d of %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total), p.pageHref(p.Result.Page-1), p.pageHref(p.Result.Page+1))
+				}
+			</div>
+		} else if p.Filter.ChannelID != 0 || p.Filter.Status != "" || p.Filter.EventType != "" {
+			@EmptyState("No notifications match these filters.", p.BasePath+"/notifications/history", "Clear filters")
+		} else {
+			@EmptyState("Nothing has been sent yet.", "", "")
+		}
 	}
 }

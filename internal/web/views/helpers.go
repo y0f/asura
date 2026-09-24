@@ -12,49 +12,61 @@ import (
 	"github.com/y0f/asura/internal/storage"
 )
 
-func StatusColor(status string) string {
+// StatusTone maps any monitor, incident or event status onto one of the
+// semantic tones defined in tokens.css (ok, warn, crit, neutral).
+func StatusTone(status string) string {
+	switch status {
+	case "up", "resolved", "operational", "sent":
+		return "ok"
+	case "down", "open", "created", "major_outage", "failed":
+		return "crit"
+	case "degraded", "acknowledged":
+		return "warn"
+	default:
+		return "neutral"
+	}
+}
+
+// StatusLabel is the human wording for a status value.
+func StatusLabel(status string) string {
 	switch status {
 	case "up":
-		return "text-emerald-400"
+		return "Up"
 	case "down":
-		return "text-red-400"
-	case "degraded", "paused":
-		return "text-yellow-400"
+		return "Down"
+	case "degraded":
+		return "Degraded"
+	case "paused":
+		return "Paused"
+	case "pending", "":
+		return "Pending"
+	case "open":
+		return "Open"
+	case "acknowledged":
+		return "Acknowledged"
+	case "resolved":
+		return "Resolved"
 	default:
-		return "text-gray-500"
+		return capitalize(status)
 	}
+}
+
+func StatusColor(status string) string {
+	if t := StatusTone(status); t != "neutral" {
+		return "text-" + t
+	}
+	return "text-muted"
 }
 
 func StatusBg(status string) string {
-	switch status {
-	case "up":
-		return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-	case "down":
-		return "bg-red-500/10 text-red-400 border-red-500/20"
-	case "degraded", "paused":
-		return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-	case "open":
-		return "bg-red-500/10 text-red-400 border-red-500/20"
-	case "acknowledged":
-		return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-	case "resolved":
-		return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-	default:
-		return "bg-gray-500/10 text-gray-400 border-gray-500/20"
-	}
+	return StatusColor(status)
 }
 
 func StatusDot(status string) string {
-	switch status {
-	case "up", "resolved":
-		return "bg-emerald-400"
-	case "down", "created":
-		return "bg-red-400"
-	case "degraded", "acknowledged", "paused":
-		return "bg-yellow-400"
-	default:
-		return "bg-gray-500"
+	if t := StatusTone(status); t != "neutral" {
+		return "bg-" + t
 	}
+	return "bg-muted"
 }
 
 func TimeAgo(t any) string {
@@ -127,27 +139,30 @@ func UptimeFmt(pct float64) string {
 	return fmt.Sprintf("%.2f%%", pct)
 }
 
+// UptimeTone is the single uptime threshold scale used by every chart,
+// legend and number: >=99.9 ok, >=99 warn, >=95 major, below that crit.
+func UptimeTone(pct float64) string {
+	switch {
+	case pct >= 99.9:
+		return "ok"
+	case pct >= 99:
+		return "warn"
+	case pct >= 95:
+		return "major"
+	default:
+		return "crit"
+	}
+}
+
 func UptimeColor(pct float64) string {
-	if pct >= 99.9 {
-		return "text-emerald-400"
-	}
-	if pct >= 99 {
-		return "text-yellow-400"
-	}
-	return "text-red-400"
+	return "text-" + UptimeTone(pct)
 }
 
 func UptimeBarFill(pct float64, hasData bool) string {
 	if !hasData {
-		return "rgba(128,128,128,0.2)"
+		return "var(--color-chart-empty)"
 	}
-	if pct >= 99 {
-		return "#10b981"
-	}
-	if pct >= 95 {
-		return "#eab308"
-	}
-	return "#ef4444"
+	return "var(--color-" + UptimeTone(pct) + ")"
 }
 
 func UptimeBarsSVG(bars []DailyBar) string {
@@ -163,7 +178,7 @@ func UptimeBarsSVG(bars []DailyBar) string {
 		x := i * (barW + gap)
 		fill := UptimeBarFill(bar.UptimePct, bar.HasData)
 		tooltip := UptimeBarTooltip(bar.UptimePct, bar.HasData, bar.Label)
-		s += fmt.Sprintf(`<rect x="%d" y="0" width="%d" height="%d" rx="1" fill="%s" opacity="0.8" class="hover:opacity-100" style="cursor:default" @mouseenter="tooltip='%s';show=true;mx=$event.clientX;my=$event.clientY" @mousemove="mx=$event.clientX;my=$event.clientY" @mouseleave="show=false"/>`, x, barW, h, fill, tooltip)
+		s += fmt.Sprintf(`<rect x="%d" y="0" width="%d" height="%d" rx="1" fill="%s" opacity="0.85" style="cursor:default" @mouseenter="tooltip='%s';show=true;mx=$event.clientX;my=$event.clientY" @mousemove="mx=$event.clientX;my=$event.clientY" @mouseleave="show=false"/>`, x, barW, h, fill, tooltip)
 	}
 	s += `</svg>`
 	return s
@@ -187,15 +202,15 @@ func JSEscapeString(s string) string {
 func HttpStatusColor(code int) string {
 	switch {
 	case code >= 200 && code < 300:
-		return "text-emerald-400"
+		return "text-ok"
 	case code >= 300 && code < 400:
-		return "text-blue-400"
+		return "text-info"
 	case code >= 400 && code < 500:
-		return "text-yellow-400"
+		return "text-warn"
 	case code >= 500:
-		return "text-red-400"
+		return "text-crit"
 	default:
-		return "text-gray-500"
+		return "text-muted"
 	}
 }
 
@@ -208,16 +223,16 @@ func CertDays(t *time.Time) int {
 
 func CertColor(t *time.Time) string {
 	if t == nil {
-		return "text-gray-500"
+		return "text-muted"
 	}
 	days := int(time.Until(*t).Hours() / 24)
 	if days < 7 {
-		return "text-red-400"
+		return "text-crit"
 	}
 	if days < 30 {
-		return "text-yellow-400"
+		return "text-warn"
 	}
-	return "text-emerald-400"
+	return "text-ok"
 }
 
 func TypeLabel(t string) string {
@@ -542,15 +557,15 @@ func mdInline(s string) string {
 func SeverityBg(severity string) string {
 	switch severity {
 	case "critical":
-		return "bg-red-500/10 text-red-400 border-red-500/20"
+		return "badge-red"
 	case "major":
-		return "bg-orange-500/10 text-orange-400 border-orange-500/20"
+		return "badge-orange"
 	case "minor":
-		return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+		return "badge-yellow"
 	case "warning":
-		return "bg-blue-500/10 text-blue-400 border-blue-500/20"
+		return "badge-blue"
 	default:
-		return "bg-gray-500/10 text-gray-400 border-gray-500/20"
+		return ""
 	}
 }
 
@@ -564,19 +579,7 @@ type HeatmapDay struct {
 }
 
 func heatmapColor(pct float64, hasData bool) string {
-	if !hasData {
-		return "var(--color-chart-empty)"
-	}
-	if pct >= 99.995 {
-		return "#34d399"
-	}
-	if pct >= 99 {
-		return "#fbbf24"
-	}
-	if pct >= 95 {
-		return "#f97316"
-	}
-	return "#f87171"
+	return UptimeBarFill(pct, hasData)
 }
 
 func HeatmapSVG(days []HeatmapDay) string {
@@ -613,4 +616,20 @@ func HeatmapSVG(days []HeatmapDay) string {
 	}
 	b.WriteString(`</svg>`)
 	return b.String()
+}
+
+// absTime formats a time (or *time.Time) as an absolute UTC timestamp for
+// tooltips and <time datetime>. It returns "" for nil or unsupported values.
+func absTime(t any) string {
+	switch v := t.(type) {
+	case time.Time:
+		return v.UTC().Format("2006-01-02 15:04:05 UTC")
+	case *time.Time:
+		if v == nil {
+			return ""
+		}
+		return v.UTC().Format("2006-01-02 15:04:05 UTC")
+	default:
+		return ""
+	}
 }

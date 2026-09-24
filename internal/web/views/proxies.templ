@@ -18,119 +18,120 @@ type ProxyFormParams struct {
 
 templ ProxyListPage(p ProxyListParams) {
 	@Layout(p.LayoutParams) {
-		<div>
-			<div class="flex items-center justify-end mb-5">
-				if p.Perms["monitors.write"] {
-					@ToolbarNewButton(p.BasePath+"/proxies/new", "New Proxy")
-				}
-			</div>
-			if len(p.Proxies) > 0 {
-				<div class="panel">
-					<table class="w-full">
-						<thead>
-							<tr class="border-b border-line text-left">
-								<th class="th">Name</th>
-								<th class="th">Protocol</th>
-								<th class="th">Host</th>
-								<th class="th">Port</th>
-								<th class="th">Status</th>
-								<th class="th text-right">Actions</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-line">
-							for _, proxy := range p.Proxies {
-								<tr class="hover:bg-surface-200/20 transition-colors">
-									<td class="px-4 py-3"><span class="text-sm text-muted-light font-medium">{ proxy.Name }</span></td>
-									<td class="px-4 py-3"><span class="text-xs text-muted uppercase">{ proxy.Protocol }</span></td>
-									<td class="px-4 py-3"><span class="text-xs text-muted-light font-mono">{ proxy.Host }</span></td>
-									<td class="px-4 py-3"><span class="text-xs text-muted tabular-nums">{ fmt.Sprint(proxy.Port) }</span></td>
-									<td class="px-4 py-3">
-										if proxy.Enabled {
-											<span class="badge badge-emerald inline-flex items-center gap-1.5">
-												<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-												Enabled
-											</span>
-										} else {
-											<span class="badge badge-zinc">Disabled</span>
-										}
-									</td>
-									<td class="px-4 py-3 text-right">
-										<div class="flex items-center justify-end gap-2">
-											if p.Perms["monitors.write"] {
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/proxies/%d/edit", p.BasePath, proxy.ID)) } class="row-action" title="Edit" aria-label="Edit proxy">
-													<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
-												</a>
-												@DeleteButton(fmt.Sprintf("%s/proxies/%d/delete", p.BasePath, proxy.ID), "Delete this proxy? Monitors using it will lose their proxy assignment.")
-											}
-										</div>
-									</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</div>
-			} else {
-				@EmptyState("No proxies yet", p.BasePath+"/proxies/new", "New Proxy")
+		@PageHeader(PageHeaderParams{Title: "Proxies", Subtitle: "Outbound HTTP or SOCKS5 proxies that monitors can route their checks through."}) {
+			if p.Can("monitors.write") {
+				@ToolbarNewButton(p.BasePath+"/proxies/new", "New proxy")
 			}
-		</div>
+		}
+		if len(p.Proxies) > 0 {
+			<div class="panel overflow-x-auto">
+				<table class="w-full min-w-[560px]">
+					<thead>
+						<tr class="border-b border-line">
+							<th class="th">Name</th>
+							<th class="th">Address</th>
+							<th class="th w-px">Status</th>
+							<th class="th w-px"><span class="sr-only">Actions</span></th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-line">
+						for _, proxy := range p.Proxies {
+							<tr>
+								<td class="px-4 py-3 text-sm text-white font-medium">{ proxy.Name }</td>
+								<td class="px-4 py-3 text-sm text-muted-light font-mono">{ fmt.Sprintf("%s://%s:%d", proxy.Protocol, proxy.Host, proxy.Port) }</td>
+								<td class="px-4 py-3">
+									if proxy.Enabled {
+										<span class="inline-flex items-center gap-1.5 text-sm text-ok"><span class="dot bg-ok"></span>Enabled</span>
+									} else {
+										<span class="inline-flex items-center gap-1.5 text-sm text-muted"><span class="dot bg-muted"></span>Disabled</span>
+									}
+								</td>
+								<td class="px-4 py-3">
+									if p.Can("monitors.write") {
+										<div class="flex items-center justify-end gap-0.5">
+											<a href={ templ.SafeURL(fmt.Sprintf("%s/proxies/%d/edit", p.BasePath, proxy.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + proxy.Name }>
+												@iconEdit()
+											</a>
+											@DeleteButton(fmt.Sprintf("%s/proxies/%d/delete", p.BasePath, proxy.ID), "Delete this proxy? Monitors using it will connect directly.")
+										</div>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		} else if p.Can("monitors.write") {
+			@EmptyState("No proxies yet.", p.BasePath+"/proxies/new", "Add a proxy")
+		} else {
+			@EmptyState("No proxies yet.", "", "")
+		}
 	}
+}
+
+func (p ProxyFormParams) header() PageHeaderParams {
+	if p.Proxy.ID > 0 {
+		return PageHeaderParams{Title: "Edit proxy", Subtitle: p.Proxy.Name, BackHref: p.BasePath + "/proxies", BackLabel: "Proxies"}
+	}
+	return PageHeaderParams{Title: "New proxy", BackHref: p.BasePath + "/proxies", BackLabel: "Proxies"}
 }
 
 templ ProxyFormPage(p ProxyFormParams) {
 	@Layout(p.LayoutParams) {
-		<div>
-			<form method="POST"
-				action={ templ.SafeURL(proxyFormAction(p.BasePath, p.Proxy)) }
-				class="max-w-2xl space-y-4">
-				<div class="card card-pad space-y-4">
+		@PageHeader(p.header())
+		<form method="POST" action={ templ.SafeURL(proxyFormAction(p.BasePath, p.Proxy)) } class="max-w-3xl space-y-6">
+			<div class="card card-pad space-y-4">
+				<div>
+					<label class="form-label" for="name">Name</label>
+					<input id="name" type="text" name="name" value={ p.Proxy.Name } required class="form-input" placeholder="Office proxy"/>
+				</div>
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 					<div>
-						<label class="form-label" for="name">Name</label>
-						<input id="name" type="text" name="name" value={ p.Proxy.Name } required class="form-input" placeholder="My Proxy"/>
+						<label class="form-label" for="protocol">Protocol</label>
+						<select id="protocol" name="protocol" class="form-select">
+							<option value="http" selected?={ p.Proxy.Protocol == "http" }>HTTP</option>
+							<option value="socks5" selected?={ p.Proxy.Protocol == "socks5" }>SOCKS5</option>
+						</select>
 					</div>
-					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-						<div>
-							<label class="form-label" for="protocol">Protocol</label>
-							<select id="protocol" name="protocol" class="form-select">
-								<option value="http" selected?={ p.Proxy.Protocol == "http" }>HTTP</option>
-								<option value="socks5" selected?={ p.Proxy.Protocol == "socks5" }>SOCKS5</option>
-							</select>
-						</div>
-						<div>
-							<label class="form-label" for="host">Host</label>
-							<input id="host" type="text" name="host" value={ p.Proxy.Host } required class="form-input" placeholder="proxy.example.com"/>
-						</div>
-						<div>
-							<label class="form-label" for="port">Port</label>
-							<input id="port" type="number" name="port" value={ fmt.Sprint(p.Proxy.Port) } min="1" max="65535" required class="form-input tabular-nums"/>
-						</div>
+					<div>
+						<label class="form-label" for="host">Host</label>
+						<input id="host" type="text" name="host" value={ p.Proxy.Host } required class="form-input" placeholder="proxy.example.com"/>
 					</div>
-					<div class="grid grid-cols-2 gap-4">
-						<div>
-							<label class="form-label" for="auth_user">Auth Username</label>
-							<input id="auth_user" type="text" name="auth_user" value={ p.Proxy.AuthUser } placeholder="Optional" class="form-input"/>
-						</div>
-						<div>
-							<label class="form-label" for="auth_pass">Auth Password</label>
-							<input id="auth_pass" type="password" name="auth_pass" value={ p.Proxy.AuthPass } placeholder="Optional" class="form-input"/>
-						</div>
+					<div>
+						<label class="form-label" for="port">Port</label>
+						<input id="port" type="number" name="port" value={ fmt.Sprint(p.Proxy.Port) } min="1" max="65535" required class="form-input tabular-nums"/>
 					</div>
-					<label class="flex items-center gap-2 cursor-pointer">
-						<input type="checkbox" name="enabled" checked?={ p.Proxy.Enabled } class="form-checkbox"/>
-						<span class="text-xs text-muted-light">Enabled</span>
-					</label>
 				</div>
-				<div class="flex items-center gap-3">
-					<button type="submit" class="btn-primary btn-press">
-						if p.Proxy.ID > 0 {
-							Update
-						} else {
-							Create
-						}
-					</button>
-					<a href={ templ.SafeURL(p.BasePath + "/proxies") } class="btn-secondary btn-press">Cancel</a>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<div>
+						<label class="form-label" for="auth_user">Username <span class="text-muted font-normal">(optional)</span></label>
+						<input id="auth_user" type="text" name="auth_user" value={ p.Proxy.AuthUser } autocomplete="off" class="form-input"/>
+					</div>
+					<div>
+						<label class="form-label" for="auth_pass">Password <span class="text-muted font-normal">(optional)</span></label>
+						<input id="auth_pass" type="password" name="auth_pass" autocomplete="new-password"
+							if p.Proxy.AuthPass != "" {
+								placeholder="Saved. Leave blank to keep it."
+							}
+							class="form-input"/>
+					</div>
 				</div>
-			</form>
-		</div>
+				<label class="flex items-center gap-2 cursor-pointer">
+					<input type="checkbox" name="enabled" checked?={ p.Proxy.Enabled } class="form-checkbox"/>
+					<span class="text-sm text-muted-light">Enabled</span>
+				</label>
+			</div>
+			<div class="flex items-center gap-2">
+				<button type="submit" class="btn-primary">
+					if p.Proxy.ID > 0 {
+						Save changes
+					} else {
+						Create proxy
+					}
+				</button>
+				<a href={ templ.SafeURL(p.BasePath + "/proxies") } class="btn-secondary">Cancel</a>
+			</div>
+		</form>
 	}
 }
 

@@ -9,80 +9,90 @@ styled with a self-hosted [Tailwind CSS v4](https://tailwindcss.com) standalone 
 web/
   tailwind.input.css      # entry: @import tailwindcss + fonts + @source + design-system layers
   css/
-    tokens.css            # design tokens: color ramp, brand, type scale, radii (dark = default, light remap)
-    base.css              # element base styles: body, focus rings, scrollbars, tables, motion, theme plumbing
-    components.css        # reusable component utilities/classes (buttons, inputs, cards, badges, switch …)
+    tokens.css            # colours, status tones, type scale, radii (dark default, light remap)
+    base.css              # element base styles: body, focus ring, scrollbars, tables, motion
+    components.css        # component utilities (card, panel, form-*, btn-*, badge, switch, filter-tab …)
   static/
-    tailwind.css          # BUILT output (committed; CI rebuilds on push to main)
+    tailwind.css          # BUILT output (committed; CI fails if it is stale)
     fonts/                # Inter + JetBrains Mono (woff2, self-hosted)
     *.js                  # htmx, alpine, uplot, small page scripts
-  embed.go                # //go:embed static/* — assets are baked into the binary
+  embed.go                # //go:embed static/* - assets are baked into the binary
 
 internal/web/views/       # templ templates
-  layout.templ            # app shell: sidebar, top bar, command palette (the only full <html> for the app)
-  components.templ        # shared components: Toast, FormModal, FormCard, StatusPill, EmptyState, buttons …
-  helpers.go              # presentational Go helpers (status colours, formatting, SVG sparkline/heatmap)
-  *.templ                 # one file per page (dashboard, monitors, monitorform, incidents, settings, …)
-  statuspage.templ        # the public, embeddable status page (its own <html>)
+  layout.templ            # app shell: sidebar, mobile top bar, command palette
+  components.templ        # PageHeader, StatCard, StatusPill, Pager, RelTime, dialogs, toasts, buttons
+  helpers.go              # status tones and labels, formatting, SVG sparkline/heatmap/uptime bars
+  secrets.go              # which settings keys are secrets; redaction and merge-on-save
+  assets.go               # content-hashed static URLs (cache busting)
+  render_test.go          # renders every page and checks structure and accessibility invariants
+  *.templ                 # one file per page
+  statuspage.templ        # the public status page (its own <html>)
 ```
-
-Separation of concerns: **tokens** (what the theme is) → **base** (how raw elements look) →
-**components** (reusable UI). Templates compose components and never hard-code design values.
 
 ## Design system
 
-**Theme** is driven by `data-theme` on `<html>` (`dark` default, `light` remap), resolved before first
-paint by an inline head script so there is no flash. Every neutral utility (`bg-surface`, `text-muted`,
-`border-line`, …) resolves to a CSS variable, so both themes share one set of classes.
+The look is flat and dense: a near-black neutral ramp, 1px borders, 4px radii, 32px controls,
+bold page headings, and colour reserved for meaning.
 
-**Color** — blue is the primary (`brand`). Neutrals are a 5-step elevation ramp
-(`surface` canvas → `surface-50/100` cards → `surface-200/300` controls) plus `line`/`line-light`
-borders and `white`/`muted-light`/`muted` text. Status colors stay semantic (emerald/red/yellow/blue).
+**Theme.** `data-theme` on `<html>` (`dark` default, `light` remap) is resolved before first paint
+by `themeScript`. Every neutral utility (`bg-surface`, `text-muted`, `border-line`, …) resolves to a
+CSS variable, so both themes share one set of classes. The public status page follows the
+visitor's OS preference.
 
-**Type scale** — one source of truth in `tokens.css`. Use the named steps, **never** `text-[Npx]`:
+**Colour.**
+- Neutrals: `surface` (canvas) → `surface-50` (cards, inputs, sidebar) → `surface-100` (dialogs) →
+  `surface-200` (hover, selected) → `surface-300` (strong controls); `line` / `line-light` borders;
+  `white` / `muted-light` / `muted` text.
+- Accent: `brand` marks active navigation, focus rings and selection (yellow in dark, violet in
+  light). `brand-button` is the single filled primary button colour.
+- Status tones: `ok`, `warn`, `major`, `crit`, `info`. Use them through `StatusTone`,
+  `UptimeTone`, `StatusPill` and the `text-*` / `bg-*` utilities. Never use raw Tailwind palette
+  colours (`emerald-400`, `red-500`, …) or hex values in templates, Go or JS.
+
+**Type scale.** One source of truth in `tokens.css`. Use the named steps, never `text-[Npx]`:
 
 | token | px | use |
 |------|----|-----|
-| `text-2xs` | 11 | micro labels, kbd, meta |
-| `text-xs` | 12 | captions, table cells |
-| `text-sm` | 13 | body / secondary |
-| `text-base` | 14 | primary body, inputs |
-| `text-md` | 15 | card titles, emphasis |
-| `text-lg` | 18 | section headings |
-| `text-xl` | 22 | page headings |
-| `text-2xl` | 28 | large stats |
-| `text-3xl` | 34 | hero metrics |
+| `text-2xs` | 11 | kbd, dense meta |
+| `text-xs` | 12 | captions, hints, badges |
+| `text-sm` | 14 | body, table cells, controls |
+| `text-md` | 16 | card and section titles |
+| `text-lg` | 18 | form section headings |
+| `text-xl` | 20 | dashboard section headings |
+| `text-2xl` | 24 | stat values |
+| `text-3xl` | 30 | page heading (`PageHeader`) |
 
-**Component utilities** (in `components.css`) — reach for these instead of ad-hoc classes:
-`card` / `panel` / `card-pad` (surfaces), `eyebrow` (section labels), `form-label` / `form-input` /
-`form-select` / `form-checkbox` / `form-hint` (forms), `btn-primary` / `btn-secondary` / `btn-danger` /
-`btn-success` / `btn-warning` / `btn-sm` / `btn-press` (buttons), `icon-btn` / `row-action` (icon actions),
-`badge` + `badge-*` (pills), `switch`, `filter-tab` + `filter-active`/`filter-inactive`, `th`, `stat-label`.
+**Components.** Reach for these before writing markup:
+- Page structure: `PageHeader` (the page's single `<h1>`, back link, subtitle, actions) and
+  `StatCard`.
+- Status and time: `StatusPill` (dot + label), `SeverityPill`, `Pager`, `RelTime` (relative time
+  with the absolute UTC time on hover).
+- Actions and empty states: `ToolbarNewButton` / `ToolbarNewButtonClick`, `DeleteButton`,
+  `EmptyState` / `EmptyStateModal`.
+- Dialogs and messages: `FormModal`, `ConfirmModal` (via `$dispatch('confirm', …)`), `Toast`.
+- Utility classes: `card` / `panel` / `card-pad`, `form-label` / `form-input` / `form-select` /
+  `form-checkbox` / `form-hint`, `btn-primary` / `btn-secondary` / `btn-danger` (+ `btn-sm`),
+  `row-action`, `icon-btn`, `badge` (+ `badge-*`), `dot`, `switch`, `filter-tab`, `th`.
 
 ## Build
 
 ```bash
-make css      # one-shot: build + minify web/static/tailwind.css
+make css      # build + minify web/static/tailwind.css and docs/static/docs.css
 make watch    # rebuild on save during development
 make generate # templ generate (regenerate *_templ.go after editing *.templ)
 ```
 
-Raw CLI (what the targets run):
-
-```bash
-./tailwindcss -i web/tailwind.input.css -o web/static/tailwind.css --minify
-templ generate
-```
-
-`web/static/tailwind.css` is committed and embedded; CI rebuilds it on push to `main`. The docs site has
-its own mirror of this theme in `docs/tailwind.input.css` → `docs/static/docs.css`.
+CI runs both and fails the build if the committed output differs.
 
 ## House rules
 
-- Never hard-code a font size — use a `text-*` scale token. Same for the component utilities above.
-- New reusable UI → add a component in `components.templ` (markup) and/or `components.css` (style); don't
-  copy-paste styling between pages.
-- The persistent top bar already shows the page title — pages don't repeat it as an in-page heading.
-- Keep the a11y floor: visible focus ring (provided by `base.css`), `aria-label` on icon-only controls,
-  `alt` on images, reduced-motion respected.
-- Run `make css` after touching any template or CSS so the committed output stays in sync.
+- Each page renders exactly one `<h1>`, through `PageHeader`.
+- Status wording and colour come from the helpers (`StatusTone`, `StatusLabel`, `UptimeTone`), so
+  every page agrees on what "degraded" or "at risk" means.
+- Hide write actions from read-only keys with `p.Can("perm")`.
+- Never render a stored secret into HTML. Add new secret settings keys to `secrets.go`.
+- Build query strings with `net/url` (`url.Values`), never by concatenation.
+- Every control needs a label (`<label for>`, a wrapping label, or `aria-label`); icon-only buttons
+  need `aria-label`. `render_test.go` enforces this.
+- Reference static files with `Asset(basePath, name)` so they are cache-busted.
+- Run `make generate && make css` after touching templates or CSS.

@@ -37,7 +37,11 @@ func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{GroupID: &id}, storage.Pagination{Page: 1, PerPage: 100})
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	result, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{GroupID: &id}, storage.Pagination{Page: page, PerPage: 50})
 	if err != nil {
 		h.logger.Error("web: list group monitors", "error", err)
 	}
@@ -60,14 +64,14 @@ func (h *Handler) GroupCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.ValidateMonitorGroup(g); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/groups")
 		return
 	}
 
 	if err := h.store.CreateMonitorGroup(r.Context(), g); err != nil {
 		h.logger.Error("web: create group", "error", err)
-		h.setFlash(w, "Failed to create group")
+		h.setError(w, "Failed to create group")
 		h.redirect(w, r, "/groups")
 		return
 	}
@@ -92,14 +96,14 @@ func (h *Handler) GroupUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.ValidateMonitorGroup(g); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/groups")
 		return
 	}
 
 	if err := h.store.UpdateMonitorGroup(r.Context(), g); err != nil {
 		h.logger.Error("web: update group", "error", err)
-		h.setFlash(w, "Failed to update group")
+		h.setError(w, "Failed to update group")
 		h.redirect(w, r, "/groups")
 		return
 	}

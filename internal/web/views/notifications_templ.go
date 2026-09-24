@@ -23,6 +23,60 @@ func notifChannelsXData(basePath string) string {
 	return "notifChannels('" + JSEscapeString(basePath) + "')"
 }
 
+func eventLabel(ev string) string {
+	switch ev {
+	case "incident.created":
+		return "Incident opened"
+	case "incident.resolved":
+		return "Incident resolved"
+	case "incident.acknowledged":
+		return "Incident acknowledged"
+	case "incident.reminder":
+		return "Reminder"
+	case "content.changed":
+		return "Content changed"
+	case "cert.changed":
+		return "Certificate changed"
+	case "test":
+		return "Test"
+	default:
+		return ev
+	}
+}
+
+func channelTypeLabel(t string) string {
+	switch t {
+	case "webhook":
+		return "Webhook"
+	case "email":
+		return "Email"
+	case "telegram":
+		return "Telegram"
+	case "discord":
+		return "Discord"
+	case "slack":
+		return "Slack"
+	case "ntfy":
+		return "ntfy"
+	case "teams":
+		return "Microsoft Teams"
+	case "pagerduty":
+		return "PagerDuty"
+	case "opsgenie":
+		return "Opsgenie"
+	case "pushover":
+		return "Pushover"
+	case "googlechat":
+		return "Google Chat"
+	case "matrix":
+		return "Matrix"
+	case "gotify":
+		return "Gotify"
+	default:
+		return t
+	}
+}
+
 func NotificationListPage(p NotificationListParams) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -61,9 +115,9 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.BasePath + "/static/notifications-form.js")
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(Asset(p.BasePath, "notifications-form.js"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 20, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 74, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -76,108 +130,119 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(notifChannelsXData(p.BasePath))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 21, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 75, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"flex items-center justify-end gap-2 mb-5\"><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var5 templ.SafeURL
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/notifications/history"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 23, Col: 66}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" class=\"btn-secondary btn-sm btn-press inline-flex items-center gap-1.5\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 3v5h5\"></path><path d=\"M3.05 13A9 9 0 1 0 6 5.3L3 8\"></path><path d=\"M12 7v5l3 2\"></path></svg> History</a> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if p.Perms["notifications.write"] {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<button @click=\"resetForm(); showForm = true\" class=\"btn-primary btn-press\"><svg class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5v14m7-7H5\"></path></svg> New Channel</button>")
+			templ_7745c5c3_Var5 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				if p.Can("notifications.write") {
+					templ_7745c5c3_Err = ToolbarNewButtonClick("resetForm(); showForm = true", "New channel").Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, " <a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
+				var templ_7745c5c3_Var6 templ.SafeURL
+				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.BasePath + "/notifications/history"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 80, Col: 66}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"btn-secondary\">History</a>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = PageHeader(PageHeaderParams{Title: "Notifications", Subtitle: "Where alerts are sent when incidents open, change or resolve."}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Channels) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, ch := range p.Channels {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"card p-4 hover:border-line-light transition-colors\"><div class=\"flex items-center justify-between mb-2.5\"><div class=\"flex items-center gap-2\"><span class=\"text-sm text-white font-medium\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var6 string
-					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 41, Col: 63}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</span> <span class=\"badge badge-zinc\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"card card-pad flex flex-col\"><div class=\"flex items-start justify-between gap-3\"><div class=\"min-w-0\"><h2 class=\"text-md font-semibold truncate\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
-					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Type)
+					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 42, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 88, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</span></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</h2><div class=\"text-sm text-muted\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var8 = []any{"w-1.5 h-1.5 rounded-full", templ.KV("bg-emerald-400", ch.Enabled), templ.KV("bg-muted", !ch.Enabled)}
-					templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var8...)
+					var templ_7745c5c3_Var8 string
+					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(channelTypeLabel(ch.Type))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 89, Col: 68}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var9 string
-					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var8).String())
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 1, Col: 0}
+					if ch.Enabled {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<span class=\"inline-flex items-center gap-1.5 text-sm text-ok shrink-0\"><span class=\"dot bg-ok\"></span>Enabled</span>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"inline-flex items-center gap-1.5 text-sm text-muted shrink-0\"><span class=\"dot bg-muted\"></span>Disabled</span>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\"></div></div><div class=\"flex flex-wrap gap-1 mb-3\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><div class=\"flex flex-wrap gap-1 mt-3 mb-4\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					for _, ev := range ch.Events {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"badge badge-zinc\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"badge\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var10 string
-						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(ev)
+						var templ_7745c5c3_Var9 string
+						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(eventLabel(ev))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 48, Col: 44}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 99, Col: 45}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -190,42 +255,42 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if p.Perms["notifications.write"] {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"flex items-center gap-1.5 pt-2.5 border-t border-line\"><button type=\"button\" @click=\"")
+					if p.Can("notifications.write") {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"mt-auto flex items-center gap-2 pt-3 border-t border-line\"><button type=\"button\" @click=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var11 string
-						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("editChannel(%s)", ToJSON(ch)))
+						var templ_7745c5c3_Var10 string
+						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("editChannel(%s)", ChannelEditJSON(ch)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 53, Col: 82}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 104, Col: 91}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"btn-secondary btn-sm btn-press\">Edit</button><form method=\"POST\" action=\"")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var12 templ.SafeURL
-						templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)))
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 55, Col: 111}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"btn-secondary btn-sm\">Edit</button><form method=\"POST\" action=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" class=\"contents\"><button type=\"submit\" class=\"btn-secondary btn-sm btn-press\">Test</button></form>")
+						var templ_7745c5c3_Var11 templ.SafeURL
+						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/notifications.templ`, Line: 105, Col: 111}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = DeleteButton(fmt.Sprintf("%s/notifications/%d/delete", p.BasePath, ch.ID), "Delete this channel?").Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"><button type=\"submit\" class=\"btn-secondary btn-sm\">Send test</button></form><div class=\"ml-auto\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
+						templ_7745c5c3_Err = DeleteButton(fmt.Sprintf("%s/notifications/%d/delete", p.BasePath, ch.ID), "Delete this notification channel?").Render(ctx, templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -239,18 +304,18 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-			} else if p.Perms["notifications.write"] {
-				templ_7745c5c3_Err = EmptyStateModal("No notification channels yet", "resetForm(); showForm = true", "New Channel").Render(ctx, templ_7745c5c3_Buffer)
+			} else if p.Can("notifications.write") {
+				templ_7745c5c3_Err = EmptyStateModal("No notification channels yet.", "resetForm(); showForm = true", "Add a channel").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = EmptyState("No notification channels yet", "", "").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = EmptyState("No notification channels yet.", "", "").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -262,7 +327,7 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-3\"><div><label class=\"form-label\" for=\"name\">Name</label> <input id=\"name\" type=\"text\" name=\"name\" x-model=\"formData.name\" required class=\"form-input\"></div><div><label class=\"form-label\" for=\"type\">Type</label> <select id=\"type\" name=\"type\" x-model=\"formData.type\" class=\"form-select\"><option value=\"webhook\">Webhook</option> <option value=\"email\">Email</option> <option value=\"telegram\">Telegram</option> <option value=\"discord\">Discord</option> <option value=\"slack\">Slack</option> <option value=\"ntfy\">ntfy</option> <option value=\"teams\">Microsoft Teams</option> <option value=\"pagerduty\">PagerDuty</option> <option value=\"opsgenie\">Opsgenie</option> <option value=\"pushover\">Pushover</option> <option value=\"googlechat\">Google Chat</option> <option value=\"matrix\">Matrix</option> <option value=\"gotify\">Gotify</option></select></div><div><div class=\"flex items-center justify-between mb-1.5\"><label class=\"form-label mb-0!\">Settings</label> <button type=\"button\" @click=\"advancedNotifSettings = !advancedNotifSettings\" class=\"text-2xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50\"><span x-text=\"advancedNotifSettings ? 'Form Mode' : 'Advanced (JSON)'\"></span></button></div><input type=\"hidden\" name=\"notif_settings_mode\" :value=\"advancedNotifSettings ? 'json' : 'form'\"><div x-show=\"advancedNotifSettings\" x-cloak><textarea name=\"settings_json\" x-model=\"formData.settings_json\" rows=\"4\" class=\"form-input font-mono resize-y\"></textarea></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-4\"><div><label class=\"form-label\" for=\"notif-name\">Name</label> <input id=\"notif-name\" type=\"text\" name=\"name\" x-model=\"formData.name\" required class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif-type\">Type</label> <select id=\"notif-type\" name=\"type\" x-model=\"formData.type\" class=\"form-select\"><option value=\"webhook\">Webhook</option> <option value=\"email\">Email</option> <option value=\"telegram\">Telegram</option> <option value=\"discord\">Discord</option> <option value=\"slack\">Slack</option> <option value=\"ntfy\">ntfy</option> <option value=\"teams\">Microsoft Teams</option> <option value=\"pagerduty\">PagerDuty</option> <option value=\"opsgenie\">Opsgenie</option> <option value=\"pushover\">Pushover</option> <option value=\"googlechat\">Google Chat</option> <option value=\"matrix\">Matrix</option> <option value=\"gotify\">Gotify</option></select></div><div><div class=\"flex items-center justify-between mb-2\"><div class=\"form-label mb-0!\">Settings</div><button type=\"button\" @click=\"advancedNotifSettings = !advancedNotifSettings\" class=\"btn-secondary btn-sm\"><span x-text=\"advancedNotifSettings ? 'Use form' : 'Edit as JSON'\">Edit as JSON</span></button></div><input type=\"hidden\" name=\"notif_settings_mode\" :value=\"advancedNotifSettings ? 'json' : 'form'\"><div x-show=\"advancedNotifSettings\" x-cloak><textarea name=\"settings_json\" x-model=\"formData.settings_json\" rows=\"5\" aria-label=\"Settings (JSON)\" class=\"form-input font-mono text-xs resize-y\"></textarea></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -318,13 +383,13 @@ func NotificationListPage(p NotificationListParams) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div><div><label class=\"form-label mb-2\">Events</label><div class=\"grid grid-cols-2 gap-2\"><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_created\" :checked=\"events.created\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Incident Created</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_resolved\" :checked=\"events.resolved\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Incident Resolved</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_acknowledged\" :checked=\"events.acknowledged\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Incident Acknowledged</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_reminder\" :checked=\"events.reminder\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Incident Reminder</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_content_changed\" :checked=\"events.changed\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Content Changed</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_cert_changed\" :checked=\"events.certChanged\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Certificate Changed</span></label></div></div><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"enabled\" :checked=\"formData.enabled\" class=\"form-checkbox\"> <span class=\"text-xs text-muted-light\">Enabled</span></label><div class=\"flex items-center gap-3 pt-1\"><button type=\"submit\" class=\"btn-primary btn-press\" x-text=\"editId ? 'Update' : 'Create'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"btn-secondary btn-press\">Cancel</button></div></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div><div><div class=\"form-label\">Send on</div><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-2\"><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_created\" :checked=\"events.created\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Incident opened</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_resolved\" :checked=\"events.resolved\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Incident resolved</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_acknowledged\" :checked=\"events.acknowledged\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Incident acknowledged</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_incident_reminder\" :checked=\"events.reminder\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Reminder while open</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_content_changed\" :checked=\"events.changed\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Content changed</span></label> <label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"event_cert_changed\" :checked=\"events.certChanged\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Certificate changed</span></label></div></div><label class=\"flex items-center gap-2 cursor-pointer\"><input type=\"checkbox\" name=\"enabled\" :checked=\"formData.enabled\" class=\"form-checkbox\"> <span class=\"text-sm text-muted-light\">Enabled</span></label><div class=\"flex items-center gap-2 pt-1\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Save changes' : 'Create channel'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"btn-secondary\">Cancel</button></div></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = FormModal("showForm", "max-w-md", "editId ? 'Edit Notification Channel' : 'New Notification Channel'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = FormModal("showForm", "max-w-lg", "editId ? 'Edit channel' : 'New channel'").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -358,12 +423,12 @@ func notifWebhookFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var14 == nil {
-			templ_7745c5c3_Var14 = templ.NopComponent
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div x-show=\"!advancedNotifSettings && formData.type === 'webhook'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_webhook_url\">URL</label> <input id=\"notif_webhook_url\" type=\"url\" name=\"notif_webhook_url\" x-model=\"webhook.url\" :required=\"!advancedNotifSettings && formData.type === 'webhook'\" placeholder=\"https://example.com/webhook\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_webhook_secret\">Secret</label> <input id=\"notif_webhook_secret\" type=\"text\" name=\"notif_webhook_secret\" x-model=\"webhook.secret\" placeholder=\"Optional HMAC-SHA256 secret\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div x-show=\"!advancedNotifSettings && formData.type === 'webhook'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_webhook_url\">URL</label> <input id=\"notif_webhook_url\" type=\"url\" name=\"notif_webhook_url\" x-model=\"webhook.url\" :required=\"!advancedNotifSettings && formData.type === 'webhook'\" placeholder=\"https://example.com/webhook\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_webhook_secret\">Secret</label> <input id=\"notif_webhook_secret\" type=\"password\" autocomplete=\"off\" name=\"notif_webhook_secret\" x-model=\"webhook.secret\" :placeholder=\"secretsSet.includes('secret') ? 'Saved. Leave blank to keep it.' : 'Optional HMAC-SHA256 secret'\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -387,12 +452,12 @@ func notifTelegramFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var15 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var15 == nil {
-			templ_7745c5c3_Var15 = templ.NopComponent
+		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var14 == nil {
+			templ_7745c5c3_Var14 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div x-show=\"!advancedNotifSettings && formData.type === 'telegram'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_telegram_bot_token\">Bot Token</label> <input id=\"notif_telegram_bot_token\" type=\"text\" name=\"notif_telegram_bot_token\" x-model=\"telegram.bot_token\" :required=\"!advancedNotifSettings && formData.type === 'telegram'\" placeholder=\"123456:ABC-DEF1234...\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_telegram_chat_id\">Chat ID</label> <input id=\"notif_telegram_chat_id\" type=\"text\" name=\"notif_telegram_chat_id\" x-model=\"telegram.chat_id\" :required=\"!advancedNotifSettings && formData.type === 'telegram'\" placeholder=\"-1001234567890\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div x-show=\"!advancedNotifSettings && formData.type === 'telegram'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_telegram_bot_token\">Bot Token</label> <input id=\"notif_telegram_bot_token\" type=\"password\" autocomplete=\"off\" name=\"notif_telegram_bot_token\" x-model=\"telegram.bot_token\" :required=\"!advancedNotifSettings && formData.type === 'telegram' && !secretsSet.includes('bot_token')\" :placeholder=\"secretsSet.includes('bot_token') ? 'Saved. Leave blank to keep it.' : '123456:ABC-DEF1234...'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_telegram_chat_id\">Chat ID</label> <input id=\"notif_telegram_chat_id\" type=\"text\" name=\"notif_telegram_chat_id\" x-model=\"telegram.chat_id\" :required=\"!advancedNotifSettings && formData.type === 'telegram'\" placeholder=\"-1001234567890\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -416,12 +481,12 @@ func notifDiscordFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var16 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var16 == nil {
-			templ_7745c5c3_Var16 = templ.NopComponent
+		templ_7745c5c3_Var15 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var15 == nil {
+			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div x-show=\"!advancedNotifSettings && formData.type === 'discord'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_discord_webhook_url\">Webhook URL</label> <input id=\"notif_discord_webhook_url\" type=\"url\" name=\"notif_discord_webhook_url\" x-model=\"discord.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'discord'\" placeholder=\"https://discord.com/api/webhooks/...\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div x-show=\"!advancedNotifSettings && formData.type === 'discord'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_discord_webhook_url\">Webhook URL</label> <input id=\"notif_discord_webhook_url\" type=\"url\" name=\"notif_discord_webhook_url\" x-model=\"discord.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'discord' && !secretsSet.includes('webhook_url')\" :placeholder=\"secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://discord.com/api/webhooks/...'\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -445,12 +510,12 @@ func notifSlackFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var17 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var17 == nil {
-			templ_7745c5c3_Var17 = templ.NopComponent
+		templ_7745c5c3_Var16 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var16 == nil {
+			templ_7745c5c3_Var16 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div x-show=\"!advancedNotifSettings && formData.type === 'slack'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_slack_webhook_url\">Webhook URL</label> <input id=\"notif_slack_webhook_url\" type=\"url\" name=\"notif_slack_webhook_url\" x-model=\"slack.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'slack'\" placeholder=\"https://hooks.slack.com/services/...\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_slack_channel\">Channel</label> <input id=\"notif_slack_channel\" type=\"text\" name=\"notif_slack_channel\" x-model=\"slack.channel\" placeholder=\"Optional (e.g. #alerts)\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div x-show=\"!advancedNotifSettings && formData.type === 'slack'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_slack_webhook_url\">Webhook URL</label> <input id=\"notif_slack_webhook_url\" type=\"url\" name=\"notif_slack_webhook_url\" x-model=\"slack.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'slack' && !secretsSet.includes('webhook_url')\" :placeholder=\"secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://hooks.slack.com/services/...'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_slack_channel\">Channel</label> <input id=\"notif_slack_channel\" type=\"text\" name=\"notif_slack_channel\" x-model=\"slack.channel\" placeholder=\"Optional (e.g. #alerts)\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -474,12 +539,12 @@ func notifEmailFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var18 == nil {
-			templ_7745c5c3_Var18 = templ.NopComponent
+		templ_7745c5c3_Var17 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var17 == nil {
+			templ_7745c5c3_Var17 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div x-show=\"!advancedNotifSettings && formData.type === 'email'\" x-cloak class=\"space-y-3\"><div class=\"grid grid-cols-3 gap-3\"><div class=\"col-span-2\"><label class=\"form-label-sm\" for=\"notif_email_host\">SMTP Host</label> <input id=\"notif_email_host\" type=\"text\" name=\"notif_email_host\" x-model=\"email.host\" :required=\"!advancedNotifSettings && formData.type === 'email'\" placeholder=\"smtp.example.com\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_email_port\">Port</label> <input id=\"notif_email_port\" type=\"number\" name=\"notif_email_port\" x-model=\"email.port\" placeholder=\"587\" class=\"form-input tabular-nums\"></div></div><div class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label-sm\" for=\"notif_email_username\">Username</label> <input id=\"notif_email_username\" type=\"text\" name=\"notif_email_username\" x-model=\"email.username\" placeholder=\"SMTP user\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_email_password\">Password</label> <input id=\"notif_email_password\" type=\"password\" name=\"notif_email_password\" x-model=\"email.password\" placeholder=\"SMTP password\" class=\"form-input\"></div></div><div><label class=\"form-label-sm\" for=\"notif_email_from\">From</label> <input id=\"notif_email_from\" type=\"email\" name=\"notif_email_from\" x-model=\"email.from\" :required=\"!advancedNotifSettings && formData.type === 'email'\" placeholder=\"alerts@example.com\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_email_to\">To</label> <input id=\"notif_email_to\" type=\"text\" name=\"notif_email_to\" x-model=\"email.to\" :required=\"!advancedNotifSettings && formData.type === 'email'\" placeholder=\"admin@example.com, ops@example.com\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Comma-separated</p></div><div><label class=\"form-label-sm\" for=\"notif_email_tls_mode\">TLS Mode</label> <select id=\"notif_email_tls_mode\" name=\"notif_email_tls_mode\" x-model=\"email.tls_mode\" class=\"form-select\"><option value=\"starttls\">STARTTLS (default, port 587)</option> <option value=\"smtps\">SMTPS (port 465)</option> <option value=\"none\">None (plain, port 25)</option></select></div><div><label class=\"form-label-sm\" for=\"notif_email_cc\">CC</label> <input id=\"notif_email_cc\" type=\"text\" name=\"notif_email_cc\" x-model=\"email.cc\" placeholder=\"cc@example.com\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Comma-separated (optional)</p></div><div><label class=\"form-label-sm\" for=\"notif_email_bcc\">BCC</label> <input id=\"notif_email_bcc\" type=\"text\" name=\"notif_email_bcc\" x-model=\"email.bcc\" placeholder=\"bcc@example.com\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Comma-separated (optional)</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div x-show=\"!advancedNotifSettings && formData.type === 'email'\" x-cloak class=\"space-y-3\"><div class=\"grid grid-cols-3 gap-3\"><div class=\"col-span-2\"><label class=\"form-label\" for=\"notif_email_host\">SMTP Host</label> <input id=\"notif_email_host\" type=\"text\" name=\"notif_email_host\" x-model=\"email.host\" :required=\"!advancedNotifSettings && formData.type === 'email'\" placeholder=\"smtp.example.com\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_email_port\">Port</label> <input id=\"notif_email_port\" type=\"number\" name=\"notif_email_port\" x-model=\"email.port\" placeholder=\"587\" class=\"form-input tabular-nums\"></div></div><div class=\"grid grid-cols-2 gap-3\"><div><label class=\"form-label\" for=\"notif_email_username\">Username</label> <input id=\"notif_email_username\" type=\"text\" name=\"notif_email_username\" x-model=\"email.username\" placeholder=\"SMTP user\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_email_password\">Password</label> <input id=\"notif_email_password\" type=\"password\" name=\"notif_email_password\" x-model=\"email.password\" :placeholder=\"secretsSet.includes('password') ? 'Saved. Leave blank to keep it.' : 'SMTP password'\" class=\"form-input\"></div></div><div><label class=\"form-label\" for=\"notif_email_from\">From</label> <input id=\"notif_email_from\" type=\"email\" name=\"notif_email_from\" x-model=\"email.from\" :required=\"!advancedNotifSettings && formData.type === 'email'\" placeholder=\"alerts@example.com\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_email_to\">To</label> <input id=\"notif_email_to\" type=\"text\" name=\"notif_email_to\" x-model=\"email.to\" :required=\"!advancedNotifSettings && formData.type === 'email'\" placeholder=\"admin@example.com, ops@example.com\" class=\"form-input\"><p class=\"form-hint\">Comma-separated</p></div><div><label class=\"form-label\" for=\"notif_email_tls_mode\">TLS Mode</label> <select id=\"notif_email_tls_mode\" name=\"notif_email_tls_mode\" x-model=\"email.tls_mode\" class=\"form-select\"><option value=\"starttls\">STARTTLS (default, port 587)</option> <option value=\"smtps\">SMTPS (port 465)</option> <option value=\"none\">None (plain, port 25)</option></select></div><div><label class=\"form-label\" for=\"notif_email_cc\">CC</label> <input id=\"notif_email_cc\" type=\"text\" name=\"notif_email_cc\" x-model=\"email.cc\" placeholder=\"cc@example.com\" class=\"form-input\"><p class=\"form-hint\">Comma-separated (optional)</p></div><div><label class=\"form-label\" for=\"notif_email_bcc\">BCC</label> <input id=\"notif_email_bcc\" type=\"text\" name=\"notif_email_bcc\" x-model=\"email.bcc\" placeholder=\"bcc@example.com\" class=\"form-input\"><p class=\"form-hint\">Comma-separated (optional)</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -503,12 +568,12 @@ func notifNtfyFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div x-show=\"!advancedNotifSettings && formData.type === 'ntfy'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_ntfy_server_url\">Server URL</label> <input id=\"notif_ntfy_server_url\" type=\"url\" name=\"notif_ntfy_server_url\" x-model=\"ntfy.server_url\" placeholder=\"https://ntfy.sh\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Leave empty for ntfy.sh</p></div><div><label class=\"form-label-sm\" for=\"notif_ntfy_topic\">Topic</label> <input id=\"notif_ntfy_topic\" type=\"text\" name=\"notif_ntfy_topic\" x-model=\"ntfy.topic\" :required=\"!advancedNotifSettings && formData.type === 'ntfy'\" placeholder=\"asura-alerts\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_ntfy_priority\">Priority</label> <select id=\"notif_ntfy_priority\" name=\"notif_ntfy_priority\" x-model=\"ntfy.priority\" class=\"form-select\"><option value=\"1\">1 — Min</option> <option value=\"2\">2 — Low</option> <option value=\"3\">3 — Default</option> <option value=\"4\">4 — High</option> <option value=\"5\">5 — Urgent</option></select></div><div><label class=\"form-label-sm\" for=\"notif_ntfy_tags\">Tags</label> <input id=\"notif_ntfy_tags\" type=\"text\" name=\"notif_ntfy_tags\" x-model=\"ntfy.tags\" placeholder=\"warning,server\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">Comma-separated emoji tags</p></div><div><label class=\"form-label-sm\" for=\"notif_ntfy_click_url\">Click URL</label> <input id=\"notif_ntfy_click_url\" type=\"url\" name=\"notif_ntfy_click_url\" x-model=\"ntfy.click_url\" placeholder=\"https://status.example.com\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div x-show=\"!advancedNotifSettings && formData.type === 'ntfy'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_ntfy_server_url\">Server URL</label> <input id=\"notif_ntfy_server_url\" type=\"url\" name=\"notif_ntfy_server_url\" x-model=\"ntfy.server_url\" placeholder=\"https://ntfy.sh\" class=\"form-input\"><p class=\"form-hint\">Leave empty for ntfy.sh</p></div><div><label class=\"form-label\" for=\"notif_ntfy_topic\">Topic</label> <input id=\"notif_ntfy_topic\" type=\"text\" name=\"notif_ntfy_topic\" x-model=\"ntfy.topic\" :required=\"!advancedNotifSettings && formData.type === 'ntfy'\" placeholder=\"asura-alerts\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_ntfy_priority\">Priority</label> <select id=\"notif_ntfy_priority\" name=\"notif_ntfy_priority\" x-model=\"ntfy.priority\" class=\"form-select\"><option value=\"1\">1 — Min</option> <option value=\"2\">2 — Low</option> <option value=\"3\">3 — Default</option> <option value=\"4\">4 — High</option> <option value=\"5\">5 — Urgent</option></select></div><div><label class=\"form-label\" for=\"notif_ntfy_tags\">Tags</label> <input id=\"notif_ntfy_tags\" type=\"text\" name=\"notif_ntfy_tags\" x-model=\"ntfy.tags\" placeholder=\"warning,server\" class=\"form-input\"><p class=\"form-hint\">Comma-separated emoji tags</p></div><div><label class=\"form-label\" for=\"notif_ntfy_click_url\">Click URL</label> <input id=\"notif_ntfy_click_url\" type=\"url\" name=\"notif_ntfy_click_url\" x-model=\"ntfy.click_url\" placeholder=\"https://status.example.com\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -532,12 +597,12 @@ func notifTeamsFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var20 == nil {
-			templ_7745c5c3_Var20 = templ.NopComponent
+		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var19 == nil {
+			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div x-show=\"!advancedNotifSettings && formData.type === 'teams'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_teams_webhook_url\">Webhook URL</label> <input id=\"notif_teams_webhook_url\" type=\"url\" name=\"notif_teams_webhook_url\" x-model=\"teams.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'teams'\" placeholder=\"https://outlook.office.com/webhook/...\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div x-show=\"!advancedNotifSettings && formData.type === 'teams'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_teams_webhook_url\">Webhook URL</label> <input id=\"notif_teams_webhook_url\" type=\"url\" name=\"notif_teams_webhook_url\" x-model=\"teams.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'teams' && !secretsSet.includes('webhook_url')\" :placeholder=\"secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://outlook.office.com/webhook/...'\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -561,12 +626,12 @@ func notifPagerdutyFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var21 == nil {
-			templ_7745c5c3_Var21 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<div x-show=\"!advancedNotifSettings && formData.type === 'pagerduty'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_pagerduty_routing_key\">Routing Key</label> <input id=\"notif_pagerduty_routing_key\" type=\"text\" name=\"notif_pagerduty_routing_key\" x-model=\"pagerduty.routing_key\" :required=\"!advancedNotifSettings && formData.type === 'pagerduty'\" placeholder=\"Events API v2 integration key\" class=\"form-input\"><p class=\"text-2xs text-muted mt-1\">From your PagerDuty service integration</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<div x-show=\"!advancedNotifSettings && formData.type === 'pagerduty'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_pagerduty_routing_key\">Routing Key</label> <input id=\"notif_pagerduty_routing_key\" type=\"password\" autocomplete=\"off\" name=\"notif_pagerduty_routing_key\" x-model=\"pagerduty.routing_key\" :required=\"!advancedNotifSettings && formData.type === 'pagerduty' && !secretsSet.includes('routing_key')\" :placeholder=\"secretsSet.includes('routing_key') ? 'Saved. Leave blank to keep it.' : 'Events API v2 integration key'\" class=\"form-input\"><p class=\"form-hint\">From your PagerDuty service integration</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -590,12 +655,12 @@ func notifOpsgenieFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var22 == nil {
-			templ_7745c5c3_Var22 = templ.NopComponent
+		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var21 == nil {
+			templ_7745c5c3_Var21 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div x-show=\"!advancedNotifSettings && formData.type === 'opsgenie'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_opsgenie_api_key\">API Key</label> <input id=\"notif_opsgenie_api_key\" type=\"text\" name=\"notif_opsgenie_api_key\" x-model=\"opsgenie.api_key\" :required=\"!advancedNotifSettings && formData.type === 'opsgenie'\" placeholder=\"Opsgenie API integration key\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_opsgenie_region\">Region</label> <select id=\"notif_opsgenie_region\" name=\"notif_opsgenie_region\" x-model=\"opsgenie.region\" class=\"form-select\"><option value=\"\">US (default)</option> <option value=\"eu\">EU</option></select></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div x-show=\"!advancedNotifSettings && formData.type === 'opsgenie'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_opsgenie_api_key\">API Key</label> <input id=\"notif_opsgenie_api_key\" type=\"password\" autocomplete=\"off\" name=\"notif_opsgenie_api_key\" x-model=\"opsgenie.api_key\" :required=\"!advancedNotifSettings && formData.type === 'opsgenie' && !secretsSet.includes('api_key')\" :placeholder=\"secretsSet.includes('api_key') ? 'Saved. Leave blank to keep it.' : 'Opsgenie API integration key'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_opsgenie_region\">Region</label> <select id=\"notif_opsgenie_region\" name=\"notif_opsgenie_region\" x-model=\"opsgenie.region\" class=\"form-select\"><option value=\"\">US (default)</option> <option value=\"eu\">EU</option></select></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -619,12 +684,12 @@ func notifPushoverFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var23 == nil {
-			templ_7745c5c3_Var23 = templ.NopComponent
+		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var22 == nil {
+			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div x-show=\"!advancedNotifSettings && formData.type === 'pushover'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_pushover_user_key\">User Key</label> <input id=\"notif_pushover_user_key\" type=\"text\" name=\"notif_pushover_user_key\" x-model=\"pushover.user_key\" :required=\"!advancedNotifSettings && formData.type === 'pushover'\" placeholder=\"Your Pushover user key\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_pushover_app_token\">App Token</label> <input id=\"notif_pushover_app_token\" type=\"text\" name=\"notif_pushover_app_token\" x-model=\"pushover.app_token\" :required=\"!advancedNotifSettings && formData.type === 'pushover'\" placeholder=\"Your Pushover application token\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_pushover_priority\">Priority</label> <select id=\"notif_pushover_priority\" name=\"notif_pushover_priority\" x-model=\"pushover.priority\" class=\"form-select\"><option value=\"-2\">Lowest</option> <option value=\"-1\">Low</option> <option value=\"0\">Normal (default)</option> <option value=\"1\">High</option> <option value=\"2\">Emergency</option></select><p class=\"text-2xs text-muted mt-1\">0 = auto-select based on event type</p></div><div><label class=\"form-label-sm\" for=\"notif_pushover_sound\">Sound</label> <input id=\"notif_pushover_sound\" type=\"text\" name=\"notif_pushover_sound\" x-model=\"pushover.sound\" placeholder=\"pushover (default)\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_pushover_device\">Device</label> <input id=\"notif_pushover_device\" type=\"text\" name=\"notif_pushover_device\" x-model=\"pushover.device\" placeholder=\"All devices (default)\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div x-show=\"!advancedNotifSettings && formData.type === 'pushover'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_pushover_user_key\">User Key</label> <input id=\"notif_pushover_user_key\" type=\"text\" name=\"notif_pushover_user_key\" x-model=\"pushover.user_key\" :required=\"!advancedNotifSettings && formData.type === 'pushover' && !secretsSet.includes('user_key')\" :placeholder=\"secretsSet.includes('user_key') ? 'Saved. Leave blank to keep it.' : 'Your Pushover user key'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_pushover_app_token\">App Token</label> <input id=\"notif_pushover_app_token\" type=\"password\" autocomplete=\"off\" name=\"notif_pushover_app_token\" x-model=\"pushover.app_token\" :required=\"!advancedNotifSettings && formData.type === 'pushover' && !secretsSet.includes('app_token')\" :placeholder=\"secretsSet.includes('app_token') ? 'Saved. Leave blank to keep it.' : 'Your Pushover application token'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_pushover_priority\">Priority</label> <select id=\"notif_pushover_priority\" name=\"notif_pushover_priority\" x-model=\"pushover.priority\" class=\"form-select\"><option value=\"-2\">Lowest</option> <option value=\"-1\">Low</option> <option value=\"0\">Normal (default)</option> <option value=\"1\">High</option> <option value=\"2\">Emergency</option></select><p class=\"form-hint\">0 = auto-select based on event type</p></div><div><label class=\"form-label\" for=\"notif_pushover_sound\">Sound</label> <input id=\"notif_pushover_sound\" type=\"text\" name=\"notif_pushover_sound\" x-model=\"pushover.sound\" placeholder=\"pushover (default)\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_pushover_device\">Device</label> <input id=\"notif_pushover_device\" type=\"text\" name=\"notif_pushover_device\" x-model=\"pushover.device\" placeholder=\"All devices (default)\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -648,12 +713,12 @@ func notifGooglechatFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var24 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var24 == nil {
-			templ_7745c5c3_Var24 = templ.NopComponent
+		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var23 == nil {
+			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div x-show=\"!advancedNotifSettings && formData.type === 'googlechat'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_googlechat_webhook_url\">Webhook URL</label> <input id=\"notif_googlechat_webhook_url\" type=\"url\" name=\"notif_googlechat_webhook_url\" x-model=\"googlechat.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'googlechat'\" placeholder=\"https://chat.googleapis.com/v1/spaces/.../messages?key=...\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div x-show=\"!advancedNotifSettings && formData.type === 'googlechat'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_googlechat_webhook_url\">Webhook URL</label> <input id=\"notif_googlechat_webhook_url\" type=\"url\" name=\"notif_googlechat_webhook_url\" x-model=\"googlechat.webhook_url\" :required=\"!advancedNotifSettings && formData.type === 'googlechat' && !secretsSet.includes('webhook_url')\" :placeholder=\"secretsSet.includes('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://chat.googleapis.com/v1/spaces/.../messages?key=...'\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -677,12 +742,12 @@ func notifMatrixFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var25 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var25 == nil {
-			templ_7745c5c3_Var25 = templ.NopComponent
+		templ_7745c5c3_Var24 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var24 == nil {
+			templ_7745c5c3_Var24 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div x-show=\"!advancedNotifSettings && formData.type === 'matrix'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_matrix_homeserver\">Homeserver</label> <input id=\"notif_matrix_homeserver\" type=\"url\" name=\"notif_matrix_homeserver\" x-model=\"matrix.homeserver\" :required=\"!advancedNotifSettings && formData.type === 'matrix'\" placeholder=\"https://matrix.org\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_matrix_access_token\">Access Token</label> <input id=\"notif_matrix_access_token\" type=\"text\" name=\"notif_matrix_access_token\" x-model=\"matrix.access_token\" :required=\"!advancedNotifSettings && formData.type === 'matrix'\" placeholder=\"syt_...\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_matrix_room_id\">Room ID</label> <input id=\"notif_matrix_room_id\" type=\"text\" name=\"notif_matrix_room_id\" x-model=\"matrix.room_id\" :required=\"!advancedNotifSettings && formData.type === 'matrix'\" placeholder=\"!roomid:matrix.org\" class=\"form-input\"></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div x-show=\"!advancedNotifSettings && formData.type === 'matrix'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_matrix_homeserver\">Homeserver</label> <input id=\"notif_matrix_homeserver\" type=\"url\" name=\"notif_matrix_homeserver\" x-model=\"matrix.homeserver\" :required=\"!advancedNotifSettings && formData.type === 'matrix'\" placeholder=\"https://matrix.org\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_matrix_access_token\">Access Token</label> <input id=\"notif_matrix_access_token\" type=\"password\" autocomplete=\"off\" name=\"notif_matrix_access_token\" x-model=\"matrix.access_token\" :required=\"!advancedNotifSettings && formData.type === 'matrix' && !secretsSet.includes('access_token')\" :placeholder=\"secretsSet.includes('access_token') ? 'Saved. Leave blank to keep it.' : 'syt_...'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_matrix_room_id\">Room ID</label> <input id=\"notif_matrix_room_id\" type=\"text\" name=\"notif_matrix_room_id\" x-model=\"matrix.room_id\" :required=\"!advancedNotifSettings && formData.type === 'matrix'\" placeholder=\"!roomid:matrix.org\" class=\"form-input\"></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -706,12 +771,12 @@ func notifGotifyFields() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var26 == nil {
-			templ_7745c5c3_Var26 = templ.NopComponent
+		templ_7745c5c3_Var25 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var25 == nil {
+			templ_7745c5c3_Var25 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div x-show=\"!advancedNotifSettings && formData.type === 'gotify'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label-sm\" for=\"notif_gotify_server_url\">Server URL</label> <input id=\"notif_gotify_server_url\" type=\"url\" name=\"notif_gotify_server_url\" x-model=\"gotify.server_url\" :required=\"!advancedNotifSettings && formData.type === 'gotify'\" placeholder=\"https://gotify.example.com\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_gotify_app_token\">App Token</label> <input id=\"notif_gotify_app_token\" type=\"text\" name=\"notif_gotify_app_token\" x-model=\"gotify.app_token\" :required=\"!advancedNotifSettings && formData.type === 'gotify'\" placeholder=\"Application token from Gotify\" class=\"form-input\"></div><div><label class=\"form-label-sm\" for=\"notif_gotify_priority\">Priority</label> <select id=\"notif_gotify_priority\" name=\"notif_gotify_priority\" x-model=\"gotify.priority\" class=\"form-select\"><option value=\"1\">1 — Low</option> <option value=\"5\">5 — Normal (default)</option> <option value=\"8\">8 — High</option> <option value=\"10\">10 — Max</option></select></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div x-show=\"!advancedNotifSettings && formData.type === 'gotify'\" x-cloak class=\"space-y-3\"><div><label class=\"form-label\" for=\"notif_gotify_server_url\">Server URL</label> <input id=\"notif_gotify_server_url\" type=\"url\" name=\"notif_gotify_server_url\" x-model=\"gotify.server_url\" :required=\"!advancedNotifSettings && formData.type === 'gotify'\" placeholder=\"https://gotify.example.com\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_gotify_app_token\">App Token</label> <input id=\"notif_gotify_app_token\" type=\"password\" autocomplete=\"off\" name=\"notif_gotify_app_token\" x-model=\"gotify.app_token\" :required=\"!advancedNotifSettings && formData.type === 'gotify' && !secretsSet.includes('app_token')\" :placeholder=\"secretsSet.includes('app_token') ? 'Saved. Leave blank to keep it.' : 'Application token from Gotify'\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"notif_gotify_priority\">Priority</label> <select id=\"notif_gotify_priority\" name=\"notif_gotify_priority\" x-model=\"gotify.priority\" class=\"form-select\"><option value=\"1\">1 — Low</option> <option value=\"5\">5 — Normal (default)</option> <option value=\"8\">8 — High</option> <option value=\"10\">10 — Max</option></select></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -1,5 +1,7 @@
 # Frontend Architecture Overhaul
 
+> **Superseded.** This spec was only partly implemented. See `docs/frontend-rework.md` for the current audit, plan and progress.
+
 ## Problem
 
 The frontend has grown organically to 19 templ files (~13,500 lines) with significant duplication, inconsistent patterns, and UX issues that make the product feel unpolished.

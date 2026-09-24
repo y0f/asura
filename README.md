@@ -21,8 +21,9 @@
 
 ---
 
-![Dashboard - live monitors, sparklines, active incidents](assets/webpanel.png)
-![Monitor detail - uptime, response-time chart, recent checks](assets/monitorview.png)
+![Dashboard - monitors with problems first, sparklines, open incidents](assets/webpanel.png)
+![Monitor detail - uptime, response-time chart, SLA budget, 365-day history](assets/monitorview.png)
+![Public status page - grouped monitors with 90-day uptime bars](assets/statuspage.png)
 
 ---
 
