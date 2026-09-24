@@ -215,7 +215,7 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 					if p.Config != nil {
 						<a href={ templ.SafeURL(p.BasePath + "/" + p.Config.Slug + "/rss") } class="hover:text-white">RSS feed</a>
 					}
-					<a href="https://github.com/y0f/asura" target="_blank" rel="noopener" class="hover:text-white">Powered by <span class="font-semibold text-white">Asura</span></a>
+					<a href="https://github.com/y0f/asura" target="_blank" rel="noopener" class="flex items-center gap-1.5 hover:text-white">Powered by <img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-3.5 w-auto"/></a>
 				</footer>
 			</main>
 			if p.Config != nil && p.Config.AnalyticsScript != "" {

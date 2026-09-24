@@ -24,7 +24,7 @@ func tagAlpineData(basePath string) string {
     showForm: false,
     editId: 0,
     name: '',
-    color: '#6b16ed',
+    color: '#1484ff',
     basePath: '` + JSEscapeString(basePath) + `',
     get formAction() {
         return this.editId ? this.basePath + '/tags/' + this.editId : this.basePath + '/tags';
@@ -32,12 +32,12 @@ func tagAlpineData(basePath string) string {
     resetForm() {
         this.editId = 0;
         this.name = '';
-        this.color = '#6b16ed';
+        this.color = '#1484ff';
     },
     editTag(t) {
         this.editId = t.id;
         this.name = t.name;
-        this.color = t.color || '#6b16ed';
+        this.color = t.color || '#1484ff';
         this.showForm = true;
     }
 }`
@@ -259,7 +259,7 @@ func TagListPage(p TagListParams) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-4\"><div><label class=\"form-label\" for=\"tag-name\">Name</label> <input id=\"tag-name\" type=\"text\" name=\"name\" x-model=\"name\" required maxlength=\"50\" placeholder=\"production\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"tag-color\">Colour</label><div class=\"flex items-center gap-2\"><input id=\"tag-color\" type=\"color\" name=\"color\" x-model=\"color\" class=\"h-9 w-12 shrink-0 rounded-control border border-line-light bg-surface-50 cursor-pointer p-1\"> <input type=\"text\" x-model=\"color\" aria-label=\"Colour hex value\" placeholder=\"#6b16ed\" maxlength=\"7\" class=\"form-input font-mono\"></div></div><div class=\"flex items-center gap-2 pt-1\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Save changes' : 'Create tag'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"btn-secondary\">Cancel</button></div></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<form method=\"POST\" :action=\"formAction\" class=\"space-y-4\"><div><label class=\"form-label\" for=\"tag-name\">Name</label> <input id=\"tag-name\" type=\"text\" name=\"name\" x-model=\"name\" required maxlength=\"50\" placeholder=\"production\" class=\"form-input\"></div><div><label class=\"form-label\" for=\"tag-color\">Colour</label><div class=\"flex items-center gap-2\"><input id=\"tag-color\" type=\"color\" name=\"color\" x-model=\"color\" class=\"h-9 w-12 shrink-0 rounded-control border border-line-light bg-surface-50 cursor-pointer p-1\"> <input type=\"text\" x-model=\"color\" aria-label=\"Colour hex value\" placeholder=\"#1484ff\" maxlength=\"7\" class=\"form-input font-mono\"></div></div><div class=\"flex items-center gap-2 pt-1\"><button type=\"submit\" class=\"btn-primary\" x-text=\"editId ? 'Save changes' : 'Create tag'\"></button> <button type=\"button\" @click=\"showForm = false\" class=\"btn-secondary\">Cancel</button></div></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

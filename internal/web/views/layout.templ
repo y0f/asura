@@ -23,7 +23,7 @@ templ themeScript() {
 	<script>(function(){try{var p=localStorage.getItem("theme")||"dark";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.setAttribute("data-theme",d?"dark":"light");if(localStorage.getItem("navc")==="1")document.documentElement.classList.add("nav-collapsed");}catch(e){}})();</script>
 }
 
-// Layout is the authenticated app shell: a left sidebar (wordmark, quick
+// Layout is the authenticated app shell: a left sidebar (logo, quick
 // search, grouped links, account menu at the bottom), the page content, and the
 // global command palette. The sidebar collapses to an icon rail on desktop and
 // is a slide-over drawer on mobile.
@@ -194,13 +194,15 @@ templ Sidebar(p LayoutParams) {
 		aria-label="Main navigation"
 	>
 		<div class="h-14 flex items-center shrink-0 px-4 gap-2" :class="collapsed ? 'md:justify-center md:px-0' : 'justify-between'">
-			<a href={ templ.SafeURL(p.BasePath + "/") } class="flex items-baseline gap-2 min-w-0" x-show="!collapsed">
-				<span class="text-xl font-bold tracking-tight text-white">Asura</span>
+			<a href={ templ.SafeURL(p.BasePath + "/") } class="flex items-center gap-2 min-w-0" x-show="!collapsed">
+				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
 				if p.Version != "" {
 					<span class="font-mono text-2xs text-muted truncate">{ p.Version }</span>
 				}
 			</a>
-			<a href={ templ.SafeURL(p.BasePath + "/") } x-cloak x-show="collapsed" class="hidden md:flex h-8 w-8 items-center justify-center rounded-control bg-surface-200 text-white font-bold" aria-label="Asura home">A</a>
+			<a href={ templ.SafeURL(p.BasePath + "/") } x-cloak x-show="collapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
+				<img src={ p.BasePath + "/static/favicon.ico" } alt="" class="h-6 w-6"/>
+			</a>
 			<button @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
 				@iconX()
 			</button>
@@ -320,14 +322,14 @@ templ navLink(p LayoutParams, href, key, label string) {
 	</a>
 }
 
-// topbar is only shown below md: the menu button and wordmark. On desktop the
+// topbar is only shown below md: the menu button and logo. On desktop the
 // sidebar carries the brand and each page renders its own heading.
 templ topbar(p LayoutParams) {
 	<header class="md:hidden h-14 flex items-center gap-3 px-4 border-b border-line bg-surface sticky top-0 z-20">
 		<button @click="nav=true" class="icon-btn -ml-2" aria-label="Open navigation" :aria-expanded="nav">
 			<svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
 		</button>
-		<span class="text-lg font-bold text-white">Asura</span>
+		<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
 		<span id="page-title" class="text-sm text-muted truncate">{ p.Title }</span>
 	</header>
 }

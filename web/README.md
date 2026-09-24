@@ -31,8 +31,8 @@ internal/web/views/       # templ templates
 
 ## Design system
 
-The look is flat and dense: a near-black neutral ramp, 1px borders, 4px radii, 32px controls,
-bold page headings, and colour reserved for meaning.
+The look is flat and dense: a near-black neutral ramp, a blue accent, 1px borders, 4px radii,
+32px controls, bold page headings, and colour otherwise reserved for status.
 
 **Theme.** `data-theme` on `<html>` (`dark` default, `light` remap) is resolved before first paint
 by `themeScript`. Every neutral utility (`bg-surface`, `text-muted`, `border-line`, …) resolves to a
@@ -43,8 +43,8 @@ visitor's OS preference.
 - Neutrals: `surface` (canvas) → `surface-50` (cards, inputs, sidebar) → `surface-100` (dialogs) →
   `surface-200` (hover, selected) → `surface-300` (strong controls); `line` / `line-light` borders;
   `white` / `muted-light` / `muted` text.
-- Accent: `brand` marks active navigation, focus rings and selection (yellow in dark, violet in
-  light). `brand-button` is the single filled primary button colour.
+- Accent: blue is the primary colour. `brand` marks active navigation, focus rings, links and
+  selection; `brand-button` is the single filled primary button colour.
 - Status tones: `ok`, `warn`, `major`, `crit`, `info`. Use them through `StatusTone`,
   `UptimeTone`, `StatusPill` and the `text-*` / `bg-*` utilities. Never use raw Tailwind palette
   colours (`emerald-400`, `red-500`, …) or hex values in templates, Go or JS.

@@ -8,15 +8,15 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  /* Accent
+  /* Accent (blue is the primary colour)
      brand         = active navigation, focus rings, links, selected filters
      brand-button  = the one filled (primary) button colour */
-  --color-brand: rgb(252 212 82);
-  --color-brand-strong: rgb(253 224 128);
+  --color-brand: rgb(56 152 255);
+  --color-brand-strong: rgb(96 174 255);
   --color-brand-fg: rgb(255 255 255);
-  --color-brand-button: rgb(107 22 237);
-  --color-brand-button-hover: rgb(115 23 255);
-  --color-chart-line: rgb(159 103 255);
+  --color-brand-button: rgb(0 108 236);
+  --color-brand-button-hover: rgb(20 124 250);
+  --color-chart-line: rgb(56 152 255);
   --color-chart-empty: rgb(40 40 40);
 
   /* Neutral ramp (flat, near-black, no tint)
@@ -68,12 +68,12 @@
 }
 
 html[data-theme="light"] {
-  --color-brand: rgb(107 22 237);
-  --color-brand-strong: rgb(90 18 200);
+  --color-brand: rgb(0 112 243);
+  --color-brand-strong: rgb(0 98 224);
   --color-brand-fg: rgb(255 255 255);
-  --color-brand-button: rgb(107 22 237);
-  --color-brand-button-hover: rgb(115 23 255);
-  --color-chart-line: rgb(107 22 237);
+  --color-brand-button: rgb(0 112 243);
+  --color-brand-button-hover: rgb(0 98 224);
+  --color-chart-line: rgb(0 112 243);
   --color-chart-empty: rgb(229 229 229);
 
   --color-surface: rgb(250 250 250);

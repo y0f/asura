@@ -22,12 +22,12 @@ templ authHead(basePath, title string) {
 	<link rel="stylesheet" href={ Asset(basePath, "tailwind.css") }/>
 }
 
-// authShell centers a small form under the wordmark.
-templ authShell(heading, subtitle, errMsg string) {
+// authShell centers a small form under the logo.
+templ authShell(basePath, heading, subtitle, errMsg string) {
 	<body class="bg-surface text-muted-light font-sans min-h-screen flex items-center justify-center px-4 antialiased">
 		<main class="w-full max-w-sm">
 			<div class="mb-8 text-center">
-				<div class="text-3xl font-bold tracking-tight text-white">Asura</div>
+				<img src={ basePath + "/static/logo.gif" } alt="Asura" class="h-6 w-auto mx-auto"/>
 			</div>
 			<div class="card p-6">
 				<h1 class="text-xl font-bold">{ heading }</h1>
@@ -47,7 +47,7 @@ templ LoginPage(p LoginParams) {
 	<head>
 		@authHead(p.BasePath, "Sign in")
 	</head>
-	@authShell("Sign in", "Use an API key from your Asura configuration.", p.Error) {
+	@authShell(p.BasePath, "Sign in", "Use an API key from your Asura configuration.", p.Error) {
 		<form method="POST" action={ templ.SafeURL(p.BasePath + "/login") } class="space-y-4">
 			<div>
 				<label class="form-label" for="api_key">API key</label>
@@ -65,7 +65,7 @@ templ TOTPPage(p TOTPParams) {
 	<head>
 		@authHead(p.BasePath, "Two-factor authentication")
 	</head>
-	@authShell("Two-factor authentication", "Enter the 6-digit code from your authenticator app.", p.Error) {
+	@authShell(p.BasePath, "Two-factor authentication", "Enter the 6-digit code from your authenticator app.", p.Error) {
 		<form method="POST" action={ templ.SafeURL(p.BasePath + "/login/totp") } class="space-y-4">
 			<input type="hidden" name="challenge" value={ p.ChallengeToken }/>
 			<div>

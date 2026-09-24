@@ -607,8 +607,7 @@ flat and dense:
 - Inter on a near-black neutral ramp (`#101010` canvas, `#181818` cards, `#242424`/`#323232`
   borders) with 1px borders, 4px radii and 32px controls
 - bold page headings with a muted subtitle
-- one accent: yellow for active and focus states in dark, violet for the filled primary button
-  and in light
+- one accent: blue, for active navigation, focus rings, links and the filled primary button
 - colour otherwise reserved for status
 
 `web/README.md` describes the design system as built.
@@ -626,7 +625,7 @@ flat and dense:
 | 8 (partial) | Skip link. The mobile drawer is `inert` while closed and closes with Escape. Desktop topbar removed (the sidebar carries the brand). All static assets are content-hashed. htmx and uPlot are deferred. |
 | 9 (partial) | Dialogs: initial focus (FormModal) and focus return (ConfirmModal), `alertdialog` with an accessible name. Toasts are a fixed live region (`role=status`, or `role=alert` for errors). Keyboard-reachable channel checkboxes. `aria-pressed` on toggles. Labels on every filter and condition-builder control. `<time>` with absolute UTC on hover. Text summary for the public uptime bars. On-call "on call now" is shown in text. |
 | 10 (partial) | Removed the global `main table {display:block}` hack. Monitor and incident tables drop secondary columns on small screens. Forms and stat grids collapse to one column. The 19 type pills are now a Type select. Stat values shrink on phones. |
-| 11 | Removed the body glows, public noise and glow layers, glass blur, gradient switch, press-scale animation, nav chevrons, uppercase eyebrows and the indigo tag default. The dashboard leads with problems (sorted by status) and a one-line summary; the request and visitor tiles are gone. Wordmark instead of the GIF logo. Rewritten copy. |
+| 11 | Removed the body glows, public noise and glow layers, glass blur, gradient switch, press-scale animation, nav chevrons, uppercase eyebrows and the indigo tag default. The dashboard leads with problems (sorted by status) and a one-line summary; the request and visitor tiles are gone. Rewritten copy. The existing logo is kept. |
 | 12 (partial) | Public status page: visitor wording (Operational, Degraded, Outage, Partial/Major outage), follows the OS theme, absolute incident times, labelled subscribe form with `aria-pressed`, cache-busted CSS. |
 
 Correctness fixes from step 1:
