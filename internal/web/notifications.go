@@ -299,12 +299,12 @@ func assembleNotificationSettings(r *http.Request, chType string) json.RawMessag
 func assembleEmailSettings(r *http.Request) json.RawMessage {
 	port, _ := strconv.Atoi(r.FormValue("notif_email_port"))
 	s := notifier.EmailSettings{
-		Host:    r.FormValue("notif_email_host"),
-		Port:    port,
+		Host:     r.FormValue("notif_email_host"),
+		Port:     port,
 		Username: r.FormValue("notif_email_username"),
 		Password: r.FormValue("notif_email_password"),
-		From:    r.FormValue("notif_email_from"),
-		TLSMode: r.FormValue("notif_email_tls_mode"),
+		From:     r.FormValue("notif_email_from"),
+		TLSMode:  r.FormValue("notif_email_tls_mode"),
 	}
 	if toStr := strings.TrimSpace(r.FormValue("notif_email_to")); toStr != "" {
 		for _, addr := range strings.Split(toStr, ",") {

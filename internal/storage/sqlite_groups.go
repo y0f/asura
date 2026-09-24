@@ -85,4 +85,3 @@ func (s *SQLiteStore) DeleteMonitorGroup(ctx context.Context, id int64) error {
 	}
 	return tx.Commit()
 }
-
