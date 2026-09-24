@@ -2,6 +2,8 @@ package views
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -11,134 +13,144 @@ type EscalationPolicyListParams struct {
 	Channels []*storage.NotificationChannel
 }
 
+func channelNames(channels []*storage.NotificationChannel, ids []int64) string {
+	if len(ids) == 0 {
+		return "no channels"
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		names = append(names, channelName(channels, id))
+	}
+	return strings.Join(names, ", ")
+}
+
 templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data={ escalationXData(p) }>
-			<div class="flex items-center justify-end gap-2 mb-5">
-				if p.Perms["escalation_policies.write"] {
-					<button type="button" @click="openCreate()"
-						class="btn-primary btn-press shrink-0">
-						<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m7-7H5"></path></svg>
-						New Policy
-					</button>
+			@PageHeader(PageHeaderParams{Title: "Escalation Policies", Subtitle: "Notify more channels the longer an incident stays open."}) {
+				if p.Can("escalation_policies.write") {
+					@ToolbarNewButtonClick("openCreate()", "New policy")
 				}
-			</div>
+			}
 			if len(p.Policies) == 0 {
-				@EmptyStateModal("No escalation policies yet", "openCreate()", "New Policy")
+				if p.Can("escalation_policies.write") {
+					@EmptyStateModal("No escalation policies yet.", "openCreate()", "Create a policy")
+				} else {
+					@EmptyState("No escalation policies yet.", "", "")
+				}
 			} else {
-				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+				<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 					for _, ep := range p.Policies {
-						<div class="card p-4 hover:border-line-light transition-colors">
-							<div class="flex items-start justify-between mb-2">
-								<div>
-									<h3 class="text-sm font-medium text-white">{ ep.Name }</h3>
+						<div class="card card-pad">
+							<div class="flex items-start justify-between gap-3 mb-3">
+								<div class="min-w-0">
+									<div class="flex items-center gap-2">
+										<h2 class="text-md font-semibold truncate">{ ep.Name }</h2>
+										if ep.Enabled {
+											<span class="badge badge-emerald">Enabled</span>
+										} else {
+											<span class="badge">Disabled</span>
+										}
+										if ep.Repeat {
+											<span class="badge">Repeats</span>
+										}
+									</div>
 									if ep.Description != "" {
-										<p class="text-2xs text-muted mt-0.5">{ ep.Description }</p>
+										<p class="text-sm text-muted mt-1">{ ep.Description }</p>
 									}
 								</div>
-								<div class="flex items-center gap-1.5 shrink-0">
-									if ep.Enabled {
-										<span class="badge badge-emerald">on</span>
-									} else {
-										<span class="badge badge-zinc">off</span>
-									}
-									if ep.Repeat {
-										<span class="badge badge-blue">repeat</span>
-									}
-								</div>
-							</div>
-							<div class="space-y-1 mb-3">
-								for i, step := range ep.Steps {
-									<div class="flex items-center gap-2 text-2xs">
-										<span class="w-4 h-4 rounded-full bg-surface-200 flex items-center justify-center text-2xs text-muted shrink-0">{ fmt.Sprint(i + 1) }</span>
-										<span class="text-muted-light">
-											if step.DelayMinutes == 0 {
-												Immediately
-											} else {
-												After { fmt.Sprintf("%dm", step.DelayMinutes) }
-											}
-										</span>
-										<span class="text-muted">&gt; { fmt.Sprintf("%d channel(s)", len(step.NotificationChannelIDs)) }</span>
+								if p.Can("escalation_policies.write") {
+									<div class="flex items-center gap-0.5 shrink-0">
+										<button type="button" @click={ fmt.Sprintf("openEdit(%s)", ToJSON(ep)) } class="row-action" title="Edit" aria-label={ "Edit " + ep.Name }>
+											@iconEdit()
+										</button>
+										@DeleteButton(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID), "Delete this escalation policy?")
 									</div>
 								}
 							</div>
-							if p.Perms["escalation_policies.write"] {
-								<div class="flex items-center gap-1 pt-2 border-t border-line">
-									<button type="button" @click={ fmt.Sprintf("openEdit(%s)", ToJSON(ep)) } class="row-action" title="Edit" aria-label="Edit policy">
-										<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
-									</button>
-									@DeleteButton(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID), "Delete this policy?")
-								</div>
-							}
+							<ol class="space-y-1.5">
+								for i, step := range ep.Steps {
+									<li class="flex items-baseline gap-2 text-sm">
+										<span class="w-5 text-right text-muted tabular-nums shrink-0">{ fmt.Sprint(i + 1) }.</span>
+										<span class="text-white shrink-0">
+											if step.DelayMinutes == 0 {
+												Immediately
+											} else {
+												{ fmt.Sprintf("After %d min", step.DelayMinutes) }
+											}
+										</span>
+										<span class="text-muted-light min-w-0">→ { channelNames(p.Channels, step.NotificationChannelIDs) }</span>
+									</li>
+								}
+							</ol>
 						</div>
 					}
 				</div>
 			}
-			@FormModal("showForm", "max-w-md", "editId ? 'Edit Policy' : 'New Policy'") {
-				<form method="POST" :action="formAction" class="space-y-3">
+			@FormModal("showForm", "max-w-lg", "editId ? 'Edit escalation policy' : 'New escalation policy'") {
+				<form method="POST" :action="formAction" class="space-y-4">
 					<div>
-						<label class="form-label" for="name">Name</label>
-						<input type="text" id="name" name="name" x-model="formData.name" class="form-input" required/>
+						<label class="form-label" for="ep-name">Name</label>
+						<input type="text" id="ep-name" name="name" x-model="formData.name" class="form-input" required/>
 					</div>
 					<div>
-						<label class="form-label" for="description">Description</label>
-						<input type="text" id="description" name="description" x-model="formData.description" class="form-input"/>
+						<label class="form-label" for="ep-description">Description <span class="text-muted font-normal">(optional)</span></label>
+						<input type="text" id="ep-description" name="description" x-model="formData.description" class="form-input"/>
 					</div>
-					<div class="flex items-center gap-5">
+					<div class="flex flex-wrap items-center gap-5">
 						<label class="flex items-center gap-2 cursor-pointer">
 							<input type="checkbox" name="enabled" x-model="formData.enabled" class="form-checkbox"/>
-							<span class="text-xs text-muted-light">Enabled</span>
+							<span class="text-sm text-muted-light">Enabled</span>
 						</label>
 						<label class="flex items-center gap-2 cursor-pointer">
 							<input type="checkbox" name="repeat" x-model="formData.repeat" class="form-checkbox"/>
-							<span class="text-xs text-muted-light">Repeat after last step</span>
+							<span class="text-sm text-muted-light">Repeat after the last step</span>
 						</label>
 					</div>
 					<div>
-						<label class="form-label">Steps</label>
+						<div class="form-label">Steps</div>
 						<div class="space-y-2">
 							<template x-for="(step, idx) in formData.steps" :key="idx">
-								<div class="card p-3 space-y-2">
+								<fieldset class="rounded-control border border-line-light p-3 space-y-3">
 									<div class="flex items-center justify-between">
-										<span class="text-2xs text-muted" x-text="'Step ' + (idx + 1)"></span>
-										<div class="flex items-center gap-1">
-											<button type="button" @click="moveStep(idx, -1)" x-show="idx > 0" aria-label="Move step up" title="Move step up" class="row-action">
-												<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg>
+										<legend class="text-sm font-medium text-white" x-text="'Step ' + (idx + 1)"></legend>
+										<div class="flex items-center gap-0.5">
+											<button type="button" @click="moveStep(idx, -1)" x-show="idx > 0" aria-label="Move step up" title="Move up" class="row-action">
+												<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg>
 											</button>
-											<button type="button" @click="moveStep(idx, 1)" x-show="idx < formData.steps.length - 1" aria-label="Move step down" title="Move step down" class="row-action">
-												<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+											<button type="button" @click="moveStep(idx, 1)" x-show="idx < formData.steps.length - 1" aria-label="Move step down" title="Move down" class="row-action">
+												<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
 											</button>
-											<button type="button" @click="removeStep(idx)" aria-label="Remove step" title="Remove step" class="row-action">
-												<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+											<button type="button" @click="removeStep(idx)" aria-label="Remove step" title="Remove" class="row-action hover:text-crit!">
+												@iconX()
 											</button>
 										</div>
 									</div>
 									<div>
-										<label class="form-label-sm">Delay (minutes)</label>
-										<input type="number" min="0" x-model.number="step.delay_minutes" class="form-input text-xs w-24"/>
-										<input type="hidden" :name="'step_delay_minutes[]'" :value="step.delay_minutes"/>
+										<label class="form-label-sm" :for="'step-delay-' + idx">Delay (minutes)</label>
+										<input type="number" min="0" :id="'step-delay-' + idx" x-model.number="step.delay_minutes" class="form-input w-28 h-8"/>
+										<input type="hidden" name="step_delay_minutes[]" :value="step.delay_minutes"/>
 									</div>
 									<div>
-										<label class="form-label-sm">Notification channels</label>
+										<div class="form-label-sm">Notify</div>
 										<div class="flex flex-wrap gap-1.5">
 											for _, ch := range p.Channels {
-												<label class="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs transition-colors cursor-pointer select-none border-line hover:border-line-light" :class={ fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand/30 bg-brand/[0.06]'", ch.ID) }>
-													<input type="checkbox" :checked={ fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID) } @change={ fmt.Sprintf("toggleChannel(idx, %d)", ch.ID) } class="hidden"/>
-													<span class="text-muted-light">{ ch.Name }</span>
-													<span class="text-muted">({ ch.Type })</span>
+												<label class="inline-flex items-center gap-2 rounded-control border border-line-light px-2 h-8 text-sm cursor-pointer select-none hover:bg-surface-200" :class={ fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand'", ch.ID) }>
+													<input type="checkbox" :checked={ fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID) } @change={ fmt.Sprintf("toggleChannel(idx, %d)", ch.ID) } class="form-checkbox"/>
+													<span class="text-white">{ ch.Name }</span>
 												</label>
 											}
 										</div>
-										<input type="hidden" :name="'step_channels[]'" :value="JSON.stringify(step.channel_ids)"/>
+										<input type="hidden" name="step_channels[]" :value="JSON.stringify(step.channel_ids)"/>
 									</div>
-								</div>
+								</fieldset>
 							</template>
 						</div>
-						<button type="button" @click="addStep()" class="btn-secondary btn-sm btn-press mt-2">+ Add Step</button>
+						<button type="button" @click="addStep()" class="btn-secondary btn-sm mt-2">Add step</button>
 					</div>
-					<div class="flex items-center gap-3 pt-3">
-						<button type="submit" class="btn-primary btn-press" x-text="editId ? 'Save' : 'Create'"></button>
-						<button type="button" @click="showForm = false" class="btn-secondary btn-press">Cancel</button>
+					<div class="flex items-center gap-2 pt-1">
+						<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create policy'"></button>
+						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
 					</div>
 				</form>
 			}
@@ -184,5 +196,5 @@ func escalationXData(p EscalationPolicyListParams) string {
 			let i = ids.indexOf(chId);
 			if (i >= 0) ids.splice(i, 1); else ids.push(chId);
 		}
-	}`, p.BasePath, p.BasePath, p.BasePath)
+	}`, JSEscapeString(p.BasePath), JSEscapeString(p.BasePath), JSEscapeString(p.BasePath))
 }

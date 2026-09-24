@@ -30,20 +30,20 @@ func (h *Handler) TagCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.ValidateTag(t); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/tags")
 		return
 	}
 
 	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil {
-		h.setFlash(w, "Tag name already in use")
+		h.setError(w, "Tag name already in use")
 		h.redirect(w, r, "/tags")
 		return
 	}
 
 	if err := h.store.CreateTag(r.Context(), t); err != nil {
 		h.logger.Error("web: create tag", "error", err)
-		h.setFlash(w, "Failed to create tag")
+		h.setError(w, "Failed to create tag")
 		h.redirect(w, r, "/tags")
 		return
 	}
@@ -70,20 +70,20 @@ func (h *Handler) TagUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.ValidateTag(t); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/tags")
 		return
 	}
 
 	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil && existing.ID != id {
-		h.setFlash(w, "Tag name already in use")
+		h.setError(w, "Tag name already in use")
 		h.redirect(w, r, "/tags")
 		return
 	}
 
 	if err := h.store.UpdateTag(r.Context(), t); err != nil {
 		h.logger.Error("web: update tag", "error", err)
-		h.setFlash(w, "Failed to update tag")
+		h.setError(w, "Failed to update tag")
 		h.redirect(w, r, "/tags")
 		return
 	}
@@ -101,7 +101,7 @@ func (h *Handler) TagDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.store.DeleteTag(r.Context(), id); err != nil {
 		h.logger.Error("web: delete tag", "error", err)
-		h.setFlash(w, "Failed to delete tag")
+		h.setError(w, "Failed to delete tag")
 		h.redirect(w, r, "/tags")
 		return
 	}

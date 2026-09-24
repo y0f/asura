@@ -6,7 +6,7 @@
 </p>
 <p align="center">
   <a href="https://github.com/y0f/asura/actions/workflows/ci.yml"><img src="https://github.com/y0f/asura/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://goreportcard.com/report/github.com/y0f/asura?branch=main"><img src="https://goreportcard.com/badge/github.com/y0f/asura?branch=main" alt="Go Report Card"></a>
+  <a href="https://github.com/y0f/asura/stargazers"><img src="https://img.shields.io/github/stars/y0f/asura?style=flat" alt="GitHub stars"></a>
   <a href="https://github.com/y0f/asura/blob/main/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/y0f/asura" alt="Go Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="https://github.com/y0f/asura/releases/latest"><img src="https://img.shields.io/github/v/release/y0f/asura?include_prereleases&sort=semver" alt="Release"></a>
@@ -21,8 +21,9 @@
 
 ---
 
-![Dashboard - live monitors, sparklines, active incidents](assets/webpanel.png)
-![Monitor detail - uptime, response-time chart, recent checks](assets/monitorview.png)
+![Dashboard - monitors with problems first, sparklines, open incidents](assets/webpanel.png)
+![Monitor detail - uptime, response-time chart, SLA budget, 365-day history](assets/monitorview.png)
+![Public status page - grouped monitors with 90-day uptime bars](assets/statuspage.png)
 
 ---
 

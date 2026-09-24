@@ -1,8 +1,6 @@
 package web
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -17,7 +15,6 @@ import (
 	"github.com/y0f/asura/internal/notifier"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/web/views"
-	staticfs "github.com/y0f/asura/web"
 )
 
 type Handler struct {
@@ -28,13 +25,14 @@ type Handler struct {
 	subNotifier        *notifier.SubscriberNotifier
 	logger             *slog.Logger
 	version            string
-	assetVer           string
 	startTime          time.Time
 	cspFrameDirective  string
 	OnStatusPageChange func()
 	loginRL            *httputil.RateLimiter
 	totpMu             sync.Mutex
 	totpChallenges     map[string]*totpChallenge
+	revealMu           sync.Mutex
+	agentReveals       map[string]agentReveal
 	done               chan struct{}
 }
 
@@ -54,7 +52,6 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 		subNotifier:       subNotifier,
 		logger:            logger,
 		version:           version,
-		assetVer:          assetVersion(),
 		startTime:         time.Now(),
 		cspFrameDirective: cspDirective,
 		loginRL:           httputil.NewRateLimiter(cfg.Auth.Login.RateLimitPerSec, cfg.Auth.Login.RateLimitBurst),
@@ -65,23 +62,12 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 	return h
 }
 
-// assetVersion returns a short content hash of the compiled stylesheet, used to
-// cache-bust the <link> so a fresh build is fetched immediately while an
-// unchanged build stays served from the browser cache (max-age). Falls back to a
-// constant when the asset can't be read, which only disables busting.
-func assetVersion() string {
-	b, err := staticfs.FS.ReadFile("static/tailwind.css")
-	if err != nil {
-		return "0"
-	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])[:12]
-}
-
 func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.LayoutParams {
 	perms := make(map[string]bool)
+	superAdmin := false
 	if k := httputil.GetAPIKey(r.Context()); k != nil {
 		perms = k.PermissionMap()
+		superAdmin = k.SuperAdmin
 	}
 	toastKind, toastMsg := "", ""
 	if c, err := r.Cookie("toast"); err == nil {
@@ -95,15 +81,15 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 		}
 	}
 	return views.LayoutParams{
-		Title:     title,
-		Active:    active,
-		Username:  httputil.GetAPIKeyName(r.Context()),
-		Perms:     perms,
-		Version:   h.version,
-		AssetVer:  h.assetVer,
-		ToastKind: toastKind,
-		ToastMsg:  toastMsg,
-		BasePath:  h.cfg.Server.BasePath,
+		Title:      title,
+		Active:     active,
+		Username:   httputil.GetAPIKeyName(r.Context()),
+		Perms:      perms,
+		SuperAdmin: superAdmin,
+		Version:    h.version,
+		ToastKind:  toastKind,
+		ToastMsg:   toastMsg,
+		BasePath:   h.cfg.Server.BasePath,
 	}
 }
 
@@ -132,8 +118,14 @@ func (h *Handler) setToast(w http.ResponseWriter, kind, msg string) {
 	})
 }
 
+// setFlash reports a successful action.
 func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
 	h.setToast(w, "success", msg)
+}
+
+// setError reports a failed action. Error toasts stay until dismissed.
+func (h *Handler) setError(w http.ResponseWriter, msg string) {
+	h.setToast(w, "error", msg)
 }
 
 func (h *Handler) audit(r *http.Request, action, entity string, entityID int64, detail string) {

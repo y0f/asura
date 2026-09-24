@@ -14,6 +14,7 @@ generate:
 
 css:
 	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --minify
+	$(TAILWIND) -i docs/tailwind.input.css -o docs/static/docs.css --minify
 
 watch:
 	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --watch

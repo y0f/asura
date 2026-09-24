@@ -2,6 +2,10 @@ package views
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -24,168 +28,117 @@ func (p RequestLogParams) logs() []*storage.RequestLog {
 	return logs
 }
 
-func (p RequestLogParams) timeFilterHref(tr string) string {
-	href := fmt.Sprintf("%s/logs?range=%s", p.BasePath, tr)
-	if p.Filter != "" {
-		href += "&group=" + p.Filter
-	}
-	if p.ClientIP != "" {
-		href += "&ip=" + p.ClientIP
-	}
-	return href
-}
-
-func (p RequestLogParams) groupFilterHref(group string) string {
-	href := fmt.Sprintf("%s/logs?range=%s", p.BasePath, p.TimeRange)
+// href builds a logs URL from the current filters with the given overrides,
+// escaping every value.
+func (p RequestLogParams) href(timeRange, group, ip string, page int) string {
+	q := url.Values{}
+	q.Set("range", timeRange)
 	if group != "" {
-		href += "&group=" + group
+		q.Set("group", group)
 	}
-	if p.ClientIP != "" {
-		href += "&ip=" + p.ClientIP
+	if ip != "" {
+		q.Set("ip", ip)
 	}
-	return href
-}
-
-// clientIPHref filters to a specific client IP, preserving the range/group
-// filters but replacing (not appending to) any active IP filter.
-func (p RequestLogParams) clientIPHref(ip string) string {
-	href := fmt.Sprintf("%s/logs?range=%s", p.BasePath, p.TimeRange)
-	if p.Filter != "" {
-		href += "&group=" + p.Filter
+	if page > 1 {
+		q.Set("page", strconv.Itoa(page))
 	}
-	href += "&ip=" + ip
-	return href
-}
-
-func (p RequestLogParams) pageHref(page int) string {
-	href := fmt.Sprintf("%s/logs?range=%s", p.BasePath, p.TimeRange)
-	if p.Filter != "" {
-		href += "&group=" + p.Filter
-	}
-	if p.ClientIP != "" {
-		href += "&ip=" + p.ClientIP
-	}
-	href += fmt.Sprintf("&page=%d", page)
-	return href
-}
-
-func (p RequestLogParams) ipFilterFormBase() string {
-	return p.BasePath + "/logs"
+	return p.BasePath + "/logs?" + q.Encode()
 }
 
 templ RequestLogListPage(p RequestLogParams) {
 	@Layout(p.LayoutParams) {
-		<div>
-			if p.Stats != nil {
-				<div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-					<div class="card px-4 py-3">
-						<div class="stat-label">Requests</div>
-						<div class="text-2xl font-semibold text-white tabular-nums">{ fmt.Sprint(p.Stats.TotalRequests) }</div>
-					</div>
-					<div class="card px-4 py-3">
-						<div class="stat-label">Visitors</div>
-						<div class="text-2xl font-semibold text-muted-light tabular-nums">{ fmt.Sprint(p.Stats.UniqueVisitors) }</div>
-					</div>
-					<div class="card px-4 py-3">
-						<div class="stat-label">Avg Latency</div>
-						<div class="text-2xl font-semibold text-muted-light tabular-nums">{ FormatMs(p.Stats.AvgLatencyMs) }</div>
-					</div>
-				</div>
-			}
-			<div class="flex items-center gap-3 mb-3 overflow-x-auto">
-				<div class="flex gap-1.5">
-					for _, tr := range []string{"1h", "12h", "24h", "7d"} {
-						<a href={ templ.SafeURL(p.timeFilterHref(tr)) }
-							class={ "filter-tab", templ.KV("filter-active", p.TimeRange == tr), templ.KV("filter-inactive", p.TimeRange != tr) }>
-							{ tr }
-						</a>
-					}
-				</div>
-				<div class="h-4 w-px bg-line"></div>
-				<div class="flex gap-1.5">
-					<a href={ templ.SafeURL(p.groupFilterHref("")) }
-						class={ "filter-tab", templ.KV("filter-active", p.Filter == ""), templ.KV("filter-inactive", p.Filter != "") }>All</a>
-					for _, g := range []string{"web", "api", "badge", "auth", "status"} {
-						<a href={ templ.SafeURL(p.groupFilterHref(g)) }
-							class={ "filter-tab", templ.KV("filter-active", p.Filter == g), templ.KV("filter-inactive", p.Filter != g) }>
-							{ capitalize(g) }
-						</a>
-					}
-				</div>
-				if len(p.TopIPs) > 0 {
-					<div class="h-4 w-px bg-line"></div>
-					<form method="GET" action={ templ.SafeURL(p.ipFilterFormBase()) } class="contents">
-						<input type="hidden" name="range" value={ p.TimeRange }/>
-						if p.Filter != "" {
-							<input type="hidden" name="group" value={ p.Filter }/>
-						}
-						<select name="ip" onchange="this.form.submit()" class={ "form-select-sm", templ.KV("text-brand border-brand/30", p.ClientIP != "") }>
-							<option value="">All IPs</option>
-							for _, ip := range p.TopIPs {
-								<option value={ ip } selected?={ ip == p.ClientIP }>{ ip }</option>
-							}
-						</select>
-					</form>
-				}
+		@PageHeader(PageHeaderParams{Title: "Request Logs", Subtitle: "HTTP requests served by Asura: the UI, API, badges and status pages."})
+		if p.Stats != nil {
+			<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+				@StatCard("Requests", fmt.Sprint(p.Stats.TotalRequests), "")
+				@StatCard("Unique visitors", fmt.Sprint(p.Stats.UniqueVisitors), "")
+				@StatCard("Average latency", FormatMs(p.Stats.AvgLatencyMs), "")
 			</div>
-			if logs := p.logs(); len(logs) > 0 {
-				<div class="panel">
-					<div class="overflow-x-auto">
-						<table class="w-full min-w-[800px]">
-							<thead>
-								<tr class="border-b border-line text-left">
-									<th class="th">Time</th>
-									<th class="th">Method</th>
-									<th class="th">Path</th>
-									<th class="th">Status</th>
-									<th class="th">Latency</th>
-									<th class="th">IP</th>
-									<th class="th">Group</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-line">
-								for _, log := range logs {
-									<tr class="hover:bg-surface-200/20 transition-colors">
-										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono whitespace-nowrap">{ TimeAgo(log.CreatedAt) }</td>
-										<td class="px-4 py-2.5"><span class="badge badge-zinc">{ log.Method }</span></td>
-										<td class="px-4 py-2.5 text-xs text-muted-light font-mono truncate max-w-[250px]" title={ log.Path }>{ log.Path }</td>
-										<td class={ "px-4 py-2.5 text-xs font-mono tabular-nums", HttpStatusColor(log.StatusCode) }>{ fmt.Sprint(log.StatusCode) }</td>
-										<td class="px-4 py-2.5 text-xs text-muted tabular-nums font-mono">{ FormatMs(log.LatencyMs) }</td>
-										<td class="px-4 py-2.5 text-2xs font-mono">
-											<a href={ templ.SafeURL(p.clientIPHref(log.ClientIP)) } class="text-muted hover:text-brand transition-colors">{ log.ClientIP }</a>
-										</td>
-										<td class="px-4 py-2.5"><span class="badge badge-zinc">{ log.RouteGroup }</span></td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
-					if p.Result != nil && p.Result.TotalPages > 1 {
-						<div class="px-4 py-2.5 border-t border-line flex items-center justify-between">
-							<span class="text-2xs text-muted tabular-nums">
-								{ fmt.Sprintf("Page %d / %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total) }
-							</span>
-							<div class="flex gap-1">
-								if p.Result.Page > 1 {
-									@PrevPageBtn(p.pageHref(p.Result.Page - 1))
-								}
-								if p.Result.Page < p.Result.TotalPages {
-									@NextPageBtn(p.pageHref(p.Result.Page + 1))
-								}
-							</div>
-						</div>
+		}
+		<div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
+			<nav class="flex flex-wrap gap-1" aria-label="Time range">
+				for _, tr := range []string{"1h", "12h", "24h", "7d"} {
+					<a href={ templ.SafeURL(p.href(tr, p.Filter, p.ClientIP, 1)) }
+						class={ "filter-tab", templ.KV("filter-active", p.TimeRange == tr), templ.KV("filter-inactive", p.TimeRange != tr) }>{ tr }</a>
+				}
+			</nav>
+			<nav class="flex flex-wrap gap-1" aria-label="Route group">
+				<a href={ templ.SafeURL(p.href(p.TimeRange, "", p.ClientIP, 1)) }
+					class={ "filter-tab", templ.KV("filter-active", p.Filter == ""), templ.KV("filter-inactive", p.Filter != "") }>All</a>
+				for _, g := range []string{"web", "api", "badge", "auth", "status"} {
+					<a href={ templ.SafeURL(p.href(p.TimeRange, g, p.ClientIP, 1)) }
+						class={ "filter-tab", templ.KV("filter-active", p.Filter == g), templ.KV("filter-inactive", p.Filter != g) }>{ routeGroupLabel(g) }</a>
+				}
+			</nav>
+			if len(p.TopIPs) > 0 {
+				<form method="GET" action={ templ.SafeURL(p.BasePath + "/logs") }>
+					<input type="hidden" name="range" value={ p.TimeRange }/>
+					if p.Filter != "" {
+						<input type="hidden" name="group" value={ p.Filter }/>
 					}
-				</div>
-			} else {
-				@EmptyState("No request logs yet", "", "")
+					<select name="ip" onchange="this.form.submit()" class="form-select-sm" aria-label="Client IP">
+						<option value="">All IPs</option>
+						for _, ip := range p.TopIPs {
+							<option value={ ip } selected?={ ip == p.ClientIP }>{ ip }</option>
+						}
+					</select>
+					<noscript><button type="submit" class="btn-secondary btn-sm">Apply</button></noscript>
+				</form>
 			}
 		</div>
+		if logs := p.logs(); len(logs) > 0 {
+			<div class="panel">
+				<div class="overflow-x-auto">
+					<table class="w-full min-w-[800px]">
+						<thead>
+							<tr class="border-b border-line">
+								<th class="th">Time</th>
+								<th class="th">Method</th>
+								<th class="th">Path</th>
+								<th class="th">Status</th>
+								<th class="th">Latency</th>
+								<th class="th">Client</th>
+								<th class="th">Group</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-line">
+							for _, log := range logs {
+								<tr>
+									<td class="px-4 py-2.5 text-sm text-muted whitespace-nowrap">@RelTime(log.CreatedAt)</td>
+									<td class="px-4 py-2.5 text-xs font-mono text-white">{ log.Method }</td>
+									<td class="px-4 py-2.5 text-xs text-muted-light font-mono truncate max-w-[280px]" title={ log.Path }>{ log.Path }</td>
+									<td class={ "px-4 py-2.5 text-sm font-mono tabular-nums", HttpStatusColor(log.StatusCode) }>{ fmt.Sprint(log.StatusCode) }</td>
+									<td class="px-4 py-2.5 text-sm text-muted tabular-nums font-mono">{ FormatMs(log.LatencyMs) }</td>
+									<td class="px-4 py-2.5 text-xs font-mono">
+										<a href={ templ.SafeURL(p.href(p.TimeRange, p.Filter, log.ClientIP, 1)) } class="text-muted-light hover:text-white hover:underline">{ log.ClientIP }</a>
+									</td>
+									<td class="px-4 py-2.5 text-sm text-muted">{ routeGroupLabel(log.RouteGroup) }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				if p.Result != nil && p.Result.TotalPages > 1 {
+					@Pager(p.Result.Page, p.Result.TotalPages, fmt.Sprintf("Page %d of %d · %d entries", p.Result.Page, p.Result.TotalPages, p.Result.Total), p.href(p.TimeRange, p.Filter, p.ClientIP, p.Result.Page-1), p.href(p.TimeRange, p.Filter, p.ClientIP, p.Result.Page+1))
+				}
+			</div>
+		} else {
+			@EmptyState("No requests in this range.", "", "")
+		}
 	}
+}
+
+func routeGroupLabel(g string) string {
+	if g == "api" {
+		return "API"
+	}
+	return capitalize(g)
 }
 
 func capitalize(s string) string {
 	if s == "" {
 		return s
 	}
-	return string(s[0]-32) + s[1:]
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[size:]
 }

@@ -38,19 +38,19 @@ func (h *Handler) StatusPageForm(w http.ResponseWriter, r *http.Request) {
 	if idStr != "" {
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			h.setFlash(w, "Invalid status page ID")
+			h.setError(w, "Invalid status page ID")
 			h.redirect(w, r, "/status-pages")
 			return
 		}
 		sp, err = h.store.GetStatusPage(ctx, id)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				h.setFlash(w, "Status page not found")
+				h.setError(w, "Status page not found")
 				h.redirect(w, r, "/status-pages")
 				return
 			}
 			h.logger.Error("web: get status page", "error", err)
-			h.setFlash(w, "Failed to load status page")
+			h.setError(w, "Failed to load status page")
 			h.redirect(w, r, "/status-pages")
 			return
 		}
@@ -120,7 +120,7 @@ func (h *Handler) StatusPageCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.ValidateStatusPage(sp); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/status-pages/new")
 		return
 	}
@@ -129,14 +129,14 @@ func (h *Handler) StatusPageCreate(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
 	if err == nil && existing != nil {
-		h.setFlash(w, "Slug already in use")
+		h.setError(w, "Slug already in use")
 		h.redirect(w, r, "/status-pages/new")
 		return
 	}
 
 	if err := h.store.CreateStatusPage(ctx, sp); err != nil {
 		h.logger.Error("web: create status page", "error", err)
-		h.setFlash(w, "Failed to create status page")
+		h.setError(w, "Failed to create status page")
 		h.redirect(w, r, "/status-pages/new")
 		return
 	}
@@ -158,7 +158,7 @@ func (h *Handler) StatusPageCreate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) StatusPageUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.setFlash(w, "Invalid ID")
+		h.setError(w, "Invalid ID")
 		h.redirect(w, r, "/status-pages")
 		return
 	}
@@ -168,7 +168,7 @@ func (h *Handler) StatusPageUpdate(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.store.GetStatusPage(r.Context(), id)
 	if err != nil {
 		h.logger.Error("web: get status page for update", "error", err)
-		h.setFlash(w, "Failed to load status page")
+		h.setError(w, "Failed to load status page")
 		h.redirect(w, r, "/status-pages")
 		return
 	}
@@ -198,7 +198,7 @@ func (h *Handler) StatusPageUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.ValidateStatusPage(sp); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
 		return
 	}
@@ -207,14 +207,14 @@ func (h *Handler) StatusPageUpdate(w http.ResponseWriter, r *http.Request) {
 
 	slugOwner, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
 	if err == nil && slugOwner != nil && slugOwner.ID != id {
-		h.setFlash(w, "Slug already in use")
+		h.setError(w, "Slug already in use")
 		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
 		return
 	}
 
 	if err := h.store.UpdateStatusPage(ctx, sp); err != nil {
 		h.logger.Error("web: update status page", "error", err)
-		h.setFlash(w, "Failed to update status page")
+		h.setError(w, "Failed to update status page")
 		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
 		return
 	}

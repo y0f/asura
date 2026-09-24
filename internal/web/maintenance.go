@@ -30,13 +30,13 @@ func (h *Handler) Maintenance(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MaintenanceCreate(w http.ResponseWriter, r *http.Request) {
 	mw := h.parseMaintenanceForm(r)
 	if err := validate.ValidateMaintenanceWindow(mw); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/maintenance")
 		return
 	}
 	if err := h.store.CreateMaintenanceWindow(r.Context(), mw); err != nil {
 		h.logger.Error("web: create maintenance", "error", err)
-		h.setFlash(w, "Failed to create maintenance window")
+		h.setError(w, "Failed to create maintenance window")
 		h.redirect(w, r, "/maintenance")
 		return
 	}
@@ -53,13 +53,13 @@ func (h *Handler) MaintenanceUpdate(w http.ResponseWriter, r *http.Request) {
 	mw := h.parseMaintenanceForm(r)
 	mw.ID = id
 	if err := validate.ValidateMaintenanceWindow(mw); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/maintenance")
 		return
 	}
 	if err := h.store.UpdateMaintenanceWindow(r.Context(), mw); err != nil {
 		h.logger.Error("web: update maintenance", "error", err)
-		h.setFlash(w, "Failed to update maintenance window")
+		h.setError(w, "Failed to update maintenance window")
 		h.redirect(w, r, "/maintenance")
 		return
 	}
@@ -88,14 +88,14 @@ func (h *Handler) MaintenanceToggle(w http.ResponseWriter, r *http.Request) {
 	}
 	mw, err := h.store.GetMaintenanceWindow(r.Context(), id)
 	if err != nil {
-		h.setFlash(w, "Maintenance window not found")
+		h.setError(w, "Maintenance window not found")
 		h.redirect(w, r, "/maintenance")
 		return
 	}
 	newActive := !mw.Active
 	if err := h.store.ToggleMaintenanceWindow(r.Context(), id, newActive); err != nil {
 		h.logger.Error("web: toggle maintenance", "error", err)
-		h.setFlash(w, "Failed to toggle maintenance window")
+		h.setError(w, "Failed to toggle maintenance window")
 	} else {
 		if newActive {
 			h.setFlash(w, "Maintenance started")

@@ -7,14 +7,13 @@ import (
 
 type SettingsParams struct {
 	LayoutParams
-	DBSizeBytes    int64
-	GoVersion      string
-	AppVersion     string
-	Uptime         string
-	MonitorCount   int64
-	WorkerCount    int
-	RetentionDays  int
-	EncryptionOn   bool
+	DBSizeBytes   int64
+	AppVersion    string
+	Uptime        string
+	MonitorCount  int64
+	WorkerCount   int
+	RetentionDays int
+	EncryptionOn  bool
 }
 
 func formatBytes(b int64) string {
@@ -30,105 +29,110 @@ func formatBytes(b int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+templ settingsFact(label string) {
+	<div class="py-2">
+		<dt class="text-xs text-muted">{ label }</dt>
+		<dd class="text-sm text-white font-medium mt-0.5">{ children... }
+</dd>
+	</div>
+}
+
 templ SettingsPage(p SettingsParams) {
 	@Layout(p.LayoutParams) {
-		<div class="max-w-5xl">
-			<div class="card card-pad mb-5">
-				<h2 class="text-sm font-semibold text-white mb-4">System Info</h2>
-				<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-					<div>
-						<div class="text-muted-light mb-0.5">Version</div>
-						<div class="text-white font-medium">{ p.AppVersion }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Go</div>
-						<div class="text-white font-medium">{ runtime.Version() }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Uptime</div>
-						<div class="text-white font-medium">{ p.Uptime }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Database</div>
-						<div class="text-white font-medium">{ formatBytes(p.DBSizeBytes) }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Monitors</div>
-						<div class="text-white font-medium">{ fmt.Sprint(p.MonitorCount) }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Workers</div>
-						<div class="text-white font-medium">{ fmt.Sprint(p.WorkerCount) }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Retention</div>
-						<div class="text-white font-medium">{ fmt.Sprintf("%d days", p.RetentionDays) }</div>
-					</div>
-					<div>
-						<div class="text-muted-light mb-0.5">Encryption</div>
+		@PageHeader(PageHeaderParams{Title: "Settings", Subtitle: "Instance information, configuration backup and database maintenance."})
+		<div class="space-y-6 max-w-5xl">
+			<section class="card card-pad" aria-labelledby="sys-title">
+				<h2 id="sys-title" class="text-lg font-semibold mb-2">System</h2>
+				<dl class="grid grid-cols-2 md:grid-cols-4 gap-x-6">
+					@settingsFact("Version") {
+						{ p.AppVersion }
+					}
+					@settingsFact("Go") {
+						{ runtime.Version() }
+					}
+					@settingsFact("Uptime") {
+						{ p.Uptime }
+					}
+					@settingsFact("Database size") {
+						{ formatBytes(p.DBSizeBytes) }
+					}
+					@settingsFact("Monitors") {
+						{ fmt.Sprint(p.MonitorCount) }
+					}
+					@settingsFact("Check workers") {
+						{ fmt.Sprint(p.WorkerCount) }
+					}
+					@settingsFact("History retention") {
+						{ fmt.Sprintf("%d days", p.RetentionDays) }
+					}
+					@settingsFact("Secrets at rest") {
 						if p.EncryptionOn {
-							<div class="text-emerald-400 font-medium">Enabled</div>
+							<span class="text-ok">Encrypted</span>
 						} else {
-							<div class="text-muted-light font-medium">Disabled</div>
+							<span class="text-muted-light">Not encrypted</span>
 						}
-					</div>
-				</div>
-			</div>
-			<div class="grid gap-5 md:grid-cols-2">
-				<div class="card card-pad">
-					<h2 class="text-sm font-semibold text-white mb-1">Export Configuration</h2>
-					<p class="text-xs text-muted-light mb-4">Download all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a JSON file.</p>
-					<div class="flex items-center gap-2">
-						<a href={ templ.SafeURL(p.BasePath + "/settings/export") }
-							class="btn-primary btn-press">
-							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-							Export
-						</a>
-						<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true") }
-							class="btn-secondary btn-press">
-							<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-							Export (redacted)
-						</a>
-					</div>
-				</div>
-				<div class="card card-pad">
-					<h2 class="text-sm font-semibold text-white mb-1">Import Configuration</h2>
-					<p class="text-xs text-muted-light mb-4">Upload a previously exported JSON file to restore or merge configuration.</p>
-					<form action={ templ.SafeURL(p.BasePath + "/settings/import") } method="POST" enctype="multipart/form-data" class="space-y-3" x-data="{ fileName: '' }">
-						<div>
-							<label class="form-label" for="mode">Mode</label>
-							<select id="mode" name="mode" class="form-select">
-								<option value="merge">Merge (skip existing)</option>
-								<option value="replace">Replace (overwrite all)</option>
-							</select>
+					}
+				</dl>
+			</section>
+			if p.Can("monitors.write") {
+				<div class={ "grid gap-6", templ.KV("md:grid-cols-2", p.SuperAdmin) }>
+					<section class="card card-pad" aria-labelledby="export-title">
+						<h2 id="export-title" class="text-lg font-semibold">Export</h2>
+						<p class="subtitle mt-1 mb-4">Download monitors, groups, proxies, notification channels, maintenance windows and status pages as JSON.</p>
+						<div class="flex flex-wrap items-center gap-2">
+							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true") } class="btn-secondary">Export without secrets</a>
+							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false") } class="btn-secondary">Export with secrets</a>
 						</div>
-						<div>
-							<label class="form-label">File</label>
-							<label class="flex items-center gap-3 cursor-pointer">
-								<span class="btn-secondary btn-press shrink-0">Choose file</span>
-								<span class="text-xs truncate" :class="fileName ? 'text-muted-light' : 'text-muted'" x-text="fileName || 'No file selected'"></span>
-								<input type="file" name="file" accept=".json,application/json" required class="sr-only"
-									@change="fileName = $event.target.files[0]?.name || ''"/>
-							</label>
-						</div>
-						<button type="submit" class="btn-primary btn-press">Import</button>
-					</form>
+					</section>
+					if p.SuperAdmin {
+						<section class="card card-pad" aria-labelledby="import-title">
+							<h2 id="import-title" class="text-lg font-semibold">Import</h2>
+							<p class="subtitle mt-1 mb-4">Restore or merge a previously exported file.</p>
+							<form
+								action={ templ.SafeURL(p.BasePath + "/settings/import") }
+								method="POST"
+								enctype="multipart/form-data"
+								class="space-y-4"
+								x-data="{ fileName: '', mode: 'merge' }"
+								@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace mode deletes the current configuration before importing. Continue?', onConfirm: () => { $el.dataset.confirmed = '1'; $el.requestSubmit() } }) }"
+							>
+								<div>
+									<label class="form-label" for="import-mode">Mode</label>
+									<select id="import-mode" name="mode" x-model="mode" class="form-select">
+										<option value="merge">Merge: keep existing, skip duplicates</option>
+										<option value="replace">Replace: overwrite everything</option>
+									</select>
+								</div>
+								<div>
+									<label class="form-label" for="import-file">File</label>
+									<input
+										id="import-file"
+										type="file"
+										name="file"
+										accept=".json,application/json"
+										required
+										class="block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer"
+									/>
+								</div>
+								<button type="submit" class="btn-primary">Import</button>
+							</form>
+						</section>
+					}
 				</div>
-			</div>
-			<div class="card card-pad mt-5">
-				<h2 class="text-sm font-semibold text-white mb-1">Database Maintenance</h2>
-				<p class="text-xs text-muted-light mb-4">
-					VACUUM reclaims unused space from deleted rows and rebuilds the database file.
-				</p>
-				<button type="button"
-					data-url={ p.BasePath + "/settings/vacuum" }
-					data-msg="Run VACUUM? This may take a moment for large databases."
-					@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
-					class="btn-secondary btn-press">
-					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14a9 3 0 0 0 18 0V5"></path><path d="M3 12a9 3 0 0 0 18 0"></path></svg>
-					Run VACUUM
-				</button>
-			</div>
+			}
+			if p.SuperAdmin {
+				<section class="card card-pad" aria-labelledby="db-title">
+					<h2 id="db-title" class="text-lg font-semibold">Database</h2>
+					<p class="subtitle mt-1 mb-4">VACUUM reclaims space left by deleted rows and rebuilds the database file. Large databases can take a while.</p>
+					<button
+						type="button"
+						data-url={ p.BasePath + "/settings/vacuum" }
+						data-msg="Run VACUUM now? Writes pause until it finishes."
+						@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
+						class="btn-secondary"
+					>Run VACUUM</button>
+				</section>
+			}
 		</div>
 	}
 }

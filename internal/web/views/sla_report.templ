@@ -32,122 +32,90 @@ func (p SLAReportParams) isFutureMonth() bool {
 	return !p.Period.Before(nextMonth)
 }
 
-func slaBudgetColor(entry *sla.ReportEntry) string {
-	if entry.Breached {
-		return "text-red-400"
+// slaState is the one place that decides whether an SLA entry is healthy, at
+// risk (under 10% of the error budget left) or breached.
+func slaState(entry *sla.ReportEntry) (label, tone string) {
+	switch {
+	case entry.Breached:
+		return "Breached", "crit"
+	case entry.RemainSecs <= entry.BudgetSecs/10:
+		return "At risk", "warn"
+	default:
+		return "Healthy", "ok"
 	}
-	if entry.RemainSecs <= entry.BudgetSecs/4 {
-		return "text-yellow-400"
-	}
-	return "text-emerald-400"
-}
-
-func slaStatusBadge(entry *sla.ReportEntry) string {
-	if entry.Breached {
-		return "badge-red"
-	}
-	if entry.RemainSecs <= entry.BudgetSecs/10 {
-		return "badge-yellow"
-	}
-	return "badge-emerald"
-}
-
-func slaStatusText(entry *sla.ReportEntry) string {
-	if entry.Breached {
-		return "Breached"
-	}
-	if entry.RemainSecs <= entry.BudgetSecs/10 {
-		return "At Risk"
-	}
-	return "Healthy"
 }
 
 templ SLAReportPage(p SLAReportParams) {
 	@Layout(p.LayoutParams) {
-		<div class="flex items-center justify-between mb-5">
-			<div class="flex items-center gap-2">
+		@PageHeader(PageHeaderParams{Title: "SLA Report", Subtitle: "Monthly uptime against each monitor's SLA target."}) {
+			<div class="flex items-center gap-1 sm:ml-auto">
 				if !p.isFutureMonth() {
-					<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.prevPeriod())) }
-						class="icon-btn" aria-label="Previous month" title="Previous month">
-						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+					<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.prevPeriod())) } class="icon-btn border border-line-light" aria-label="Previous month" title="Previous month">
+						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 					</a>
 				}
-				<span class="text-sm text-white font-medium tabular-nums">{ p.Period.Format("January 2006") }</span>
+				<span class="px-2 text-sm text-white font-medium tabular-nums min-w-[8.5rem] text-center">{ p.Period.Format("January 2006") }</span>
 				if !p.isCurrentMonth() && !p.isFutureMonth() {
-					<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.nextPeriod())) }
-						class="icon-btn" aria-label="Next month" title="Next month">
-						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+					<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.nextPeriod())) } class="icon-btn border border-line-light" aria-label="Next month" title="Next month">
+						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
 					</a>
 				} else {
-					<span class="icon-btn opacity-40 pointer-events-none" aria-hidden="true">
+					<span class="icon-btn border border-line opacity-40" aria-hidden="true">
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
 					</span>
 				}
+				<a href={ templ.SafeURL(fmt.Sprintf("%s/sla/export?period=%s", p.BasePath, p.Period.Format("2006-01"))) } class="btn-secondary ml-2">Export JSON</a>
 			</div>
-			<a href={ templ.SafeURL(fmt.Sprintf("%s/sla/export?period=%s", p.BasePath, p.Period.Format("2006-01"))) }
-				class="btn-secondary btn-sm btn-press">
-				<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-				Export JSON
-			</a>
-		</div>
+		}
 		if len(p.Entries) == 0 {
-			@EmptyState("No SLA targets yet", p.BasePath+"/monitors", "Configure a monitor")
-		} else {
-			<div class="grid grid-cols-3 gap-3 mb-5">
-				<div class="card px-4 py-3">
-					<div class="stat-label">Monitors Tracked</div>
-					<div class="text-2xl font-semibold text-white tabular-nums">{ fmt.Sprint(len(p.Entries)) }</div>
-				</div>
-				<div class="card px-4 py-3">
-					<div class="stat-label">Meeting SLA</div>
-					<div class="text-2xl font-semibold text-emerald-400 tabular-nums">{ fmt.Sprint(p.meetingSLA()) }</div>
-				</div>
-				<div class="card px-4 py-3">
-					<div class="stat-label">Breached</div>
-					<div class={ "text-2xl font-semibold tabular-nums", templ.KV("text-red-400", p.breachedCount() > 0), templ.KV("text-muted", p.breachedCount() == 0) }>{ fmt.Sprint(p.breachedCount()) }</div>
-				</div>
+			<div class="card px-6 py-12 text-center">
+				<p class="text-sm text-muted-light">No monitors have an SLA target.</p>
+				<p class="text-sm text-muted mt-1">Set one under "Routing &amp; behaviour" when editing a monitor.</p>
 			</div>
-			<div class="panel">
-				<div class="overflow-x-auto">
-					<table class="w-full min-w-[800px]">
-						<thead>
-							<tr class="border-b border-line text-left">
-								<th class="th">Monitor</th>
-								<th class="th">Target</th>
-								<th class="th">Actual</th>
-								<th class="th">Status</th>
-								<th class="th">Error Budget</th>
-								<th class="th">Checks</th>
+		} else {
+			<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+				@StatCard("Monitors tracked", fmt.Sprint(len(p.Entries)), "")
+				@StatCard("Meeting target", fmt.Sprint(p.meetingSLA()), toneIf(p.meetingSLA() > 0, "ok"))
+				@StatCard("Breached", fmt.Sprint(p.breachedCount()), toneIf(p.breachedCount() > 0, "crit"))
+			</div>
+			<div class="panel overflow-x-auto">
+				<table class="w-full min-w-[760px]">
+					<thead>
+						<tr class="border-b border-line">
+							<th class="th">Monitor</th>
+							<th class="th">Target</th>
+							<th class="th">Actual</th>
+							<th class="th">Status</th>
+							<th class="th">Error budget left</th>
+							<th class="th">Checks</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-line">
+						for _, entry := range p.Entries {
+							<tr>
+								<td class="px-4 py-3">
+									<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="text-sm text-white font-medium hover:underline">{ entry.MonitorName }</a>
+								</td>
+								<td class="px-4 py-3 text-sm text-muted-light tabular-nums">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
+								<td class={ "px-4 py-3 text-sm font-medium tabular-nums", UptimeColor(entry.UptimePct) }>{ UptimeFmt(entry.UptimePct) }</td>
+								<td class="px-4 py-3">
+									{{ label, tone := slaState(entry) }}
+									<span class={ "inline-flex items-center gap-1.5 text-sm whitespace-nowrap", "text-" + tone }><span class={ "dot", "bg-" + tone }></span>{ label }</span>
+								</td>
+								<td class="px-4 py-3">
+									<div class="text-sm text-white tabular-nums">{ sla.FormatDuration(entry.RemainSecs) }</div>
+									<div class="text-xs text-muted">of { sla.FormatDuration(entry.BudgetSecs) }</div>
+								</td>
+								<td class="px-4 py-3 text-sm text-muted-light tabular-nums">
+									{ fmt.Sprint(entry.TotalChecks) }
+									if entry.DownChecks > 0 {
+										<span class="text-crit ml-1">({ fmt.Sprint(entry.DownChecks) } failed)</span>
+									}
+								</td>
 							</tr>
-						</thead>
-						<tbody>
-							for _, entry := range p.Entries {
-								<tr class="border-b border-line last:border-0 hover:bg-white/[0.02] transition-colors">
-									<td class="px-4 py-3 text-sm text-white font-medium">
-										<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="hover:text-brand transition-colors">{ entry.MonitorName }</a>
-									</td>
-									<td class="px-4 py-3 text-muted-light font-mono text-xs">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
-									<td class="px-4 py-3">
-										<span class={ "font-mono text-xs font-medium", UptimeColor(entry.UptimePct) }>{ UptimeFmt(entry.UptimePct) }</span>
-									</td>
-									<td class="px-4 py-3">
-										<span class={ "badge", slaStatusBadge(entry) }>{ slaStatusText(entry) }</span>
-									</td>
-									<td class="px-4 py-3">
-										<div class={ "text-xs font-mono", slaBudgetColor(entry) }>{ sla.FormatDuration(entry.RemainSecs) }</div>
-										<div class="text-2xs text-muted">of { sla.FormatDuration(entry.BudgetSecs) }</div>
-									</td>
-									<td class="px-4 py-3 text-xs text-muted-light tabular-nums">
-										{ fmt.Sprint(entry.TotalChecks) }
-										if entry.DownChecks > 0 {
-											<span class="text-red-400/70 ml-1">({ fmt.Sprint(entry.DownChecks) } down)</span>
-										}
-									</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</div>
+						}
+					</tbody>
+				</table>
 			</div>
 		}
 	}

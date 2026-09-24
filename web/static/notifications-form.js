@@ -3,6 +3,8 @@ function notifChannels(basePath) {
         basePath: basePath,
         showForm: false,
         editId: 0,
+        secretsSet: [],
+        originalType: '',
         advancedNotifSettings: false,
         formData: { name: '', type: 'webhook', enabled: true, settings_json: '{}' },
         events: { created: true, resolved: true, acknowledged: false, reminder: true, changed: false, certChanged: false },
@@ -19,11 +21,19 @@ function notifChannels(basePath) {
         googlechat: { webhook_url: '' },
         matrix: { homeserver: '', access_token: '', room_id: '' },
         gotify: { server_url: '', app_token: '', priority: 5 },
+        // kept reports whether a secret field may be left blank because the
+        // server already stores a value for it. Only true while the channel
+        // keeps its original type: stored secrets are not carried across types.
+        kept(key) {
+            return this.editId !== 0 && this.formData.type === this.originalType && this.secretsSet.includes(key);
+        },
         get formAction() {
             return this.editId ? this.basePath + '/notifications/' + this.editId : this.basePath + '/notifications';
         },
         resetForm() {
             this.editId = 0;
+            this.secretsSet = [];
+            this.originalType = '';
             this.advancedNotifSettings = false;
             this.formData = { name: '', type: 'webhook', enabled: true, settings_json: '{}' };
             this.events = { created: true, resolved: true, acknowledged: false, reminder: true, changed: false, certChanged: false };
@@ -44,6 +54,8 @@ function notifChannels(basePath) {
         editChannel(ch) {
             this.resetForm();
             this.editId = ch.id;
+            this.secretsSet = ch.secrets_set || [];
+            this.originalType = ch.type;
             this.formData.name = ch.name;
             this.formData.type = ch.type;
             this.formData.enabled = ch.enabled;

@@ -36,13 +36,13 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
 	if k == nil || !k.SuperAdmin {
-		h.setFlash(w, "Vacuum requires super admin access")
+		h.setError(w, "Vacuum requires super admin access")
 		h.redirect(w, r, "/settings")
 		return
 	}
 	if err := h.store.Vacuum(r.Context()); err != nil {
 		h.logger.Error("web: vacuum", "error", err)
-		h.setFlash(w, "Vacuum failed: "+err.Error())
+		h.setError(w, "Vacuum failed. See the server log for details.")
 	} else {
 		h.setFlash(w, "Database vacuumed successfully")
 	}
@@ -60,7 +60,7 @@ func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
 
 	data, err := api.BuildExportData(r.Context(), h.store, redact)
 	if err != nil {
-		h.setFlash(w, "Failed to build export data")
+		h.setError(w, "Failed to build export data")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
 	if k == nil || !k.SuperAdmin {
-		h.setFlash(w, "Import requires admin access")
+		h.setError(w, "Import requires admin access")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -85,14 +85,14 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 		mode = "merge"
 	}
 	if mode != "merge" && mode != "replace" {
-		h.setFlash(w, "Invalid import mode")
+		h.setError(w, "Invalid import mode")
 		h.redirect(w, r, "/settings")
 		return
 	}
 
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		h.setFlash(w, "No file uploaded")
+		h.setError(w, "No file uploaded")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -100,19 +100,19 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(io.LimitReader(file, 10<<20))
 	if err != nil {
-		h.setFlash(w, "Failed to read file")
+		h.setError(w, "Failed to read file")
 		h.redirect(w, r, "/settings")
 		return
 	}
 
 	var data api.ExportData
 	if err := json.Unmarshal(body, &data); err != nil {
-		h.setFlash(w, "Invalid JSON file")
+		h.setError(w, "Invalid JSON file")
 		h.redirect(w, r, "/settings")
 		return
 	}
 	if data.Version != 1 {
-		h.setFlash(w, "Unsupported export version")
+		h.setError(w, "Unsupported export version")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -126,7 +126,11 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 		h.OnStatusPageChange()
 	}
 
-	h.setFlash(w, fmt.Sprintf("Imported: %d monitors, %d channels, %d groups, %d proxies, %d maintenance, %d status pages (%d skipped, %d errors)",
+	kind := "success"
+	if stats.Errors > 0 {
+		kind = "warning"
+	}
+	h.setToast(w, kind, fmt.Sprintf("Imported %d monitors, %d channels, %d groups, %d proxies, %d maintenance windows and %d status pages (%d skipped, %d errors)",
 		stats.Monitors, stats.Channels, stats.Groups, stats.Proxies, stats.Maintenance, stats.StatusPages, stats.Skipped, stats.Errors))
 	h.redirect(w, r, "/settings")
 }

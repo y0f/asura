@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,15 +31,20 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 
-	if err := validate.ValidateNotificationChannel(ch); err != nil {
-		h.setFlash(w, err.Error())
+	if err := notificationJSONError(r); err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/notifications")
+		return
+	}
+	if err := validateChannelForm(ch); err != nil {
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
 		return
 	}
 
 	if err := h.store.CreateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("web: create notification", "error", err)
-		h.setFlash(w, "Failed to create channel")
+		h.setError(w, "Failed to create channel")
 		h.redirect(w, r, "/notifications")
 		return
 	}
@@ -56,21 +62,65 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
 	ch.ID = id
 
-	if err := validate.ValidateNotificationChannel(ch); err != nil {
-		h.setFlash(w, err.Error())
+	// Reject a bad JSON editor submission before merging, otherwise the stored
+	// secrets alone would pass "settings is required" and wipe everything else.
+	if err := notificationJSONError(r); err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/notifications")
+		return
+	}
+
+	// Secret fields are sent to the browser blank: a blank field keeps the
+	// stored value (only while the type is unchanged) and "Remove saved value"
+	// clears it.
+	if existing, err := h.store.GetNotificationChannel(r.Context(), id); err == nil && existing != nil && existing.Type == ch.Type {
+		ch.Settings = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type], views.ClearSet(r.Form["clear_secrets"]))
+	}
+
+	if err := validateChannelForm(ch); err != nil {
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/notifications")
 		return
 	}
 
 	if err := h.store.UpdateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("web: update notification", "error", err)
-		h.setFlash(w, "Failed to update channel")
+		h.setError(w, "Failed to update channel")
 		h.redirect(w, r, "/notifications")
 		return
 	}
 
 	h.setFlash(w, "Notification channel updated")
 	h.redirect(w, r, "/notifications")
+}
+
+// notificationJSONError rejects an empty or invalid "Edit as JSON" submission,
+// which parseNotificationForm would otherwise turn into empty settings.
+func notificationJSONError(r *http.Request) error {
+	if r.FormValue("notif_settings_mode") != "json" {
+		return nil
+	}
+	raw := strings.TrimSpace(r.FormValue("settings_json"))
+	if raw == "" {
+		return fmt.Errorf("settings JSON is required")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil || obj == nil {
+		return fmt.Errorf("settings JSON must be a valid JSON object")
+	}
+	return nil
+}
+
+// validateChannelForm adds the web form's own check to the shared validation:
+// a channel must not be saved without the secret it needs to deliver.
+func validateChannelForm(ch *storage.NotificationChannel) error {
+	if err := validate.ValidateNotificationChannel(ch); err != nil {
+		return err
+	}
+	if k := views.MissingRequiredSecret(ch); k != "" {
+		return fmt.Errorf("%s is required for %s channels", strings.ReplaceAll(k, "_", " "), ch.Type)
+	}
+	return nil
 }
 
 func (h *Handler) NotificationDelete(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +144,7 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	}
 	ch, err := h.store.GetNotificationChannel(r.Context(), id)
 	if err != nil {
-		h.setFlash(w, "Channel not found")
+		h.setError(w, "Channel not found")
 		h.redirect(w, r, "/notifications")
 		return
 	}
@@ -107,7 +157,7 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.notifier.SendTest(ch, testInc); err != nil {
-		h.setFlash(w, "Test failed: "+err.Error())
+		h.setError(w, "Test failed: "+err.Error())
 	} else {
 		h.setFlash(w, "Test notification sent")
 	}

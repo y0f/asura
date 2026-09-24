@@ -1,6 +1,8 @@
 package views
 
 import (
+	"fmt"
+
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -55,20 +57,80 @@ type StatusPageAuthParams struct {
 }
 
 templ publicHead(basePath, title string) {
-	<script>
-		(function(){try{var p=localStorage.getItem("theme")||"dark";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.setAttribute("data-theme",d?"dark":"light");}catch(e){}})();
-	</script>
 	<meta charset="UTF-8"/>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<script>(function(){try{var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",d?"dark":"light");}catch(e){}})();</script>
 	<title>{ title }</title>
 	<link rel="preload" href={ basePath + "/static/fonts/inter.woff2" } as="font" type="font/woff2" crossorigin/>
-	<link rel="stylesheet" href={ basePath + "/static/tailwind.css" }/>
+	<link rel="stylesheet" href={ Asset(basePath, "tailwind.css") }/>
 	{ children... }
+}
+
+// publicOverall turns the overall status into visitor-facing wording. A single
+// failing monitor out of many is a partial outage, not a major one.
+func publicOverall(p PublicStatusPageParams) (label, tone string) {
+	switch p.Overall {
+	case "operational":
+		return "All systems operational", "ok"
+	case "degraded":
+		return "Degraded performance", "warn"
+	}
+	total, down := 0, 0
+	for _, m := range p.allMonitors() {
+		total++
+		if m.Monitor.Status == "down" {
+			down++
+		}
+	}
+	if total > 0 && down*2 >= total {
+		return "Major outage", "crit"
+	}
+	return "Partial outage", "major"
+}
+
+func (p PublicStatusPageParams) allMonitors() []MonitorWithUptime {
+	if !p.HasGroups {
+		return p.Monitors
+	}
+	var all []MonitorWithUptime
+	for _, g := range p.Groups {
+		all = append(all, g.Monitors...)
+	}
+	return all
+}
+
+// publicStatus is the visitor-facing wording for a monitor status.
+func publicStatus(status string) (label, tone string) {
+	switch status {
+	case "up":
+		return "Operational", "ok"
+	case "degraded":
+		return "Degraded", "warn"
+	case "down":
+		return "Outage", "crit"
+	case "paused":
+		return "Paused", "neutral"
+	default:
+		return "No data", "neutral"
+	}
+}
+
+func publicIncidentStatus(status string) string {
+	switch status {
+	case "open":
+		return "Investigating"
+	case "acknowledged":
+		return "Identified"
+	case "resolved":
+		return "Resolved"
+	default:
+		return capitalize(status)
+	}
 }
 
 templ PublicStatusPage(p PublicStatusPageParams) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang="en" data-theme="dark">
 		<head>
 			@publicHead(p.BasePath, p.Title) {
 				if p.Config != nil && p.Config.FaviconURL != "" {
@@ -79,107 +141,83 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 				if p.Config != nil {
 					<link rel="alternate" type="application/rss+xml" title={ p.Title + " RSS" } href={ p.BasePath + "/" + p.Config.Slug + "/rss" }/>
 				}
-				<script defer src={ p.BasePath + "/static/alpine.min.js" }></script>
-				<style>
-					[x-cloak] { display: none !important; }
-					::selection { background: rgba(0,128,255,.15); }
-					::-webkit-scrollbar { width: 3px; height: 3px; }
-					::-webkit-scrollbar-track { background: transparent; }
-					::-webkit-scrollbar-thumb { background: var(--color-line-light); border-radius: 3px; }
-					.noise-bg {
-						position: fixed;
-						inset: 0;
-						pointer-events: none;
-						z-index: 0;
-						background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 700' width='700' height='700'%3E%3Cdefs%3E%3Cfilter id='nnnoise-filter' x='-20%25' y='-20%25' width='140%25' height='140%25' filterUnits='objectBoundingBox' primitiveUnits='userSpaceOnUse' color-interpolation-filters='linearRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='4' seed='15' stitchTiles='stitch' x='0%25' y='0%25' width='100%25' height='100%25' result='turbulence'/%3E%3CfeSpecularLighting surfaceScale='5' specularConstant='0.8' specularExponent='20' lighting-color='white' x='0%25' y='0%25' width='100%25' height='100%25' in='turbulence' result='specularLighting'%3E%3CfeDistantLight azimuth='3' elevation='96'/%3E%3C/feSpecularLighting%3E%3CfeColorMatrix type='saturate' values='0' x='0%25' y='0%25' width='100%25' height='100%25' in='specularLighting' result='colormatrix'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='700' height='700' fill='black'/%3E%3Crect width='700' height='700' fill='white' filter='url(%23nnnoise-filter)'/%3E%3C/svg%3E");
-						background-size: 400px;
-						opacity: 0.045;
-					}
-					.glow-bg {
-						position: fixed;
-						inset: 0;
-						pointer-events: none;
-						z-index: 0;
-						background: radial-gradient(ellipse 90% 45% at 50% -5%, rgba(0,128,255,0.08) 0%, transparent 70%);
-					}
-					if p.Config != nil && p.Config.CustomCSS != "" {
+				<script defer src={ Asset(p.BasePath, "alpine.min.js") }></script>
+				if p.Config != nil && p.Config.CustomCSS != "" {
+					<style>
 						{ p.Config.CustomCSS }
-					}
-				</style>
+					</style>
+				}
 			}
 		</head>
 		<body class="bg-surface text-muted-light font-sans min-h-screen antialiased">
-			<div class="noise-bg"></div>
-			<div class="glow-bg"></div>
-			<div class="relative z-10 max-w-2xl mx-auto px-4 py-14 sm:px-6 sm:py-20">
-				if p.Config != nil && p.Config.LogoURL != "" {
-					<div class="flex justify-center mb-6">
-						<img src={ p.Config.LogoURL } alt={ p.Title } class="h-10 object-contain"/>
-					</div>
-				}
+			<main class="max-w-3xl mx-auto px-4 py-12 sm:px-6 sm:py-16">
+				<header class="mb-8">
+					if p.Config != nil && p.Config.LogoURL != "" {
+						<img src={ p.Config.LogoURL } alt={ p.Title } class="h-9 object-contain mb-6"/>
+					}
+					<h1 class="text-3xl font-bold">{ p.Title }</h1>
+					if p.Config != nil && p.Config.Description != "" {
+						<p class="subtitle mt-1.5">{ p.Config.Description }</p>
+					}
+				</header>
 				if p.Config != nil && p.Config.CustomHeaderHTML != "" {
 					@templ.Raw(p.Config.CustomHeaderHTML)
 				}
-				@statusOverallBanner(p.Overall)
+				@statusOverallBanner(p)
 				if p.HasGroups {
 					for _, g := range p.Groups {
 						if g.Name != "" {
-							<h2 class="eyebrow text-muted-light mb-2.5 mt-7">{ g.Name }</h2>
+							<h2 class="text-lg font-semibold mt-8 mb-3">{ g.Name }</h2>
 						}
-						<div class="card overflow-hidden divide-y divide-line mb-4">
+						<div class="panel divide-y divide-line mb-4">
 							for _, mwu := range g.Monitors {
 								@statusMonitorRow(mwu)
 							}
 						</div>
 					}
 				} else if len(p.Monitors) > 0 {
-					<div class="card overflow-hidden divide-y divide-line">
+					<div class="panel divide-y divide-line">
 						for _, mwu := range p.Monitors {
 							@statusMonitorRow(mwu)
 						}
 					</div>
 				} else {
-					@EmptyState("No monitors yet", "", "")
+					<div class="card px-6 py-10 text-center text-sm text-muted">Nothing is being monitored on this page yet.</div>
 				}
 				if p.Config != nil && p.Config.ShowIncidents && p.HasIncidents {
-					<div class="mt-10">
-						<h2 class="eyebrow text-muted-light mb-3">Recent Incidents</h2>
-						<div class="card overflow-hidden divide-y divide-line">
+					<section class="mt-12" aria-labelledby="incidents-title">
+						<h2 id="incidents-title" class="text-lg font-semibold mb-3">Recent incidents</h2>
+						<div class="panel divide-y divide-line">
 							for _, inc := range p.Incidents {
 								<div class="px-5 py-4">
 									<div class="flex items-center justify-between gap-3">
-										<div class="flex items-center gap-2.5 min-w-0">
-											<span class={ "w-2 h-2 rounded-full shrink-0", StatusDot(inc.Status) }></span>
-											<span class="text-base font-medium text-white truncate">{ inc.MonitorName }</span>
-										</div>
-										@StatusPill(inc.Status)
+										<span class="text-md font-medium text-white truncate">{ inc.MonitorName }</span>
+										<span class={ "inline-flex items-center gap-1.5 text-sm shrink-0", StatusColor(inc.Status) }><span class={ "dot", StatusDot(inc.Status) }></span>{ publicIncidentStatus(inc.Status) }</span>
 									</div>
-									<div class="mt-2 flex items-center gap-3 text-xs text-muted">
-										<span>{ TimeAgo(inc.StartedAt) }</span>
+									<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+										<time datetime={ isoTime(inc.StartedAt) }>{ inc.StartedAt.UTC().Format("Jan 2, 15:04 UTC") }</time>
 										if inc.ResolvedAt != nil {
-											<span class="text-emerald-400">Resolved in { IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</span>
+											<span>Resolved after { IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</span>
 										}
 									</div>
 								</div>
 							}
 						</div>
-					</div>
+					</section>
 				}
 				if p.Message != "" {
-					<div class="mt-6 rounded-control border border-brand/20 bg-brand/[0.04] px-4 py-3">
-						<p class="text-sm text-brand">{ p.Message }</p>
-					</div>
+					<div role="status" class="mt-6 rounded-card border border-line-light bg-surface-50 px-4 py-3 text-sm text-white">{ p.Message }</div>
 				}
 				if p.SubscriptionsEnabled {
 					@statusSubscribeWidget(p.BasePath, p.Config.Slug)
 				}
-				<div class="mt-12 pt-5 border-t border-line flex items-center justify-center gap-1.5">
-					<span class="text-2xs text-muted">Powered by</span>
-					<a href="https://github.com/y0f/asura" target="_blank" rel="noopener" class="flex items-center">
-						<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 object-contain"/>
-					</a>
-				</div>
-			</div>
+				<footer class="mt-14 pt-5 border-t border-line flex items-center justify-between gap-3 text-sm text-muted">
+					if p.Config != nil {
+						<a href={ templ.SafeURL(p.BasePath + "/" + p.Config.Slug + "/rss") } class="hover:text-white">RSS feed</a>
+					}
+					<a href="https://github.com/y0f/asura" target="_blank" rel="noopener" class="flex items-center gap-1.5 hover:text-white">Powered by <img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-3.5 w-auto"/></a>
+				</footer>
+			</main>
 			if p.Config != nil && p.Config.AnalyticsScript != "" {
 				@templ.Raw(p.Config.AnalyticsScript)
 			}
@@ -188,152 +226,135 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 }
 
 templ statusSubscribeWidget(basePath, slug string) {
-	<div class="mt-10" x-data="{open: false, type: 'email'}" x-cloak>
-		<div class="flex justify-center">
-			<button @click="open = !open" class="btn-secondary btn-sm btn-press">
-				<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-				Subscribe to updates
-			</button>
-		</div>
-		<div x-show="open" x-transition class="mt-4 card mx-auto max-w-sm">
-			<form method="POST" action={ templ.SafeURL(basePath + "/" + slug + "/subscribe") } class="p-5 space-y-3.5">
-				<div class="flex gap-2">
-					<button type="button" @click="type = 'email'"
-						:class="type === 'email' ? 'bg-brand/10 text-brand border-brand/30' : 'bg-surface text-muted border-line hover:text-muted-light'"
-						class="flex-1 text-sm font-medium px-3 py-2 rounded-control border transition-colors">
-						Email
-					</button>
-					<button type="button" @click="type = 'webhook'"
-						:class="type === 'webhook' ? 'bg-brand/10 text-brand border-brand/30' : 'bg-surface text-muted border-line hover:text-muted-light'"
-						class="flex-1 text-sm font-medium px-3 py-2 rounded-control border transition-colors">
-						Webhook
-					</button>
+	<section class="mt-12" x-data="{open: false, type: 'email'}" aria-labelledby="subscribe-title">
+		<div class="card card-pad">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<h2 id="subscribe-title" class="text-lg font-semibold">Get updates</h2>
+					<p class="subtitle mt-0.5">Be notified when an incident is opened or resolved.</p>
+				</div>
+				<button type="button" @click="open = !open" :aria-expanded="open" class="btn-secondary">Subscribe</button>
+			</div>
+			<form x-show="open" x-cloak method="POST" action={ templ.SafeURL(basePath + "/" + slug + "/subscribe") } class="mt-4 pt-4 border-t border-line space-y-4">
+				<div class="flex gap-1" role="group" aria-label="Delivery method">
+					<button type="button" @click="type = 'email'" :aria-pressed="type === 'email'"
+						:class="type === 'email' ? 'filter-active' : 'filter-inactive'" class="filter-tab">Email</button>
+					<button type="button" @click="type = 'webhook'" :aria-pressed="type === 'webhook'"
+						:class="type === 'webhook' ? 'filter-active' : 'filter-inactive'" class="filter-tab">Webhook</button>
 				</div>
 				<input type="hidden" name="type" :value="type"/>
 				<div x-show="type === 'email'">
-					<input type="email" name="email" placeholder="you@example.com" class="form-input w-full"/>
+					<label class="form-label" for="sub-email">Email address</label>
+					<input id="sub-email" type="email" name="email" :required="type === 'email'" :disabled="type !== 'email'" placeholder="you@example.com" class="form-input"/>
+					<p class="form-hint">You'll get a confirmation email first.</p>
 				</div>
-				<div x-show="type === 'webhook'">
-					<input type="url" name="webhook_url" placeholder="https://your-server.com/webhook" class="form-input w-full"/>
+				<div x-show="type === 'webhook'" x-cloak>
+					<label class="form-label" for="sub-webhook">Webhook URL</label>
+					<input id="sub-webhook" type="url" name="webhook_url" :required="type === 'webhook'" :disabled="type !== 'webhook'" placeholder="https://example.com/webhook" class="form-input"/>
+					<p class="form-hint">Incident events are POSTed to this URL as JSON.</p>
 				</div>
-				<button type="submit" class="btn-primary btn-press w-full">
-					Subscribe
-				</button>
-				<p x-show="type === 'email'" class="text-xs text-muted text-center">We'll send a confirmation email. No spam, ever.</p>
-				<p x-show="type === 'webhook'" class="text-xs text-muted text-center">We'll POST JSON events to your URL.</p>
+				<button type="submit" class="btn-primary">Subscribe</button>
 			</form>
 		</div>
-	</div>
+	</section>
 }
 
 templ SubscriberResultPage(p SubscriberResultParams) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang="en" data-theme="dark">
 		<head>
-			@publicHead(p.BasePath, p.Heading+" - "+p.Title) {
+			@publicHead(p.BasePath, p.Heading+" · "+p.Title) {
 				<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
 			}
 		</head>
-		<body class="bg-surface text-muted-light font-sans min-h-screen antialiased flex items-center justify-center">
-			<div class="w-full max-w-sm px-4 text-center">
-				if p.Success {
-					<div class="mb-4">
-						<svg class="w-12 h-12 mx-auto text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-					</div>
-				} else {
-					<div class="mb-4">
-						<svg class="w-12 h-12 mx-auto text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-					</div>
-				}
-				<h1 class="text-md font-medium text-white mb-2">{ p.Heading }</h1>
-				<p class="text-sm text-muted mb-6">{ p.Message }</p>
-				<a href={ templ.SafeURL(p.BasePath + "/" + p.Slug) } class="text-brand text-xs hover:underline">Back to { p.Title }</a>
-			</div>
+		<body class="bg-surface text-muted-light font-sans min-h-screen antialiased flex items-center justify-center px-4">
+			<main class="w-full max-w-sm card p-6">
+				<div class="flex items-center gap-2 mb-2">
+					if p.Success {
+						<span class="dot bg-ok"></span>
+					} else {
+						<span class="dot bg-crit"></span>
+					}
+					<h1 class="text-xl font-bold">{ p.Heading }</h1>
+				</div>
+				<p class="text-sm text-muted-light mb-5">{ p.Message }</p>
+				<a href={ templ.SafeURL(p.BasePath + "/" + p.Slug) } class="btn-secondary">Back to { p.Title }</a>
+			</main>
 		</body>
 	</html>
 }
 
 templ StatusPageAuthPage(p StatusPageAuthParams) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang="en" data-theme="dark">
 		<head>
 			@publicHead(p.BasePath, p.Title) {
 				<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
 			}
 		</head>
-		<body class="bg-surface text-muted-light font-sans min-h-screen antialiased flex items-center justify-center">
-			<div class="w-full max-w-xs px-4">
-				<div class="text-center mb-8">
-					<p class="text-sm text-white font-medium">{ p.Title }</p>
-					<p class="text-xs text-muted mt-1">This status page is password protected</p>
-				</div>
+		<body class="bg-surface text-muted-light font-sans min-h-screen antialiased flex items-center justify-center px-4">
+			<main class="w-full max-w-sm card p-6">
+				<h1 class="text-xl font-bold">{ p.Title }</h1>
+				<p class="subtitle mt-1 mb-5">This status page is password protected.</p>
 				<form method="POST" action={ templ.SafeURL(p.BasePath + "/" + p.Slug + "/auth") } class="space-y-4">
 					<div>
-						<input type="password" name="password" autofocus required
-							placeholder="Password"
-							class="form-input w-full"/>
+						<label class="form-label" for="sp-password">Password</label>
+						<input id="sp-password" type="password" name="password" autofocus required class="form-input"/>
 					</div>
 					if p.Error != "" {
-						<p class="text-xs text-red-400">Incorrect password. Try again.</p>
+						<p role="alert" class="text-sm text-crit">Incorrect password. Try again.</p>
 					}
-					<button type="submit" class="btn-primary btn-press w-full">Continue</button>
+					<button type="submit" class="btn-primary w-full h-9">Continue</button>
 				</form>
-			</div>
+			</main>
 		</body>
 	</html>
 }
 
-templ statusOverallBanner(overall string) {
-	<div class={ "mb-8 rounded-card border px-5 py-4 flex items-center gap-3",
-		templ.KV("border-emerald-500/25 bg-emerald-500/[0.06]", overall == "operational"),
-		templ.KV("border-yellow-500/25 bg-yellow-500/[0.06]", overall == "degraded"),
-		templ.KV("border-red-500/25 bg-red-500/[0.06]", overall != "operational" && overall != "degraded") }>
-		<span class="relative flex h-2 w-2 shrink-0">
-			<span class={ "animate-ping absolute inline-flex h-full w-full rounded-full opacity-50",
-				templ.KV("bg-emerald-400", overall == "operational"),
-				templ.KV("bg-yellow-400", overall == "degraded"),
-				templ.KV("bg-red-400", overall != "operational" && overall != "degraded") }></span>
-			<span class={ "relative inline-flex rounded-full h-2 w-2",
-				templ.KV("bg-emerald-400", overall == "operational"),
-				templ.KV("bg-yellow-400", overall == "degraded"),
-				templ.KV("bg-red-400", overall != "operational" && overall != "degraded") }></span>
-		</span>
-		<span class={ "text-md font-semibold",
-			templ.KV("text-emerald-400", overall == "operational"),
-			templ.KV("text-yellow-400", overall == "degraded"),
-			templ.KV("text-red-400", overall != "operational" && overall != "degraded") }>
-			if overall == "operational" {
-				All Systems Operational
-			} else if overall == "degraded" {
-				Partial System Degradation
-			} else {
-				Major System Outage
-			}
-		</span>
+templ statusOverallBanner(p PublicStatusPageParams) {
+	{{ label, tone := publicOverall(p) }}
+	<div role="status" class={ "mb-8 rounded-card border px-5 py-4 flex items-center gap-3 bg-surface-50", "border-" + tone + "/50" }>
+		<span class={ "dot w-2.5 h-2.5", "bg-" + tone }></span>
+		<span class="text-lg font-semibold text-white">{ label }</span>
 	</div>
 }
 
 templ statusMonitorRow(mwu MonitorWithUptime) {
+	{{ label, tone := publicStatus(mwu.Monitor.Status) }}
 	<div class="px-5 py-4">
 		<div class="flex items-center justify-between gap-3 mb-3">
-			<span class="text-base font-medium text-white truncate min-w-0">{ mwu.Monitor.Name }</span>
-			<div class="flex items-center gap-3 shrink-0">
-				<span class={ "text-sm font-semibold tabular-nums", UptimeColor(mwu.Uptime90d) }>{ mwu.UptimeLabel }</span>
-				@StatusPill(mwu.Monitor.Status)
+			<span class="text-md font-medium text-white truncate min-w-0">{ mwu.Monitor.Name }</span>
+			<div class="flex items-center gap-4 shrink-0">
+				<span class="text-sm text-muted tabular-nums">{ mwu.UptimeLabel }</span>
+				<span class={ "inline-flex items-center gap-1.5 text-sm", toneTextClass(tone) }><span class={ "dot", toneDotClass(tone) }></span>{ label }</span>
 			</div>
 		</div>
 		<div x-data="{tooltip: '', show: false, mx: 0, my: 0}">
-			<div class="bg-line/40 rounded-control overflow-hidden [&>svg]:!h-5">
+			<div class="rounded-[3px] overflow-hidden" aria-hidden="true">
 				@templ.Raw(UptimeBarsSVG(mwu.DailyBars))
 			</div>
+			<p class="sr-only">{ uptimeSummary(mwu) }</p>
 			<div x-show="show" x-cloak
-				class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-muted-light shadow-lg pointer-events-none whitespace-nowrap"
+				class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-white shadow-lg pointer-events-none whitespace-nowrap"
 				:style="`top: ${my - 40}px; left: ${mx}px`"
 				x-text="tooltip"></div>
 		</div>
-		<div class="flex items-center justify-between mt-2.5">
-			<span class="text-2xs text-muted-light">90 days ago</span>
-			<span class="text-2xs text-muted-light">Today</span>
+		<div class="flex items-center justify-between mt-2 text-xs text-muted">
+			<span>90 days ago</span>
+			<span>Today</span>
 		</div>
 	</div>
+}
+
+func uptimeSummary(mwu MonitorWithUptime) string {
+	bad := 0
+	for _, b := range mwu.DailyBars {
+		if b.HasData && b.UptimePct < 99.9 {
+			bad++
+		}
+	}
+	if bad == 0 {
+		return mwu.UptimeLabel + " uptime over the last 90 days, no days with notable downtime."
+	}
+	return fmt.Sprintf("%s uptime over the last 90 days, %d days with downtime.", mwu.UptimeLabel, bad)
 }

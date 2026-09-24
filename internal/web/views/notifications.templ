@@ -15,66 +15,118 @@ func notifChannelsXData(basePath string) string {
 	return "notifChannels('" + JSEscapeString(basePath) + "')"
 }
 
+func eventLabel(ev string) string {
+	switch ev {
+	case "incident.created":
+		return "Incident opened"
+	case "incident.resolved":
+		return "Incident resolved"
+	case "incident.acknowledged":
+		return "Incident acknowledged"
+	case "incident.reminder":
+		return "Reminder"
+	case "content.changed":
+		return "Content changed"
+	case "cert.changed":
+		return "Certificate changed"
+	case "test":
+		return "Test"
+	default:
+		return ev
+	}
+}
+
+func channelTypeLabel(t string) string {
+	switch t {
+	case "webhook":
+		return "Webhook"
+	case "email":
+		return "Email"
+	case "telegram":
+		return "Telegram"
+	case "discord":
+		return "Discord"
+	case "slack":
+		return "Slack"
+	case "ntfy":
+		return "ntfy"
+	case "teams":
+		return "Microsoft Teams"
+	case "pagerduty":
+		return "PagerDuty"
+	case "opsgenie":
+		return "Opsgenie"
+	case "pushover":
+		return "Pushover"
+	case "googlechat":
+		return "Google Chat"
+	case "matrix":
+		return "Matrix"
+	case "gotify":
+		return "Gotify"
+	default:
+		return t
+	}
+}
+
 templ NotificationListPage(p NotificationListParams) {
 	@Layout(p.LayoutParams) {
-		<script src={ p.BasePath + "/static/notifications-form.js" }></script>
+		<script src={ Asset(p.BasePath, "notifications-form.js") }></script>
 		<div x-data={ notifChannelsXData(p.BasePath) }>
-			<div class="flex items-center justify-end gap-2 mb-5">
-				<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="btn-secondary btn-sm btn-press inline-flex items-center gap-1.5">
-					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 2"></path></svg>
-					History
-				</a>
-				if p.Perms["notifications.write"] {
-					<button @click="resetForm(); showForm = true"
-						class="btn-primary btn-press">
-						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
-						New Channel
-					</button>
+			@PageHeader(PageHeaderParams{Title: "Notifications", Subtitle: "Where alerts are sent when incidents open, change or resolve."}) {
+				if p.Can("notifications.write") {
+					@ToolbarNewButtonClick("resetForm(); showForm = true", "New channel")
 				}
-			</div>
+				<a href={ templ.SafeURL(p.BasePath + "/notifications/history") } class="btn-secondary">History</a>
+			}
 			if len(p.Channels) > 0 {
-				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+				<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 					for _, ch := range p.Channels {
-						<div class="card p-4 hover:border-line-light transition-colors">
-							<div class="flex items-center justify-between mb-2.5">
-								<div class="flex items-center gap-2">
-									<span class="text-sm text-white font-medium">{ ch.Name }</span>
-									<span class="badge badge-zinc">{ ch.Type }</span>
+						<div class="card card-pad flex flex-col">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<h2 class="text-md font-semibold truncate">{ ch.Name }</h2>
+									<div class="text-sm text-muted">{ channelTypeLabel(ch.Type) }</div>
 								</div>
-								<div class={ "w-1.5 h-1.5 rounded-full", templ.KV("bg-emerald-400", ch.Enabled), templ.KV("bg-muted", !ch.Enabled) }></div>
-							</div>
-							<div class="flex flex-wrap gap-1 mb-3">
-								for _, ev := range ch.Events {
-									<span class="badge badge-zinc">{ ev }</span>
+								if ch.Enabled {
+									<span class="inline-flex items-center gap-1.5 text-sm text-ok shrink-0"><span class="dot bg-ok"></span>Enabled</span>
+								} else {
+									<span class="inline-flex items-center gap-1.5 text-sm text-muted shrink-0"><span class="dot bg-muted"></span>Disabled</span>
 								}
 							</div>
-							if p.Perms["notifications.write"] {
-								<div class="flex items-center gap-1.5 pt-2.5 border-t border-line">
-									<button type="button" @click={ fmt.Sprintf("editChannel(%s)", ToJSON(ch)) }
-										class="btn-secondary btn-sm btn-press">Edit</button>
-									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)) } class="contents">
-										<button type="submit" class="btn-secondary btn-sm btn-press">Test</button>
+							<div class="flex flex-wrap gap-1 mt-3 mb-4">
+								for _, ev := range ch.Events {
+									<span class="badge">{ eventLabel(ev) }</span>
+								}
+							</div>
+							if p.Can("notifications.write") {
+								<div class="mt-auto flex items-center gap-2 pt-3 border-t border-line">
+									<button type="button" @click={ fmt.Sprintf("editChannel(%s)", ChannelEditJSON(ch)) } class="btn-secondary btn-sm">Edit</button>
+									<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/notifications/%d/test", p.BasePath, ch.ID)) }>
+										<button type="submit" class="btn-secondary btn-sm">Send test</button>
 									</form>
-									@DeleteButton(fmt.Sprintf("%s/notifications/%d/delete", p.BasePath, ch.ID), "Delete this channel?")
+									<div class="ml-auto">
+										@DeleteButton(fmt.Sprintf("%s/notifications/%d/delete", p.BasePath, ch.ID), "Delete this notification channel?")
+									</div>
 								</div>
 							}
 						</div>
 					}
 				</div>
-			} else if p.Perms["notifications.write"] {
-				@EmptyStateModal("No notification channels yet", "resetForm(); showForm = true", "New Channel")
+			} else if p.Can("notifications.write") {
+				@EmptyStateModal("No notification channels yet.", "resetForm(); showForm = true", "Add a channel")
 			} else {
-				@EmptyState("No notification channels yet", "", "")
+				@EmptyState("No notification channels yet.", "", "")
 			}
-			@FormModal("showForm", "max-w-md", "editId ? 'Edit Notification Channel' : 'New Notification Channel'") {
-				<form method="POST" :action="formAction" class="space-y-3">
+			@FormModal("showForm", "max-w-lg", "editId ? 'Edit channel' : 'New channel'") {
+				<form method="POST" :action="formAction" class="space-y-4">
 					<div>
-						<label class="form-label" for="name">Name</label>
-						<input id="name" type="text" name="name" x-model="formData.name" required class="form-input"/>
+						<label class="form-label" for="notif-name">Name</label>
+						<input id="notif-name" type="text" name="name" x-model="formData.name" required class="form-input"/>
 					</div>
 					<div>
-						<label class="form-label" for="type">Type</label>
-						<select id="type" name="type" x-model="formData.type" class="form-select">
+						<label class="form-label" for="notif-type">Type</label>
+						<select id="notif-type" name="type" x-model="formData.type" class="form-select">
 							<option value="webhook">Webhook</option>
 							<option value="email">Email</option>
 							<option value="telegram">Telegram</option>
@@ -91,16 +143,16 @@ templ NotificationListPage(p NotificationListParams) {
 						</select>
 					</div>
 					<div>
-						<div class="flex items-center justify-between mb-1.5">
-							<label class="form-label mb-0!">Settings</label>
+						<div class="flex items-center justify-between mb-2">
+							<div class="form-label mb-0!">Settings</div>
 							<button type="button" @click="advancedNotifSettings = !advancedNotifSettings"
-								class="text-2xs text-brand hover:text-brand/80 transition-colors rounded-control px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50">
-								<span x-text="advancedNotifSettings ? 'Form Mode' : 'Advanced (JSON)'"></span>
+								class="btn-secondary btn-sm">
+								<span x-text="advancedNotifSettings ? 'Use form' : 'Edit as JSON'">Edit as JSON</span>
 							</button>
 						</div>
 						<input type="hidden" name="notif_settings_mode" :value="advancedNotifSettings ? 'json' : 'form'"/>
 						<div x-show="advancedNotifSettings" x-cloak>
-							<textarea name="settings_json" x-model="formData.settings_json" rows="4" class="form-input font-mono resize-y"></textarea>
+							<textarea name="settings_json" x-model="formData.settings_json" rows="5" aria-label="Settings (JSON)" class="form-input font-mono text-xs resize-y"></textarea>
 						</div>
 						@notifWebhookFields()
 						@notifTelegramFields()
@@ -117,41 +169,41 @@ templ NotificationListPage(p NotificationListParams) {
 						@notifGotifyFields()
 					</div>
 					<div>
-						<label class="form-label mb-2">Events</label>
-						<div class="grid grid-cols-2 gap-2">
+						<div class="form-label">Send on</div>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input type="checkbox" name="event_incident_created" :checked="events.created" class="form-checkbox"/>
-								<span class="text-xs text-muted-light">Incident Created</span>
+								<span class="text-sm text-muted-light">Incident opened</span>
 							</label>
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input type="checkbox" name="event_incident_resolved" :checked="events.resolved" class="form-checkbox"/>
-								<span class="text-xs text-muted-light">Incident Resolved</span>
+								<span class="text-sm text-muted-light">Incident resolved</span>
 							</label>
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input type="checkbox" name="event_incident_acknowledged" :checked="events.acknowledged" class="form-checkbox"/>
-								<span class="text-xs text-muted-light">Incident Acknowledged</span>
+								<span class="text-sm text-muted-light">Incident acknowledged</span>
 							</label>
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input type="checkbox" name="event_incident_reminder" :checked="events.reminder" class="form-checkbox"/>
-								<span class="text-xs text-muted-light">Incident Reminder</span>
+								<span class="text-sm text-muted-light">Reminder while open</span>
 							</label>
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input type="checkbox" name="event_content_changed" :checked="events.changed" class="form-checkbox"/>
-								<span class="text-xs text-muted-light">Content Changed</span>
+								<span class="text-sm text-muted-light">Content changed</span>
 							</label>
 							<label class="flex items-center gap-2 cursor-pointer">
 								<input type="checkbox" name="event_cert_changed" :checked="events.certChanged" class="form-checkbox"/>
-								<span class="text-xs text-muted-light">Certificate Changed</span>
+								<span class="text-sm text-muted-light">Certificate changed</span>
 							</label>
 						</div>
 					</div>
 					<label class="flex items-center gap-2 cursor-pointer">
 						<input type="checkbox" name="enabled" :checked="formData.enabled" class="form-checkbox"/>
-						<span class="text-xs text-muted-light">Enabled</span>
+						<span class="text-sm text-muted-light">Enabled</span>
 					</label>
-					<div class="flex items-center gap-3 pt-1">
-						<button type="submit" class="btn-primary btn-press" x-text="editId ? 'Update' : 'Create'"></button>
-						<button type="button" @click="showForm = false" class="btn-secondary btn-press">Cancel</button>
+					<div class="flex items-center gap-2 pt-1">
+						<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create channel'"></button>
+						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
 					</div>
 				</form>
 			}
@@ -162,12 +214,16 @@ templ NotificationListPage(p NotificationListParams) {
 templ notifWebhookFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'webhook'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_webhook_url">URL</label>
+			<label class="form-label" for="notif_webhook_url">URL</label>
 			<input id="notif_webhook_url" type="url" name="notif_webhook_url" x-model="webhook.url" :required="!advancedNotifSettings && formData.type === 'webhook'" placeholder="https://example.com/webhook" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_webhook_secret">Secret</label>
-			<input id="notif_webhook_secret" type="text" name="notif_webhook_secret" x-model="webhook.secret" placeholder="Optional HMAC-SHA256 secret" class="form-input"/>
+			<label class="form-label" for="notif_webhook_secret">Secret</label>
+			<input id="notif_webhook_secret" type="password" autocomplete="off" name="notif_webhook_secret" x-model="webhook.secret" :placeholder="kept('secret') ? 'Saved. Leave blank to keep it.' : 'Optional HMAC-SHA256 secret'" class="form-input"/>
+			<label x-show="kept('secret')" class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+				<input type="checkbox" name="clear_secrets" value="secret" :disabled="!kept('secret')" class="form-checkbox"/>
+				Remove saved value
+			</label>
 		</div>
 	</div>
 }
@@ -175,11 +231,11 @@ templ notifWebhookFields() {
 templ notifTelegramFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'telegram'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_telegram_bot_token">Bot Token</label>
-			<input id="notif_telegram_bot_token" type="text" name="notif_telegram_bot_token" x-model="telegram.bot_token" :required="!advancedNotifSettings && formData.type === 'telegram'" placeholder="123456:ABC-DEF1234..." class="form-input"/>
+			<label class="form-label" for="notif_telegram_bot_token">Bot Token</label>
+			<input id="notif_telegram_bot_token" type="password" autocomplete="off" name="notif_telegram_bot_token" x-model="telegram.bot_token" :required="!advancedNotifSettings && formData.type === 'telegram' && !kept('bot_token')" :placeholder="kept('bot_token') ? 'Saved. Leave blank to keep it.' : '123456:ABC-DEF1234...'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_telegram_chat_id">Chat ID</label>
+			<label class="form-label" for="notif_telegram_chat_id">Chat ID</label>
 			<input id="notif_telegram_chat_id" type="text" name="notif_telegram_chat_id" x-model="telegram.chat_id" :required="!advancedNotifSettings && formData.type === 'telegram'" placeholder="-1001234567890" class="form-input"/>
 		</div>
 	</div>
@@ -188,8 +244,8 @@ templ notifTelegramFields() {
 templ notifDiscordFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'discord'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_discord_webhook_url">Webhook URL</label>
-			<input id="notif_discord_webhook_url" type="url" name="notif_discord_webhook_url" x-model="discord.webhook_url" :required="!advancedNotifSettings && formData.type === 'discord'" placeholder="https://discord.com/api/webhooks/..." class="form-input"/>
+			<label class="form-label" for="notif_discord_webhook_url">Webhook URL</label>
+			<input id="notif_discord_webhook_url" type="url" name="notif_discord_webhook_url" x-model="discord.webhook_url" :required="!advancedNotifSettings && formData.type === 'discord' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://discord.com/api/webhooks/...'" class="form-input"/>
 		</div>
 	</div>
 }
@@ -197,11 +253,11 @@ templ notifDiscordFields() {
 templ notifSlackFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'slack'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_slack_webhook_url">Webhook URL</label>
-			<input id="notif_slack_webhook_url" type="url" name="notif_slack_webhook_url" x-model="slack.webhook_url" :required="!advancedNotifSettings && formData.type === 'slack'" placeholder="https://hooks.slack.com/services/..." class="form-input"/>
+			<label class="form-label" for="notif_slack_webhook_url">Webhook URL</label>
+			<input id="notif_slack_webhook_url" type="url" name="notif_slack_webhook_url" x-model="slack.webhook_url" :required="!advancedNotifSettings && formData.type === 'slack' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://hooks.slack.com/services/...'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_slack_channel">Channel</label>
+			<label class="form-label" for="notif_slack_channel">Channel</label>
 			<input id="notif_slack_channel" type="text" name="notif_slack_channel" x-model="slack.channel" placeholder="Optional (e.g. #alerts)" class="form-input"/>
 		</div>
 	</div>
@@ -211,35 +267,39 @@ templ notifEmailFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'email'" x-cloak class="space-y-3">
 		<div class="grid grid-cols-3 gap-3">
 			<div class="col-span-2">
-				<label class="form-label-sm" for="notif_email_host">SMTP Host</label>
+				<label class="form-label" for="notif_email_host">SMTP Host</label>
 				<input id="notif_email_host" type="text" name="notif_email_host" x-model="email.host" :required="!advancedNotifSettings && formData.type === 'email'" placeholder="smtp.example.com" class="form-input"/>
 			</div>
 			<div>
-				<label class="form-label-sm" for="notif_email_port">Port</label>
+				<label class="form-label" for="notif_email_port">Port</label>
 				<input id="notif_email_port" type="number" name="notif_email_port" x-model="email.port" placeholder="587" class="form-input tabular-nums"/>
 			</div>
 		</div>
 		<div class="grid grid-cols-2 gap-3">
 			<div>
-				<label class="form-label-sm" for="notif_email_username">Username</label>
+				<label class="form-label" for="notif_email_username">Username</label>
 				<input id="notif_email_username" type="text" name="notif_email_username" x-model="email.username" placeholder="SMTP user" class="form-input"/>
 			</div>
 			<div>
-				<label class="form-label-sm" for="notif_email_password">Password</label>
-				<input id="notif_email_password" type="password" name="notif_email_password" x-model="email.password" placeholder="SMTP password" class="form-input"/>
+				<label class="form-label" for="notif_email_password">Password</label>
+				<input id="notif_email_password" type="password" name="notif_email_password" x-model="email.password" :placeholder="kept('password') ? 'Saved. Leave blank to keep it.' : 'SMTP password'" class="form-input"/>
+			<label x-show="kept('password')" class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+				<input type="checkbox" name="clear_secrets" value="password" :disabled="!kept('password')" class="form-checkbox"/>
+				Remove saved value
+			</label>
 			</div>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_email_from">From</label>
+			<label class="form-label" for="notif_email_from">From</label>
 			<input id="notif_email_from" type="email" name="notif_email_from" x-model="email.from" :required="!advancedNotifSettings && formData.type === 'email'" placeholder="alerts@example.com" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_email_to">To</label>
+			<label class="form-label" for="notif_email_to">To</label>
 			<input id="notif_email_to" type="text" name="notif_email_to" x-model="email.to" :required="!advancedNotifSettings && formData.type === 'email'" placeholder="admin@example.com, ops@example.com" class="form-input"/>
-			<p class="text-2xs text-muted mt-1">Comma-separated</p>
+			<p class="form-hint">Comma-separated</p>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_email_tls_mode">TLS Mode</label>
+			<label class="form-label" for="notif_email_tls_mode">TLS Mode</label>
 			<select id="notif_email_tls_mode" name="notif_email_tls_mode" x-model="email.tls_mode" class="form-select">
 				<option value="starttls">STARTTLS (default, port 587)</option>
 				<option value="smtps">SMTPS (port 465)</option>
@@ -247,14 +307,14 @@ templ notifEmailFields() {
 			</select>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_email_cc">CC</label>
+			<label class="form-label" for="notif_email_cc">CC</label>
 			<input id="notif_email_cc" type="text" name="notif_email_cc" x-model="email.cc" placeholder="cc@example.com" class="form-input"/>
-			<p class="text-2xs text-muted mt-1">Comma-separated (optional)</p>
+			<p class="form-hint">Comma-separated (optional)</p>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_email_bcc">BCC</label>
+			<label class="form-label" for="notif_email_bcc">BCC</label>
 			<input id="notif_email_bcc" type="text" name="notif_email_bcc" x-model="email.bcc" placeholder="bcc@example.com" class="form-input"/>
-			<p class="text-2xs text-muted mt-1">Comma-separated (optional)</p>
+			<p class="form-hint">Comma-separated (optional)</p>
 		</div>
 	</div>
 }
@@ -262,16 +322,16 @@ templ notifEmailFields() {
 templ notifNtfyFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'ntfy'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_ntfy_server_url">Server URL</label>
+			<label class="form-label" for="notif_ntfy_server_url">Server URL</label>
 			<input id="notif_ntfy_server_url" type="url" name="notif_ntfy_server_url" x-model="ntfy.server_url" placeholder="https://ntfy.sh" class="form-input"/>
-			<p class="text-2xs text-muted mt-1">Leave empty for ntfy.sh</p>
+			<p class="form-hint">Leave empty for ntfy.sh</p>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_ntfy_topic">Topic</label>
+			<label class="form-label" for="notif_ntfy_topic">Topic</label>
 			<input id="notif_ntfy_topic" type="text" name="notif_ntfy_topic" x-model="ntfy.topic" :required="!advancedNotifSettings && formData.type === 'ntfy'" placeholder="asura-alerts" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_ntfy_priority">Priority</label>
+			<label class="form-label" for="notif_ntfy_priority">Priority</label>
 			<select id="notif_ntfy_priority" name="notif_ntfy_priority" x-model="ntfy.priority" class="form-select">
 				<option value="1">1 — Min</option>
 				<option value="2">2 — Low</option>
@@ -281,12 +341,12 @@ templ notifNtfyFields() {
 			</select>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_ntfy_tags">Tags</label>
+			<label class="form-label" for="notif_ntfy_tags">Tags</label>
 			<input id="notif_ntfy_tags" type="text" name="notif_ntfy_tags" x-model="ntfy.tags" placeholder="warning,server" class="form-input"/>
-			<p class="text-2xs text-muted mt-1">Comma-separated emoji tags</p>
+			<p class="form-hint">Comma-separated emoji tags</p>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_ntfy_click_url">Click URL</label>
+			<label class="form-label" for="notif_ntfy_click_url">Click URL</label>
 			<input id="notif_ntfy_click_url" type="url" name="notif_ntfy_click_url" x-model="ntfy.click_url" placeholder="https://status.example.com" class="form-input"/>
 		</div>
 	</div>
@@ -295,8 +355,8 @@ templ notifNtfyFields() {
 templ notifTeamsFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'teams'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_teams_webhook_url">Webhook URL</label>
-			<input id="notif_teams_webhook_url" type="url" name="notif_teams_webhook_url" x-model="teams.webhook_url" :required="!advancedNotifSettings && formData.type === 'teams'" placeholder="https://outlook.office.com/webhook/..." class="form-input"/>
+			<label class="form-label" for="notif_teams_webhook_url">Webhook URL</label>
+			<input id="notif_teams_webhook_url" type="url" name="notif_teams_webhook_url" x-model="teams.webhook_url" :required="!advancedNotifSettings && formData.type === 'teams' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://outlook.office.com/webhook/...'" class="form-input"/>
 		</div>
 	</div>
 }
@@ -304,9 +364,9 @@ templ notifTeamsFields() {
 templ notifPagerdutyFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'pagerduty'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_pagerduty_routing_key">Routing Key</label>
-			<input id="notif_pagerduty_routing_key" type="text" name="notif_pagerduty_routing_key" x-model="pagerduty.routing_key" :required="!advancedNotifSettings && formData.type === 'pagerduty'" placeholder="Events API v2 integration key" class="form-input"/>
-			<p class="text-2xs text-muted mt-1">From your PagerDuty service integration</p>
+			<label class="form-label" for="notif_pagerduty_routing_key">Routing Key</label>
+			<input id="notif_pagerduty_routing_key" type="password" autocomplete="off" name="notif_pagerduty_routing_key" x-model="pagerduty.routing_key" :required="!advancedNotifSettings && formData.type === 'pagerduty' && !kept('routing_key')" :placeholder="kept('routing_key') ? 'Saved. Leave blank to keep it.' : 'Events API v2 integration key'" class="form-input"/>
+			<p class="form-hint">From your PagerDuty service integration</p>
 		</div>
 	</div>
 }
@@ -314,11 +374,11 @@ templ notifPagerdutyFields() {
 templ notifOpsgenieFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'opsgenie'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_opsgenie_api_key">API Key</label>
-			<input id="notif_opsgenie_api_key" type="text" name="notif_opsgenie_api_key" x-model="opsgenie.api_key" :required="!advancedNotifSettings && formData.type === 'opsgenie'" placeholder="Opsgenie API integration key" class="form-input"/>
+			<label class="form-label" for="notif_opsgenie_api_key">API Key</label>
+			<input id="notif_opsgenie_api_key" type="password" autocomplete="off" name="notif_opsgenie_api_key" x-model="opsgenie.api_key" :required="!advancedNotifSettings && formData.type === 'opsgenie' && !kept('api_key')" :placeholder="kept('api_key') ? 'Saved. Leave blank to keep it.' : 'Opsgenie API integration key'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_opsgenie_region">Region</label>
+			<label class="form-label" for="notif_opsgenie_region">Region</label>
 			<select id="notif_opsgenie_region" name="notif_opsgenie_region" x-model="opsgenie.region" class="form-select">
 				<option value="">US (default)</option>
 				<option value="eu">EU</option>
@@ -330,15 +390,15 @@ templ notifOpsgenieFields() {
 templ notifPushoverFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'pushover'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_pushover_user_key">User Key</label>
-			<input id="notif_pushover_user_key" type="text" name="notif_pushover_user_key" x-model="pushover.user_key" :required="!advancedNotifSettings && formData.type === 'pushover'" placeholder="Your Pushover user key" class="form-input"/>
+			<label class="form-label" for="notif_pushover_user_key">User Key</label>
+			<input id="notif_pushover_user_key" type="text" name="notif_pushover_user_key" x-model="pushover.user_key" :required="!advancedNotifSettings && formData.type === 'pushover' && !kept('user_key')" :placeholder="kept('user_key') ? 'Saved. Leave blank to keep it.' : 'Your Pushover user key'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_pushover_app_token">App Token</label>
-			<input id="notif_pushover_app_token" type="text" name="notif_pushover_app_token" x-model="pushover.app_token" :required="!advancedNotifSettings && formData.type === 'pushover'" placeholder="Your Pushover application token" class="form-input"/>
+			<label class="form-label" for="notif_pushover_app_token">App Token</label>
+			<input id="notif_pushover_app_token" type="password" autocomplete="off" name="notif_pushover_app_token" x-model="pushover.app_token" :required="!advancedNotifSettings && formData.type === 'pushover' && !kept('app_token')" :placeholder="kept('app_token') ? 'Saved. Leave blank to keep it.' : 'Your Pushover application token'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_pushover_priority">Priority</label>
+			<label class="form-label" for="notif_pushover_priority">Priority</label>
 			<select id="notif_pushover_priority" name="notif_pushover_priority" x-model="pushover.priority" class="form-select">
 				<option value="-2">Lowest</option>
 				<option value="-1">Low</option>
@@ -346,14 +406,14 @@ templ notifPushoverFields() {
 				<option value="1">High</option>
 				<option value="2">Emergency</option>
 			</select>
-			<p class="text-2xs text-muted mt-1">0 = auto-select based on event type</p>
+			<p class="form-hint">0 = auto-select based on event type</p>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_pushover_sound">Sound</label>
+			<label class="form-label" for="notif_pushover_sound">Sound</label>
 			<input id="notif_pushover_sound" type="text" name="notif_pushover_sound" x-model="pushover.sound" placeholder="pushover (default)" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_pushover_device">Device</label>
+			<label class="form-label" for="notif_pushover_device">Device</label>
 			<input id="notif_pushover_device" type="text" name="notif_pushover_device" x-model="pushover.device" placeholder="All devices (default)" class="form-input"/>
 		</div>
 	</div>
@@ -362,8 +422,8 @@ templ notifPushoverFields() {
 templ notifGooglechatFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'googlechat'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_googlechat_webhook_url">Webhook URL</label>
-			<input id="notif_googlechat_webhook_url" type="url" name="notif_googlechat_webhook_url" x-model="googlechat.webhook_url" :required="!advancedNotifSettings && formData.type === 'googlechat'" placeholder="https://chat.googleapis.com/v1/spaces/.../messages?key=..." class="form-input"/>
+			<label class="form-label" for="notif_googlechat_webhook_url">Webhook URL</label>
+			<input id="notif_googlechat_webhook_url" type="url" name="notif_googlechat_webhook_url" x-model="googlechat.webhook_url" :required="!advancedNotifSettings && formData.type === 'googlechat' && !kept('webhook_url')" :placeholder="kept('webhook_url') ? 'Saved. Leave blank to keep it.' : 'https://chat.googleapis.com/v1/spaces/.../messages?key=...'" class="form-input"/>
 		</div>
 	</div>
 }
@@ -371,15 +431,15 @@ templ notifGooglechatFields() {
 templ notifMatrixFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'matrix'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_matrix_homeserver">Homeserver</label>
+			<label class="form-label" for="notif_matrix_homeserver">Homeserver</label>
 			<input id="notif_matrix_homeserver" type="url" name="notif_matrix_homeserver" x-model="matrix.homeserver" :required="!advancedNotifSettings && formData.type === 'matrix'" placeholder="https://matrix.org" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_matrix_access_token">Access Token</label>
-			<input id="notif_matrix_access_token" type="text" name="notif_matrix_access_token" x-model="matrix.access_token" :required="!advancedNotifSettings && formData.type === 'matrix'" placeholder="syt_..." class="form-input"/>
+			<label class="form-label" for="notif_matrix_access_token">Access Token</label>
+			<input id="notif_matrix_access_token" type="password" autocomplete="off" name="notif_matrix_access_token" x-model="matrix.access_token" :required="!advancedNotifSettings && formData.type === 'matrix' && !kept('access_token')" :placeholder="kept('access_token') ? 'Saved. Leave blank to keep it.' : 'syt_...'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_matrix_room_id">Room ID</label>
+			<label class="form-label" for="notif_matrix_room_id">Room ID</label>
 			<input id="notif_matrix_room_id" type="text" name="notif_matrix_room_id" x-model="matrix.room_id" :required="!advancedNotifSettings && formData.type === 'matrix'" placeholder="!roomid:matrix.org" class="form-input"/>
 		</div>
 	</div>
@@ -388,15 +448,15 @@ templ notifMatrixFields() {
 templ notifGotifyFields() {
 	<div x-show="!advancedNotifSettings && formData.type === 'gotify'" x-cloak class="space-y-3">
 		<div>
-			<label class="form-label-sm" for="notif_gotify_server_url">Server URL</label>
+			<label class="form-label" for="notif_gotify_server_url">Server URL</label>
 			<input id="notif_gotify_server_url" type="url" name="notif_gotify_server_url" x-model="gotify.server_url" :required="!advancedNotifSettings && formData.type === 'gotify'" placeholder="https://gotify.example.com" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_gotify_app_token">App Token</label>
-			<input id="notif_gotify_app_token" type="text" name="notif_gotify_app_token" x-model="gotify.app_token" :required="!advancedNotifSettings && formData.type === 'gotify'" placeholder="Application token from Gotify" class="form-input"/>
+			<label class="form-label" for="notif_gotify_app_token">App Token</label>
+			<input id="notif_gotify_app_token" type="password" autocomplete="off" name="notif_gotify_app_token" x-model="gotify.app_token" :required="!advancedNotifSettings && formData.type === 'gotify' && !kept('app_token')" :placeholder="kept('app_token') ? 'Saved. Leave blank to keep it.' : 'Application token from Gotify'" class="form-input"/>
 		</div>
 		<div>
-			<label class="form-label-sm" for="notif_gotify_priority">Priority</label>
+			<label class="form-label" for="notif_gotify_priority">Priority</label>
 			<select id="notif_gotify_priority" name="notif_gotify_priority" x-model="gotify.priority" class="form-select">
 				<option value="1">1 — Low</option>
 				<option value="5">5 — Normal (default)</option>

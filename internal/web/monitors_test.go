@@ -530,3 +530,27 @@ func TestParseMonitorFormJSONModeInvalidJSON(t *testing.T) {
 		t.Errorf("invalid JSON assertions should be nil, got %s", mon.Assertions)
 	}
 }
+
+func TestValidateMonitorFormRejectsInvalidJSON(t *testing.T) {
+	mon := &storage.Monitor{Name: "x", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, FailureThreshold: 1, SuccessThreshold: 1}
+	r := buildFormRequest(url.Values{"settings_mode": {"json"}, "settings_json": {"{not json"}})
+	if err := validateMonitorForm(r, mon); err == nil || !strings.Contains(err.Error(), "Settings JSON") {
+		t.Fatalf("expected settings JSON error, got %v", err)
+	}
+	r = buildFormRequest(url.Values{"assertions_mode": {"json"}, "assertions_json": {"[1,"}})
+	if err := validateMonitorForm(r, mon); err == nil || !strings.Contains(err.Error(), "Conditions JSON") {
+		t.Fatalf("expected conditions JSON error, got %v", err)
+	}
+	r = buildFormRequest(url.Values{"settings_mode": {"json"}, "settings_json": {`{"method":"GET"}`}})
+	if err := validateMonitorForm(r, mon); err != nil {
+		t.Fatalf("valid JSON rejected: %v", err)
+	}
+}
+
+func TestMonitorFormDataRedactsSecrets(t *testing.T) {
+	mon := &storage.Monitor{Type: "http", Settings: json.RawMessage(`{"auth_method":"bearer","bearer_token":"tok-123"}`)}
+	fd := monitorToFormData(mon)
+	if strings.Contains(fd.SettingsJSON, "tok-123") {
+		t.Fatalf("settings JSON exposes the token: %s", fd.SettingsJSON)
+	}
+}

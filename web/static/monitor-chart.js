@@ -1,3 +1,13 @@
+// withAlpha turns a CSS colour (hex or rgb) into an rgba() string with the
+// given alpha, so chart fills can be derived from the theme tokens.
+function withAlpha(color, a) {
+    const c = document.createElement('canvas').getContext('2d');
+    c.fillStyle = color;
+    const hex = c.fillStyle;
+    if (hex[0] !== '#') return color;
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
 function monitorChart() {
     return {
         range: '24h',
@@ -31,18 +41,21 @@ function monitorChart() {
             const cs = getComputedStyle(document.documentElement);
             const axisColor = cs.getPropertyValue('--color-muted').trim();
             const gridColor = cs.getPropertyValue('--color-line').trim();
+            const lineColor = cs.getPropertyValue('--color-chart-line').trim();
+            const critColor = cs.getPropertyValue('--color-crit').trim();
+            const font = '11px Inter, system-ui, sans-serif';
             const opts = {
                 width: el.clientWidth, height: 200,
                 cursor: { show: true, drag: { x: false, y: false } },
                 select: { show: false }, legend: { show: false },
                 padding: [12, 8, 0, 0],
                 axes: [
-                    { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font: '10px Inter, system-ui, sans-serif', gap: 6 },
-                    { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font: '10px Inter, system-ui, sans-serif', gap: 6, values: (u, vals) => vals.map(v => v + 'ms') }
+                    { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font, gap: 6 },
+                    { size: 64, stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font, gap: 6, values: (u, vals) => vals.map(v => v + 'ms') }
                 ],
                 series: [
                     {},
-                    { label: 'Response Time', stroke: '#0080ff', width: 1.5, fill: 'rgba(0,128,255,0.06)', points: { show: false } }
+                    { label: 'Response time', stroke: lineColor, width: 1.5, fill: withAlpha(lineColor, 0.1), points: { show: false } }
                 ],
                 hooks: {
                     draw: [(u) => {
@@ -52,7 +65,8 @@ function monitorChart() {
                             if (statuses[i] !== 'down') continue;
                             const x = Math.round(u.valToPos(ts[i], 'x', true));
                             ctx.save();
-                            ctx.fillStyle = 'rgba(248,113,113,0.15)';
+                            ctx.globalAlpha = 0.18;
+                            ctx.fillStyle = critColor;
                             const bw = Math.max(2, width / statuses.length);
                             ctx.fillRect(x - bw / 2, top, bw, height);
                             ctx.restore();
@@ -89,7 +103,7 @@ function monitorChart() {
                 if (this.chart && this.$refs.chart) this.chart.setSize({ width: this.$refs.chart.clientWidth, height: 200 });
             });
             this.$nextTick(() => { if (this.$refs.chart) this.resizeObs.observe(this.$refs.chart); });
-            this.themeHandler = () => this.fetchData();
+            this.themeHandler = () => this.render();
             window.addEventListener('theme-changed', this.themeHandler);
         },
         destroy() { if (this.resizeObs) this.resizeObs.disconnect(); if (this.chart) this.chart.destroy(); if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler); }

@@ -89,7 +89,7 @@ func (h *Handler) IncidentAck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if inc.Status != incident.StatusOpen {
-		h.setFlash(w, "Incident is not open")
+		h.setError(w, "Incident is not open")
 		h.redirect(w, r, "/incidents/"+r.PathValue("id"))
 		return
 	}
@@ -101,7 +101,7 @@ func (h *Handler) IncidentAck(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.UpdateIncident(ctx, inc); err != nil {
 		h.logger.Error("web: ack incident", "error", err)
-		h.setFlash(w, "Failed to acknowledge incident")
+		h.setError(w, "Failed to acknowledge incident")
 		h.redirect(w, r, "/incidents/"+r.PathValue("id"))
 		return
 	}
@@ -150,7 +150,7 @@ func (h *Handler) IncidentResolve(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.UpdateIncident(ctx, inc); err != nil {
 		h.logger.Error("web: resolve incident", "error", err)
-		h.setFlash(w, "Failed to resolve incident")
+		h.setError(w, "Failed to resolve incident")
 		h.redirect(w, r, "/incidents/"+r.PathValue("id"))
 		return
 	}

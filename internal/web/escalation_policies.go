@@ -39,14 +39,14 @@ func (h *Handler) EscalationPolicyCreate(w http.ResponseWriter, r *http.Request)
 	ep, steps := h.parseEscalationPolicyForm(r)
 
 	if err := validate.ValidateEscalationPolicy(ep); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/escalation-policies")
 		return
 	}
 
 	if err := h.store.CreateEscalationPolicy(r.Context(), ep); err != nil {
 		h.logger.Error("web: create escalation policy", "error", err)
-		h.setFlash(w, "Failed to create escalation policy")
+		h.setError(w, "Failed to create escalation policy")
 		h.redirect(w, r, "/escalation-policies")
 		return
 	}
@@ -70,14 +70,14 @@ func (h *Handler) EscalationPolicyUpdate(w http.ResponseWriter, r *http.Request)
 	ep.ID = id
 
 	if err := validate.ValidateEscalationPolicy(ep); err != nil {
-		h.setFlash(w, err.Error())
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/escalation-policies")
 		return
 	}
 
 	if err := h.store.UpdateEscalationPolicy(r.Context(), ep); err != nil {
 		h.logger.Error("web: update escalation policy", "error", err)
-		h.setFlash(w, "Failed to update escalation policy")
+		h.setError(w, "Failed to update escalation policy")
 		h.redirect(w, r, "/escalation-policies")
 		return
 	}

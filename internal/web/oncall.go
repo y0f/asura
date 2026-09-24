@@ -29,7 +29,7 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
 	period := r.FormValue("period")
 	if name == "" {
-		h.setFlash(w, "Name is required")
+		h.setError(w, "Name is required")
 		h.redirect(w, r, "/on-call")
 		return
 	}
@@ -43,7 +43,7 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(channelIDs) == 0 {
-		h.setFlash(w, "Select at least one channel")
+		h.setError(w, "Select at least one channel")
 		h.redirect(w, r, "/on-call")
 		return
 	}
@@ -54,7 +54,7 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.store.CreateOnCallRotation(r.Context(), rot); err != nil {
 		h.logger.Error("web: create on-call rotation", "error", err)
-		h.setFlash(w, "Failed to create rotation")
+		h.setError(w, "Failed to create rotation")
 		h.redirect(w, r, "/on-call")
 		return
 	}
@@ -84,7 +84,7 @@ func (h *Handler) OnCallOverride(w http.ResponseWriter, r *http.Request) {
 	}
 	rot, err := h.store.GetOnCallRotation(r.Context(), id)
 	if err != nil {
-		h.setFlash(w, "Rotation not found")
+		h.setError(w, "Rotation not found")
 		h.redirect(w, r, "/on-call")
 		return
 	}
@@ -101,7 +101,7 @@ func (h *Handler) OnCallOverride(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.UpdateOnCallRotation(r.Context(), rot); err != nil {
 		h.logger.Error("web: override on-call", "error", err)
-		h.setFlash(w, "Failed to set override")
+		h.setError(w, "Failed to set override")
 	} else if chID > 0 {
 		h.setFlash(w, "Override set")
 	} else {
