@@ -271,3 +271,44 @@ func TestNotificationInvalidJSONDoesNotWipeSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestMonitorAuthSwitchDropsOldSecret(t *testing.T) {
+	h, store := storeHandler(t)
+	mon := &storage.Monitor{Name: "API", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true,
+		FailureThreshold: 1, SuccessThreshold: 1,
+		Settings: json.RawMessage(`{"auth_method":"basic","basic_auth_user":"u","basic_auth_pass":"old-pass","mtls_enabled":true,"mtls_client_key":"KEY"}`)}
+	if err := store.CreateMonitor(context.Background(), mon); err != nil {
+		t.Fatal(err)
+	}
+	id := strconvI(mon.ID)
+	form := httpMonitorForm("", url.Values{"settings_auth_method": {"none"}})
+	w := httptest.NewRecorder()
+	r := adminRequest("POST", "/monitors/"+id, form)
+	r.SetPathValue("id", id)
+	h.MonitorUpdate(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("update failed (%d)", w.Code)
+	}
+	got, _ := store.GetMonitor(context.Background(), mon.ID)
+	if strings.Contains(string(got.Settings), "old-pass") || strings.Contains(string(got.Settings), "KEY") {
+		t.Fatalf("secrets for disabled auth/mTLS were kept: %s", got.Settings)
+	}
+}
+
+func TestMonitorJSONEditWithoutAuthMethodKeepsToken(t *testing.T) {
+	h, store := storeHandler(t)
+	mon := &storage.Monitor{Name: "API", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true,
+		FailureThreshold: 1, SuccessThreshold: 1, Settings: json.RawMessage(`{"bearer_token":"legacy-token"}`)}
+	if err := store.CreateMonitor(context.Background(), mon); err != nil {
+		t.Fatal(err)
+	}
+	id := strconvI(mon.ID)
+	form := httpMonitorForm("", url.Values{"settings_mode": {"json"}, "settings_json": {`{"bearer_token":"","method":"GET"}`}})
+	w := httptest.NewRecorder()
+	r := adminRequest("POST", "/monitors/"+id, form)
+	r.SetPathValue("id", id)
+	h.MonitorUpdate(w, r)
+	if got := storedBearer(t, store, mon.ID); got != "legacy-token" {
+		t.Fatalf("legacy bearer token dropped on JSON save, got %q", got)
+	}
+}

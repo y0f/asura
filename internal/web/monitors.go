@@ -748,7 +748,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	// is built from what was submitted, so it never contains a stored secret.
 	submittedSettings := mon.Settings
 	if sameType {
-		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, views.MonitorSecretKeys[mon.Type], views.ClearSet(r.Form["clear_secrets"]))
+		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, activeMonitorSecretKeys(mon.Type, mon.Settings, existingSettings), views.ClearSet(r.Form["clear_secrets"]))
 	}
 
 	if err := validateMonitorForm(r, mon); err != nil {
@@ -1139,6 +1139,44 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 	}
 
 	return mon, parseIDList(r.Form["notification_channel_ids[]"]), monTags
+}
+
+// activeMonitorSecretKeys returns the secret keys that the submitted settings
+// still use, so only those are carried over from the stored monitor. Switching
+// an HTTP monitor to another auth method, or turning mTLS off, drops the old
+// secret instead of silently keeping it.
+func activeMonitorSecretKeys(monType string, settings, stored json.RawMessage) []string {
+	if monType != "http" {
+		return views.MonitorSecretKeys[monType]
+	}
+	var s storage.HTTPSettings
+	if len(settings) > 0 {
+		if err := json.Unmarshal(settings, &s); err != nil {
+			return nil
+		}
+	}
+	method := s.AuthMethod
+	if method == "" {
+		// Settings without an explicit auth_method (older monitors, JSON
+		// edits) keep the method the stored settings imply; the submitted
+		// secret itself is blank, so it cannot be inferred from them.
+		var prev storage.HTTPSettings
+		_ = json.Unmarshal(stored, &prev)
+		method = inferHTTPAuthMethod(prev)
+	}
+	var keys []string
+	switch method {
+	case "basic":
+		keys = append(keys, "basic_auth_pass")
+	case "bearer":
+		keys = append(keys, "bearer_token")
+	case "oauth2":
+		keys = append(keys, "oauth2_client_secret")
+	}
+	if s.MTLSEnabled {
+		keys = append(keys, "mtls_client_key")
+	}
+	return keys
 }
 
 // blankMonitorSecrets clears stored secret values from form data so they are
