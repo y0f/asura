@@ -1155,28 +1155,45 @@ func activeMonitorSecretKeys(monType string, settings, stored json.RawMessage) [
 			return nil
 		}
 	}
-	method := s.AuthMethod
-	if method == "" {
-		// Settings without an explicit auth_method (older monitors, JSON
-		// edits) keep the method the stored settings imply; the submitted
-		// secret itself is blank, so it cannot be inferred from them.
+	method := inferHTTPAuthMethod(s)
+	if s.AuthMethod == "" && method == "none" {
+		// Settings without an explicit auth_method (older monitors edited as
+		// JSON) cannot imply a method from a blank secret. Keep the stored
+		// method only when the submitted JSON still carries its secret key,
+		// as the redacted editor content does; "{}" or another method's
+		// fields drop it.
 		var prev storage.HTTPSettings
 		_ = json.Unmarshal(stored, &prev)
-		method = inferHTTPAuthMethod(prev)
+		var present map[string]json.RawMessage
+		_ = json.Unmarshal(settings, &present)
+		if k := httpAuthSecretKey(inferHTTPAuthMethod(prev)); k != "" {
+			if _, ok := present[k]; ok {
+				method = inferHTTPAuthMethod(prev)
+			}
+		}
 	}
 	var keys []string
-	switch method {
-	case "basic":
-		keys = append(keys, "basic_auth_pass")
-	case "bearer":
-		keys = append(keys, "bearer_token")
-	case "oauth2":
-		keys = append(keys, "oauth2_client_secret")
+	if k := httpAuthSecretKey(method); k != "" {
+		keys = append(keys, k)
 	}
 	if s.MTLSEnabled {
 		keys = append(keys, "mtls_client_key")
 	}
 	return keys
+}
+
+// httpAuthSecretKey is the settings key holding the secret for an auth method.
+func httpAuthSecretKey(method string) string {
+	switch method {
+	case "basic":
+		return "basic_auth_pass"
+	case "bearer":
+		return "bearer_token"
+	case "oauth2":
+		return "oauth2_client_secret"
+	default:
+		return ""
+	}
 }
 
 // blankMonitorSecrets clears stored secret values from form data so they are

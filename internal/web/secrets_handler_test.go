@@ -312,3 +312,23 @@ func TestMonitorJSONEditWithoutAuthMethodKeepsToken(t *testing.T) {
 		t.Fatalf("legacy bearer token dropped on JSON save, got %q", got)
 	}
 }
+
+func TestMonitorJSONAuthSwitchDropsLegacySecret(t *testing.T) {
+	for _, submitted := range []string{`{"basic_auth_user":"u","basic_auth_pass":"p"}`, `{}`} {
+		h, store := storeHandler(t)
+		mon := &storage.Monitor{Name: "API", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true,
+			FailureThreshold: 1, SuccessThreshold: 1, Settings: json.RawMessage(`{"bearer_token":"legacy-token"}`)}
+		if err := store.CreateMonitor(context.Background(), mon); err != nil {
+			t.Fatal(err)
+		}
+		id := strconvI(mon.ID)
+		form := httpMonitorForm("", url.Values{"settings_mode": {"json"}, "settings_json": {submitted}})
+		w := httptest.NewRecorder()
+		r := adminRequest("POST", "/monitors/"+id, form)
+		r.SetPathValue("id", id)
+		h.MonitorUpdate(w, r)
+		if got := storedBearer(t, store, mon.ID); got != "" {
+			t.Fatalf("JSON %s kept the old bearer token %q", submitted, got)
+		}
+	}
+}
