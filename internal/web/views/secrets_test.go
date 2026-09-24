@@ -53,6 +53,16 @@ func TestMergeSecretsClearRemovesStored(t *testing.T) {
 	}
 }
 
+func TestMergeSecretsHandlesNonObjectInput(t *testing.T) {
+	old := json.RawMessage(`{"bearer_token":"s3cret"}`)
+	for _, upd := range []string{"null", "[]", "42", `"x"`} {
+		got := MergeSecrets(json.RawMessage(upd), old, MonitorSecretKeys["http"], nil)
+		if string(got) != upd {
+			t.Errorf("MergeSecrets(%s) = %s, want input unchanged", upd, got)
+		}
+	}
+}
+
 func TestMissingRequiredSecret(t *testing.T) {
 	ch := &storage.NotificationChannel{Type: "discord", Settings: json.RawMessage(`{"webhook_url":""}`)}
 	if MissingRequiredSecret(ch) != "webhook_url" {

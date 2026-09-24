@@ -105,6 +105,10 @@ func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]
 			return updated
 		}
 	}
+	// JSON null decodes to a nil map: nothing to merge into.
+	if next == nil {
+		return updated
+	}
 	changed := false
 	for _, k := range keys {
 		if clear[k] {
