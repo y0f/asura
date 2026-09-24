@@ -80,7 +80,7 @@ templ SettingsPage(p SettingsParams) {
 						<p class="subtitle mt-1 mb-4">Download monitors, groups, proxies, notification channels, maintenance windows and status pages as JSON.</p>
 						<div class="flex flex-wrap items-center gap-2">
 							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true") } class="btn-secondary">Export without secrets</a>
-							<a href={ templ.SafeURL(p.BasePath + "/settings/export") } class="btn-secondary">Export with secrets</a>
+							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false") } class="btn-secondary">Export with secrets</a>
 						</div>
 					</section>
 					<section class="card card-pad" aria-labelledby="import-title">

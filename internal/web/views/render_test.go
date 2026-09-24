@@ -201,6 +201,17 @@ func TestPagesStructure(t *testing.T) {
 	}
 }
 
+func TestSettingsExportLinks(t *testing.T) {
+	var buf bytes.Buffer
+	if err := SettingsPage(SettingsParams{LayoutParams: testLayout("Settings", true)}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "/settings/export?redact_secrets=false") || !strings.Contains(out, "/settings/export?redact_secrets=true") {
+		t.Fatal("export buttons do not request explicit redaction modes")
+	}
+}
+
 func TestReadOnlyPagesHideWriteActions(t *testing.T) {
 	for name, page := range pages(false) {
 		if name == "login" || name == "totp" || name == "public" || name == "public-auth" || name == "monitor-form" || name == "proxy-form" || name == "status-form" {
