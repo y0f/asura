@@ -25,8 +25,9 @@ jobs:
         id: css-check
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD)
-          # Skip if no template or CSS input files changed
-          if ! echo "$CHANGED" | grep -qE '\.templ$|tailwind\.input\.css$|\.html$'; then
+          # Skip if nothing Tailwind scans or imports changed (templates, the
+          # Go view helpers that build class names, CSS sources, docs HTML).
+          if ! echo "$CHANGED" | grep -qE '\.templ$|^internal/web/views/.*\.go$|^web/css/|tailwind\.input\.css$|\.html$'; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -52,6 +53,35 @@ jobs:
           git add web/static/tailwind.css docs/static/docs.css
           git commit -m "Rebuild Tailwind CSS [skip ci]"
           git push
+
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
+
+      - name: Download Tailwind CLI
+        run: |
+          curl -sL -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
+          chmod +x tailwindcss
+
+      - name: Generated files are up to date
+        run: |
+          templ generate
+          ./tailwindcss -i web/tailwind.input.css -o web/static/tailwind.css --minify
+          ./tailwindcss -i docs/tailwind.input.css -o docs/static/docs.css --minify
+          rm -f tailwindcss
+          if ! git diff --exit-code --stat; then
+            echo "::error::Generated templ or CSS output is stale. Run 'templ generate' and 'make css', then commit."
+            exit 1
+          fi
 
   test:
     runs-on: ubuntu-latest
