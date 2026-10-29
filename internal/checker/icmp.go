@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/y0f/asura/internal/safenet"
@@ -89,7 +90,9 @@ func probeICMP(dst net.IP, isIPv6 bool, start time.Time, timeout time.Duration) 
 	}
 	defer conn.Close()
 
-	if err := sendEchoRequest(conn, dst, isIPv6); err != nil {
+	seq := int(icmpSeq.Add(1) & 0xffff)
+	sent := time.Now()
+	if err := sendEchoRequest(conn, dst, isIPv6, seq); err != nil {
 		return &Result{
 			Status:       "down",
 			ResponseTime: time.Since(start).Milliseconds(),
@@ -97,9 +100,13 @@ func probeICMP(dst net.IP, isIPv6 bool, start time.Time, timeout time.Duration) 
 		}
 	}
 
-	result, _ := readEchoReply(conn, dst, start, timeout, isIPv6)
-	return result
+	return readEchoReply(conn, dst, sent, timeout, isIPv6, seq)
 }
+
+// icmpSeq gives every probe in the process its own sequence number. A raw
+// socket receives every ICMP packet on the host, so concurrent monitors can
+// only tell their replies apart by source, ID and sequence.
+var icmpSeq atomic.Uint32
 
 func listenICMP(isIPv6 bool) (*icmp.PacketConn, error) {
 	if isIPv6 {
@@ -116,7 +123,14 @@ func listenICMP(isIPv6 bool) (*icmp.PacketConn, error) {
 	return conn, err
 }
 
-func sendEchoRequest(conn *icmp.PacketConn, dst net.IP, isIPv6 bool) error {
+// isDatagram reports whether conn is an unprivileged ICMP datagram socket.
+// Its LocalAddr is a *net.UDPAddr, whose Network() is "udp", never "udp4".
+func isDatagram(conn *icmp.PacketConn) bool {
+	_, ok := conn.LocalAddr().(*net.UDPAddr)
+	return ok
+}
+
+func sendEchoRequest(conn *icmp.PacketConn, dst net.IP, isIPv6 bool, seq int) error {
 	var msgType icmp.Type
 	if isIPv6 {
 		msgType = ipv6.ICMPTypeEchoRequest
@@ -128,8 +142,8 @@ func sendEchoRequest(conn *icmp.PacketConn, dst net.IP, isIPv6 bool) error {
 		Type: msgType,
 		Code: 0,
 		Body: &icmp.Echo{
-			ID:   os.Getpid() & 0xffff,
-			Seq:  1,
+			ID:   echoID,
+			Seq:  seq,
 			Data: []byte("asura-ping"),
 		},
 	}
@@ -138,69 +152,68 @@ func sendEchoRequest(conn *icmp.PacketConn, dst net.IP, isIPv6 bool) error {
 		return err
 	}
 
-	network := conn.LocalAddr().Network()
-	var dstAddr net.Addr
-	switch network {
-	case "udp4":
+	var dstAddr net.Addr = &net.IPAddr{IP: dst}
+	if isDatagram(conn) {
 		dstAddr = &net.UDPAddr{IP: dst}
-	case "udp6":
-		dstAddr = &net.UDPAddr{IP: dst}
-	default:
-		dstAddr = &net.IPAddr{IP: dst}
 	}
 	_, err = conn.WriteTo(wb, dstAddr)
 	return err
 }
 
-func readEchoReply(conn *icmp.PacketConn, dst net.IP, start time.Time, timeout time.Duration, isIPv6 bool) (*Result, error) {
-	conn.SetReadDeadline(time.Now().Add(timeout))
-	rb := make([]byte, 1500)
-	n, _, err := conn.ReadFrom(rb)
-	elapsed := time.Since(start).Milliseconds()
+var echoID = os.Getpid() & 0xffff
 
-	if err != nil {
-		return &Result{
-			Status:       "down",
-			ResponseTime: elapsed,
-			Message:      fmt.Sprintf("receive failed: %v", err),
-		}, nil
-	}
-
-	var proto int
-	network := conn.LocalAddr().Network()
-	switch network {
-	case "udp4":
-		proto = 1
-	case "udp6":
+func readEchoReply(conn *icmp.PacketConn, dst net.IP, sent time.Time, timeout time.Duration, isIPv6 bool, seq int) *Result {
+	conn.SetReadDeadline(sent.Add(timeout))
+	proto := 1
+	if isIPv6 {
 		proto = 58
-	default:
-		if isIPv6 {
-			proto = 58
-		} else {
-			proto = 1
+	}
+	// The kernel rewrites the echo ID of datagram sockets and only delivers
+	// that socket's own replies, so the ID is checked on raw sockets only.
+	checkID := !isDatagram(conn)
+
+	rb := make([]byte, 1500)
+	for {
+		n, peer, err := conn.ReadFrom(rb)
+		if err != nil {
+			return &Result{
+				Status:       "down",
+				ResponseTime: time.Since(sent).Milliseconds(),
+				Message:      fmt.Sprintf("receive failed: %v", err),
+			}
 		}
-	}
-
-	rm, err := icmp.ParseMessage(proto, rb[:n])
-	if err != nil {
-		return &Result{
-			Status:       "down",
-			ResponseTime: elapsed,
-			Message:      fmt.Sprintf("parse reply failed: %v", err),
-		}, nil
-	}
-
-	if rm.Type == ipv4.ICMPTypeEchoReply || rm.Type == ipv6.ICMPTypeEchoReply {
+		rm, err := icmp.ParseMessage(proto, rb[:n])
+		if err != nil || !isEchoReplyFor(rm, peer, dst, seq, checkID) {
+			continue
+		}
+		elapsed := time.Since(sent).Milliseconds()
 		return &Result{
 			Status:       "up",
 			ResponseTime: elapsed,
 			Message:      fmt.Sprintf("ping %s: %dms", dst, elapsed),
-		}, nil
+		}
 	}
+}
 
-	return &Result{
-		Status:       "down",
-		ResponseTime: elapsed,
-		Message:      fmt.Sprintf("unexpected ICMP type: %v", rm.Type),
-	}, nil
+// isEchoReplyFor reports whether rm, received from peer, answers the echo
+// request with sequence seq that was sent to dst.
+func isEchoReplyFor(rm *icmp.Message, peer net.Addr, dst net.IP, seq int, checkID bool) bool {
+	if rm.Type != ipv4.ICMPTypeEchoReply && rm.Type != ipv6.ICMPTypeEchoReply {
+		return false
+	}
+	var from net.IP
+	switch a := peer.(type) {
+	case *net.IPAddr:
+		from = a.IP
+	case *net.UDPAddr:
+		from = a.IP
+	}
+	if !from.Equal(dst) {
+		return false
+	}
+	echo, ok := rm.Body.(*icmp.Echo)
+	if !ok || echo.Seq != seq {
+		return false
+	}
+	return !checkID || echo.ID == echoID
 }
