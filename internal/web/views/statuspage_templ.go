@@ -326,7 +326,7 @@ func PublicStatusPage(p PublicStatusPageParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.Config != nil && p.Config.CustomCSS != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<style>\r\n\t\t\t\t\t\t{ p.Config.CustomCSS }\r\n\t\t\t\t\t</style>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<style>\n\t\t\t\t\t\t{ p.Config.CustomCSS }\n\t\t\t\t\t</style>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
