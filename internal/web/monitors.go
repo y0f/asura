@@ -737,6 +737,70 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 	h.redirect(w, r, "/monitors")
 }
 
+// keepStoredMonitorFields carries over what the edit form does not submit.
+// The form has no enabled/paused field, so the existing enabled state (and
+// created_at) is kept instead of letting parseMonitorForm's default flip a
+// paused monitor back on; enable/disable goes through Pause/Resume. It returns
+// the stored secrets and settings when the type is unchanged.
+func keepStoredMonitorFields(mon, existing *storage.Monitor) (storedSecrets map[string]bool, existingSettings json.RawMessage, sameType bool) {
+	mon.Enabled = existing.Enabled
+	mon.CreatedAt = existing.CreatedAt
+	sameType = existing.Type == mon.Type
+	if sameType {
+		storedSecrets = views.StoredSecrets(existing.Settings, views.MonitorSecretKeys[mon.Type])
+		existingSettings = existing.Settings
+	}
+	// Multi-step settings have no form editor; never let a form-mode save
+	// replace stored steps with nothing.
+	if mon.Type == "http_multi" && len(mon.Settings) == 0 && existing.Type == "http_multi" {
+		mon.Settings = existing.Settings
+	}
+	return storedSecrets, existingSettings, sameType
+}
+
+// renderMonitorEditError shows the edit form again with msg. mon carries the
+// submitted values, so a stored secret is never put into the form.
+func (h *Handler) renderMonitorEditError(w http.ResponseWriter, r *http.Request, msg string, mon *storage.Monitor, storedSecrets map[string]bool, channelIDs []int64, monTags []storage.MonitorTag) {
+	groups, _ := h.store.ListMonitorGroups(r.Context())
+	channels, _ := h.store.ListNotificationChannels(r.Context())
+	proxies, _ := h.store.ListProxies(r.Context())
+	allTags, _ := h.store.ListTags(r.Context())
+	escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
+	lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
+	lp.Error = msg
+	fd := monitorToFormData(mon)
+	fd.SecretsStored = storedSecrets
+	keepRawJSON(r, fd)
+	fd.Groups = groups
+	fd.NotificationChannels = channels
+	fd.Proxies = proxies
+	fd.AllTags = allTags
+	fd.EscalationPolicies = escalationPolicies
+	fd.SelectedChannelIDs = channelIDs
+	fd.SelectedTags = monTags
+	h.renderMonitorForm(w, r, lp, fd)
+}
+
+// saveEditedAgentAssignment stores the agent assignment of an updated monitor
+// that was saved with agent checks off while it has agent_ids, and switches
+// them back on only once the assignment is stored. It returns the message to
+// show when that fails (agent checks then stay off), or "".
+func (h *Handler) saveEditedAgentAssignment(r *http.Request, mon *storage.Monitor, agentEnabled bool) string {
+	err := h.store.SetMonitorAgentIDs(r.Context(), mon.ID, mon.AgentIDs)
+	if err == nil && agentEnabled && len(mon.AgentIDs) > 0 {
+		err = h.store.UpdateMonitor(r.Context(), mon)
+	}
+	if err == nil {
+		return ""
+	}
+	h.logger.Error("web: set monitor agents", "error", err)
+	msg := "Monitor updated, but saving its agent assignment failed"
+	if len(mon.AgentIDs) > 0 {
+		msg += ", so agent checks are off. Edit the monitor to try again."
+	}
+	return msg
+}
+
 func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
@@ -746,30 +810,12 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 
 	mon, channelIDs, monTags := h.parseMonitorForm(r)
 	mon.ID = id
-	var storedSecrets map[string]bool
-	var existingSettings json.RawMessage
-	sameType := false
-
-	// The edit form does not submit an enabled/paused field, so preserve the
-	// existing enabled state (and created_at) instead of letting parseMonitorForm's
-	// default flip a paused monitor back on. Enable/disable goes through Pause/Resume.
-	if existing, err := h.store.GetMonitor(r.Context(), id); err == nil && existing != nil {
-		mon.Enabled = existing.Enabled
-		mon.CreatedAt = existing.CreatedAt
-		sameType = existing.Type == mon.Type
-		if sameType {
-			storedSecrets = views.StoredSecrets(existing.Settings, views.MonitorSecretKeys[mon.Type])
-			existingSettings = existing.Settings
-		}
-		// Multi-step settings have no form editor; never let a form-mode save
-		// replace stored steps with nothing.
-		if mon.Type == "http_multi" && len(mon.Settings) == 0 && existing.Type == "http_multi" {
-			mon.Settings = existing.Settings
-		}
-	} else {
+	existing, err := h.store.GetMonitor(r.Context(), id)
+	if err != nil || existing == nil {
 		h.redirect(w, r, "/monitors")
 		return
 	}
+	storedSecrets, existingSettings, sameType := keepStoredMonitorFields(mon, existing)
 
 	// Secret fields are rendered empty: a blank field keeps the stored value
 	// and "Remove saved value" clears it. Validation runs on the merged
@@ -781,25 +827,8 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.validateMonitorFormAgents(r, mon); err != nil {
-		groups, _ := h.store.ListMonitorGroups(r.Context())
-		channels, _ := h.store.ListNotificationChannels(r.Context())
-		proxies, _ := h.store.ListProxies(r.Context())
-		allTags, _ := h.store.ListTags(r.Context())
-		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
-		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
-		lp.Error = err.Error()
 		mon.Settings = submittedSettings
-		fd := monitorToFormData(mon)
-		fd.SecretsStored = storedSecrets
-		keepRawJSON(r, fd)
-		fd.Groups = groups
-		fd.NotificationChannels = channels
-		fd.Proxies = proxies
-		fd.AllTags = allTags
-		fd.EscalationPolicies = escalationPolicies
-		fd.SelectedChannelIDs = channelIDs
-		fd.SelectedTags = monTags
-		h.renderMonitorForm(w, r, lp, fd)
+		h.renderMonitorEditError(w, r, err.Error(), mon, storedSecrets, channelIDs, monTags)
 		return
 	}
 
@@ -812,26 +841,9 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	err = h.store.UpdateMonitor(r.Context(), mon)
 	mon.AgentEnabled = agentEnabled
 	if err != nil {
-		groups, _ := h.store.ListMonitorGroups(r.Context())
-		channels, _ := h.store.ListNotificationChannels(r.Context())
-		proxies, _ := h.store.ListProxies(r.Context())
-		allTags, _ := h.store.ListTags(r.Context())
-		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 		h.logger.Error("web: update monitor", "error", err)
-		lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
-		lp.Error = "Failed to update monitor"
 		mon.Settings = submittedSettings
-		fd := monitorToFormData(mon)
-		fd.SecretsStored = storedSecrets
-		keepRawJSON(r, fd)
-		fd.Groups = groups
-		fd.NotificationChannels = channels
-		fd.Proxies = proxies
-		fd.AllTags = allTags
-		fd.EscalationPolicies = escalationPolicies
-		fd.SelectedChannelIDs = channelIDs
-		fd.SelectedTags = monTags
-		h.renderMonitorForm(w, r, lp, fd)
+		h.renderMonitorEditError(w, r, "Failed to update monitor", mon, storedSecrets, channelIDs, monTags)
 		return
 	}
 
@@ -841,18 +853,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("web: set monitor notification channels", "error", err)
 	}
 
-	var assignErr string
-	err = h.store.SetMonitorAgentIDs(r.Context(), id, mon.AgentIDs)
-	if err == nil && agentEnabled && len(mon.AgentIDs) > 0 {
-		err = h.store.UpdateMonitor(r.Context(), mon)
-	}
-	if err != nil {
-		h.logger.Error("web: set monitor agents", "error", err)
-		assignErr = "Monitor updated, but saving its agent assignment failed"
-		if len(mon.AgentIDs) > 0 {
-			assignErr += ", so agent checks are off. Edit the monitor to try again."
-		}
-	}
+	assignErr := h.saveEditedAgentAssignment(r, mon, agentEnabled)
 
 	if err := h.store.SetMonitorTags(r.Context(), id, monTags); err != nil {
 		h.logger.Error("web: set monitor tags", "error", err)
