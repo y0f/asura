@@ -12,6 +12,7 @@ import (
 
 	"github.com/y0f/asura/internal/safenet"
 	"github.com/y0f/asura/internal/storage"
+	"golang.org/x/net/publicsuffix"
 )
 
 type DomainChecker struct {
@@ -67,9 +68,12 @@ func sanitizeDomain(target string) string {
 	domain = strings.ToLower(domain)
 	domain = strings.NewReplacer("\r", "", "\n", "").Replace(domain)
 
-	parts := strings.Split(domain, ".")
-	if len(parts) > 2 {
-		domain = strings.Join(parts[len(parts)-2:], ".")
+	domain = strings.TrimSuffix(domain, ".")
+
+	// Reduce to the registrable domain (eTLD+1) so multi-label public
+	// suffixes such as co.uk or com.au keep their registrant label.
+	if reg, err := publicsuffix.EffectiveTLDPlusOne(domain); err == nil {
+		return reg
 	}
 	return domain
 }

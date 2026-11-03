@@ -24,6 +24,23 @@ func generateAPIKey() (key, hash string, err error) {
 	return key, hash, nil
 }
 
+// enableEncryption installs the at-rest encryptor on store when key is set.
+func enableEncryption(ctx context.Context, store *storage.SQLiteStore, key string) error {
+	if key == "" {
+		return nil
+	}
+	salt, err := store.EnsureKDFSalt(ctx)
+	if err != nil {
+		return fmt.Errorf("load encryption salt: %w", err)
+	}
+	enc, err := storage.NewEncryptor(key, salt)
+	if err != nil {
+		return fmt.Errorf("create encryptor: %w", err)
+	}
+	store.SetEncryptor(enc)
+	return nil
+}
+
 func handleTOTPCommands(configPath, setupName, verifyName, removeName string, args []string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -36,6 +53,11 @@ func handleTOTPCommands(configPath, setupName, verifyName, removeName string, ar
 	}
 	defer store.Close()
 	ctx := context.Background()
+
+	// TOTP secrets are encrypted at rest like the running server stores them.
+	if err := enableEncryption(ctx, store, cfg.Database.EncryptionKey); err != nil {
+		return err
+	}
 
 	switch {
 	case setupName != "":

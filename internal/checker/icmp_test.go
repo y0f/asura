@@ -3,6 +3,7 @@ package checker
 import (
 	"net"
 	"testing"
+	"time"
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -42,9 +43,26 @@ func TestIsEchoReplyFor(t *testing.T) {
 	}
 }
 
-func TestICMPSeqUnique(t *testing.T) {
-	a, b := icmpSeq.Add(1), icmpSeq.Add(1)
-	if a == b {
-		t.Fatalf("two probes got the same sequence %d", a)
+// The unprivileged fallback is a datagram socket, which only accepts a
+// *net.UDPAddr destination: writing an *net.IPAddr to it fails with EINVAL, so
+// every probe on a host without raw-socket rights reported "send failed".
+func TestICMPDatagramSocketProbe(t *testing.T) {
+	conn, err := icmp.ListenPacket("udp4", "127.0.0.1")
+	if err != nil {
+		t.Skipf("unprivileged ICMP sockets not available: %v", err)
+	}
+	defer conn.Close()
+	if !isDatagram(conn) {
+		t.Fatalf("udp4 ICMP socket with local address %T not detected as datagram", conn.LocalAddr())
+	}
+
+	dst := net.ParseIP("127.0.0.1")
+	seq := int(icmpSeq.Add(1) & 0xffff)
+	sent := time.Now()
+	if err := sendEchoRequest(conn, dst, false, seq); err != nil {
+		t.Fatalf("send on datagram socket: %v", err)
+	}
+	if res := readEchoReply(conn, dst, sent, sent.Add(3*time.Second), false, seq); res.Status != "up" {
+		t.Fatalf("no echo reply over the datagram socket: %s", res.Message)
 	}
 }

@@ -63,6 +63,9 @@ func (c *GRPCChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	req.Header.Set("TE", "trailers")
 
 	client := &http.Client{Transport: transport, Timeout: timeout}
+	// Each check builds its own transport; release its pooled connection (and
+	// readLoop goroutine) once the response body is closed.
+	defer client.CloseIdleConnections()
 
 	start := time.Now()
 	resp, err := client.Do(req)

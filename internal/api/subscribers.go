@@ -9,7 +9,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/safenet"
 	"github.com/y0f/asura/internal/storage"
 )
@@ -17,9 +19,15 @@ import (
 const (
 	maxSubscriberEmailLen   = 254
 	maxSubscriberWebhookLen = 2048
+
+	subscriberConfirmTimeout = time.Minute
 )
 
-func (h *Handler) CountSubscribers(w http.ResponseWriter, r *http.Request) {
+// ListSubscribers returns the total subscriber count for a page. Keys that
+// may manage subscribers (monitors.write) also get the confirmed subscribers,
+// whose IDs can be passed to DeleteSubscriber. Read-only keys get only the
+// count: emails are personal data and webhook URLs often embed tokens.
+func (h *Handler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid status page id")
@@ -31,8 +39,57 @@ func (h *Handler) CountSubscribers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to count subscribers")
 		return
 	}
+	if key := httputil.GetAPIKey(r.Context()); key == nil || !key.HasPermission("monitors.write") {
+		writeJSON(w, http.StatusOK, map[string]any{"count": count})
+		return
+	}
+	subs, err := h.store.ListConfirmedSubscribers(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list subscribers")
+		return
+	}
+	if subs == nil {
+		subs = []*storage.StatusPageSubscriber{}
+	}
 
-	writeJSON(w, http.StatusOK, map[string]int64{"count": count})
+	writeJSON(w, http.StatusOK, map[string]any{"count": count, "data": subs})
+}
+
+// ConfirmSubscription serves the confirmation link from subscriber emails
+// ({slug}/confirm?token=...) when the web UI, which normally serves it, is off.
+func (h *Handler) ConfirmSubscription(w http.ResponseWriter, r *http.Request, pageID int64) {
+	ctx := r.Context()
+	token := r.URL.Query().Get("token")
+	sub, err := h.store.GetSubscriberByToken(ctx, token)
+	if token == "" || err != nil || sub.StatusPageID != pageID {
+		writeError(w, http.StatusNotFound, "invalid or expired confirmation link")
+		return
+	}
+	if !sub.Confirmed {
+		if err := h.store.ConfirmSubscriber(ctx, token); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to confirm subscription")
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "confirmed"})
+}
+
+// Unsubscribe serves the unsubscribe link from subscriber emails
+// ({slug}/unsubscribe?token=...) when the web UI is off.
+func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request, pageID int64) {
+	ctx := r.Context()
+	token := r.URL.Query().Get("token")
+	sub, err := h.store.GetSubscriberByToken(ctx, token)
+	if token == "" || err != nil || sub.StatusPageID != pageID {
+		// Already removed or never existed: the outcome the caller wants.
+		writeJSON(w, http.StatusOK, map[string]string{"status": "unsubscribed"})
+		return
+	}
+	if err := h.store.DeleteSubscriberByToken(ctx, token); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to unsubscribe")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "unsubscribed"})
 }
 
 func (h *Handler) DeleteSubscriber(w http.ResponseWriter, r *http.Request) {
@@ -119,9 +176,26 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 
 	msg := "subscribed"
 	if req.Type == "email" {
+		// SubNotifier is nil when subscriptions are disabled; the subscriber
+		// is stored all the same, as in v1.3.0.
+		if h.SubNotifier != nil {
+			h.sendConfirmation(r.Context(), sub, sp)
+		}
 		msg = "confirmation email sent"
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"status": msg})
+}
+
+// sendConfirmation emails the confirmation link in the background; the send
+// must outlive the request, so it does not inherit its cancellation.
+func (h *Handler) sendConfirmation(ctx context.Context, sub *storage.StatusPageSubscriber, sp *storage.StatusPage) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), subscriberConfirmTimeout)
+	go func() {
+		defer cancel()
+		if err := h.SubNotifier.SendConfirmationEmail(ctx, sub, sp); err != nil {
+			h.logger.Error("api: send confirmation email", "subscriber_id", sub.ID, "error", err)
+		}
+	}()
 }
 
 func (h *Handler) validateSubscriberEmail(email string) string {

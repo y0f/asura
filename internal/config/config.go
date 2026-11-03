@@ -235,10 +235,26 @@ func (c *Config) Validate() error {
 	if err := c.validateMonitorConfig(); err != nil {
 		return err
 	}
+	if err := c.validateAuth(); err != nil {
+		return err
+	}
 	if err := validateAPIKeys(c.Auth.APIKeys); err != nil {
 		return err
 	}
 	return validateLogLevel(c.Logging.Level)
+}
+
+func (c *Config) validateAuth() error {
+	if c.Auth.Session.Lifetime < time.Minute {
+		return fmt.Errorf("auth.session.lifetime must be at least 1m")
+	}
+	if c.Auth.Login.RateLimitPerSec <= 0 {
+		return fmt.Errorf("auth.login.rate_limit_per_sec must be positive")
+	}
+	if c.Auth.Login.RateLimitBurst <= 0 {
+		return fmt.Errorf("auth.login.rate_limit_burst must be positive")
+	}
+	return nil
 }
 
 func (c *Config) validateServer() error {
@@ -306,11 +322,17 @@ func validateAPIKeys(keys []APIKeyConfig) error {
 		validPerms[p] = true
 	}
 
+	// Sessions, TOTP secrets and audit entries are keyed by name.
+	seen := make(map[string]int, len(keys))
 	for i := range keys {
 		key := &keys[i]
 		if key.Name == "" {
 			return fmt.Errorf("auth.api_keys[%d].name is required", i)
 		}
+		if j, dup := seen[key.Name]; dup {
+			return fmt.Errorf("auth.api_keys[%d].name %q duplicates auth.api_keys[%d]", i, key.Name, j)
+		}
+		seen[key.Name] = i
 		if key.Hash == "" {
 			return fmt.Errorf("auth.api_keys[%d].hash is required", i)
 		}

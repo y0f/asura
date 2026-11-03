@@ -7,14 +7,16 @@
 <p>Downloads all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a single JSON file. Two options:</p>
 
 <ul>
-  <li><strong>Export</strong>. includes all data including secrets (passwords, tokens, bearer keys)</li>
-  <li><strong>Export (redacted)</strong>. replaces secrets with <code>***</code> for safe sharing</li>
+  <li><strong>Export</strong>. includes all data including secrets (passwords, tokens, bearer keys). Use this for backups</li>
+  <li><strong>Export (redacted)</strong>. leaves out secrets for safe sharing: notification channel settings, proxy credentials, monitor passwords, tokens and keys, and all custom header values. A redacted file cannot restore those secrets</li>
 </ul>
 
 <p>Via API:</p>
 
 <pre><code>curl -H "X-API-Key: ak_..." https://example.com/api/v1/export &gt; backup.json
 curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=true &gt; backup-safe.json</code></pre>
+
+<p>The API export is a full backup unless you add <code>?redact_secrets=true</code>; redaction is opt-in. The web UI offers both buttons.</p>
 
 <h2>Import</h2>
 

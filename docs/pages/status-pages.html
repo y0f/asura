@@ -12,7 +12,7 @@
   <tr><td><code>slug</code></td><td>URL path segment. Lowercase letters, numbers, and hyphens. The page is served at <code>/{slug}</code></td></tr>
   <tr><td><code>description</code></td><td>Short subtitle shown below the title</td></tr>
   <tr><td><code>enabled</code></td><td>When off, the public page returns 404. The admin API still works.</td></tr>
-  <tr><td><code>api_enabled</code></td><td>Expose a public JSON endpoint at <code>/api/v1/status-pages/{id}/public</code> without authentication. Independent from the HTML page.</td></tr>
+  <tr><td><code>api_enabled</code></td><td>"Public JSON API". Also serves the public JSON endpoint at <code>/api/v1/status-pages/{id}/public</code> while <code>enabled</code> is off, and allows subscribing through the API (which also needs <code>enabled</code>). An enabled page serves its JSON whether or not this is on.</td></tr>
   <tr><td><code>show_incidents</code></td><td>Display recent incidents below the monitor list</td></tr>
   <tr><td><code>sort_order</code></td><td>Controls ordering in the admin list</td></tr>
 </table>
@@ -47,18 +47,18 @@
 <ul>
   <li>The password is stored as a SHA-256 hash. never in plain text</li>
   <li>Password comparison uses constant-time comparison to prevent timing attacks</li>
-  <li>Auth attempts are rate-limited using the same limiter as admin login</li>
+  <li>Auth attempts are rate-limited per client IP using the same limiter as admin login; wrong passwords sent to the JSON endpoint in the <code>X-Status-Page-Password</code> header count against it too</li>
   <li>Leave the field blank when editing to keep the existing password unchanged</li>
   <li>Tick <strong>Remove password protection</strong> to clear the password and make the page publicly accessible</li>
 </ul>
 
 <h2>Public JSON API</h2>
 
-<p>When <code>api_enabled</code> is on, Asura serves a machine-readable endpoint:</p>
+<p>Asura serves a machine-readable endpoint for every page that has <code>enabled</code> or <code>api_enabled</code> on; it returns 404 only when both are off. Turning <code>api_enabled</code> off therefore does not hide the JSON of an enabled page; to hide it, turn off both.</p>
 
 <pre><code>GET /api/v1/status-pages/{id}/public</code></pre>
 
-<p>No authentication required. Response is cached for 30 seconds via <code>Cache-Control: public, max-age=30</code>.</p>
+<p>No API key required. A password-protected page also requires its password: send it in the <code>X-Status-Page-Password</code> header, or send the cookie set by the page's login form at <code>/{slug}/auth</code>; without either the endpoint returns 401. Wrong header passwords are rate-limited per client IP (429 once the limit is reached); correct ones do not count against the limit. Response is cached for 30 seconds via <code>Cache-Control: public, max-age=30</code>.</p>
 
 <pre><code>{
   "page": {

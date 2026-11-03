@@ -36,6 +36,7 @@ type MonitorFormParams struct {
 	Groups               []*storage.MonitorGroup
 	NotificationChannels []*storage.NotificationChannel
 	SelectedChannelIDs   []int64
+	Agents               []*storage.Agent
 	Proxies              []*storage.Proxy
 	EscalationPolicies   []*storage.EscalationPolicy
 	AllTags              []*storage.Tag
@@ -162,7 +163,8 @@ func advancedSectionData(p MonitorFormParams) string {
 		hasTrack := p.Monitor.TrackChanges
 		hasUpside := p.Monitor.UpsideDown
 		hasAgentOff := !p.Monitor.AgentEnabled
-		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasAnomaly || hasResend || hasTrack || hasUpside || hasAgentOff {
+		hasAgents := len(p.Monitor.AgentIDs) > 0
+		if hasGroup || hasProxy || hasTags || hasChannels || hasEscalation || hasSLA || hasAnomaly || hasResend || hasTrack || hasUpside || hasAgentOff || hasAgents {
 			show = "true"
 		}
 	}
@@ -445,6 +447,27 @@ templ MonitorFormPage(p MonitorFormParams) {
 									@SettingCheckbox("Upside-down mode", "upside_down", p.Monitor.UpsideDown)
 									@SettingCheckbox("Enable for agents", "agent_enabled", p.Monitor.AgentEnabled)
 								</div>
+								if len(p.Agents) > 0 {
+									<div>
+										<div class="form-label">Agents</div>
+										<p class="form-hint mt-0 mb-2">Leave all unchecked to run on every agent.</p>
+										<div class="flex flex-wrap gap-1.5">
+											for _, ag := range p.Agents {
+												<label class="inline-flex items-center gap-2 rounded-control border border-line-light px-2 h-8 text-sm cursor-pointer select-none hover:bg-surface-200 has-checked:border-brand has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand">
+													<input type="checkbox" name="agent_ids[]" value={ fmt.Sprint(ag.ID) }
+														if InSlice(ag.ID, p.Monitor.AgentIDs) {
+															checked
+														}
+														class="form-checkbox"/>
+													<span class="text-white">{ ag.Name }</span>
+													if ag.Location != "" {
+														<span class="text-muted">{ ag.Location }</span>
+													}
+												</label>
+											}
+										</div>
+									</div>
+								}
 							</div>
 						</div>
 					</div>

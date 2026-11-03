@@ -19,7 +19,9 @@ import (
 // When allowPrivate is false the target address is validated before being
 // forwarded to the proxy, because the proxy — not the local dialer — performs
 // the final connection and would otherwise reach private/reserved IPs that the
-// base dialer's safenet Control blocks for direct connections.
+// base dialer's safenet Control blocks for direct connections. The address is
+// forwarded unchanged, hostname included; see validateProxyTarget for what
+// the check does and does not cover.
 func ProxyDialer(proxyURL string, baseDial func(ctx context.Context, network, addr string) (net.Conn, error), allowPrivate bool) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	if proxyURL == "" {
 		return nil
@@ -62,13 +64,21 @@ func ProxyDialer(proxyURL string, baseDial func(ctx context.Context, network, ad
 // a private or reserved IP when allowPrivate is false, restoring the protection
 // that safenet's dial Control provides for direct (non-proxied) connections.
 // addr may be a bare host or host:port.
+//
+// The check resolves the host with Asura's resolver, but the proxy is still
+// given the hostname and resolves it on its own, in its own network: that is
+// the point of a proxy (other regions, split DNS, hostname ACLs). The check
+// therefore protects the network Asura runs in from monitors aimed at it, but
+// cannot constrain what the proxy itself reaches: a name may resolve
+// differently for the proxy, or change between the two lookups. Restrict the
+// proxy's reach with the proxy's own ACLs.
 func validateProxyTarget(ctx context.Context, addr string, allowPrivate bool) error {
 	if allowPrivate {
 		return nil
 	}
-	host := addr
-	if h, _, err := net.SplitHostPort(addr); err == nil {
-		host = h
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		if safenet.IsPrivateIP(ip) {
@@ -76,9 +86,12 @@ func validateProxyTarget(ctx context.Context, addr string, allowPrivate bool) er
 		}
 		return nil
 	}
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	ips, err := lookupProxyTarget(ctx, "ip", host)
 	if err != nil {
-		return fmt.Errorf("resolve proxied target %s: %w", host, err)
+		// Names only the proxy can resolve (split DNS) are not addresses in
+		// Asura's network, which is all this check protects: let the proxy
+		// resolve them, as v1.3.0 did.
+		return nil
 	}
 	for _, ip := range ips {
 		if safenet.IsPrivateIP(ip) {
@@ -87,6 +100,10 @@ func validateProxyTarget(ctx context.Context, addr string, allowPrivate bool) er
 	}
 	return nil
 }
+
+// lookupProxyTarget resolves a proxied target host; a variable so tests can
+// simulate DNS answers.
+var lookupProxyTarget = net.DefaultResolver.LookupIP
 
 // HTTPProxyURL returns a *url.URL for use with http.Transport.Proxy if the
 // proxy URL uses HTTP. Returns nil for SOCKS5 or empty URLs.

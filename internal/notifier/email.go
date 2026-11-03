@@ -11,27 +11,42 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
 	"github.com/y0f/asura/internal/storage"
 )
 
-const smtpDialTimeout = 15 * time.Second
+const (
+	smtpDialTimeout = 15 * time.Second
+	// smtpSessionTimeout bounds the whole SMTP conversation (greeting, TLS,
+	// AUTH, DATA, QUIT) when the caller's context has no earlier deadline.
+	smtpSessionTimeout = 60 * time.Second
+)
 
-// dialSMTP opens a TCP connection to a mail server with a bounded timeout and,
-// unless allowPrivate is set, refuses to connect to private/reserved IPs so a
-// configured SMTP host cannot be used to probe internal services.
-func dialSMTP(ctx context.Context, addr string, allowPrivate bool) (net.Conn, error) {
-	d := &net.Dialer{
-		Timeout: smtpDialTimeout,
-		Control: safenet.MaybeDialControl(allowPrivate),
+// dialSMTP opens a TCP connection to a mail server with a bounded dial timeout
+// and sets a deadline on the connection covering the whole SMTP conversation,
+// because net/smtp does not honour ctx after the dial. Mail relays are
+// operator-configured and commonly run on localhost or the LAN, so private
+// addresses are not blocked here.
+func dialSMTP(ctx context.Context, addr string) (net.Conn, error) {
+	d := &net.Dialer{Timeout: smtpDialTimeout}
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
 	}
-	return d.DialContext(ctx, "tcp", addr)
+	deadline := time.Now().Add(smtpSessionTimeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 // newSMTPClient dials addr and wraps it in an SMTP client, closing the
 // connection if the client greeting fails.
-func newSMTPClient(ctx context.Context, addr, host string, allowPrivate bool) (*smtp.Client, error) {
-	conn, err := dialSMTP(ctx, addr, allowPrivate)
+func newSMTPClient(ctx context.Context, addr, host string) (*smtp.Client, error) {
+	conn, err := dialSMTP(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -52,12 +67,16 @@ type EmailSettings struct {
 	To       []string `json:"to"`
 	CC       []string `json:"cc,omitempty"`
 	BCC      []string `json:"bcc,omitempty"`
-	TLSMode  string   `json:"tls_mode,omitempty"` // none, starttls (default), smtps
+	TLSMode  string   `json:"tls_mode,omitempty"` // none, starttls (default, opportunistic), starttls_required, smtps
 }
 
-type EmailSender struct {
-	AllowPrivate bool
-}
+// TLSModeSTARTTLSRequired makes STARTTLS mandatory: delivery fails instead of
+// falling back to plaintext when the server does not offer it. Every other
+// tls_mode except "none" and "smtps" (including "starttls" and an empty value)
+// upgrades opportunistically, as smtp.SendMail does.
+const TLSModeSTARTTLSRequired = "starttls_required"
+
+type EmailSender struct{}
 
 func (s *EmailSender) Type() string { return "email" }
 
@@ -95,16 +114,16 @@ func (s *EmailSender) Send(ctx context.Context, channel *storage.NotificationCha
 
 	switch settings.TLSMode {
 	case "smtps":
-		return sendSMTPS(ctx, addr, host, settings, allRcpt, msgBytes, s.AllowPrivate)
+		return sendSMTPS(ctx, addr, host, settings, allRcpt, msgBytes)
 	case "none":
-		return sendPlain(ctx, addr, host, settings, allRcpt, msgBytes, s.AllowPrivate)
+		return sendPlain(ctx, addr, host, settings, allRcpt, msgBytes)
 	default:
-		return sendSTARTTLS(ctx, addr, host, settings, allRcpt, msgBytes, s.AllowPrivate)
+		return sendSTARTTLS(ctx, addr, host, settings, allRcpt, msgBytes)
 	}
 }
 
-func sendSMTPS(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte, allowPrivate bool) error {
-	conn, err := dialSMTP(ctx, addr, allowPrivate)
+func sendSMTPS(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte) error {
+	conn, err := dialSMTP(ctx, addr)
 	if err != nil {
 		return fmt.Errorf("smtps dial failed: %w", err)
 	}
@@ -122,8 +141,8 @@ func sendSMTPS(ctx context.Context, addr, host string, s EmailSettings, rcpt []s
 	return sendViaClient(client, s, rcpt, msg)
 }
 
-func sendPlain(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte, allowPrivate bool) error {
-	client, err := newSMTPClient(ctx, addr, host, allowPrivate)
+func sendPlain(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte) error {
+	client, err := newSMTPClient(ctx, addr, host)
 	if err != nil {
 		return fmt.Errorf("smtp dial failed: %w", err)
 	}
@@ -131,18 +150,35 @@ func sendPlain(ctx context.Context, addr, host string, s EmailSettings, rcpt []s
 	return sendViaClient(client, s, rcpt, msg)
 }
 
-func sendSTARTTLS(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte, allowPrivate bool) error {
-	client, err := newSMTPClient(ctx, addr, host, allowPrivate)
+func sendSTARTTLS(ctx context.Context, addr, host string, s EmailSettings, rcpt []string, msg []byte) error {
+	client, err := newSMTPClient(ctx, addr, host)
 	if err != nil {
 		return fmt.Errorf("smtp dial failed: %w", err)
 	}
 	defer client.Close()
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
-			return fmt.Errorf("starttls failed: %w", err)
-		}
+	if err := startTLS(client, host, s.TLSMode == TLSModeSTARTTLSRequired); err != nil {
+		return err
 	}
 	return sendViaClient(client, s, rcpt, msg)
+}
+
+// startTLS upgrades the connection with STARTTLS when the server offers it.
+// With required set (tls_mode "starttls_required"), a server that does not
+// offer it is an error rather than a silent fallback to plaintext, which an
+// on-path attacker could force by stripping the capability. Otherwise
+// ("starttls", empty or any other value) the connection stays plaintext, as
+// smtp.SendMail did, so relays without TLS keep working.
+func startTLS(client *smtp.Client, host string, required bool) error {
+	if ok, _ := client.Extension("STARTTLS"); !ok {
+		if !required {
+			return nil
+		}
+		return fmt.Errorf("starttls: server %s does not offer STARTTLS (set tls_mode to \"none\" to allow plaintext)", host)
+	}
+	if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		return fmt.Errorf("starttls failed: %w", err)
+	}
+	return nil
 }
 
 func sendViaClient(client *smtp.Client, s EmailSettings, rcpt []string, msg []byte) error {

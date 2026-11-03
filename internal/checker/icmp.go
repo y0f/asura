@@ -53,7 +53,7 @@ func (c *ICMPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 			continue
 		}
 
-		result := probeICMP(t.ip, t.isIPv6, start, timeout)
+		result := probeICMP(ctx, t.ip, t.isIPv6, start, timeout)
 		if result.Status == "up" {
 			return result, nil
 		}
@@ -83,7 +83,7 @@ func resolveICMPTargets(ctx context.Context, target string) []icmpTarget {
 	return targets
 }
 
-func probeICMP(dst net.IP, isIPv6 bool, start time.Time, timeout time.Duration) *Result {
+func probeICMP(ctx context.Context, dst net.IP, isIPv6 bool, start time.Time, timeout time.Duration) *Result {
 	conn, err := listenICMP(isIPv6)
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: time.Since(start).Milliseconds(), Message: fmt.Sprintf("ICMP listen failed: %v", err)}
@@ -100,7 +100,14 @@ func probeICMP(dst net.IP, isIPv6 bool, start time.Time, timeout time.Duration) 
 		}
 	}
 
-	return readEchoReply(conn, dst, sent, timeout, isIPv6, seq)
+	// Never wait past the check's context deadline: with several resolved
+	// addresses the probes run one after another and would otherwise add up
+	// to N x timeout.
+	deadline := sent.Add(timeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	return readEchoReply(conn, dst, sent, deadline, isIPv6, seq)
 }
 
 // icmpSeq gives every probe in the process its own sequence number. A raw
@@ -162,8 +169,8 @@ func sendEchoRequest(conn *icmp.PacketConn, dst net.IP, isIPv6 bool, seq int) er
 
 var echoID = os.Getpid() & 0xffff
 
-func readEchoReply(conn *icmp.PacketConn, dst net.IP, sent time.Time, timeout time.Duration, isIPv6 bool, seq int) *Result {
-	conn.SetReadDeadline(sent.Add(timeout))
+func readEchoReply(conn *icmp.PacketConn, dst net.IP, sent, deadline time.Time, isIPv6 bool, seq int) *Result {
+	conn.SetReadDeadline(deadline)
 	proto := 1
 	if isIPv6 {
 		proto = 58

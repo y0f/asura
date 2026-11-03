@@ -44,6 +44,9 @@ type ExportMonitor struct {
 	GroupName                string             `json:"group_name,omitempty"`
 	ProxyName                string             `json:"proxy_name,omitempty"`
 	NotificationChannelNames []string           `json:"notification_channel_names,omitempty"`
+	AgentEnabled             bool               `json:"agent_enabled,omitempty"`
+	// AgentNames restricts the monitor to these agents; empty means every agent.
+	AgentNames []string `json:"agent_names,omitempty"`
 }
 
 type ExportMonitorTag struct {
@@ -120,13 +123,22 @@ func BuildExportData(ctx context.Context, store storage.Store, redact bool) (*Ex
 		channelMap[ch.ID] = ch.Name
 	}
 
+	agents, err := store.ListAgents(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list agents: %w", err)
+	}
+	agentMap := make(map[int64]string, len(agents))
+	for _, a := range agents {
+		agentMap[a.ID] = a.Name
+	}
+
 	result, err := store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 10000})
 	if err != nil {
 		return nil, fmt.Errorf("list monitors: %w", err)
 	}
 	monitors := result.Data.([]*storage.Monitor)
 
-	exportMonitors := buildExportMonitors(ctx, store, monitors, groupMap, proxyMap, channelMap, redact)
+	exportMonitors := buildExportMonitors(ctx, store, monitors, groupMap, proxyMap, channelMap, agentMap, redact)
 	exportPages := buildExportStatusPages(ctx, store, monitors)
 	exportProxies := buildExportProxies(proxies, redact)
 	exportChannels := buildExportChannels(channels, redact)
@@ -148,7 +160,7 @@ func BuildExportData(ctx context.Context, store storage.Store, redact bool) (*Ex
 }
 
 func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*storage.Monitor,
-	groupMap, proxyMap, channelMap map[int64]string, redact bool) []ExportMonitor {
+	groupMap, proxyMap, channelMap, agentMap map[int64]string, redact bool) []ExportMonitor {
 	monIDs := make([]int64, len(monitors))
 	for i, m := range monitors {
 		monIDs[i] = m.ID
@@ -177,6 +189,7 @@ func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*s
 			UpsideDown:       m.UpsideDown,
 			ResendInterval:   m.ResendInterval,
 			SLATarget:        m.SLATarget,
+			AgentEnabled:     m.AgentEnabled,
 		}
 		if m.GroupID != nil {
 			em.GroupName = groupMap[*m.GroupID]
@@ -188,6 +201,12 @@ func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*s
 		for _, chID := range chIDs {
 			if name, ok := channelMap[chID]; ok {
 				em.NotificationChannelNames = append(em.NotificationChannelNames, name)
+			}
+		}
+		agentIDs, _ := store.GetMonitorAgentIDs(ctx, m.ID)
+		for _, aID := range agentIDs {
+			if name, ok := agentMap[aID]; ok {
+				em.AgentNames = append(em.AgentNames, name)
 			}
 		}
 		for _, mt := range tagMap[m.ID] {
@@ -338,6 +357,8 @@ type importCtx struct {
 	proxyNameToID   map[string]int64
 	channelNameToID map[string]int64
 	monitorNameToID map[string]int64
+	// agentNameToIDs maps agent names to IDs; names need not be unique.
+	agentNameToIDs map[string][]int64
 }
 
 // RunImport imports configuration data into the store.
@@ -351,6 +372,7 @@ func RunImport(ctx context.Context, store storage.Store, logger *slog.Logger, da
 		proxyNameToID:   make(map[string]int64),
 		channelNameToID: make(map[string]int64),
 		monitorNameToID: make(map[string]int64),
+		agentNameToIDs:  make(map[string][]int64),
 	}
 
 	importGroups(ctx, ic, data.MonitorGroups, stats)
@@ -460,12 +482,19 @@ func importMonitors(ctx context.Context, ic *importCtx, monitors []ExportMonitor
 			ic.monitorNameToID[m.Name] = m.ID
 		}
 	}
+	agents, err := ic.store.ListAgents(ctx)
+	if err != nil {
+		ic.logger.Error("import: list agents", "error", err)
+	}
+	for _, a := range agents {
+		ic.agentNameToIDs[a.Name] = append(ic.agentNameToIDs[a.Name], a.ID)
+	}
 	for _, em := range monitors {
 		if _, exists := ic.monitorNameToID[em.Name]; exists && ic.mode == "merge" {
 			stats.Skipped++
 			continue
 		}
-		if importSingleMonitor(ctx, ic, &em) {
+		if importSingleMonitor(ctx, ic, &em, stats) {
 			stats.Monitors++
 		} else {
 			stats.Errors++
@@ -473,7 +502,7 @@ func importMonitors(ctx context.Context, ic *importCtx, monitors []ExportMonitor
 	}
 }
 
-func importSingleMonitor(ctx context.Context, ic *importCtx, em *ExportMonitor) bool {
+func importSingleMonitor(ctx context.Context, ic *importCtx, em *ExportMonitor, stats *ImportStats) bool {
 	m := &storage.Monitor{
 		Name: em.Name, Description: em.Description, Type: em.Type, Target: em.Target,
 		Interval: em.Interval, Timeout: em.Timeout, Enabled: em.Enabled,
@@ -481,6 +510,22 @@ func importSingleMonitor(ctx context.Context, ic *importCtx, em *ExportMonitor) 
 		TrackChanges: em.TrackChanges, FailureThreshold: em.FailureThreshold,
 		SuccessThreshold: em.SuccessThreshold, UpsideDown: em.UpsideDown,
 		ResendInterval: em.ResendInterval, SLATarget: em.SLATarget,
+		AgentEnabled: em.AgentEnabled,
+	}
+	var agentIDs []int64
+	for _, name := range em.AgentNames {
+		ids, ok := ic.agentNameToIDs[name]
+		if !ok {
+			ic.logger.Warn("import: unknown agent", "monitor", em.Name, "agent", name)
+			stats.Errors++
+			continue
+		}
+		agentIDs = append(agentIDs, ids...)
+	}
+	if len(em.AgentNames) > 0 && len(agentIDs) == 0 {
+		// None of its agents exist here: an empty assignment would run the
+		// monitor on every agent, so keep it off the agents instead.
+		m.AgentEnabled = false
 	}
 	if em.GroupName != "" {
 		if gid, ok := ic.groupNameToID[em.GroupName]; ok {
@@ -509,6 +554,19 @@ func importSingleMonitor(ctx context.Context, ic *importCtx, em *ExportMonitor) 
 	if len(chIDs) > 0 {
 		if err := ic.store.SetMonitorNotificationChannels(ctx, m.ID, chIDs); err != nil {
 			ic.logger.Error("import: set monitor channels", "monitor", m.Name, "error", err)
+		}
+	}
+
+	if len(agentIDs) > 0 {
+		if err := ic.store.SetMonitorAgentIDs(ctx, m.ID, agentIDs); err != nil {
+			ic.logger.Error("import: set monitor agents", "monitor", m.Name, "error", err)
+			stats.Errors++
+			if m.AgentEnabled {
+				m.AgentEnabled = false
+				if err := ic.store.UpdateMonitor(ctx, m); err != nil {
+					ic.logger.Error("import: disable agents", "monitor", m.Name, "error", err)
+				}
+			}
 		}
 	}
 
@@ -600,7 +658,8 @@ func importStatusPages(ctx context.Context, ic *importCtx, pages []ExportStatusP
 }
 
 func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
-	redact := r.URL.Query().Get("redact_secrets") != "false"
+	// A plain export is a full backup, secrets included; redaction is opt-in.
+	redact := r.URL.Query().Get("redact_secrets") == "true"
 
 	data, err := BuildExportData(r.Context(), h.store, redact)
 	if err != nil {

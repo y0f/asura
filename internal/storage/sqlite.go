@@ -86,8 +86,16 @@ func hashLegacyTokens(db *sql.DB) error {
 		return fmt.Errorf("check tokens_hashed: %w", err)
 	}
 
+	// Rewrite every token and set the flag in one transaction: if any step
+	// fails nothing is committed, so a retry never hashes a row twice.
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	for _, tbl := range []string{"agents", "heartbeats"} {
-		rows, err := db.Query("SELECT id, token FROM " + tbl)
+		rows, err := tx.Query("SELECT id, token FROM " + tbl)
 		if err != nil {
 			return fmt.Errorf("select %s tokens: %w", tbl, err)
 		}
@@ -104,8 +112,8 @@ func hashLegacyTokens(db *sql.DB) error {
 			}
 			// Hash every legacy row unconditionally: a random 64-hex agent token is
 			// indistinguishable from a sha256 digest, so a length/hex check would
-			// skip genuine plaintext. The meta 'tokens_hashed' gate guarantees this
-			// runs exactly once, so there is no double-hashing risk.
+			// skip genuine plaintext. The meta 'tokens_hashed' gate, committed in
+			// the same transaction, guarantees this runs exactly once.
 			pending = append(pending, t)
 		}
 		if err := rows.Err(); err != nil {
@@ -115,16 +123,16 @@ func hashLegacyTokens(db *sql.DB) error {
 		rows.Close()
 
 		for _, t := range pending {
-			if _, err := db.Exec("UPDATE "+tbl+" SET token=? WHERE id=?", sha256Hex(t.token), t.id); err != nil {
+			if _, err := tx.Exec("UPDATE "+tbl+" SET token=? WHERE id=?", sha256Hex(t.token), t.id); err != nil {
 				return fmt.Errorf("update %s token: %w", tbl, err)
 			}
 		}
 	}
 
-	if _, err := db.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('tokens_hashed', '1')"); err != nil {
+	if _, err := tx.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('tokens_hashed', '1')"); err != nil {
 		return fmt.Errorf("set tokens_hashed: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 func runMigrations(db *sql.DB) error {

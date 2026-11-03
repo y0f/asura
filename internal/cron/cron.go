@@ -13,6 +13,11 @@ type Expr struct {
 	doms    []int
 	months  []int
 	dows    []int
+	// domStar/dowStar record whether the day fields were unrestricted ("*"
+	// or "*/n"). Standard cron ORs day-of-month and day-of-week when both are
+	// restricted.
+	domStar bool
+	dowStar bool
 }
 
 func Parse(expr string) (*Expr, error) {
@@ -42,15 +47,23 @@ func Parse(expr string) (*Expr, error) {
 			e.dows[i] = 0
 		}
 	}
+	e.domStar = strings.HasPrefix(fields[2], "*")
+	e.dowStar = strings.HasPrefix(fields[4], "*")
 	return e, nil
 }
 
 func (e *Expr) Matches(t time.Time) bool {
-	return contains(e.minutes, t.Minute()) &&
-		contains(e.hours, t.Hour()) &&
-		contains(e.doms, t.Day()) &&
-		contains(e.months, int(t.Month())) &&
-		contains(e.dows, int(t.Weekday()))
+	if !contains(e.minutes, t.Minute()) ||
+		!contains(e.hours, t.Hour()) ||
+		!contains(e.months, int(t.Month())) {
+		return false
+	}
+	domMatch := contains(e.doms, t.Day())
+	dowMatch := contains(e.dows, int(t.Weekday()))
+	if e.domStar || e.dowStar {
+		return domMatch && dowMatch
+	}
+	return domMatch || dowMatch
 }
 
 func parseField(field string, min, max int) ([]int, error) {

@@ -49,6 +49,9 @@ func (c *HTTPMultiChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 			return nil
 		},
 	}
+	// The transport is per check: keep connections alive across steps, then
+	// release them so idle conns and their goroutines do not accumulate.
+	defer client.CloseIdleConnections()
 
 	vars := make(map[string]string)
 	var totalRT int64

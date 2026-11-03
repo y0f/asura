@@ -229,8 +229,20 @@ func (s *SQLiteStore) RollupRequestLogs(ctx context.Context, date string) error 
 	}
 	nextDay := d.AddDate(0, 0, 1).Format("2006-01-02")
 
-	_, err = s.writeDB.ExecContext(ctx,
-		`INSERT OR REPLACE INTO request_log_rollups (date, route_group, monitor_id, requests, unique_visitors, avg_latency_ms)
+	// The UNIQUE(date, route_group, monitor_id) key never matches rows whose
+	// monitor_id is NULL, so INSERT OR REPLACE would add duplicates. Replace the
+	// whole day atomically instead.
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, "DELETE FROM request_log_rollups WHERE date=?", date); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO request_log_rollups (date, route_group, monitor_id, requests, unique_visitors, avg_latency_ms)
 		 SELECT
 		   ? AS date,
 		   route_group,
@@ -242,7 +254,10 @@ func (s *SQLiteStore) RollupRequestLogs(ctx context.Context, date string) error 
 		 WHERE created_at >= ? AND created_at < ?
 		 GROUP BY route_group, monitor_id`,
 		date, date+"T00:00:00Z", nextDay+"T00:00:00Z")
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) PurgeOldRequestLogs(ctx context.Context, before time.Time) (int64, error) {

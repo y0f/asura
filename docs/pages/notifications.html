@@ -46,7 +46,7 @@
   }
 }</code></pre>
 
-<p><code>tls_mode</code>: <code>starttls</code> (default, upgrades plain connection), <code>smtps</code> (TLS from the start, typically port 465), or <code>none</code> (plaintext). Emails are sent as HTML with a plain-text fallback.</p>
+<p><code>tls_mode</code>: <code>starttls</code> (default; upgrades the plain connection with STARTTLS when the server offers it and otherwise sends in plaintext, as an empty value does), <code>starttls_required</code> (upgrades with STARTTLS and fails instead of sending in plaintext when the server does not offer it, which protects against an attacker stripping STARTTLS), <code>smtps</code> (TLS from the start, typically port 465), or <code>none</code> (plaintext). The same values apply to <code>subscriptions.smtp.tls_mode</code> in <code>config.yaml</code>. Mail servers on localhost or a private network are allowed; <code>allow_private_targets</code> does not apply to SMTP. Each delivery attempt, including the whole SMTP conversation, has a time limit, so a mail server that stops responding cannot block other notifications. Emails are sent as HTML with a plain-text fallback.</p>
 
 <h2>Telegram</h2>
 

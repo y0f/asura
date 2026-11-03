@@ -149,7 +149,7 @@ monitor:
 #     username: ""
 #     password: ""
 #     from: "status@example.com"
-#     tls_mode: "starttls"  # none, starttls, smtps
+#     tls_mode: "starttls"  # none, starttls (if offered), starttls_required, smtps
 
 logging:
   # Log level: debug, info, warn, error

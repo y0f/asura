@@ -91,17 +91,10 @@ func main() {
 	defer cancel()
 
 	if cfg.Database.EncryptionKey != "" {
-		salt, err := store.EnsureKDFSalt(ctx)
-		if err != nil {
-			logger.Error("failed to load encryption salt", "error", err)
+		if err := enableEncryption(ctx, store, cfg.Database.EncryptionKey); err != nil {
+			logger.Error("failed to enable encryption at rest", "error", err)
 			os.Exit(1)
 		}
-		enc, err := storage.NewEncryptor(cfg.Database.EncryptionKey, salt)
-		if err != nil {
-			logger.Error("failed to create encryptor", "error", err)
-			os.Exit(1)
-		}
-		store.SetEncryptor(enc)
 		logger.Info("encryption at rest enabled")
 	}
 
@@ -145,6 +138,9 @@ func main() {
 	worker(func() { runVacuumWorker(ctx, store, logger) })
 
 	httpServer := startHTTPServer(cfg, srv, logger, cancel)
+	// Shutdown does not cancel request contexts, so long-lived SSE streams
+	// must be closed explicitly or they hold up graceful shutdown.
+	httpServer.RegisterOnShutdown(srv.EventBroker().Close)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -155,14 +151,17 @@ func main() {
 	case <-ctx.Done():
 	}
 
-	cancel()
-
+	// Drain HTTP first so in-flight requests finish (and their request logs are
+	// queued) while the background workers are still running; then stop them.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server shutdown error", "error", err)
 	}
+	srv.Close()
+
+	cancel()
 
 	workersDone := make(chan struct{})
 	go func() {

@@ -332,3 +332,41 @@ func TestMonitorJSONAuthSwitchDropsLegacySecret(t *testing.T) {
 		}
 	}
 }
+
+// The web form must reject agent ids that do not exist, like the API does,
+// instead of saving the monitor and silently dropping the assignment.
+func TestMonitorFormRejectsUnknownAgentIDs(t *testing.T) {
+	h, store := storeHandler(t)
+	ctx := context.Background()
+	agent := &storage.Agent{Name: "eu", Token: "tok", Enabled: true}
+	if err := store.CreateAgent(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	agentIDs := url.Values{"agent_ids[]": {strconv.FormatInt(agent.ID, 10), "999999"}}
+
+	w := httptest.NewRecorder()
+	h.MonitorCreate(w, adminRequest("POST", "/monitors", httpMonitorForm("tok", agentIDs)))
+	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "agent 999999 does not exist") {
+		t.Fatalf("create with an unknown agent id: code %d, want the form re-shown with an error", w.Code)
+	}
+
+	mon := &storage.Monitor{Name: "API", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true,
+		FailureThreshold: 1, SuccessThreshold: 1}
+	if err := store.CreateMonitor(ctx, mon); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetMonitorAgentIDs(ctx, mon.ID, []int64{agent.ID}); err != nil {
+		t.Fatal(err)
+	}
+	id := strconv.FormatInt(mon.ID, 10)
+	w = httptest.NewRecorder()
+	r := adminRequest("POST", "/monitors/"+id, httpMonitorForm("tok", agentIDs))
+	r.SetPathValue("id", id)
+	h.MonitorUpdate(w, r)
+	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "agent 999999 does not exist") {
+		t.Fatalf("update with an unknown agent id: code %d, want the form re-shown with an error", w.Code)
+	}
+	if got, _ := store.GetMonitorAgentIDs(ctx, mon.ID); len(got) != 1 || got[0] != agent.ID {
+		t.Fatalf("assignment changed to %v, want [%d]", got, agent.ID)
+	}
+}

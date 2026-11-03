@@ -30,6 +30,19 @@ func (s *Server) getStatusPageIDBySlug(slug string) (int64, bool) {
 	return id, ok
 }
 
+// subscriberLink resolves the {slug} path value to an enabled status page and
+// passes its ID to h.
+func (s *Server) subscriberLink(h func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pageID, ok := s.getStatusPageIDBySlug(r.PathValue("slug"))
+		if !ok {
+			writeError(w, http.StatusNotFound, "status page not found")
+			return
+		}
+		h(w, r, pageID)
+	}
+}
+
 func (s *Server) statusPageRouter(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.web != nil {

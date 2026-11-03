@@ -18,10 +18,18 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	maintWrite := s.api.Auth("maintenance.write")
 	metricsRead := s.api.Auth("metrics.read")
 
-	if s.cfg.Server.BasePath != "" {
+	// The redirect target is the dashboard, which only exists with the web UI.
+	if s.cfg.Server.BasePath != "" && s.cfg.IsWebUIEnabled() {
 		mux.HandleFunc("GET "+s.cfg.Server.BasePath, func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, s.cfg.Server.BasePath+"/", http.StatusMovedPermanently)
 		})
+	}
+
+	if !s.cfg.IsWebUIEnabled() {
+		// Subscriber emails link to {slug}/confirm and {slug}/unsubscribe,
+		// which statusPageRouter serves when the web UI is on.
+		mux.HandleFunc("GET "+s.p("/{slug}/confirm"), s.subscriberLink(s.api.ConfirmSubscription))
+		mux.HandleFunc("GET "+s.p("/{slug}/unsubscribe"), s.subscriberLink(s.api.Unsubscribe))
 	}
 
 	if s.cfg.IsWebUIEnabled() && s.web != nil {
@@ -211,7 +219,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("DELETE "+s.p("/api/v1/status-pages/{id}"), monWrite(http.HandlerFunc(s.api.DeleteStatusPage)))
 	mux.HandleFunc("GET "+s.p("/api/v1/status-pages/{id}/public"), s.api.PublicStatusPage)
 	mux.HandleFunc("POST "+s.p("/api/v1/status-pages/{id}/subscribe"), s.api.SubscribeAPI)
-	mux.Handle("GET "+s.p("/api/v1/status-pages/{id}/subscribers"), monRead(http.HandlerFunc(s.api.CountSubscribers)))
+	mux.Handle("GET "+s.p("/api/v1/status-pages/{id}/subscribers"), monRead(http.HandlerFunc(s.api.ListSubscribers)))
 	mux.Handle("DELETE "+s.p("/api/v1/status-pages/{id}/subscribers/{subId}"), monWrite(http.HandlerFunc(s.api.DeleteSubscriber)))
 
 	mux.Handle("GET "+s.p("/api/v1/request-logs"), metricsRead(http.HandlerFunc(s.api.ListRequestLogs)))

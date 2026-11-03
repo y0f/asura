@@ -212,6 +212,39 @@ func TestSettingsExportLinks(t *testing.T) {
 	}
 }
 
+// The email channel form keeps "starttls" as the opportunistic v1.3.0 mode
+// and offers strict STARTTLS only as the separate "starttls_required" value.
+func TestEmailTLSModeOptions(t *testing.T) {
+	var buf bytes.Buffer
+	if err := NotificationListPage(NotificationListParams{LayoutParams: testLayout("Notifications", true)}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, v := range []string{"starttls", "starttls_required", "smtps", "none"} {
+		if !strings.Contains(out, `<option value="`+v+`">`) {
+			t.Errorf("TLS mode option %q missing", v)
+		}
+	}
+	if !strings.Contains(out, `<option value="starttls">STARTTLS if offered`) {
+		t.Error(`"starttls" option is not labelled as opportunistic`)
+	}
+}
+
+// The "Public JSON API" toggle explains what it does: an enabled page always
+// serves its JSON, the toggle adds it for non-public pages and API subscribe.
+func TestStatusPageAPIToggleHint(t *testing.T) {
+	var buf bytes.Buffer
+	if err := StatusPageFormPage(StatusPageFormParams{LayoutParams: testLayout("Status Page", true), Assigned: map[int64]bool{}, AssignedData: map[int64]storage.StatusPageMonitor{}}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, s := range []string{"A public page always serves its status as JSON", "while the page is not public", "subscribe through the API"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("status page form lacks the Public JSON API hint %q", s)
+		}
+	}
+}
+
 func TestSettingsImportNeedsSuperAdmin(t *testing.T) {
 	lp := testLayout("Settings", true)
 	lp.SuperAdmin = false

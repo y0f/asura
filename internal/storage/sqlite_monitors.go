@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"strings"
+	"slices"
 	"time"
 )
 
@@ -451,40 +451,49 @@ func (s *SQLiteStore) GetLatestCheckResult(ctx context.Context, monitorID int64)
 
 func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int) (map[int64][]*SparklinePoint, error) {
 	result := make(map[int64][]*SparklinePoint, len(monitorIDs))
-	if len(monitorIDs) == 0 {
+	if len(monitorIDs) == 0 || n <= 0 {
 		return result, nil
 	}
-	placeholders := make([]string, len(monitorIDs))
-	args := make([]any, len(monitorIDs)+1)
-	for i, id := range monitorIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	args[len(monitorIDs)] = n
 
-	query := fmt.Sprintf(`
-		SELECT monitor_id, status, response_time FROM (
-			SELECT monitor_id, status, response_time,
-				ROW_NUMBER() OVER (PARTITION BY monitor_id ORDER BY created_at DESC) AS rn
-			FROM check_results WHERE monitor_id IN (%s)
-		) t WHERE rn <= ? ORDER BY monitor_id, rn DESC`,
-		strings.Join(placeholders, ","))
-
-	rows, err := s.readDB.QueryContext(ctx, query, args...)
+	// One indexed LIMIT query per monitor reads only the n newest rows. A single
+	// ROW_NUMBER() query over all monitors would number every retained row.
+	stmt, err := s.readDB.PrepareContext(ctx,
+		`SELECT status, response_time FROM check_results
+		 WHERE monitor_id=? ORDER BY created_at DESC LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	for rows.Next() {
-		var p SparklinePoint
-		var mid int64
-		if err := rows.Scan(&mid, &p.Status, &p.ResponseTime); err != nil {
+	for _, id := range monitorIDs {
+		if _, done := result[id]; done {
+			continue
+		}
+		rows, err := stmt.QueryContext(ctx, id, n)
+		if err != nil {
 			return nil, err
 		}
-		result[mid] = append(result[mid], &p)
+		var points []*SparklinePoint
+		for rows.Next() {
+			var p SparklinePoint
+			if err := rows.Scan(&p.Status, &p.ResponseTime); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			points = append(points, &p)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		if len(points) == 0 {
+			continue
+		}
+		slices.Reverse(points) // oldest first
+		result[id] = points
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (s *SQLiteStore) GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64) ([]int64, error) {

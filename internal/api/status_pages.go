@@ -58,6 +58,7 @@ func (h *Handler) CreateStatusPage(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		storage.StatusPage
 		Monitors []storage.StatusPageMonitor `json:"monitors"`
+		Password *string                     `json:"password"`
 	}
 	if err := h.readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -65,6 +66,7 @@ func (h *Handler) CreateStatusPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sp := &input.StatusPage
+	applyStatusPagePassword(sp, input.Password)
 	if err := validate.ValidateStatusPage(sp); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -123,6 +125,7 @@ func (h *Handler) UpdateStatusPage(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		storage.StatusPage
 		Monitors *[]storage.StatusPageMonitor `json:"monitors"`
+		Password *string                      `json:"password"`
 	}
 	if err := h.readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -132,6 +135,7 @@ func (h *Handler) UpdateStatusPage(w http.ResponseWriter, r *http.Request) {
 	sp := &input.StatusPage
 	sp.ID = id
 	sp.PasswordHash = existing.PasswordHash
+	applyStatusPagePassword(sp, input.Password)
 	if err := validate.ValidateStatusPage(sp); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -216,14 +220,34 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The JSON is served for every public (enabled) page; api_enabled
+	// ("Public JSON API") additionally serves it while the page is not
+	// public. SubscribeAPI requires both.
 	if !sp.Enabled && !sp.APIEnabled {
 		writeError(w, http.StatusNotFound, "status page is not enabled")
 		return
 	}
 
-	if sp.PasswordHash != "" && !statusPageAuthValid(r, sp.ID, sp.PasswordHash) {
-		writeError(w, http.StatusUnauthorized, "status page is password protected")
-		return
+	if sp.PasswordHash != "" {
+		valid, limited := false, false
+		if r.Header.Get(statusPagePasswordHeader) != "" {
+			// Password guesses in the header share the web password form's
+			// limiter. Only failed attempts use it up, so a client sending
+			// the right password is never throttled by its own requests.
+			valid, limited = h.loginRL.LimitFailures(httputil.ExtractIP(r, h.cfg.TrustedNets()), func() bool {
+				return statusPageAuthValid(r, sp.ID, sp.PasswordHash)
+			})
+		} else {
+			valid = statusPageAuthValid(r, sp.ID, sp.PasswordHash)
+		}
+		if limited {
+			writeError(w, http.StatusTooManyRequests, "too many password attempts")
+			return
+		}
+		if !valid {
+			writeError(w, http.StatusUnauthorized, "status page is password protected")
+			return
+		}
 	}
 
 	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
@@ -280,9 +304,38 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// statusPagePasswordHeader lets API clients without the web UI's auth cookie
+// read a password-protected status page.
+const statusPagePasswordHeader = "X-Status-Page-Password"
+
+// hashStatusPagePassword matches the hashing used by the web status page form
+// and auth handler.
+func hashStatusPagePassword(password string) string {
+	sum := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(sum[:])
+}
+
+// applyStatusPagePassword sets (non-empty) or clears (empty) the page password
+// when the request included a "password" field; nil leaves it unchanged.
+func applyStatusPagePassword(sp *storage.StatusPage, password *string) {
+	if password == nil {
+		return
+	}
+	if *password == "" {
+		sp.PasswordHash = ""
+	} else {
+		sp.PasswordHash = hashStatusPagePassword(*password)
+	}
+	sp.PasswordEnabled = sp.PasswordHash != ""
+}
+
 // statusPageAuthValid reports whether the request carries a valid status-page
-// auth cookie, matching the value set by the web auth handler.
+// auth cookie (as set by the web auth handler) or the page password in the
+// X-Status-Page-Password header.
 func statusPageAuthValid(r *http.Request, pageID int64, passwordHash string) bool {
+	if pw := r.Header.Get(statusPagePasswordHeader); pw != "" {
+		return subtle.ConstantTimeCompare([]byte(hashStatusPagePassword(pw)), []byte(passwordHash)) == 1
+	}
 	c, err := r.Cookie(fmt.Sprintf("sp_auth_%d", pageID))
 	if err != nil {
 		return false

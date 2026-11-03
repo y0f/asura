@@ -2,7 +2,9 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -593,6 +595,7 @@ func buildHeatmap(ctx context.Context, store storage.Store, monitorID int64, now
 
 func (h *Handler) renderMonitorForm(w http.ResponseWriter, r *http.Request, lp views.LayoutParams, fd *views.MonitorFormParams) {
 	fd.LayoutParams = lp
+	fd.Agents, _ = h.store.ListAgents(r.Context())
 	h.renderComponent(w, r, views.MonitorFormPage(*fd))
 }
 
@@ -618,6 +621,7 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		lp.Title = "Edit " + mon.Name
+		mon.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), id)
 		fd := monitorToFormData(mon)
 		fd.SecretsStored = views.StoredSecrets(mon.Settings, views.MonitorSecretKeys[mon.Type])
 		blankMonitorSecrets(fd)
@@ -645,7 +649,7 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 
 	h.applyMonitorDefaults(mon)
 
-	if err := validateMonitorForm(r, mon); err != nil {
+	if err := h.validateMonitorFormAgents(r, mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
@@ -666,7 +670,16 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.CreateMonitor(r.Context(), mon); err != nil {
+	// A monitor without an agent assignment runs on every agent, so one that
+	// is to be assigned is created with agents off and only switched on once
+	// the assignment is stored.
+	agentEnabled := mon.AgentEnabled
+	if len(mon.AgentIDs) > 0 {
+		mon.AgentEnabled = false
+	}
+	err := h.store.CreateMonitor(r.Context(), mon)
+	mon.AgentEnabled = agentEnabled
+	if err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
@@ -694,6 +707,18 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var assignErr string
+	if len(mon.AgentIDs) > 0 {
+		err := h.store.SetMonitorAgentIDs(r.Context(), mon.ID, mon.AgentIDs)
+		if err == nil && agentEnabled {
+			err = h.store.UpdateMonitor(r.Context(), mon)
+		}
+		if err != nil {
+			h.logger.Error("web: set monitor agents", "error", err)
+			assignErr = "Monitor created, but saving its agent assignment failed, so agent checks are off. Edit the monitor to try again."
+		}
+	}
+
 	if len(monTags) > 0 {
 		if err := h.store.SetMonitorTags(r.Context(), mon.ID, monTags); err != nil {
 			h.logger.Error("web: set monitor tags", "error", err)
@@ -704,7 +729,11 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		h.pipeline.ReloadMonitors()
 	}
 
-	h.setFlash(w, "Monitor created")
+	if assignErr != "" {
+		h.setError(w, assignErr)
+	} else {
+		h.setFlash(w, "Monitor created")
+	}
 	h.redirect(w, r, "/monitors")
 }
 
@@ -751,7 +780,7 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, activeMonitorSecretKeys(mon.Type, mon.Settings, existingSettings), views.ClearSet(r.Form["clear_secrets"]))
 	}
 
-	if err := validateMonitorForm(r, mon); err != nil {
+	if err := h.validateMonitorFormAgents(r, mon); err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
@@ -774,7 +803,15 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.UpdateMonitor(r.Context(), mon); err != nil {
+	// As in MonitorCreate, agent checks of a monitor that is to be assigned
+	// stay off until the assignment is stored.
+	agentEnabled := mon.AgentEnabled
+	if len(mon.AgentIDs) > 0 {
+		mon.AgentEnabled = false
+	}
+	err = h.store.UpdateMonitor(r.Context(), mon)
+	mon.AgentEnabled = agentEnabled
+	if err != nil {
 		groups, _ := h.store.ListMonitorGroups(r.Context())
 		channels, _ := h.store.ListNotificationChannels(r.Context())
 		proxies, _ := h.store.ListProxies(r.Context())
@@ -804,6 +841,19 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("web: set monitor notification channels", "error", err)
 	}
 
+	var assignErr string
+	err = h.store.SetMonitorAgentIDs(r.Context(), id, mon.AgentIDs)
+	if err == nil && agentEnabled && len(mon.AgentIDs) > 0 {
+		err = h.store.UpdateMonitor(r.Context(), mon)
+	}
+	if err != nil {
+		h.logger.Error("web: set monitor agents", "error", err)
+		assignErr = "Monitor updated, but saving its agent assignment failed"
+		if len(mon.AgentIDs) > 0 {
+			assignErr += ", so agent checks are off. Edit the monitor to try again."
+		}
+	}
+
 	if err := h.store.SetMonitorTags(r.Context(), id, monTags); err != nil {
 		h.logger.Error("web: set monitor tags", "error", err)
 	}
@@ -812,7 +862,11 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		h.pipeline.ReloadMonitors()
 	}
 
-	h.setFlash(w, "Monitor updated")
+	if assignErr != "" {
+		h.setError(w, assignErr)
+	} else {
+		h.setFlash(w, "Monitor updated")
+	}
 	h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 }
 
@@ -939,6 +993,7 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 		FailureThreshold:   src.FailureThreshold,
 		SuccessThreshold:   src.SuccessThreshold,
 		UpsideDown:         src.UpsideDown,
+		AgentEnabled:       src.AgentEnabled,
 		ResendInterval:     src.ResendInterval,
 		SLATarget:          src.SLATarget,
 		AnomalySensitivity: src.AnomalySensitivity,
@@ -947,7 +1002,16 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 		EscalationPolicyID: src.EscalationPolicyID,
 	}
 
-	if err := h.store.CreateMonitor(ctx, clone); err != nil {
+	// As in MonitorCreate, agent checks of a clone that is to be assigned
+	// stay off until the assignment is stored.
+	agentIDs, _ := h.store.GetMonitorAgentIDs(ctx, id)
+	agentEnabled := clone.AgentEnabled
+	if len(agentIDs) > 0 {
+		clone.AgentEnabled = false
+	}
+	err = h.store.CreateMonitor(ctx, clone)
+	clone.AgentEnabled = agentEnabled
+	if err != nil {
 		h.logger.Error("web: clone monitor", "error", err)
 		h.setError(w, "Failed to clone monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
@@ -968,11 +1032,27 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var assignErr string
+	if len(agentIDs) > 0 {
+		err := h.store.SetMonitorAgentIDs(ctx, clone.ID, agentIDs)
+		if err == nil && agentEnabled {
+			err = h.store.UpdateMonitor(ctx, clone)
+		}
+		if err != nil {
+			h.logger.Error("web: clone monitor agents", "error", err)
+			assignErr = "Monitor cloned, but saving its agent assignment failed, so agent checks are off. Edit the monitor to try again."
+		}
+	}
+
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
 	}
 
-	h.setFlash(w, "Monitor cloned")
+	if assignErr != "" {
+		h.setError(w, assignErr)
+	} else {
+		h.setFlash(w, "Monitor cloned")
+	}
 	h.redirect(w, r, "/monitors/"+strconv.FormatInt(clone.ID, 10)+"/edit")
 }
 
@@ -1138,6 +1218,7 @@ func (h *Handler) parseMonitorForm(r *http.Request) (*storage.Monitor, []int64, 
 		monTags = append(monTags, storage.MonitorTag{TagID: tid, Value: val})
 	}
 
+	mon.AgentIDs = parseIDList(r.Form["agent_ids[]"])
 	return mon, parseIDList(r.Form["notification_channel_ids[]"]), monTags
 }
 
@@ -1221,6 +1302,26 @@ func validateMonitorForm(r *http.Request, mon *storage.Monitor) error {
 		}
 	}
 	return validate.ValidateMonitor(mon)
+}
+
+// validateMonitorFormAgents runs validateMonitorForm and then checks that every
+// agent the form assigns still exists, as the API does. Otherwise a stale form
+// (agent deleted in another tab) fails the assignment after the monitor is
+// saved, leaving a new monitor unrestricted.
+func (h *Handler) validateMonitorFormAgents(r *http.Request, mon *storage.Monitor) error {
+	if err := validateMonitorForm(r, mon); err != nil {
+		return err
+	}
+	for _, id := range mon.AgentIDs {
+		if _, err := h.store.GetAgent(r.Context(), id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("agent %d does not exist; reload the form and choose the agents again", id)
+			}
+			h.logger.Error("web: get agent", "id", id, "error", err)
+			return fmt.Errorf("could not check the selected agents")
+		}
+	}
+	return nil
 }
 
 // keepRawJSON puts the user's JSON editor text back into a re-rendered form so a

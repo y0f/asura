@@ -38,16 +38,18 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 		Control: safenet.MaybeDialControl(c.AllowPrivate),
 	}).DialContext
 
+	if HTTPProxyURL(monitor.ProxyURL) != nil {
+		if u, perr := url.Parse(monitor.Target); perr == nil {
+			if err := validateProxyTarget(ctx, u.Host, c.AllowPrivate); err != nil {
+				return &Result{Status: "down", Message: err.Error()}, nil
+			}
+		}
+	}
 	transport := &http.Transport{DialContext: baseDial}
 	if monitor.ProxyURL != "" {
 		if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 			transport.DialContext = socks
 		} else if pu := HTTPProxyURL(monitor.ProxyURL); pu != nil {
-			if u, perr := url.Parse(monitor.Target); perr == nil {
-				if err := validateProxyTarget(ctx, u.Host, c.AllowPrivate); err != nil {
-					return &Result{Status: "down", Message: err.Error()}, nil
-				}
-			}
 			transport.Proxy = http.ProxyURL(pu)
 		}
 	}

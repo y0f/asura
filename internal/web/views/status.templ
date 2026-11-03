@@ -121,6 +121,7 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 					@statusToggle("api_enabled", "Public JSON API", p.StatusPage != nil && p.StatusPage.APIEnabled)
 					@statusToggle("show_incidents", "Show incidents", p.StatusPage == nil || p.StatusPage.ShowIncidents)
 				</div>
+				<p class="form-hint">A public page always serves its status as JSON at /api/v1/status-pages/&#123;id&#125;/public. Public JSON API also serves that JSON while the page is not public, and lets visitors of a public page subscribe through the API. If the page has a password, the JSON also requires it, in the X-Status-Page-Password header or the cookie set by the page's login form.</p>
 				<div>
 					<label class="form-label" for="sort_order">Sort Order</label>
 					<input id="sort_order" type="number" name="sort_order"

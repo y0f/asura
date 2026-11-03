@@ -26,9 +26,11 @@ func init() {
 		"224.0.0.0/4",
 		"240.0.0.0/4",
 		"255.255.255.255/32",
+		"::/128", // unspecified; connect() to [::] reaches the local host like 0.0.0.0
 		"::1/128",
 		"fc00::/7",
 		"fe80::/10",
+		"ff00::/8", // multicast
 	} {
 		_, ipNet, _ := net.ParseCIDR(cidr)
 		_privateRanges = append(_privateRanges, ipNet)

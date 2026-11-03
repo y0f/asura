@@ -120,7 +120,11 @@ func (s *Scheduler) loadMonitors(ctx context.Context) {
 	nowNano := time.Now().UnixNano()
 
 	for _, m := range monitors {
-		if _, exists := s.entries[m.ID]; !exists {
+		if entry, exists := s.entries[m.ID]; exists {
+			if old, ok := s.monitors[m.ID]; ok && old.Interval != m.Interval {
+				s.applyEditedInterval(entry, m.Interval)
+			}
+		} else {
 			if _, hasEff := s.effectiveInterval[m.ID]; !hasEff {
 				s.effectiveInterval[m.ID] = int64(m.Interval) * int64(time.Second)
 			}
@@ -140,6 +144,19 @@ func (s *Scheduler) loadMonitors(ctx context.Context) {
 
 	s.monitors = newMonitors
 	s.logger.Debug("scheduler: loaded monitors", "count", len(monitors))
+}
+
+// applyEditedInterval resets the effective interval of an edited monitor to
+// its new base interval and reschedules the pending run on the new cadence.
+// The caller must hold s.mu.
+func (s *Scheduler) applyEditedInterval(entry *schedulerEntry, intervalSecs int) {
+	nano := int64(intervalSecs) * int64(time.Second)
+	s.effectiveInterval[entry.monitorID] = nano
+	if entry.lastRun == 0 {
+		return // never dispatched yet: already due
+	}
+	entry.nextRun = entry.lastRun + nano
+	heap.Fix(&s.heap, entry.index)
 }
 
 // interval returns the effective interval in nanoseconds for a monitor,

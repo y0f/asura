@@ -1,10 +1,12 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/mail"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
@@ -38,12 +40,18 @@ func validateSubscription(r *http.Request) (subType, email, webhookURL, errMsg s
 	return subType, email, webhookURL, ""
 }
 
+const confirmationEmailTimeout = time.Minute
+
 func (h *Handler) StatusPageSubscribe(w http.ResponseWriter, r *http.Request, pageID int64) {
 	ctx := r.Context()
 
 	sp, err := h.store.GetStatusPage(ctx, pageID)
 	if err != nil || sp == nil || !sp.Enabled {
 		http.NotFound(w, r)
+		return
+	}
+
+	if !h.requireStatusPageAuth(w, r, sp) {
 		return
 	}
 
@@ -74,8 +82,12 @@ func (h *Handler) StatusPageSubscribe(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	if subType == "email" && h.subNotifier != nil {
+		// The request context is cancelled as soon as this handler returns,
+		// so the background send needs its own lifetime.
+		sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), confirmationEmailTimeout)
 		go func() {
-			if err := h.subNotifier.SendConfirmationEmail(ctx, sub, sp); err != nil {
+			defer cancel()
+			if err := h.subNotifier.SendConfirmationEmail(sendCtx, sub, sp); err != nil {
 				h.logger.Error("web: send confirmation email", "error", err)
 			}
 		}()

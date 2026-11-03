@@ -34,6 +34,7 @@ func (m *Manager) ProcessFailure(ctx context.Context, monitorID int64, monitorNa
 			Type:       EventCheckFailed,
 			Message:    cause,
 		})
+		m.escalateSeverity(ctx, existing, SeverityForStatus(monitorStatus))
 		return existing, false, nil
 	}
 
@@ -56,6 +57,28 @@ func (m *Manager) ProcessFailure(ctx context.Context, monitorID int64, monitorNa
 
 	m.logger.Info("incident created", "incident_id", inc.ID, "monitor_id", monitorID, "cause", cause)
 	return inc, true, nil
+}
+
+// escalateSeverity raises inc's severity when the monitor's current state is
+// worse (e.g. degraded -> down). It never lowers a severity, so manual
+// adjustments and the original severity survive later, milder failures.
+func (m *Manager) escalateSeverity(ctx context.Context, inc *storage.Incident, severity string) {
+	if severityRank(severity) <= severityRank(inc.Severity) {
+		return
+	}
+	prev := inc.Severity
+	inc.Severity = severity
+	if err := m.store.UpdateIncident(ctx, inc); err != nil {
+		inc.Severity = prev
+		m.logger.Error("incident severity upgrade failed", "incident_id", inc.ID, "error", err)
+		return
+	}
+	m.store.InsertIncidentEvent(ctx, &storage.IncidentEvent{
+		IncidentID: inc.ID,
+		Type:       EventSeverityChanged,
+		Message:    "Severity raised from " + prev + " to " + severity,
+	})
+	m.logger.Info("incident severity raised", "incident_id", inc.ID, "from", prev, "to", severity)
 }
 
 // ProcessRecovery checks if an open incident should be resolved.

@@ -128,19 +128,30 @@ func (s *SQLiteStore) IsMonitorInMaintenance(ctx context.Context, monitorID int6
 	return false, rows.Err()
 }
 
-func timeOfDaySec(t time.Time) int {
-	return t.Hour()*3600 + t.Minute()*60 + t.Second()
-}
-
-func timeInDailyWindow(mw *MaintenanceWindow, at time.Time) bool {
-	duration := mw.EndTime.Sub(mw.StartTime)
-	startSec := timeOfDaySec(mw.StartTime)
-	atSec := timeOfDaySec(at)
-	endSec := startSec + int(duration.Seconds())
-	if endSec > 86400 {
-		return atSec >= startSec || atSec < (endSec-86400)
+// inRecurringWindow reports whether at falls inside an occurrence of mw that
+// starts at mw.StartTime's time of day on a day accepted by onDay. Times are
+// compared in UTC, the zone the window is stored in. Occurrences that began on
+// earlier days are included, so a window that runs past midnight still matches
+// after midnight.
+func inRecurringWindow(mw *MaintenanceWindow, at time.Time, onDay func(time.Time) bool) bool {
+	dur := mw.EndTime.Sub(mw.StartTime)
+	if dur <= 0 {
+		return false
 	}
-	return atSec >= startSec && atSec < endSec
+	at = at.UTC()
+	h, m, sec := mw.StartTime.UTC().Clock()
+	occ := time.Date(at.Year(), at.Month(), at.Day(), h, m, sec, 0, time.UTC)
+	maxBack := int(dur/(24*time.Hour)) + 1
+	for d := 0; d <= maxBack; d++ {
+		o := occ.AddDate(0, 0, -d)
+		if o.After(at) || !onDay(o) {
+			continue
+		}
+		if at.Before(o.Add(dur)) {
+			return true
+		}
+	}
+	return false
 }
 
 func isInWindow(mw *MaintenanceWindow, at time.Time) bool {
@@ -155,7 +166,9 @@ func isInWindow(mw *MaintenanceWindow, at time.Time) bool {
 		if err != nil {
 			return false
 		}
-		dur := int(mw.EndTime.Sub(mw.StartTime).Minutes()) + 1
+		// The window covers [fire minute, fire minute + duration): look back
+		// duration minutes for a matching fire time, not one more.
+		dur := int(mw.EndTime.Sub(mw.StartTime).Minutes())
 		for m := 0; m < dur; m++ {
 			if expr.Matches(at.Add(-time.Duration(m) * time.Minute)) {
 				return true
@@ -163,11 +176,13 @@ func isInWindow(mw *MaintenanceWindow, at time.Time) bool {
 		}
 		return false
 	case "daily":
-		return timeInDailyWindow(mw, at)
+		return inRecurringWindow(mw, at, func(time.Time) bool { return true })
 	case "weekly":
-		return mw.StartTime.Weekday() == at.Weekday() && timeInDailyWindow(mw, at)
+		wd := mw.StartTime.UTC().Weekday()
+		return inRecurringWindow(mw, at, func(d time.Time) bool { return d.Weekday() == wd })
 	case "monthly":
-		return mw.StartTime.Day() == at.Day() && timeInDailyWindow(mw, at)
+		md := mw.StartTime.UTC().Day()
+		return inRecurringWindow(mw, at, func(d time.Time) bool { return d.Day() == md })
 	default:
 		return !at.Before(mw.StartTime) && at.Before(mw.EndTime)
 	}

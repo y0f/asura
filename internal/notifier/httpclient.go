@@ -5,15 +5,32 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/y0f/asura/internal/safenet"
 )
 
-// newHTTPClient builds an HTTP client whose dialer blocks connections to
-// private/reserved IPs unless allowPrivate is true. All outbound sender
+// Two shared clients (private targets blocked / allowed) so senders reuse
+// keep-alive connections instead of building a new transport, with its own
+// idle pool, on every request.
+var (
+	_safeHTTPClient    = sync.OnceValue(func() *http.Client { return buildHTTPClient(false) })
+	_privateHTTPClient = sync.OnceValue(func() *http.Client { return buildHTTPClient(true) })
+)
+
+// newHTTPClient returns a shared HTTP client whose dialer blocks connections
+// to private/reserved IPs unless allowPrivate is true. All outbound sender
 // requests must use this so user-controlled URLs cannot be used for SSRF.
+// Callers must not modify the returned client.
 func newHTTPClient(allowPrivate bool) *http.Client {
+	if allowPrivate {
+		return _privateHTTPClient()
+	}
+	return _safeHTTPClient()
+}
+
+func buildHTTPClient(allowPrivate bool) *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
@@ -21,6 +38,11 @@ func newHTTPClient(allowPrivate bool) *http.Client {
 				Timeout: 10 * time.Second,
 				Control: safenet.MaybeDialControl(allowPrivate),
 			}).DialContext,
+			ForceAttemptHTTP2:   true,
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
 		},
 	}
 }

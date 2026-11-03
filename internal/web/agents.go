@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -117,9 +118,22 @@ func (h *Handler) AgentDelete(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/agents")
 		return
 	}
-	if err := h.store.DeleteAgent(r.Context(), id); err != nil {
+	disabled, err := h.store.DeleteAgent(r.Context(), id)
+	if err != nil {
 		h.logger.Error("web: delete agent", "error", err)
+		h.setError(w, "Failed to delete agent")
+		h.redirect(w, r, "/agents")
+		return
 	}
-	h.setFlash(w, "Agent deleted")
+	h.audit(r, "delete", "agent", id, "")
+	for _, monID := range disabled {
+		h.logger.Warn("monitor disabled for agents: its only assigned agent was deleted", "monitor_id", monID, "agent_id", id)
+		h.audit(r, "update", "monitor", monID, fmt.Sprintf("agent checks disabled: only assigned agent %d was deleted", id))
+	}
+	if len(disabled) > 0 {
+		h.setFlash(w, fmt.Sprintf("Agent deleted. %d monitor(s) assigned only to it no longer run on agents.", len(disabled)))
+	} else {
+		h.setFlash(w, "Agent deleted")
+	}
 	h.redirect(w, r, "/agents")
 }

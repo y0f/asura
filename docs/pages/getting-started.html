@@ -50,7 +50,7 @@ scp dist/asura-linux-amd64 you@server:/usr/local/bin/asura</code></pre>
 
 <p>Requires Go 1.26+ and the <a href="https://templ.guide/" target="_blank">templ</a> CLI:</p>
 
-<pre><code>go install github.com/a-h/templ/cmd/templ@v0.3.977</code></pre>
+<pre><code>go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)</code></pre>
 
 <p>You also need the <a href="https://github.com/tailwindlabs/tailwindcss/releases" target="_blank">Tailwind CSS standalone CLI</a> binary in the project root (named <code>tailwindcss</code>).</p>
 

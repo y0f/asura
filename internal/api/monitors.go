@@ -61,6 +61,7 @@ func (h *Handler) GetMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.MonitorTags, _ = h.store.GetMonitorTags(r.Context(), m.ID)
+	m.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), m.ID)
 
 	if m.Type == "heartbeat" {
 		hb, err := h.store.GetHeartbeatByMonitorID(r.Context(), m.ID)
@@ -95,27 +96,21 @@ func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := h.validateAgentIDs(r.Context(), m.AgentIDs); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
+	agentEnabled := agentsOffUntilAssigned(&m, m.AgentIDs)
 	if err := h.store.CreateMonitor(r.Context(), &m); err != nil {
 		h.logger.Error("create monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create monitor")
 		return
 	}
 
-	if len(m.NotificationChannelIDs) > 0 {
-		if err := h.store.SetMonitorNotificationChannels(r.Context(), m.ID, m.NotificationChannelIDs); err != nil {
-			h.logger.Error("set monitor notification channels", "error", err)
-		}
-	}
-
-	if len(m.MonitorTags) > 0 {
-		if err := validate.ValidateMonitorTags(m.MonitorTags); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err := h.store.SetMonitorTags(r.Context(), m.ID, m.MonitorTags); err != nil {
-			h.logger.Error("set monitor tags", "error", err)
-		}
+	if err := h.saveNewMonitorRelations(r.Context(), &m, agentEnabled); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	var heartbeat *storage.Heartbeat
@@ -175,7 +170,12 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := h.validateAgentIDs(r.Context(), m.AgentIDs); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
+	agentEnabled := agentsOffUntilAssigned(&m, m.AgentIDs)
 	if err := h.store.UpdateMonitor(r.Context(), &m); err != nil {
 		h.logger.Error("update monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to update monitor")
@@ -185,6 +185,12 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.SetMonitorNotificationChannels(r.Context(), m.ID, m.NotificationChannelIDs); err != nil {
 		h.logger.Error("set monitor notification channels", "error", err)
+	}
+
+	// Like the notification channels, the assignment is replaced: no agent_ids
+	// means the monitor runs on every agent again.
+	if err := h.assignAgents(r.Context(), &m, m.AgentIDs, agentEnabled); err != nil {
+		h.logger.Error("set monitor agents", "error", err)
 	}
 
 	if err := validate.ValidateMonitorTags(m.MonitorTags); err != nil {
@@ -203,6 +209,7 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 
 	updated, _ := h.store.GetMonitor(r.Context(), id)
 	if updated != nil {
+		updated.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), id)
 		writeJSON(w, http.StatusOK, updated)
 	} else {
 		writeJSON(w, http.StatusOK, m)
@@ -351,6 +358,8 @@ func (h *Handler) CloneMonitor(w http.ResponseWriter, r *http.Request) {
 		ProxyID:            src.ProxyID,
 	}
 
+	agentIDs, _ := h.store.GetMonitorAgentIDs(ctx, id)
+	agentEnabled := agentsOffUntilAssigned(clone, agentIDs)
 	if err := h.store.CreateMonitor(ctx, clone); err != nil {
 		h.logger.Error("clone monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to clone monitor")
@@ -365,6 +374,14 @@ func (h *Handler) CloneMonitor(w http.ResponseWriter, r *http.Request) {
 	srcTags, _ := h.store.GetMonitorTags(ctx, id)
 	if len(srcTags) > 0 {
 		h.store.SetMonitorTags(ctx, clone.ID, srcTags)
+	}
+
+	if len(agentIDs) > 0 {
+		if err := h.assignAgents(ctx, clone, agentIDs, agentEnabled); err != nil {
+			h.logger.Error("set monitor agents", "error", err)
+		} else {
+			clone.AgentIDs = agentIDs
+		}
 	}
 
 	if clone.Type == "heartbeat" {
@@ -456,6 +473,74 @@ func applyMonitorDefaults(m *storage.Monitor, cfg config.MonitorConfig) {
 	if m.Type == "manual" && m.Target == "" {
 		m.Target = "manual"
 	}
+}
+
+// saveNewMonitorRelations stores the notification channels, tags and agent
+// assignment of a just-created monitor, see assignAgents for agentEnabled. It
+// returns an error only for invalid tags; storage failures are logged, as for
+// the monitor's other relations.
+func (h *Handler) saveNewMonitorRelations(ctx context.Context, m *storage.Monitor, agentEnabled bool) error {
+	if len(m.NotificationChannelIDs) > 0 {
+		if err := h.store.SetMonitorNotificationChannels(ctx, m.ID, m.NotificationChannelIDs); err != nil {
+			h.logger.Error("set monitor notification channels", "error", err)
+		}
+	}
+	if len(m.AgentIDs) > 0 {
+		if err := h.assignAgents(ctx, m, m.AgentIDs, agentEnabled); err != nil {
+			h.logger.Error("set monitor agents", "error", err)
+		}
+	}
+	if len(m.MonitorTags) > 0 {
+		if err := validate.ValidateMonitorTags(m.MonitorTags); err != nil {
+			return err
+		}
+		if err := h.store.SetMonitorTags(ctx, m.ID, m.MonitorTags); err != nil {
+			h.logger.Error("set monitor tags", "error", err)
+		}
+	}
+	return nil
+}
+
+// agentsOffUntilAssigned turns agent checks off for a monitor that is to be
+// assigned to agentIDs and returns whether they were on. A monitor without an
+// assignment runs on every agent, so it is stored with agent checks off and
+// assignAgents switches them back on once the assignment is stored.
+func agentsOffUntilAssigned(m *storage.Monitor, agentIDs []int64) bool {
+	agentEnabled := m.AgentEnabled
+	if len(agentIDs) > 0 {
+		m.AgentEnabled = false
+	}
+	return agentEnabled
+}
+
+// assignAgents stores the agent assignment of the stored monitor m and then
+// switches its agent checks back on if agentEnabled (see
+// agentsOffUntilAssigned). If either step fails, agent checks stay off.
+func (h *Handler) assignAgents(ctx context.Context, m *storage.Monitor, agentIDs []int64, agentEnabled bool) error {
+	if err := h.store.SetMonitorAgentIDs(ctx, m.ID, agentIDs); err != nil {
+		return err
+	}
+	if agentEnabled && !m.AgentEnabled {
+		m.AgentEnabled = true
+		if err := h.store.UpdateMonitor(ctx, m); err != nil {
+			m.AgentEnabled = false
+			return err
+		}
+	}
+	return nil
+}
+
+// validateAgentIDs checks that every id names an existing agent.
+func (h *Handler) validateAgentIDs(ctx context.Context, ids []int64) error {
+	for _, id := range ids {
+		if _, err := h.store.GetAgent(ctx, id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("agent_ids: agent %d does not exist", id)
+			}
+			return fmt.Errorf("agent_ids: %w", err)
+		}
+	}
+	return nil
 }
 
 func (h *Handler) createHeartbeat(ctx context.Context, m *storage.Monitor) (*storage.Heartbeat, error) {

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/storage"
 	"golang.org/x/time/rate"
 )
@@ -214,6 +213,24 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return rl.GetLimiter(ip).Allow()
 }
 
+// LimitFailures runs attempt unless ip is rate limited and charges ip a token
+// only if attempt fails, so successful attempts never use up the limit. It
+// reports whether attempt succeeded and whether ip was limited, in which case
+// attempt is not run at all: a throttled client cannot test a guess.
+func (rl *RateLimiter) LimitFailures(ip string, attempt func() bool) (ok, limited bool) {
+	lim := rl.GetLimiter(ip)
+	if lim.Tokens() < 1 {
+		return false, true
+	}
+	if attempt() {
+		return true, false
+	}
+	// Reserve, unlike Allow, always charges the token: concurrent failures
+	// may overdraw the bucket, which then delays the client's next attempts.
+	lim.Reserve()
+	return false, false
+}
+
 func (rl *RateLimiter) Middleware(trustedNets []net.IPNet, writeError func(http.ResponseWriter, int, string)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -241,49 +258,27 @@ func OverallStatus(monitors []*storage.Monitor) string {
 }
 
 func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storage.StatusPage, monitors []*storage.Monitor, now time.Time) []*storage.Incident {
-	if !sp.ShowIncidents {
+	if !sp.ShowIncidents || len(monitors) == 0 {
 		return []*storage.Incident{}
 	}
 
-	monitorIDs := make(map[int64]bool, len(monitors))
-	for _, m := range monitors {
-		monitorIDs[m.ID] = true
+	ids := make([]int64, len(monitors))
+	for i, m := range monitors {
+		ids[i] = m.ID
 	}
 
-	cutoff := now.AddDate(0, 0, -7)
+	// The page's monitors and the cutoff are filtered in SQL, so a public hit is
+	// one indexed query however many incidents other monitors have.
 	const wantIncidents = 10
-	const maxPages = 50
-
-	var filtered []*storage.Incident
-	for page := 1; page <= maxPages; page++ {
-		incResult, err := store.ListIncidents(ctx, 0, "", "", storage.Pagination{Page: page, PerPage: 100})
-		if err != nil || incResult == nil {
-			break
-		}
-		all, ok := incResult.Data.([]*storage.Incident)
-		if !ok || len(all) == 0 {
-			break
-		}
-		for _, inc := range all {
-			if !monitorIDs[inc.MonitorID] {
-				continue
-			}
-			if inc.Status == incident.StatusResolved && inc.ResolvedAt != nil && inc.ResolvedAt.Before(cutoff) {
-				continue
-			}
-			safe := *inc
-			safe.Cause = ""
-			filtered = append(filtered, &safe)
-			if len(filtered) >= wantIncidents {
-				return filtered
-			}
-		}
-		if page >= incResult.TotalPages {
-			break
-		}
+	incidents, err := store.ListRecentIncidents(ctx, ids, now.AddDate(0, 0, -7), wantIncidents)
+	if err != nil {
+		return []*storage.Incident{}
 	}
-	if filtered == nil {
-		filtered = []*storage.Incident{}
+	filtered := make([]*storage.Incident, 0, len(incidents))
+	for _, inc := range incidents {
+		safe := *inc
+		safe.Cause = ""
+		filtered = append(filtered, &safe)
 	}
 	return filtered
 }

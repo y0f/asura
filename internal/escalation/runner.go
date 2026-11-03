@@ -12,6 +12,16 @@ import (
 	"github.com/y0f/asura/internal/storage"
 )
 
+// minRepeatInterval is the shortest pause before a repeating policy restarts
+// its chain. Without it, a first step with delay 0 re-pages on every tick.
+const minRepeatInterval = 5 * time.Minute
+
+// repeatDelay is how long a repeating policy waits after its last step before
+// firing first again.
+func repeatDelay(first *storage.EscalationPolicyStep) time.Duration {
+	return max(time.Duration(first.DelayMinutes)*time.Minute, minRepeatInterval)
+}
+
 // Runner periodically checks for pending escalation steps and fires notifications.
 type Runner struct {
 	store      storage.Store
@@ -102,6 +112,14 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 		}
 	}
 
+	// Hold the step while the monitor is in maintenance, like every other
+	// notification; it fires on the first tick after the window ends.
+	if inMaint, err := r.store.IsMonitorInMaintenance(ctx, inc.MonitorID, time.Now()); err != nil {
+		r.logger.Error("escalation: check maintenance", "error", err, "monitor_id", inc.MonitorID)
+	} else if inMaint {
+		return
+	}
+
 	step := steps[state.CurrentStep]
 
 	mon, err := r.store.GetMonitor(ctx, inc.MonitorID)
@@ -132,7 +150,7 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 		if policy.Repeat {
 			nextStep = 0
 			state.CurrentStep = nextStep
-			state.NextFireAt = time.Now().Add(time.Duration(steps[0].DelayMinutes) * time.Minute)
+			state.NextFireAt = time.Now().Add(repeatDelay(steps[0]))
 		} else {
 			r.deleteState(ctx, state.IncidentID)
 			return

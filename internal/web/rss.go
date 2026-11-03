@@ -43,6 +43,10 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 		return
 	}
 
+	if !h.requireStatusPageAuth(w, r, sp) {
+		return
+	}
+
 	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
 	if err != nil {
 		monitors = []*storage.Monitor{}

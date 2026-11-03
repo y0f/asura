@@ -7,7 +7,7 @@ Thanks for your interest in contributing. This guide covers the basics.
 Requires Go 1.26+ and [templ](https://templ.guide/) CLI:
 
 ```bash
-go install github.com/a-h/templ/cmd/templ@v0.3.977
+go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
 ```
 
 ```bash

@@ -327,9 +327,11 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 				http.Redirect(w, r, loginURL, http.StatusSeeOther)
 				return
 			}
+			// A transient DB error says nothing about the session's validity:
+			// keep the cookie so the user stays signed in once it clears.
 			h.logger.Error("session lookup", "error", err)
-			h.clearSessionCookie(w)
-			http.Redirect(w, r, loginURL, http.StatusSeeOther)
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "Service temporarily unavailable, please retry.", http.StatusServiceUnavailable)
 			return
 		}
 

@@ -69,6 +69,8 @@
 
 <p>See <a href="#monitors">Monitors</a> for the full field reference and protocol settings.</p>
 
+<p><code>PUT /api/v1/monitors/{id}</code> replaces the monitor's <code>agent_ids</code>: leaving the field out removes the agent assignment, so the monitor runs on every agent. <code>GET /api/v1/monitors</code> does not include <code>agent_ids</code>, so read the monitor with <code>GET /api/v1/monitors/{id}</code> before you edit and send it back.</p>
+
 <h3>Bulk Operations</h3>
 
 <pre><code>POST /api/v1/monitors/bulk
@@ -111,7 +113,7 @@
 
 <p>Each status page has its own <code>slug</code> (URL path), <code>title</code>, <code>description</code>, and monitor set. Monitors are assigned per-page with optional <code>sort_order</code> and <code>group_name</code> for display grouping. The page is served at <code>/{slug}</code>.</p>
 
-<p>The public API for a specific page is available at <code>GET /api/v1/status-pages/{id}/public</code> (no auth required). Returns public fields only.</p>
+<p>The public API for a specific page is available at <code>GET /api/v1/status-pages/{id}/public</code> (no API key required). Returns public fields only. It is served when the page has <code>enabled</code> or <code>api_enabled</code> on and returns 404 only when both are off. A password-protected page also needs the page password in the <code>X-Status-Page-Password</code> header (attempts are rate-limited like logins).</p>
 
 <h3>Subscribers</h3>
 
@@ -133,7 +135,7 @@
   "webhook_url": "https://example.com/hook" // required when type is webhook
 }</code></pre>
 
-<p>Subscribe is public so status page visitors can opt in. Email subscriptions trigger a confirmation email; webhook subscriptions are confirmed immediately. The count endpoint returns <code>{"count":N}</code>.</p>
+<p>Subscribe is public so status page visitors can opt in. It needs a page with both <code>enabled</code> and <code>api_enabled</code> on (404 otherwise). Email subscriptions trigger a confirmation email when subscriptions are enabled in the server config; webhook subscriptions are confirmed immediately. The subscribers endpoint returns <code>{"count":N}</code>; keys with <code>monitors.write</code> also get the confirmed subscribers in <code>data</code>.</p>
 
 <h2>Status Badges</h2>
 
@@ -216,6 +218,8 @@
 </table>
 
 <p>Assign a proxy to a monitor by setting <code>proxy_id</code>. HTTP proxies work with HTTP monitors; SOCKS5 proxies work with all protocol types.</p>
+
+<p>Unless <code>allow_private_targets</code> is enabled, a proxied target (and, for HTTP monitors, every redirect target) is refused when it is a private or reserved IP or when its hostname resolves to one. The check uses Asura's own DNS resolver, but the proxy is still given the hostname and resolves it on its own, in its own network (which is why proxies are used: other regions, split DNS, hostname ACLs). The check therefore protects the network Asura runs in, but cannot constrain what the proxy reaches: a name can resolve differently for the proxy, or change between the two lookups. A hostname Asura cannot resolve at all (one that only exists in the proxy's network) is passed to the proxy unchecked. To keep a proxy away from internal services, use the proxy's own access controls (ACLs).</p>
 
 <h2>Incidents</h2>
 
@@ -444,13 +448,35 @@
   </tbody>
 </table>
 
-<p>Agent results are processed through the full pipeline: monitor status updates, incident creation/resolution, and notifications all work the same as central checks. Agents only receive non-sensitive monitor settings (credentials are stripped).</p>
+<p>Agent results are processed through the full pipeline: monitor status updates, incident creation/resolution, and notifications all work the same as central checks. Monitors whose settings include credentials or mTLS material (basic auth password, bearer token, OAuth2 client secret, mTLS client key, client certificate or CA certificate, password) are not offered to agents; they are checked only by the central server.</p>
 
-<p>Only monitors with <code>agent_enabled</code> set to true are included in agent job responses. Disable this flag on monitors targeting localhost or private IPs that should only be checked by the central server.</p>
+<p>Only monitors with <code>agent_enabled</code> set to true are included in agent job responses. Disable this flag on monitors targeting localhost or private IPs that should only be checked by the central server. An agent refuses private, loopback and other reserved targets unless it is started with <code>-allow-private</code>.</p>
+
+<p>Custom request headers and bodies (including those of <code>http_multi</code> steps) are sent to agents unchanged and often carry credentials such as <code>Authorization</code>, <code>X-API-Key</code> or <code>Cookie</code>. A monitor that has them is therefore only offered to the agents it is explicitly assigned to (<code>agent_ids</code>), never to every agent.</p>
+
+<p>Deleting an agent never widens a monitor to every agent: a monitor whose only assigned agent is deleted gets <code>agent_enabled</code> set to false, which is recorded in the audit log. The <code>DELETE</code> response lists these monitors in <code>agent_disabled_monitor_ids</code>.</p>
+
+<p>Each object posted to <code>/api/v1/agent/results</code> has <code>monitor_id</code>, <code>status</code>, <code>response_time</code> (ms), <code>status_code</code>, <code>message</code>, <code>body_hash</code>, <code>cert_fingerprint</code>, and optionally <code>dns_records</code> (a JSON-encoded array of strings, used for <code>dns_record</code> assertions; when it is absent those assertions are skipped) and <code>checked_at</code> (RFC 3339 time the check ran; defaults to the time the result is received, and a time in the future counts as the receive time). A result checked before the newest result already applied from the same agent is kept in the history but does not change the monitor's status or incidents. There is no age limit, and results from the server or other agents never make an agent's result stale, so an agent with a long cycle is still applied.</p>
 
 <h3>Running an Agent</h3>
 
 <pre><code>asura-agent --server https://your-server.com --token &lt;agent-token&gt; --interval 30s</code></pre>
+
+<table>
+  <thead>
+    <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>-server</code></td><td></td><td>Asura server URL (required)</td></tr>
+    <tr><td><code>-token</code></td><td></td><td>Agent token (required)</td></tr>
+    <tr><td><code>-interval</code></td><td><code>30s</code></td><td>How often to poll the server for jobs</td></tr>
+    <tr><td><code>-concurrency</code></td><td><code>10</code></td><td>Maximum number of checks run at the same time</td></tr>
+    <tr><td><code>-allow-private</code></td><td><code>false</code></td><td>Allow checks against private, loopback and other reserved addresses, for agents inside a LAN</td></tr>
+    <tr><td><code>-version</code></td><td></td><td>Print the version and exit</td></tr>
+  </tbody>
+</table>
+
+<p>Flags can be written with one or two dashes (<code>-server</code> or <code>--server</code>).</p>
 
 <p>The agent binary polls the server for jobs, runs checks locally, and posts results back. Only outbound HTTPS is needed. The agent binary is ~16MB and runs on any Linux server.</p>
 

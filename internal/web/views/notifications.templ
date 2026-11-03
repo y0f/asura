@@ -301,7 +301,8 @@ templ notifEmailFields() {
 		<div>
 			<label class="form-label" for="notif_email_tls_mode">TLS Mode</label>
 			<select id="notif_email_tls_mode" name="notif_email_tls_mode" x-model="email.tls_mode" class="form-select">
-				<option value="starttls">STARTTLS (default, port 587)</option>
+				<option value="starttls">STARTTLS if offered (default, port 587)</option>
+				<option value="starttls_required">STARTTLS required (port 587)</option>
 				<option value="smtps">SMTPS (port 465)</option>
 				<option value="none">None (plain, port 25)</option>
 			</select>

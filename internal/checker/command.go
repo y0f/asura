@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -72,12 +73,22 @@ func (c *CommandChecker) Check(ctx context.Context, monitor *storage.Monitor) (*
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, settings.Command, settings.Args...)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// If a grandchild inherits the output pipes, killing the direct child on
+	// ctx expiry does not close them; WaitDelay bounds how long Run waits.
+	cmd.WaitDelay = commandWaitDelay
+
+	stdout := &cappedBuffer{max: maxBodyRead}
+	stderr := &cappedBuffer{max: maxBodyRead}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	elapsed := time.Since(start).Milliseconds()
+	if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+		// The command itself succeeded; only a background child kept the
+		// output pipes open.
+		err = nil
+	}
 
 	if err != nil {
 		exitCode := -1
@@ -101,3 +112,27 @@ func (c *CommandChecker) Check(ctx context.Context, monitor *storage.Monitor) (*
 		Body:         strings.TrimSpace(stdout.String()),
 	}, nil
 }
+
+// commandWaitDelay is how long Check waits for the output pipes to close after
+// the command was killed or exited.
+const commandWaitDelay = time.Second
+
+// cappedBuffer keeps at most max bytes and silently discards the rest, so a
+// chatty command neither grows memory without bound nor blocks on its pipe.
+type cappedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if room := b.max - b.buf.Len(); room > 0 {
+		if len(p) > room {
+			b.buf.Write(p[:room])
+		} else {
+			b.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+func (b *cappedBuffer) String() string { return b.buf.String() }

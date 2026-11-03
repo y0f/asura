@@ -282,7 +282,9 @@ func TestEmailSenderSendPlain(t *testing.T) {
 		EventType: "test",
 	}
 
-	sender := &EmailSender{AllowPrivate: true}
+	// SMTP relays are operator-configured and commonly on loopback/LAN, so
+	// the default sender must reach 127.0.0.1 without allow_private_targets.
+	sender := &EmailSender{}
 	if err := sender.Send(context.Background(), ch, payload); err != nil {
 		t.Fatalf("Send() error: %v", err)
 	}

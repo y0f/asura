@@ -38,6 +38,10 @@ type Pipeline struct {
 	lastNotified         sync.Map // map[int64]time.Time — tracks last resend per monitor
 	lastSLABreach        sync.Map // map[int64]time.Time — tracks last SLA breach alert per monitor
 	statusLocks          sync.Map // map[int64]*sync.Mutex — serializes status read-modify-write per monitor
+	sources              sync.Map // map[int64]monitorSources — per-location result streaks (guarded by statusLocks)
+	sourceCheckedAt      sync.Map // map[int64]map[string]time.Time — newest applied checked_at per location (guarded by statusLocks)
+	incidentOpen         sync.Map // map[int64]bool — false once a recovery pass found no open incident; absent = unknown
+	silenced             sync.Map // map[int64]int64 — monitor ID -> incident opened in maintenance and not yet announced
 }
 
 // lockMonitorStatus serializes the monitor_status read-modify-write for a
@@ -133,14 +137,20 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	}
 
 	result := wr.Result
-	finalStatus := evaluateAssertions(mon, result)
+	finalStatus := applyUpsideDown(mon, evaluateAssertions(mon, result), result)
 
-	if mon.UpsideDown {
-		if finalStatus == "up" {
-			finalStatus = "down"
-		} else {
-			finalStatus = "up"
-			result.Message = ""
+	now := time.Now()
+	unlock := p.lockMonitorStatus(mon.ID)
+	defer unlock()
+
+	status := p.loadMonitorStatus(ctx, mon.ID)
+
+	// The anomaly downgrade must happen before the check result is stored so
+	// history, uptime and incident counting all see the same status.
+	if finalStatus == "up" {
+		if msg, ok := anomalyMessage(mon, status, result.ResponseTime); ok {
+			finalStatus = "degraded"
+			result.Message = msg
 		}
 	}
 
@@ -148,8 +158,11 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 
 	// Capture the previous check's body before inserting the new row, so the
 	// content diff compares against the prior body (not the one just stored).
+	// The (up to 1MB) body is only loaded when the hash actually changed.
 	var prevBody string
-	if mon.TrackChanges {
+	bodyChanged := mon.TrackChanges && result.BodyHash != "" &&
+		status.LastBodyHash != "" && status.LastBodyHash != result.BodyHash
+	if bodyChanged {
 		if prev, err := p.store.GetLatestCheckResult(ctx, mon.ID); err == nil && prev != nil {
 			prevBody = prev.Body
 		}
@@ -160,55 +173,18 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 		return
 	}
 
-	now := time.Now()
-	unlock := p.lockMonitorStatus(mon.ID)
-	defer unlock()
-
-	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
-	if err != nil {
-		p.logger.Warn("get monitor status, using defaults", "monitor_id", mon.ID, "error", err)
-		status = &storage.MonitorStatus{MonitorID: mon.ID}
-	}
-
-	status.Status = finalStatus
+	message := p.recordSourceResult(mon, status, localSource, finalStatus, cr.Message, now, now)
 	status.LastCheckAt = &now
 	status.ResponseTime = cr.ResponseTime
 
-	if finalStatus == "up" {
-		status.ConsecSuccesses++
-		status.ConsecFails = 0
-	} else {
-		status.ConsecFails++
-		status.ConsecSuccesses = 0
+	if bodyChanged {
+		p.handleContentChange(ctx, mon, status.LastBodyHash, result.BodyHash, prevBody, result.Body, status)
 	}
-
-	if mon.TrackChanges && result.BodyHash != "" {
-		oldHash := status.LastBodyHash
-		if oldHash != "" && oldHash != result.BodyHash {
-			p.handleContentChange(ctx, mon, oldHash, result.BodyHash, prevBody, result.Body, status)
-		}
-		status.LastBodyHash = result.BodyHash
-	} else if result.BodyHash != "" {
+	if result.BodyHash != "" {
 		status.LastBodyHash = result.BodyHash
 	}
 
-	if result.CertFingerprint != "" {
-		oldFP := status.LastCertFingerprint
-		if oldFP != "" && oldFP != result.CertFingerprint {
-			p.emitNotification(ctx, "cert.changed", nil, mon, nil)
-		}
-		status.LastCertFingerprint = result.CertFingerprint
-	}
-
-	if finalStatus == "up" && mon.AnomalySensitivity != "" && mon.AnomalySensitivity != "off" {
-		ms, err := p.store.GetMonitorStatus(ctx, mon.ID)
-		if err == nil && ms.BaselineAvg > 0 && anomaly.IsAnomaly(cr.ResponseTime, ms.BaselineAvg, ms.BaselineStddev, mon.AnomalySensitivity) {
-			finalStatus = "degraded"
-			status.Status = "degraded"
-			cr.Message = fmt.Sprintf("response time %dms exceeds baseline %.0fms (%.1fσ)",
-				cr.ResponseTime, ms.BaselineAvg, (float64(cr.ResponseTime)-ms.BaselineAvg)/ms.BaselineStddev)
-		}
-	}
+	p.updateCertFingerprint(ctx, mon, status, result.CertFingerprint)
 
 	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
 		p.logger.Error("upsert monitor status", "error", err)
@@ -221,58 +197,114 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 		p.scheduler.UpdateInterval(mon.ID, newInterval)
 	}
 
-	p.processIncidents(ctx, mon, finalStatus, status, cr.Message)
+	p.processIncidents(ctx, mon, status.Status, status, message)
 }
 
 // ProcessAgentResult handles a check result submitted by a remote agent.
-// It updates monitor status, processes incidents, and emits notifications.
-func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor, cr *storage.CheckResult) {
-	now := time.Now()
+// The raw agent status goes through the same assertion, upside_down and
+// anomaly evaluation as local results (cr.Status and cr.Message are updated
+// in place) before it is stored, so history, uptime and incidents all see the
+// same status. It is tracked as its own location so it cannot reset the
+// streaks of the local worker or of other agents.
+//
+// cr.CreatedAt is when the agent ran the check (zero or a future time means
+// now). A result checked before the newest one already applied from the same
+// agent is stored but does not change the monitor's status or incidents.
+// There is no absolute age limit, so an agent with a long cycle that posts
+// minutes after checking is still applied.
+func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor, cr *storage.CheckResult) error {
 	unlock := p.lockMonitorStatus(mon.ID)
 	defer unlock()
-
-	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
-	if err != nil {
-		status = &storage.MonitorStatus{MonitorID: mon.ID}
+	now := time.Now()
+	checkedAt := cr.CreatedAt
+	if checkedAt.IsZero() || checkedAt.After(now) {
+		checkedAt = now
 	}
 
-	finalStatus := cr.Status
-	status.Status = finalStatus
+	status := p.loadMonitorStatus(ctx, mon.ID)
+	finalStatus := evaluateAgentResult(mon, cr, status)
+
+	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
+		return err
+	}
+
+	source := agentSource(cr)
+	if p.staleSourceResult(mon, source, checkedAt) {
+		return nil
+	}
+
+	message := p.recordSourceResult(mon, status, source, finalStatus, cr.Message, checkedAt, now)
 	status.LastCheckAt = &now
 	status.ResponseTime = cr.ResponseTime
 
-	if finalStatus == "up" {
-		status.ConsecSuccesses++
-		status.ConsecFails = 0
-	} else {
-		status.ConsecFails++
-		status.ConsecSuccesses = 0
-	}
-
-	if cr.CertFingerprint != "" {
-		oldFP := status.LastCertFingerprint
-		if oldFP != "" && oldFP != cr.CertFingerprint {
-			p.emitNotification(ctx, "cert.changed", nil, mon, nil)
-		}
-		status.LastCertFingerprint = cr.CertFingerprint
-	}
+	p.updateCertFingerprint(ctx, mon, status, cr.CertFingerprint)
 
 	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
 		p.logger.Error("agent result: upsert status", "error", err)
 	}
 
-	p.processIncidents(ctx, mon, finalStatus, status, cr.Message)
+	p.processIncidents(ctx, mon, status.Status, status, message)
+	return nil
+}
+
+func (p *Pipeline) loadMonitorStatus(ctx context.Context, monitorID int64) *storage.MonitorStatus {
+	status, err := p.store.GetMonitorStatus(ctx, monitorID)
+	if err != nil || status == nil {
+		p.logger.Warn("get monitor status, using defaults", "monitor_id", monitorID, "error", err)
+		return &storage.MonitorStatus{MonitorID: monitorID}
+	}
+	return status
+}
+
+func (p *Pipeline) updateCertFingerprint(ctx context.Context, mon *storage.Monitor, status *storage.MonitorStatus, fp string) {
+	if fp == "" {
+		return
+	}
+	if old := status.LastCertFingerprint; old != "" && old != fp {
+		p.emitNotification(ctx, "cert.changed", nil, mon, nil)
+	}
+	status.LastCertFingerprint = fp
+}
+
+// applyUpsideDown inverts the status of upside-down monitors.
+func applyUpsideDown(mon *storage.Monitor, status string, result *checker.Result) string {
+	if !mon.UpsideDown {
+		return status
+	}
+	if status == "up" {
+		return "down"
+	}
+	result.Message = ""
+	return "up"
+}
+
+// anomalyMessage reports whether responseTime is anomalous against the
+// monitor's stored baseline, with a human-readable explanation.
+func anomalyMessage(mon *storage.Monitor, status *storage.MonitorStatus, responseTime int64) (string, bool) {
+	if mon.AnomalySensitivity == "" || mon.AnomalySensitivity == "off" || status.BaselineAvg <= 0 {
+		return "", false
+	}
+	if !anomaly.IsAnomaly(responseTime, status.BaselineAvg, status.BaselineStddev, mon.AnomalySensitivity) {
+		return "", false
+	}
+	return fmt.Sprintf("response time %dms exceeds baseline %.0fms (%.1fσ)",
+		responseTime, status.BaselineAvg, (float64(responseTime)-status.BaselineAvg)/status.BaselineStddev), true
 }
 
 func evaluateAssertions(mon *storage.Monitor, result *checker.Result) string {
+	return evaluateAssertionSet(mon.Assertions, result)
+}
+
+func evaluateAssertionSet(assertions json.RawMessage, result *checker.Result) string {
 	finalStatus := result.Status
-	if len(mon.Assertions) == 0 || string(mon.Assertions) == "[]" {
+	if len(assertions) == 0 || string(assertions) == "[]" {
 		return finalStatus
 	}
-	assertionResult := assertion.Evaluate(mon.Assertions, result.StatusCode, result.Body,
+	assertionResult := assertion.Evaluate(assertions, result.StatusCode, result.Body,
 		result.Headers, result.ResponseTime, result.CertExpiry, result.DNSRecords)
 	if !assertionResult.Pass {
-		if assertionResult.Degraded {
+		// A failing "degraded" assertion must not soften a hard failure.
+		if assertionResult.Degraded && finalStatus != "down" {
 			finalStatus = "degraded"
 		} else {
 			finalStatus = "down"
@@ -320,13 +352,24 @@ func buildCheckResult(mon *storage.Monitor, result *checker.Result, finalStatus 
 }
 
 func (p *Pipeline) processIncidents(ctx context.Context, mon *storage.Monitor, finalStatus string, status *storage.MonitorStatus, message string) {
-	inMaintenance, _ := p.store.IsMonitorInMaintenance(ctx, mon.ID, time.Now())
-
-	if finalStatus != "up" && status.ConsecFails >= mon.FailureThreshold {
-		p.processFailure(ctx, mon, finalStatus, message, inMaintenance)
-	} else if finalStatus == "up" && status.ConsecSuccesses >= mon.SuccessThreshold {
-		p.processRecovery(ctx, mon, inMaintenance)
+	switch {
+	case finalStatus != "up" && status.ConsecFails >= mon.FailureThreshold:
+		p.processFailure(ctx, mon, finalStatus, message, p.inMaintenance(ctx, mon.ID))
+	case finalStatus == "up" && status.ConsecSuccesses >= mon.SuccessThreshold && p.mayHaveOpenIncident(mon.ID):
+		p.processRecovery(ctx, mon)
 	}
+}
+
+func (p *Pipeline) inMaintenance(ctx context.Context, monitorID int64) bool {
+	in, _ := p.store.IsMonitorInMaintenance(ctx, monitorID, time.Now())
+	return in
+}
+
+// mayHaveOpenIncident lets steady healthy checks skip the recovery queries
+// once a recovery pass found no open incident for the monitor.
+func (p *Pipeline) mayHaveOpenIncident(monitorID int64) bool {
+	v, ok := p.incidentOpen.Load(monitorID)
+	return !ok || v.(bool)
 }
 
 func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, monitorStatus, message string, inMaintenance bool) {
@@ -335,33 +378,59 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mon
 		p.logger.Error("process failure", "error", err)
 		return
 	}
+	p.incidentOpen.Store(mon.ID, true)
 	if inMaintenance {
+		// Remember the silent incident so it is announced (and escalated) if
+		// it is still open once the maintenance window has ended.
+		if created {
+			p.silenced.Store(mon.ID, inc.ID)
+		}
 		return
 	}
-	if created {
-		p.emitNotification(ctx, "incident.created", inc, mon, nil)
-		p.lastNotified.Store(mon.ID, time.Now())
-		escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
-		p.checkSLABreach(ctx, mon)
+	if created || p.takeSilenced(mon.ID, inc.ID) {
+		p.announceIncident(ctx, mon, inc)
 	} else if p.shouldResend(mon) {
 		p.emitNotification(ctx, "incident.reminder", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
 	}
 }
 
-func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor, inMaintenance bool) {
+// announceIncident emits incident.created and starts escalation.
+func (p *Pipeline) announceIncident(ctx context.Context, mon *storage.Monitor, inc *storage.Incident) {
+	p.emitNotification(ctx, "incident.created", inc, mon, nil)
+	p.lastNotified.Store(mon.ID, time.Now())
+	escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
+	p.checkSLABreach(ctx, mon)
+}
+
+// takeSilenced reports whether incidentID was opened during maintenance and
+// never announced, and clears the marker.
+func (p *Pipeline) takeSilenced(monitorID, incidentID int64) bool {
+	v, ok := p.silenced.LoadAndDelete(monitorID)
+	return ok && v.(int64) == incidentID
+}
+
+func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor) {
 	inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
 	if err != nil {
 		p.logger.Error("process recovery", "error", err)
 		return
 	}
+	p.incidentOpen.Store(mon.ID, false)
 	if resolved {
-		escalation.CancelEscalation(ctx, p.store, inc.ID)
-		if !inMaintenance {
-			p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
-		}
+		p.notifyResolved(ctx, mon, inc, p.inMaintenance(ctx, mon.ID))
 	}
 	p.lastNotified.Delete(mon.ID)
+}
+
+// notifyResolved cancels escalation and emits incident.resolved, unless the
+// monitor is in maintenance or the incident was never announced.
+func (p *Pipeline) notifyResolved(ctx context.Context, mon *storage.Monitor, inc *storage.Incident, inMaintenance bool) {
+	escalation.CancelEscalation(ctx, p.store, inc.ID)
+	if p.takeSilenced(mon.ID, inc.ID) || inMaintenance {
+		return
+	}
+	p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
 }
 
 func (p *Pipeline) shouldResend(mon *storage.Monitor) bool {
@@ -483,18 +552,16 @@ func (p *Pipeline) ProcessHeartbeatRecovery(ctx context.Context, mon *storage.Mo
 		p.logger.Error("heartbeat recovery: upsert status", "error", err)
 	}
 
-	inMaintenance, _ := p.store.IsMonitorInMaintenance(ctx, mon.ID, now)
 	inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
 	if err != nil {
 		p.logger.Error("heartbeat recovery: process recovery", "error", err)
 		return
 	}
+	p.incidentOpen.Store(mon.ID, false)
 	if resolved {
-		escalation.CancelEscalation(ctx, p.store, inc.ID)
-		if !inMaintenance {
-			p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
-		}
+		p.notifyResolved(ctx, mon, inc, p.inMaintenance(ctx, mon.ID))
 	}
+	p.lastNotified.Delete(mon.ID)
 }
 
 // ProcessManualStatus handles a user-set status change for a manual monitor.
@@ -532,7 +599,7 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 		p.logger.Error("manual status: upsert status", "error", err)
 	}
 
-	inMaintenance, _ := p.store.IsMonitorInMaintenance(ctx, mon.ID, now)
+	inMaintenance := p.inMaintenance(ctx, mon.ID)
 
 	if newStatus == "up" && prevStatus != "up" {
 		inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
@@ -540,22 +607,18 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 			p.logger.Error("manual status: process recovery", "error", err)
 			return
 		}
+		p.incidentOpen.Store(mon.ID, false)
 		if resolved {
-			escalation.CancelEscalation(ctx, p.store, inc.ID)
-			if !inMaintenance {
-				p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
-			}
+			p.notifyResolved(ctx, mon, inc, inMaintenance)
 		}
-	} else if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending") {
-		inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, newStatus, message)
-		if err != nil {
-			p.logger.Error("manual status: process failure", "error", err)
-			return
-		}
-		if created && !inMaintenance {
-			p.emitNotification(ctx, "incident.created", inc, mon, nil)
-			escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
-		}
+		p.lastNotified.Delete(mon.ID)
+		return
+	}
+	// Re-processing a still-down manual monitor announces an incident that was
+	// opened silently during a maintenance window that has since ended.
+	_, silenced := p.silenced.Load(mon.ID)
+	if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending" || silenced) {
+		p.processFailure(ctx, mon, newStatus, message, inMaintenance)
 	}
 }
 

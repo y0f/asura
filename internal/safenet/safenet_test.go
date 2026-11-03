@@ -2,7 +2,10 @@ package safenet
 
 import (
 	"net"
+	"runtime"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestIsPrivateIP(t *testing.T) {
@@ -18,6 +21,8 @@ func TestIsPrivateIP(t *testing.T) {
 		{"100.64.0.1", true},
 		{"0.0.0.0", true},
 		{"::1", true},
+		{"::", true},
+		{"ff02::1", true},
 		{"8.8.8.8", false},
 		{"1.1.1.1", false},
 		{"93.184.216.34", false},
@@ -54,5 +59,39 @@ func TestMaybeDialControl(t *testing.T) {
 	}
 	if MaybeDialControl(false) == nil {
 		t.Fatal("expected non-nil when allowPrivate is false")
+	}
+}
+
+func TestDialControlBlocksUnspecifiedV6(t *testing.T) {
+	if err := DialControl("tcp", "[::]:80", nil); err == nil {
+		t.Fatal("DialControl allowed [::]:80")
+	}
+}
+
+// On Linux, connect() to [::] reaches services bound to loopback.
+func TestDialControlUnspecifiedV6DoesNotReachLoopback(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("connect() to [::] reaching loopback is Linux behaviour")
+	}
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skip("no IPv6 loopback:", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+	d := net.Dialer{Timeout: 2 * time.Second, Control: DialControl}
+	c, err := d.Dial("tcp", net.JoinHostPort("::", strconv.Itoa(port)))
+	if err == nil {
+		c.Close()
+		t.Fatal("DialControl-guarded dialer connected to a loopback-only listener via [::]")
 	}
 }

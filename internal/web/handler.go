@@ -38,12 +38,14 @@ type Handler struct {
 
 func (h *Handler) Stop() {
 	close(h.done)
-	h.loginRL.Stop()
 }
 
+// New returns the web UI handler. loginRL throttles login and password form
+// attempts per client IP; it is shared with the API, and the caller owns and
+// stops it.
 func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 	dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier,
-	logger *slog.Logger, version, cspDirective string) *Handler {
+	logger *slog.Logger, version, cspDirective string, loginRL *httputil.RateLimiter) *Handler {
 	h := &Handler{
 		cfg:               cfg,
 		store:             store,
@@ -54,7 +56,7 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 		version:           version,
 		startTime:         time.Now(),
 		cspFrameDirective: cspDirective,
-		loginRL:           httputil.NewRateLimiter(cfg.Auth.Login.RateLimitPerSec, cfg.Auth.Login.RateLimitBurst),
+		loginRL:           loginRL,
 		totpChallenges:    make(map[string]*totpChallenge),
 		done:              make(chan struct{}),
 	}

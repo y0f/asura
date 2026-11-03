@@ -24,10 +24,19 @@ type Handler struct {
 	logger             *slog.Logger
 	startTime          time.Time
 	OnStatusPageChange func()
+	// SubNotifier sends status page subscriber emails; nil when
+	// subscriptions are disabled.
+	SubNotifier *notifier.SubscriberNotifier
+	// loginRL throttles status page password attempts per client IP. It is
+	// the web UI's login limiter, so the API and the web password forms share
+	// one budget of attempts.
+	loginRL *httputil.RateLimiter
 }
 
+// New returns the API handler. loginRL is the limiter shared with the web
+// UI's login and status page password forms; the caller owns and stops it.
 func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
-	dispatcher *notifier.Dispatcher, logger *slog.Logger) *Handler {
+	dispatcher *notifier.Dispatcher, logger *slog.Logger, loginRL *httputil.RateLimiter) *Handler {
 	return &Handler{
 		cfg:       cfg,
 		store:     store,
@@ -35,6 +44,7 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 		notifier:  dispatcher,
 		logger:    logger,
 		startTime: time.Now(),
+		loginRL:   loginRL,
 	}
 }
 

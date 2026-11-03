@@ -33,6 +33,9 @@ type Store interface {
 	CreateIncident(ctx context.Context, inc *Incident) error
 	GetIncident(ctx context.Context, id int64) (*Incident, error)
 	ListIncidents(ctx context.Context, monitorID int64, status string, search string, p Pagination) (*PaginatedResult, error)
+	// ListRecentIncidents returns up to limit incidents of the given monitors,
+	// newest first, leaving out incidents resolved before resolvedSince.
+	ListRecentIncidents(ctx context.Context, monitorIDs []int64, resolvedSince time.Time, limit int) ([]*Incident, error)
 	UpdateIncident(ctx context.Context, inc *Incident) error
 	DeleteIncident(ctx context.Context, id int64) error
 	GetOpenIncident(ctx context.Context, monitorID int64) (*Incident, error)
@@ -197,8 +200,13 @@ type Store interface {
 	GetAgentByToken(ctx context.Context, token string) (*Agent, error)
 	ListAgents(ctx context.Context) ([]*Agent, error)
 	UpdateAgentHeartbeat(ctx context.Context, agentID int64) error
-	DeleteAgent(ctx context.Context, id int64) error
-	ListAgentJobs(ctx context.Context) ([]*AgentJob, error)
+	// DeleteAgent returns the monitors it disabled for agents because the
+	// deleted agent was the only one they were assigned to.
+	DeleteAgent(ctx context.Context, id int64) ([]int64, error)
+	ListAgentJobs(ctx context.Context, agentID int64) ([]*AgentJob, error)
+	AgentMayCheckMonitor(ctx context.Context, agentID, monitorID int64) (bool, error)
+	GetMonitorAgentIDs(ctx context.Context, monitorID int64) ([]int64, error)
+	SetMonitorAgentIDs(ctx context.Context, monitorID int64, agentIDs []int64) error
 
 	// Data rollup
 	RollupHourly(ctx context.Context, hour string) error

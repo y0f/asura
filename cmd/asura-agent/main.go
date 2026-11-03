@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,13 +40,18 @@ type result struct {
 	Message         string `json:"message"`
 	BodyHash        string `json:"body_hash"`
 	CertFingerprint string `json:"cert_fingerprint"`
-	DNSRecords      string `json:"dns_records"`
+	DNSRecords      string `json:"dns_records,omitempty"`
+	// CheckedAt is when the check started. Results are posted once per cycle,
+	// so the server uses it to ignore results older than its latest check.
+	CheckedAt time.Time `json:"checked_at"`
 }
 
 func main() {
 	serverURL := flag.String("server", "", "Asura server URL (e.g. https://monitor.example.com)")
 	token := flag.String("token", "", "Agent token")
 	interval := flag.Duration("interval", 30*time.Second, "Poll interval")
+	concurrency := flag.Int("concurrency", 10, "Maximum number of checks run at the same time")
+	allowPrivate := flag.Bool("allow-private", false, "Allow checks against private, loopback and other reserved addresses")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -59,98 +65,178 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := strings.TrimRight(*serverURL, "/")
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	registry := checker.DefaultRegistry(nil, false)
+	a := newAgent(&http.Client{Timeout: 30 * time.Second}, strings.TrimRight(*serverURL, "/"), *token,
+		checker.DefaultRegistry(nil, *allowPrivate), logger)
+	a.concurrency = *concurrency
 
-	logger.Info("starting asura-agent", "version", version, "server", server, "interval", interval.String())
+	logger.Info("starting asura-agent", "version", version, "server", a.server, "interval", interval.String(),
+		"allow_private", *allowPrivate)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	// A signal cancels ctx, which aborts the in-flight cycle as well as the loop.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	runCycle(ctx, client, server, *token, registry, logger)
+	a.runCycle(ctx)
 
 	for {
 		select {
-		case <-quit:
+		case <-ctx.Done():
 			logger.Info("shutting down")
 			return
-		case <-ctx.Done():
-			return
 		case <-ticker.C:
-			runCycle(ctx, client, server, *token, registry, logger)
+			a.runCycle(ctx)
 		}
 	}
 }
 
-func runCycle(ctx context.Context, client *http.Client, server, token string, registry *checker.Registry, logger *slog.Logger) {
-	jobs, err := fetchJobs(ctx, client, server, token)
+// agent polls the server for jobs and runs each one when its monitor interval
+// has elapsed.
+type agent struct {
+	client      *http.Client
+	server      string
+	token       string
+	registry    *checker.Registry
+	logger      *slog.Logger
+	concurrency int
+
+	lastRun map[int64]time.Time // monitor ID -> start of its last check
+	now     func() time.Time
+}
+
+func newAgent(client *http.Client, server, token string, registry *checker.Registry, logger *slog.Logger) *agent {
+	return &agent{
+		client:      client,
+		server:      server,
+		token:       token,
+		registry:    registry,
+		logger:      logger,
+		concurrency: 10,
+		lastRun:     make(map[int64]time.Time),
+		now:         time.Now,
+	}
+}
+
+// dueSlack absorbs poll jitter, so a monitor whose interval equals the poll
+// interval is not skipped every other cycle.
+const dueSlack = 2 * time.Second
+
+// due reports whether j should be checked now, given its interval.
+func (a *agent) due(j job, now time.Time) bool {
+	last, ok := a.lastRun[j.ID]
+	return !ok || j.Interval <= 0 || now.Sub(last)+dueSlack >= time.Duration(j.Interval)*time.Second
+}
+
+func (a *agent) runCycle(ctx context.Context) {
+	jobs, err := fetchJobs(ctx, a.client, a.server, a.token)
 	if err != nil {
-		logger.Error("fetch jobs failed", "error", err)
-		return
-	}
-	if len(jobs) == 0 {
+		if ctx.Err() == nil {
+			a.logger.Error("fetch jobs failed", "error", err)
+		}
 		return
 	}
 
-	logger.Info("running checks", "count", len(jobs))
-
-	var results []result
+	now := a.now()
+	var due []job
+	seen := make(map[int64]bool, len(jobs))
 	for _, j := range jobs {
-		c, err := registry.Get(j.Type)
-		if err != nil {
-			logger.Warn("unsupported monitor type", "type", j.Type, "monitor", j.Name)
-			continue
+		seen[j.ID] = true
+		if a.due(j, now) {
+			due = append(due, j)
 		}
-
-		mon := &storage.Monitor{
-			ID:       j.ID,
-			Name:     j.Name,
-			Type:     j.Type,
-			Target:   j.Target,
-			Timeout:  j.Timeout,
-			Settings: j.Settings,
+	}
+	for id := range a.lastRun {
+		if !seen[id] {
+			delete(a.lastRun, id)
 		}
-
-		checkCtx, cancel := context.WithTimeout(ctx, time.Duration(j.Timeout)*time.Second+5*time.Second)
-		res, err := c.Check(checkCtx, mon)
-		cancel()
-
-		if err != nil {
-			results = append(results, result{
-				MonitorID: j.ID,
-				Status:    "down",
-				Message:   err.Error(),
-			})
-			continue
-		}
-
-		results = append(results, result{
-			MonitorID:       j.ID,
-			Status:          res.Status,
-			ResponseTime:    res.ResponseTime,
-			StatusCode:      res.StatusCode,
-			Message:         res.Message,
-			BodyHash:        res.BodyHash,
-			CertFingerprint: res.CertFingerprint,
-		})
+	}
+	if len(due) == 0 {
+		return
 	}
 
-	if len(results) > 0 {
-		if err := postResults(ctx, client, server, token, results); err != nil {
-			logger.Error("post results failed", "error", err)
+	a.logger.Info("running checks", "count", len(due))
+
+	results := make([]*result, len(due))
+	sem := make(chan struct{}, max(a.concurrency, 1))
+	var wg sync.WaitGroup
+	for i, j := range due {
+		c, err := a.registry.Get(j.Type)
+		if err != nil {
+			a.logger.Warn("unsupported monitor type", "type", j.Type, "monitor", j.Name)
+			continue
+		}
+		a.lastRun[j.ID] = now
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+			results[i] = runCheck(ctx, c, j)
+		}()
+	}
+	wg.Wait()
+
+	if ctx.Err() != nil {
+		// Shutting down: checks were cut short, so their results are not real.
+		return
+	}
+
+	var out []result
+	for _, r := range results {
+		if r != nil {
+			out = append(out, *r)
+		}
+	}
+	if len(out) > 0 {
+		if err := postResults(ctx, a.client, a.server, a.token, out); err != nil {
+			a.logger.Error("post results failed", "error", err)
 		} else {
-			logger.Info("results posted", "count", len(results))
+			a.logger.Info("results posted", "count", len(out))
 		}
 	}
+}
+
+func runCheck(ctx context.Context, c checker.Checker, j job) *result {
+	mon := &storage.Monitor{
+		ID:       j.ID,
+		Name:     j.Name,
+		Type:     j.Type,
+		Target:   j.Target,
+		Timeout:  j.Timeout,
+		Settings: j.Settings,
+	}
+
+	checkCtx, cancel := context.WithTimeout(ctx, time.Duration(j.Timeout)*time.Second+5*time.Second)
+	defer cancel()
+	started := time.Now().UTC()
+	res, err := c.Check(checkCtx, mon)
+	if err != nil {
+		return &result{MonitorID: j.ID, Status: "down", Message: err.Error(), CheckedAt: started}
+	}
+	out := &result{
+		MonitorID:       j.ID,
+		Status:          res.Status,
+		ResponseTime:    res.ResponseTime,
+		StatusCode:      res.StatusCode,
+		Message:         res.Message,
+		BodyHash:        res.BodyHash,
+		CertFingerprint: res.CertFingerprint,
+		CheckedAt:       started,
+	}
+	// The server evaluates dns_record assertions against these records.
+	if len(res.DNSRecords) > 0 {
+		b, _ := json.Marshal(res.DNSRecords)
+		out.DNSRecords = string(b)
+	}
+	return out
 }
 
 func fetchJobs(ctx context.Context, client *http.Client, server, token string) ([]job, error) {

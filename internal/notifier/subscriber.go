@@ -188,7 +188,7 @@ func (n *SubscriberNotifier) sendSubscriberEmail(ctx context.Context, sub *stora
 }
 
 func (n *SubscriberNotifier) sendSMTPS(ctx context.Context, addr, host string, rcpt []string, msg []byte) error {
-	conn, err := dialSMTP(ctx, addr, n.allowPrivate)
+	conn, err := dialSMTP(ctx, addr)
 	if err != nil {
 		return fmt.Errorf("smtps dial: %w", err)
 	}
@@ -207,7 +207,7 @@ func (n *SubscriberNotifier) sendSMTPS(ctx context.Context, addr, host string, r
 }
 
 func (n *SubscriberNotifier) sendPlain(ctx context.Context, addr, host string, rcpt []string, msg []byte) error {
-	client, err := newSMTPClient(ctx, addr, host, n.allowPrivate)
+	client, err := newSMTPClient(ctx, addr, host)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
@@ -216,15 +216,13 @@ func (n *SubscriberNotifier) sendPlain(ctx context.Context, addr, host string, r
 }
 
 func (n *SubscriberNotifier) sendSTARTTLS(ctx context.Context, addr, host string, rcpt []string, msg []byte) error {
-	client, err := newSMTPClient(ctx, addr, host, n.allowPrivate)
+	client, err := newSMTPClient(ctx, addr, host)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
 	defer client.Close()
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
-			return fmt.Errorf("starttls: %w", err)
-		}
+	if err := startTLS(client, host, n.smtp.TLSMode == TLSModeSTARTTLSRequired); err != nil {
+		return err
 	}
 	return n.sendViaClient(client, rcpt, msg)
 }

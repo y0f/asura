@@ -31,19 +31,32 @@ type Dispatcher struct {
 	senders map[string]Sender
 	logger  *slog.Logger
 	sem     chan struct{}
+
+	attemptTimeout time.Duration // limit for one Send call
+	baseBackoff    time.Duration // wait before the 2nd attempt, doubled after
+	queueTimeout   time.Duration // how long a send may wait for a free slot
 }
 
-const maxConcurrentSends = 10
+const (
+	maxConcurrentSends    = 10
+	maxRetries            = 3
+	defaultAttemptTimeout = 10 * time.Second
+	defaultBaseBackoff    = 2 * time.Second
+	defaultQueueTimeout   = 5 * time.Minute
+)
 
 func NewDispatcher(store storage.Store, logger *slog.Logger, allowPrivateTargets bool) *Dispatcher {
 	d := &Dispatcher{
-		store:   store,
-		senders: make(map[string]Sender),
-		logger:  logger,
-		sem:     make(chan struct{}, maxConcurrentSends),
+		store:          store,
+		senders:        make(map[string]Sender),
+		logger:         logger,
+		sem:            make(chan struct{}, maxConcurrentSends),
+		attemptTimeout: defaultAttemptTimeout,
+		baseBackoff:    defaultBaseBackoff,
+		queueTimeout:   defaultQueueTimeout,
 	}
 	d.RegisterSender(&WebhookSender{AllowPrivate: allowPrivateTargets})
-	d.RegisterSender(&EmailSender{AllowPrivate: allowPrivateTargets})
+	d.RegisterSender(&EmailSender{})
 	d.RegisterSender(&TelegramSender{})
 	d.RegisterSender(&DiscordSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&SlackSender{AllowPrivate: allowPrivateTargets})
@@ -159,32 +172,35 @@ func (d *Dispatcher) SendTest(ch *storage.NotificationChannel, inc *storage.Inci
 	})
 }
 
-const (
-	maxRetries  = 3
-	baseBackoff = 2 * time.Second
-)
-
-// spawnSend acquires a concurrency slot before launching the send goroutine so
-// that a backlog of channels applies backpressure to the caller rather than
-// spawning unbounded goroutines. It bails out if ctx is cancelled while waiting.
+// spawnSend runs the send in its own goroutine so the caller (the
+// notification forwarder) never blocks on slow channels. At most
+// maxConcurrentSends run at once and the rest wait for a slot. Timeouts only
+// start once a send holds a slot, so waiting does not eat into its attempts,
+// and a send that cannot get a slot within queueTimeout is logged and recorded
+// as failed instead of being dropped without a trace.
 func (d *Dispatcher) spawnSend(sender Sender, ch *storage.NotificationChannel, payload *Payload) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-
-	select {
-	case d.sem <- struct{}{}:
-	case <-ctx.Done():
-		cancel()
-		return
-	}
-
 	go func() {
-		defer cancel()
+		wait := time.NewTimer(d.queueTimeout)
+		defer wait.Stop()
+		select {
+		case d.sem <- struct{}{}:
+		case <-wait.C:
+			msg := fmt.Sprintf("not sent: no free send slot within %s", d.queueTimeout)
+			d.logger.Error("notification dropped",
+				"channel_id", ch.ID,
+				"channel_type", ch.Type,
+				"event", payload.EventType,
+				"error", msg,
+			)
+			d.recordHistory(ch, payload, "failed", msg)
+			return
+		}
 		defer func() { <-d.sem }()
-		d.sendWithRetry(ctx, sender, ch, payload)
+		d.sendWithRetry(sender, ch, payload)
 	}()
 }
 
-func (d *Dispatcher) sendWithRetry(ctx context.Context, sender Sender, ch *storage.NotificationChannel, payload *Payload) {
+func (d *Dispatcher) sendWithRetry(sender Sender, ch *storage.NotificationChannel, payload *Payload) {
 	defer func() {
 		if r := recover(); r != nil {
 			d.logger.Error("notification sender panicked",
@@ -198,9 +214,14 @@ func (d *Dispatcher) sendWithRetry(ctx context.Context, sender Sender, ch *stora
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
+			time.Sleep(d.baseBackoff * time.Duration(1<<(attempt-1)))
 		}
-		if err := sender.Send(ctx, ch, payload); err != nil {
+		// Each attempt gets its own deadline, so a slow first attempt cannot
+		// leave the retries without time.
+		ctx, cancel := context.WithTimeout(context.Background(), d.attemptTimeout)
+		err := sender.Send(ctx, ch, payload)
+		cancel()
+		if err != nil {
 			lastErr = err
 			d.logger.Warn("notification send attempt failed",
 				"channel_id", ch.ID,

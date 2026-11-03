@@ -97,17 +97,9 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 			w.logger.Error("heartbeat watcher: upsert status", "error", err)
 		}
 
-		// Create incident through the incident manager
-		inMaintenance, _ := w.store.IsMonitorInMaintenance(ctx, mon.ID, now)
-		inc, created, err := w.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, "down", "heartbeat missed")
-		if err != nil {
-			w.logger.Error("heartbeat watcher: process failure", "error", err)
-			continue
-		}
-		if created && !inMaintenance {
-			w.pipeline.emitNotification(ctx, "incident.created", inc, mon, nil)
-			w.pipeline.lastNotified.Store(mon.ID, time.Now())
-		}
+		// Create the incident, notify and start escalation exactly like the
+		// check pipeline does.
+		w.pipeline.processFailure(ctx, mon, "down", "heartbeat missed", w.pipeline.inMaintenance(ctx, mon.ID))
 	}
 }
 
@@ -125,7 +117,14 @@ func pingAdvanced(observed, current *time.Time) bool {
 
 func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heartbeat) {
 	mon, err := w.store.GetMonitor(ctx, hb.MonitorID)
-	if err != nil || mon.ResendInterval <= 0 {
+	if err != nil {
+		return
+	}
+	if _, silenced := w.pipeline.silenced.Load(mon.ID); silenced {
+		w.announceAfterMaintenance(ctx, mon)
+		return
+	}
+	if mon.ResendInterval <= 0 {
 		return
 	}
 	if !w.pipeline.shouldResend(mon) {
@@ -141,4 +140,20 @@ func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heart
 	}
 	w.pipeline.emitNotification(ctx, "incident.reminder", inc, mon, nil)
 	w.pipeline.lastNotified.Store(mon.ID, time.Now())
+}
+
+// announceAfterMaintenance announces an incident that was opened silently
+// during a maintenance window once that window has ended.
+func (w *HeartbeatWatcher) announceAfterMaintenance(ctx context.Context, mon *storage.Monitor) {
+	if w.pipeline.inMaintenance(ctx, mon.ID) {
+		return
+	}
+	inc, err := w.store.GetOpenIncident(ctx, mon.ID)
+	if err != nil || inc == nil {
+		w.pipeline.silenced.Delete(mon.ID)
+		return
+	}
+	if w.pipeline.takeSilenced(mon.ID, inc.ID) {
+		w.pipeline.announceIncident(ctx, mon, inc)
+	}
 }

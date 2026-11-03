@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -47,8 +48,8 @@ func TestEventBrokerBroadcast(t *testing.T) {
 
 	select {
 	case got := <-c1.ch:
-		if got.Type != "incident.created" {
-			t.Fatalf("c1: expected incident.created, got %s", got.Type)
+		if !strings.HasPrefix(string(got), "event: incident.created\n") {
+			t.Fatalf("c1: expected incident.created frame, got %q", got)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("c1: timeout waiting for event")
@@ -56,8 +57,8 @@ func TestEventBrokerBroadcast(t *testing.T) {
 
 	select {
 	case got := <-c2.ch:
-		if got.Type != "incident.created" {
-			t.Fatalf("c2: expected incident.created, got %s", got.Type)
+		if !strings.HasPrefix(string(got), "event: incident.created\n") {
+			t.Fatalf("c2: expected incident.created frame, got %q", got)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("c2: timeout waiting for event")

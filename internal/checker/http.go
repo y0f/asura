@@ -97,16 +97,20 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	}
 	applyHTTPProxy(transport, monitor.ProxyURL, baseDial, c.AllowPrivate)
 
-	if pu := HTTPProxyURL(monitor.ProxyURL); pu != nil {
+	checkRedirect := redirectPolicy(resolveMaxRedirects(settings))
+	if HTTPProxyURL(monitor.ProxyURL) != nil {
 		if err := validateProxyTarget(ctx, req.URL.Host, c.AllowPrivate); err != nil {
 			return &Result{Status: "down", Message: err.Error()}, nil
 		}
+		// The proxy makes the final connection, so the safenet dial control
+		// never sees redirect targets: validate each hop before following it.
+		checkRedirect = proxiedRedirectPolicy(checkRedirect, c.AllowPrivate)
 	}
 
 	client := &http.Client{
 		Transport:     transport,
 		Timeout:       timeout,
-		CheckRedirect: redirectPolicy(resolveMaxRedirects(settings)),
+		CheckRedirect: checkRedirect,
 	}
 
 	start := time.Now()
@@ -125,6 +129,9 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	return buildHTTPResult(resp, elapsed, settings)
 }
 
+// applyHTTPProxy routes transport through proxyURL, if set. An HTTP proxy is
+// given the target hostname, as for SOCKS5; callers validate the target and
+// each redirect with validateProxyTarget.
 func applyHTTPProxy(transport *http.Transport, proxyURL string, baseDial func(context.Context, string, string) (net.Conn, error), allowPrivate bool) {
 	if proxyURL == "" {
 		return
@@ -147,6 +154,17 @@ func redirectPolicy(maxRedirects int) func(*http.Request, []*http.Request) error
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
 		}
 		return nil
+	}
+}
+
+// proxiedRedirectPolicy wraps next so every redirect target is checked
+// against the private-address policy before it is requested via the proxy.
+func proxiedRedirectPolicy(next func(*http.Request, []*http.Request) error, allowPrivate bool) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if err := next(req, via); err != nil {
+			return err
+		}
+		return validateProxyTarget(req.Context(), req.URL.Host, allowPrivate)
 	}
 }
 

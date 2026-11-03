@@ -63,12 +63,17 @@ func (h *Handler) DeleteAgentAPI(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.store.DeleteAgent(r.Context(), id); err != nil {
+	disabled, err := h.store.DeleteAgent(r.Context(), id)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete agent")
 		return
 	}
 	h.audit(r, "delete", "agent", id, "")
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	for _, monID := range disabled {
+		h.logger.Warn("monitor disabled for agents: its only assigned agent was deleted", "monitor_id", monID, "agent_id", id)
+		h.audit(r, "update", "monitor", monID, fmt.Sprintf("agent checks disabled: only assigned agent %d was deleted", id))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "deleted", "agent_disabled_monitor_ids": disabled})
 }
 
 func (h *Handler) AgentAuth(next http.Handler) http.Handler {
@@ -118,7 +123,7 @@ func (h *Handler) AgentGetJobs(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("update agent heartbeat", "error", err)
 	}
 
-	jobs, err := h.store.ListAgentJobs(r.Context())
+	jobs, err := h.store.ListAgentJobs(r.Context(), agent.ID)
 	if err != nil {
 		h.logger.Error("list agent jobs", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list jobs")
@@ -140,6 +145,51 @@ type agentResultRequest struct {
 	BodyHash        string `json:"body_hash"`
 	CertFingerprint string `json:"cert_fingerprint"`
 	DNSRecords      string `json:"dns_records"`
+	// CheckedAt is when the agent ran the check. Optional; results are
+	// batched per cycle, so the receive time can be minutes later.
+	CheckedAt *time.Time `json:"checked_at,omitempty"`
+}
+
+// agentResultMonitor returns the monitor res reports on, or nil when the result
+// must be ignored: no or unknown monitor, invalid status, its type cannot run
+// on agents, or it is not one of the agent's jobs (jobs holds the monitor IDs
+// ListAgentJobs offers the agent). Using the job list keeps result acceptance
+// in step with job listing: an agent cannot write results for monitors that
+// are off, not run by agents, assigned to other agents, or left to the server
+// because they need credentials.
+func (h *Handler) agentResultMonitor(ctx context.Context, jobs map[int64]bool, res agentResultRequest) *storage.Monitor {
+	if res.MonitorID == 0 || !validCheckStatuses[res.Status] || !jobs[res.MonitorID] {
+		return nil
+	}
+	mon, err := h.store.GetMonitor(ctx, res.MonitorID)
+	if err != nil || mon == nil || !mon.Enabled || !mon.AgentEnabled || !agentEligibleTypes[mon.Type] {
+		return nil
+	}
+	return mon
+}
+
+// agentJobIDs returns the IDs of the monitors agentID is offered as jobs.
+func (h *Handler) agentJobIDs(ctx context.Context, agentID int64) (map[int64]bool, error) {
+	jobs, err := h.store.ListAgentJobs(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make(map[int64]bool, len(jobs))
+	for _, j := range jobs {
+		ids[j.ID] = true
+	}
+	return ids, nil
+}
+
+// agentCheckedAt returns the reported checked_at, or the zero time (meaning
+// "now", the receive time) when it is missing or in the future, so a skewed
+// agent clock cannot make its later results look stale. The pipeline only
+// drops a result checked before the newest one applied from the same agent.
+func agentCheckedAt(reported *time.Time, now time.Time) time.Time {
+	if reported == nil || reported.After(now) {
+		return time.Time{}
+	}
+	return reported.UTC()
 }
 
 func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
@@ -163,22 +213,25 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Posting results is proof of life too: a long check cycle must not make
+	// an active agent look offline.
+	if err := h.store.UpdateAgentHeartbeat(r.Context(), agent.ID); err != nil {
+		h.logger.Error("update agent heartbeat", "error", err)
+	}
+
+	jobs, err := h.agentJobIDs(r.Context(), agent.ID)
+	if err != nil {
+		h.logger.Error("list agent jobs", "agent", agent.Name, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list jobs")
+		return
+	}
+
 	now := time.Now().UTC()
 	accepted := 0
 
 	for _, res := range results {
-		if res.MonitorID == 0 {
-			continue
-		}
-		if !validCheckStatuses[res.Status] {
-			continue
-		}
-
-		mon, err := h.store.GetMonitor(r.Context(), res.MonitorID)
-		if err != nil || mon == nil || !mon.Enabled || !mon.AgentEnabled {
-			continue
-		}
-		if !agentEligibleTypes[mon.Type] {
+		mon := h.agentResultMonitor(r.Context(), jobs, res)
+		if mon == nil {
 			continue
 		}
 
@@ -192,16 +245,20 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 			CertFingerprint: res.CertFingerprint,
 			DNSRecords:      res.DNSRecords,
 			AgentID:         &agent.ID,
-			CreatedAt:       now,
+			CreatedAt:       agentCheckedAt(res.CheckedAt, now),
 		}
 
-		if err := h.store.InsertCheckResult(r.Context(), cr); err != nil {
+		// The pipeline evaluates the result (assertions, upside_down, anomaly)
+		// before storing it. A stale result is kept in the history but does
+		// not drive the monitor's current status or incidents.
+		if h.pipeline != nil {
+			err = h.pipeline.ProcessAgentResult(r.Context(), mon, cr)
+		} else {
+			err = h.store.InsertCheckResult(r.Context(), cr)
+		}
+		if err != nil {
 			h.logger.Error("insert agent check result", "agent", agent.Name, "monitor_id", res.MonitorID, "error", err)
 			continue
-		}
-
-		if h.pipeline != nil {
-			h.pipeline.ProcessAgentResult(r.Context(), mon, cr)
 		}
 
 		accepted++

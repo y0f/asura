@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 33
+const schemaVersion = 35
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS content_changes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_content_changes_monitor_id ON content_changes(monitor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_content_changes_created_at ON content_changes(created_at);
 
 CREATE TABLE IF NOT EXISTS audit_log (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -322,6 +323,15 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token);
+
+-- Agents a monitor is assigned to. A monitor without rows runs on every agent.
+CREATE TABLE IF NOT EXISTS monitor_agents (
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	agent_id   INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+	PRIMARY KEY (monitor_id, agent_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monitor_agents_agent_id ON monitor_agents(agent_id);
 
 CREATE TABLE IF NOT EXISTS on_call_rotations (
 	id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -619,5 +629,19 @@ ALTER TABLE check_results ADD COLUMN agent_id INTEGER DEFAULT NULL;`,
 );
 ALTER TABLE monitor_status ADD COLUMN last_response_time INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE totp_keys ADD COLUMN last_counter INTEGER NOT NULL DEFAULT 0;`,
+	},
+	{
+		version: 34,
+		sql:     `CREATE INDEX IF NOT EXISTS idx_content_changes_created_at ON content_changes(created_at);`,
+	},
+	{
+		version: 35,
+		sql: `CREATE TABLE IF NOT EXISTS monitor_agents (
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	agent_id   INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+	PRIMARY KEY (monitor_id, agent_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monitor_agents_agent_id ON monitor_agents(agent_id);`,
 	},
 }

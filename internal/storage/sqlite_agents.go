@@ -96,16 +96,72 @@ func (s *SQLiteStore) UpdateAgentHeartbeat(ctx context.Context, agentID int64) e
 	return err
 }
 
-func (s *SQLiteStore) DeleteAgent(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM agents WHERE id=?", id)
-	return err
+// DeleteAgent deletes agent id. A monitor without agent assignments runs on
+// every agent, so a monitor assigned only to this agent is disabled for agents
+// (agent_enabled=0) in the same transaction instead of silently widening to all
+// of them. It returns the IDs of the monitors it disabled.
+func (s *SQLiteStore) DeleteAgent(ctx context.Context, id int64) ([]int64, error) {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx,
+		`SELECT m.id FROM monitors m
+		 JOIN monitor_agents ma ON ma.monitor_id = m.id AND ma.agent_id = ?
+		 WHERE m.agent_enabled = 1
+		 AND NOT EXISTS (SELECT 1 FROM monitor_agents o WHERE o.monitor_id = m.id AND o.agent_id <> ?)
+		 ORDER BY m.id`, id, id)
+	if err != nil {
+		return nil, err
+	}
+	disabled := []int64{}
+	for rows.Next() {
+		var monID int64
+		if err := rows.Scan(&monID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		disabled = append(disabled, monID)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	now := formatTime(time.Now())
+	for _, monID := range disabled {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE monitors SET agent_enabled=0, updated_at=? WHERE id=?`, now, monID); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM agents WHERE id=?", id); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return disabled, nil
 }
 
-func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
+// agentMayCheck is the SQL condition for "agent ? may check monitors.id": the
+// monitor has no agent assignment (it runs on every agent) or is assigned to it.
+const agentMayCheck = `(NOT EXISTS (SELECT 1 FROM monitor_agents ma WHERE ma.monitor_id = monitors.id)
+	OR EXISTS (SELECT 1 FROM monitor_agents ma WHERE ma.monitor_id = monitors.id AND ma.agent_id = ?))`
+
+// monitorAssigned selects whether monitors.id is assigned to specific agents.
+const monitorAssigned = `EXISTS (SELECT 1 FROM monitor_agents ma WHERE ma.monitor_id = monitors.id)`
+
+// ListAgentJobs returns the monitors agentID should check: enabled, enabled for
+// agents, of a type agents can run, and either unassigned or assigned to it.
+func (s *SQLiteStore) ListAgentJobs(ctx context.Context, agentID int64) ([]*AgentJob, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, type, target, interval_secs, timeout_secs, settings
+		`SELECT id, name, type, target, interval_secs, timeout_secs, settings, `+monitorAssigned+`
 		 FROM monitors WHERE enabled=1 AND agent_enabled=1 AND type NOT IN ('heartbeat', 'manual', 'docker', 'command')
-		 ORDER BY id`)
+		 AND `+agentMayCheck+`
+		 ORDER BY id`, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +171,16 @@ func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 	for rows.Next() {
 		var j AgentJob
 		var settings string
-		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings); err != nil {
+		var assigned bool
+		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings, &assigned); err != nil {
 			return nil, err
 		}
 		settings, err = s.decryptSettings(settings)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt settings: %w", err)
+		}
+		if !agentMayReceiveSettings(settings, assigned) {
+			continue
 		}
 		if settings != "" && settings != "{}" {
 			j.Settings = sanitizeSettingsForAgent([]byte(settings))
@@ -136,15 +196,151 @@ func (s *SQLiteStore) ListAgentJobs(ctx context.Context) ([]*AgentJob, error) {
 	return jobs, nil
 }
 
+// AgentMayCheckMonitor reports whether agentID may report results for
+// monitorID: the monitor is unassigned or assigned to that agent, and its
+// settings may be sent to that agent (see agentMayReceiveSettings).
+func (s *SQLiteStore) AgentMayCheckMonitor(ctx context.Context, agentID, monitorID int64) (bool, error) {
+	var settings string
+	var assigned bool
+	err := s.readDB.QueryRowContext(ctx,
+		`SELECT settings, `+monitorAssigned+` FROM monitors WHERE id = ? AND `+agentMayCheck,
+		monitorID, agentID).Scan(&settings, &assigned)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	settings, err = s.decryptSettings(settings)
+	if err != nil {
+		return false, fmt.Errorf("decrypt settings: %w", err)
+	}
+	return agentMayReceiveSettings(settings, assigned), nil
+}
+
+// GetMonitorAgentIDs returns the agents monitorID is assigned to, in id order;
+// empty means it runs on every agent.
+func (s *SQLiteStore) GetMonitorAgentIDs(ctx context.Context, monitorID int64) ([]int64, error) {
+	rows, err := s.readDB.QueryContext(ctx,
+		`SELECT agent_id FROM monitor_agents WHERE monitor_id = ? ORDER BY agent_id`, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SetMonitorAgentIDs replaces the agent assignment of monitorID. An empty list
+// removes the assignment, so the monitor runs on every agent.
+func (s *SQLiteStore) SetMonitorAgentIDs(ctx context.Context, monitorID int64, agentIDs []int64) error {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM monitor_agents WHERE monitor_id = ?`, monitorID); err != nil {
+		return err
+	}
+	for _, id := range agentIDs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO monitor_agents (monitor_id, agent_id) VALUES (?, ?)`, monitorID, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// agentMayReceiveSettings reports whether a monitor with these (decrypted)
+// settings may be checked by an agent it is offered to.
+//
+// A monitor that needs credentials cannot be checked without them, and secrets
+// are never sent to agents; offering it would make every agent report a false
+// "down", so it is left to the server. Custom request headers and bodies are
+// sent verbatim and often carry credentials (Authorization, X-API-Key,
+// Cookie), so they only go to agents the monitor is explicitly assigned to,
+// never to every agent.
+func agentMayReceiveSettings(settings string, assigned bool) bool {
+	if settings == "" || settings == "{}" {
+		return true
+	}
+	if settingsHaveAgentSecrets([]byte(settings)) {
+		return false
+	}
+	return assigned || !settingsHaveRequestData([]byte(settings))
+}
+
+// settingsHaveRequestData reports whether the settings carry a custom request
+// header or body, at the top level or in an http_multi step.
+func settingsHaveRequestData(raw []byte) bool {
+	type request struct {
+		Headers map[string]any `json:"headers"`
+		Body    any            `json:"body"`
+	}
+	var m struct {
+		request
+		Steps []request `json:"steps"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		// Settings that cannot be read cannot be shown to be credential-free.
+		return true
+	}
+	has := func(r request) bool {
+		if r.Body != nil && r.Body != "" {
+			return true
+		}
+		for _, v := range r.Headers {
+			if v != nil && v != "" {
+				return true
+			}
+		}
+		return false
+	}
+	if has(m.request) {
+		return true
+	}
+	for _, st := range m.Steps {
+		if has(st) {
+			return true
+		}
+	}
+	return false
+}
+
+// agentSecretKeys are monitor settings that are never sent to agents.
+var agentSecretKeys = []string{
+	"basic_auth_pass", "bearer_token", "oauth2_client_secret",
+	"mtls_client_key", "mtls_client_cert", "mtls_ca_cert", "password",
+}
+
+// settingsHaveAgentSecrets reports whether the settings carry a non-empty
+// value for any key in agentSecretKeys.
+func settingsHaveAgentSecrets(raw []byte) bool {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return false
+	}
+	for _, k := range agentSecretKeys {
+		if v, ok := m[k]; ok && v != nil && v != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func sanitizeSettingsForAgent(raw []byte) json.RawMessage {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return raw
 	}
-	for _, secret := range []string{
-		"basic_auth_pass", "bearer_token", "oauth2_client_secret",
-		"mtls_client_key", "mtls_client_cert", "mtls_ca_cert", "password",
-	} {
+	for _, secret := range agentSecretKeys {
 		delete(m, secret)
 	}
 	out, _ := json.Marshal(m)

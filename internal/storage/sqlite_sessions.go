@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -257,14 +258,13 @@ func (s *SQLiteStore) PurgeOldData(ctx context.Context, before time.Time) (int64
 	ts := formatTime(before)
 	var totalDeleted int64
 
-	res, err := s.writeDB.ExecContext(ctx, "DELETE FROM check_results WHERE created_at < ?", ts)
+	n, err := s.deleteInBatches(ctx, "check_results", "created_at < ?", ts)
 	if err != nil {
 		return 0, err
 	}
-	n, _ := res.RowsAffected()
 	totalDeleted += n
 
-	res, err = s.writeDB.ExecContext(ctx,
+	res, err := s.writeDB.ExecContext(ctx,
 		`DELETE FROM incident_events WHERE incident_id IN
 		 (SELECT id FROM incidents WHERE status='resolved' AND resolved_at < ?)`, ts)
 	if err != nil {
@@ -280,11 +280,10 @@ func (s *SQLiteStore) PurgeOldData(ctx context.Context, before time.Time) (int64
 	n, _ = res.RowsAffected()
 	totalDeleted += n
 
-	res, err = s.writeDB.ExecContext(ctx, "DELETE FROM content_changes WHERE created_at < ?", ts)
+	n, err = s.deleteInBatches(ctx, "content_changes", "created_at < ?", ts)
 	if err != nil {
 		return totalDeleted, err
 	}
-	n, _ = res.RowsAffected()
 	totalDeleted += n
 
 	res, err = s.writeDB.ExecContext(ctx, "DELETE FROM audit_log WHERE created_at < ?", ts)
@@ -308,4 +307,28 @@ func (s *SQLiteStore) PurgeOldData(ctx context.Context, before time.Time) (int64
 	totalDeleted += expired
 
 	return totalDeleted, nil
+}
+
+// purgeBatchSize bounds how many rows one retention DELETE removes. The write
+// pool has a single connection, so each batch is a short transaction and other
+// writers get the connection between batches instead of waiting for the whole
+// purge.
+const purgeBatchSize = 5000
+
+// deleteInBatches deletes rows of table matching where in chunks of
+// purgeBatchSize and returns the total number of rows deleted.
+func (s *SQLiteStore) deleteInBatches(ctx context.Context, table, where string, args ...any) (int64, error) {
+	q := "DELETE FROM " + table + " WHERE id IN (SELECT id FROM " + table + " WHERE " + where + " LIMIT " + strconv.Itoa(purgeBatchSize) + ")"
+	var total int64
+	for {
+		res, err := s.writeDB.ExecContext(ctx, q, args...)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if n < purgeBatchSize {
+			return total, nil
+		}
+	}
 }

@@ -29,6 +29,17 @@ func (h *Handler) checkStatusPageAuth(r *http.Request, pageID int64, passwordHas
 	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(expected)) == 1
 }
 
+// requireStatusPageAuth redirects to the status page's password form and
+// returns false when sp is password-protected and the request is not
+// authenticated for it.
+func (h *Handler) requireStatusPageAuth(w http.ResponseWriter, r *http.Request, sp *storage.StatusPage) bool {
+	if sp.PasswordHash == "" || h.checkStatusPageAuth(r, sp.ID, sp.PasswordHash) {
+		return true
+	}
+	http.Redirect(w, r, h.cfg.Server.BasePath+"/"+sp.Slug+"/auth", http.StatusFound)
+	return false
+}
+
 func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID int64) {
 	ctx := r.Context()
 
@@ -38,8 +49,7 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 		return
 	}
 
-	if sp.PasswordHash != "" && !h.checkStatusPageAuth(r, pageID, sp.PasswordHash) {
-		http.Redirect(w, r, h.cfg.Server.BasePath+"/"+sp.Slug+"/auth", http.StatusFound)
+	if !h.requireStatusPageAuth(w, r, sp) {
 		return
 	}
 

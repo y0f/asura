@@ -62,8 +62,21 @@ func (w *RequestLogWriter) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			flush(context.Background())
-			return
+			// Persist everything already queued; Send never blocks, so the
+			// channel only holds logs from requests that have completed.
+			fctx := context.Background()
+			for {
+				select {
+				case log := <-w.ch:
+					batch = append(batch, log)
+					if len(batch) >= requestLogBatchSize {
+						flush(fctx)
+					}
+				default:
+					flush(fctx)
+					return
+				}
+			}
 		case log := <-w.ch:
 			batch = append(batch, log)
 			if len(batch) >= requestLogBatchSize {

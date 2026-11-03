@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -63,6 +64,29 @@ func (s *SQLiteStore) RollupDaily(ctx context.Context, day string) error {
 		day+"T00",
 		day+"T24")
 	return err
+}
+
+// RollupProgress reports the newest hourly and daily rollup and the oldest raw
+// check result. Each is the zero time when there is none.
+func (s *SQLiteStore) RollupProgress(ctx context.Context) (lastHour, lastDay, oldestCheck time.Time, err error) {
+	var h, d, c sql.NullString
+	err = s.readDB.QueryRowContext(ctx,
+		`SELECT (SELECT MAX(hour) FROM check_result_hourly),
+		        (SELECT MAX(day) FROM check_result_daily),
+		        (SELECT MIN(created_at) FROM check_results)`).Scan(&h, &d, &c)
+	if err != nil {
+		return
+	}
+	if h.Valid {
+		lastHour, _ = time.Parse("2006-01-02T15", h.String)
+	}
+	if d.Valid {
+		lastDay, _ = time.Parse("2006-01-02", d.String)
+	}
+	if c.Valid {
+		oldestCheck = parseTime(c.String)
+	}
+	return
 }
 
 func (s *SQLiteStore) PurgeHourlyBefore(ctx context.Context, before time.Time) (int64, error) {

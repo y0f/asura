@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -146,13 +147,51 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 }
 
 func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time) (float64, error) {
+	from, to = from.UTC(), to.UTC()
 	var total, up int64
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0)
-		 FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
-		monitorID, formatTime(from), formatTime(to)).Scan(&total, &up)
-	if err != nil {
-		return 0, err
+
+	// Whole UTC days covered by the daily rollups are summed from
+	// check_result_daily; only the edges outside the rolled-up days (the partial
+	// first day, today, days not rolled up yet) are counted from raw rows. This
+	// keeps long ranges (the 90-day status page figure) from scanning every check.
+	raw := [][2]time.Time{{from, to}}
+	firstDay := from.Truncate(24 * time.Hour)
+	if firstDay.Before(from) {
+		firstDay = firstDay.Add(24 * time.Hour)
+	}
+	if endDay := to.Truncate(24 * time.Hour); endDay.After(firstDay) {
+		var minDay, maxDay sql.NullString
+		err := s.readDB.QueryRowContext(ctx,
+			`SELECT COALESCE(SUM(total), 0), COALESCE(SUM(up_count), 0), MIN(day), MAX(day)
+			 FROM check_result_daily WHERE monitor_id=? AND day >= ? AND day < ?`,
+			monitorID, firstDay.Format("2006-01-02"), endDay.Format("2006-01-02")).Scan(&total, &up, &minDay, &maxDay)
+		if err != nil {
+			return 0, err
+		}
+		if minDay.Valid && maxDay.Valid {
+			lo, err1 := time.Parse("2006-01-02", minDay.String)
+			hi, err2 := time.Parse("2006-01-02", maxDay.String)
+			if err1 != nil || err2 != nil {
+				return 0, fmt.Errorf("parse rollup day: %w", errors.Join(err1, err2))
+			}
+			raw = [][2]time.Time{{from, lo}, {hi.AddDate(0, 0, 1), to}}
+		}
+	}
+
+	for _, r := range raw {
+		if !r[0].Before(r[1]) {
+			continue
+		}
+		var t, u int64
+		err := s.readDB.QueryRowContext(ctx,
+			`SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0)
+			 FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
+			monitorID, formatTime(r[0]), formatTime(r[1])).Scan(&t, &u)
+		if err != nil {
+			return 0, err
+		}
+		total += t
+		up += u
 	}
 	if total == 0 {
 		return 100, nil

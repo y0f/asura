@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -114,6 +115,39 @@ func (s *SQLiteStore) ListIncidents(ctx context.Context, monitorID int64, status
 		PerPage:    p.PerPage,
 		TotalPages: int(math.Ceil(float64(total) / float64(p.PerPage))),
 	}, nil
+}
+
+func (s *SQLiteStore) ListRecentIncidents(ctx context.Context, monitorIDs []int64, resolvedSince time.Time, limit int) ([]*Incident, error) {
+	if len(monitorIDs) == 0 || limit <= 0 {
+		return []*Incident{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(monitorIDs))
+	args := make([]any, 0, len(monitorIDs)+2)
+	for _, id := range monitorIDs {
+		args = append(args, id)
+	}
+	args = append(args, formatTime(resolvedSince), limit)
+
+	rows, err := s.readDB.QueryContext(ctx,
+		`SELECT `+incidentColumnsWithName+`
+		 FROM incidents i LEFT JOIN monitors m ON m.id = i.monitor_id
+		 WHERE i.monitor_id IN (`+placeholders[:len(placeholders)-1]+`)
+		   AND NOT (i.status='resolved' AND i.resolved_at IS NOT NULL AND i.resolved_at < ?)
+		 ORDER BY i.started_at DESC LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	incidents := []*Incident{}
+	for rows.Next() {
+		inc, err := scanIncident(rows.Scan, true)
+		if err != nil {
+			return nil, err
+		}
+		incidents = append(incidents, inc)
+	}
+	return incidents, rows.Err()
 }
 
 func (s *SQLiteStore) UpdateIncident(ctx context.Context, inc *Incident) error {

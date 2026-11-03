@@ -41,7 +41,10 @@ type ReportEntry struct {
 
 // Compute calculates the SLA status for a monitor.
 func Compute(ctx context.Context, store storage.Store, monitorID int64, target float64) (*Status, error) {
-	now := time.Now().UTC()
+	return computeAt(ctx, store, monitorID, target, time.Now().UTC())
+}
+
+func computeAt(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time) (*Status, error) {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0)
 
@@ -81,7 +84,11 @@ func Compute(ctx context.Context, store storage.Store, monitorID int64, target f
 		BudgetRemainSecs:  budgetRemain,
 		BudgetRemainPct:   budgetRemainPct,
 		BudgetRemainHuman: FormatDuration(budgetRemain),
-		Breached:          uptimeMonth < target,
+		// The SLA is for the whole month, so it is only breached once the
+		// downtime so far exceeds the month's error budget (compared unrounded). Comparing the
+		// month-to-date ratio with the target would flag the first short outage
+		// of every month while nearly all of the budget is left.
+		Breached: target > 0 && float64(elapsedSecs)*(100-uptimeMonth) > float64(totalSecsMonth)*(100-min(target, 100)),
 	}, nil
 }
 
