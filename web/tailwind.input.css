@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 
 /* Fonts (self-hosted, preloaded in the layout head) */
 @font-face {
@@ -16,7 +16,7 @@
   src: url("fonts/jetbrains-mono.woff2") format("woff2");
 }
 
-/* Scan the templ views for utility usage. */
+/* Scan authored application views and helpers, not generated docs or assets. */
 @source "../internal/web/views";
 
 /* Status tones are chosen at runtime in Go (helpers.go builds "text-" + tone),

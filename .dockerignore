@@ -18,3 +18,15 @@ dist/
 .idea/
 .vscode/
 .github/
+/.testrun/
+/node_modules/
+/asura
+/asura.exe
+/asura-agent
+/asura-agent.exe
+/asura-dev*
+/tailwindcss
+/tailwindcss.exe
+coverage.out
+*.cover
+*.prof

@@ -1,0 +1,37 @@
+name: Generated assets
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  TAILWIND_VERSION: "4.2.1"
+  TAILWIND_SHA256: "39e8d4e24b3c83b0a6e69e100a972fbc75d5fef8dce47b3ddac3cf92dea81fe3"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: "go.mod"
+      - name: Download pinned Tailwind CLI
+        run: |
+          curl --fail --location --silent --show-error -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
+          chmod +x tailwindcss
+      - name: Check generated templates, documentation and CSS
+        run: |
+          make generate css
+          git diff --exit-code
+          if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "::error::Untracked generated files. Run 'make generate css' and commit the outputs."
+            git ls-files --others --exclude-standard
+            exit 1
+          fi

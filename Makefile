@@ -1,18 +1,26 @@
 BINARY   := asura
 VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  := -s -w -X main.version=$(VERSION)
+export LDFLAGS
 GOFLAGS  := -trimpath
 
 TAILWIND := ./tailwindcss
+TEMPL_VERSION = $(shell go list -m -f '{{.Version}}' github.com/a-h/templ)
+TEMPL = go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 
-.PHONY: all build css watch dev test lint run clean hash-key release generate agent
+.PHONY: all build css docs watch dev test lint run clean hash-key release generate agent
 
 all: build
 
 generate:
-	templ generate
+	$(TEMPL) generate
+	go run ./cmd/docsgen
 
-css:
+docs:
+	go run ./cmd/docsgen
+	$(TAILWIND) -i docs/tailwind.input.css -o docs/static/docs.css --minify
+
+css: generate
 	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --minify
 	$(TAILWIND) -i docs/tailwind.input.css -o docs/static/docs.css --minify
 
@@ -22,8 +30,8 @@ watch:
 dev:
 	bash dev.sh
 
-build: generate
-	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o $(BINARY) ./cmd/asura
+build: css
+	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o $(BINARY) ./cmd/asura
 
 test: generate
 	go test -race -count=1 ./...
@@ -43,12 +51,13 @@ hash-key:
 	go run ./cmd/asura -hash-key "$$key"
 
 agent:
-	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o asura-agent ./cmd/asura-agent
+	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o asura-agent ./cmd/asura-agent
 
 release:
 	@mkdir -p dist
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-linux-amd64 ./cmd/asura
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-linux-arm64 ./cmd/asura
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-agent-linux-amd64 ./cmd/asura-agent
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o dist/asura-agent-linux-arm64 ./cmd/asura-agent
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o dist/asura-linux-amd64 ./cmd/asura
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o dist/asura-linux-arm64 ./cmd/asura
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o dist/asura-agent-linux-amd64 ./cmd/asura-agent
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o dist/asura-agent-linux-arm64 ./cmd/asura-agent
+	cd dist && sha256sum asura-linux-amd64 asura-linux-arm64 asura-agent-linux-amd64 asura-agent-linux-arm64 > checksums.txt
 	@echo "Binaries written to dist/"

@@ -5,54 +5,77 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   GOTOOLCHAIN: local
 
 jobs:
-  release:
+  tag:
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      minor: ${{ steps.tag.outputs.minor }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release version
+        id: tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/release-tag.sh "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
+  validate:
+    needs: tag
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: [tag, validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: "go.mod"
-
-      - name: Rebuild Tailwind CSS
-        run: |
-          curl -sL -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.1/tailwindcss-linux-x64"
-          echo "39e8d4e24b3c83b0a6e69e100a972fbc75d5fef8dce47b3ddac3cf92dea81fe3  tailwindcss" | sha256sum -c -
-          chmod +x tailwindcss
-          ./tailwindcss -i web/tailwind.input.css -o web/static/tailwind.css --minify
-          ./tailwindcss -i docs/tailwind.input.css -o docs/static/docs.css --minify
-
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
-
-      - name: Generate templ
-        run: templ generate
-
-      - name: Build binaries
-        run: |
-          VERSION=${GITHUB_REF_NAME}
-          LDFLAGS="-s -w -X main.version=${VERSION}"
-          mkdir -p dist
-
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="${LDFLAGS}" -o dist/asura-linux-amd64 ./cmd/asura
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="${LDFLAGS}" -o dist/asura-linux-arm64 ./cmd/asura
-
-          cd dist
-          sha256sum asura-* > checksums.txt
-
+      - name: Build verified release sources
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make release VERSION="$VERSION"
+      - name: Attest release binaries and checksums
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
       - name: Create release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           generate_release_notes: true
+          prerelease: ${{ needs.tag.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.tag.outputs.prerelease == 'true' && 'false' || 'legacy' }}
+          fail_on_unmatched_files: true
           files: |
             dist/asura-linux-amd64
             dist/asura-linux-arm64
+            dist/asura-agent-linux-amd64
+            dist/asura-agent-linux-arm64
             dist/checksums.txt
+
+  docker:
+    needs: [tag, validate]
+    uses: ./.github/workflows/docker.yml
+    with:
+      image_tag: ${{ needs.tag.outputs.image_tag }}
+      minor: ${{ needs.tag.outputs.minor }}
+      prerelease: ${{ needs.tag.outputs.prerelease == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write

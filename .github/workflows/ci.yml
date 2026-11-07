@@ -5,84 +5,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
 
 env:
   GOTOOLCHAIN: local
-  TAILWIND_VERSION: "4.2.1"
-  TAILWIND_SHA256: "39e8d4e24b3c83b0a6e69e100a972fbc75d5fef8dce47b3ddac3cf92dea81fe3" # tailwindcss-linux-x64 v4.2.1
 
 jobs:
-  tailwind:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Check if rebuild needed
-        id: css-check
-        run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
-          # Skip if nothing Tailwind scans or imports changed (templates, the
-          # Go view helpers that build class names, CSS sources, docs HTML).
-          if ! echo "$CHANGED" | grep -qE '\.templ$|^internal/web/views/.*\.go$|^web/css/|tailwind\.input\.css$|\.html$'; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Download Tailwind CLI
-        if: steps.css-check.outputs.skip != 'true'
-        run: |
-          curl -sL -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
-          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
-          chmod +x tailwindcss
-
-      - name: Rebuild CSS
-        if: steps.css-check.outputs.skip != 'true'
-        run: |
-          ./tailwindcss -i web/tailwind.input.css -o web/static/tailwind.css --minify
-          ./tailwindcss -i docs/tailwind.input.css -o docs/static/docs.css --minify
-
-      - name: Commit if changed
-        if: steps.css-check.outputs.skip != 'true'
-        run: |
-          git diff --quiet web/static/tailwind.css docs/static/docs.css && exit 0
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/static/tailwind.css docs/static/docs.css
-          git commit -m "Rebuild Tailwind CSS [skip ci]"
-          git push
-
   generated:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: "go.mod"
-
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
-
-      - name: Download Tailwind CLI
-        run: |
-          curl -sL -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
-          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
-          chmod +x tailwindcss
-
-      - name: Generated files are up to date
-        run: |
-          templ generate
-          ./tailwindcss -i web/tailwind.input.css -o web/static/tailwind.css --minify
-          ./tailwindcss -i docs/tailwind.input.css -o docs/static/docs.css --minify
-          rm -f tailwindcss
-          if ! git diff --exit-code --stat; then
-            echo "::error::Generated templ or CSS output is stale. Run 'templ generate' and 'make css', then commit."
-            exit 1
-          fi
+    uses: ./.github/workflows/generated.yml
 
   test:
     runs-on: ubuntu-latest
@@ -91,100 +24,63 @@ jobs:
         go-version: ["1.26.10", "1.27.3"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Installer toolchain regression tests
+        with:
+          persist-credentials: false
+      - name: Installer regressions
         run: bash scripts/test-install.sh
-
+      - name: Development watcher regressions
+        run: bash scripts/test-dev.sh
+      - name: Release tag regressions
+        run: bash scripts/test-release-tag.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
-
-      - name: Generate templ
-        run: templ generate
-
       - name: Vet
         run: go vet ./...
-
+      - name: Check source vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: Test
-        run: go test -race -count=1 ./...
-
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - name: Retain coverage for review
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          go-version-file: "go.mod"
-
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
-
-      - name: Generate templ
-        run: templ generate
-
-      - name: Build linux/amd64
-        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/asura
-
-      - name: Build linux/arm64
-        run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /dev/null ./cmd/asura
+          name: coverage-go-${{ matrix.go-version }}
+          path: coverage.out
+          retention-days: 14
 
   quality:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: "go.mod"
-
-      - name: Install tools
+      - name: Check formatting
         run: |
-          go install github.com/fzipp/gocyclo/cmd/gocyclo@v0.6.0
-          go install github.com/gordonklaus/ineffassign@v0.1.0
-          go install github.com/client9/misspell/cmd/misspell@v0.3.4
+          unformatted=$(gofmt -l .)
+          printf '%s\n' "$unformatted"
+          test -z "$unformatted"
+      - name: Check ineffectual assignments
+        run: go run github.com/gordonklaus/ineffassign@v0.1.0 ./...
 
-      - name: gofmt
+  build:
+    runs-on: ubuntu-latest
+    needs: [generated, test, quality]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: "go.mod"
+      - name: Build server and agent for both Linux architectures
+        run: make release
+      - name: Inspect and scan release artifacts
         run: |
-          out=$(gofmt -l . 2>&1) || true
-          if [ -n "$out" ]; then
-            echo "::warning::gofmt issues found:"
-            echo "$out"
-          else
-            echo "gofmt: OK"
-          fi
-
-      - name: gocyclo
-        run: |
-          out=$(gocyclo -over 15 . 2>&1) || true
-          if [ -n "$out" ]; then
-            echo "::warning::Functions with cyclomatic complexity > 15:"
-            echo "$out"
-          else
-            echo "gocyclo: OK"
-          fi
-
-      - name: ineffassign
-        run: |
-          out=$(ineffassign ./... 2>&1) || true
-          if [ -n "$out" ]; then
-            echo "::warning::Ineffectual assignments found:"
-            echo "$out"
-          else
-            echo "ineffassign: OK"
-          fi
-
-      - name: misspell
-        run: |
-          out=$(misspell -error . 2>&1) || true
-          if [ -n "$out" ]; then
-            echo "::warning::Spelling issues found:"
-            echo "$out"
-          else
-            echo "misspell: OK"
-          fi
+          for binary in dist/asura-linux-* dist/asura-agent-linux-*; do
+            go version -m "$binary"
+            go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -mode=binary "$binary"
+          done
