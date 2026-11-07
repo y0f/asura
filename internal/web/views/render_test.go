@@ -245,7 +245,7 @@ func TestStatusPageAPIToggleHint(t *testing.T) {
 	}
 }
 
-func TestSettingsImportNeedsSuperAdmin(t *testing.T) {
+func TestSettingsTransferNeedsSuperAdmin(t *testing.T) {
 	lp := testLayout("Settings", true)
 	lp.SuperAdmin = false
 	var buf bytes.Buffer
@@ -253,11 +253,8 @@ func TestSettingsImportNeedsSuperAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if strings.Contains(out, "/settings/import") || strings.Contains(out, "/settings/vacuum") {
-		t.Fatal("import or vacuum shown to a key that is not super admin")
-	}
-	if !strings.Contains(out, "/settings/export") {
-		t.Fatal("export hidden from a key with monitors.write")
+	if strings.Contains(out, "/settings/import") || strings.Contains(out, "/settings/export") || strings.Contains(out, "/settings/vacuum") {
+		t.Fatal("configuration transfer or vacuum shown to a key that is not super admin")
 	}
 }
 

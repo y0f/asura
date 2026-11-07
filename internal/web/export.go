@@ -51,12 +51,11 @@ func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
-	canExportSecrets := k != nil && k.HasPermission("monitors.write")
-
-	redact := true
-	if canExportSecrets && r.URL.Query().Get("redact_secrets") == "false" {
-		redact = false
+	if k == nil || !k.SuperAdmin {
+		http.Error(w, "Configuration export requires super admin access", http.StatusForbidden)
+		return
 	}
+	redact := r.URL.Query().Get("redact_secrets") != "false"
 
 	data, err := api.BuildExportData(r.Context(), h.store, redact)
 	if err != nil {
@@ -75,8 +74,7 @@ func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
 	if k == nil || !k.SuperAdmin {
-		h.setError(w, "Import requires admin access")
-		h.redirect(w, r, "/settings")
+		http.Error(w, "Configuration import requires super admin access", http.StatusForbidden)
 		return
 	}
 

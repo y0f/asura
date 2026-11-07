@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 )
@@ -658,7 +659,12 @@ func importStatusPages(ctx context.Context, ic *importCtx, pages []ExportStatusP
 }
 
 func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
-	// A plain export is a full backup, secrets included; redaction is opt-in.
+	k := httputil.GetAPIKey(r.Context())
+	if k == nil || !k.SuperAdmin {
+		writeError(w, http.StatusForbidden, "configuration transfer requires super admin access")
+		return
+	}
+	// Exports include credentials unless redaction is requested.
 	redact := r.URL.Query().Get("redact_secrets") == "true"
 
 	data, err := BuildExportData(r.Context(), h.store, redact)
@@ -677,6 +683,11 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
+	k := httputil.GetAPIKey(r.Context())
+	if k == nil || !k.SuperAdmin {
+		writeError(w, http.StatusForbidden, "configuration transfer requires super admin access")
+		return
+	}
 	mode := r.URL.Query().Get("mode")
 	if mode == "" {
 		mode = "merge"
