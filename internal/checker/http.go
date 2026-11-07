@@ -169,7 +169,15 @@ func proxiedRedirectPolicy(next func(*http.Request, []*http.Request) error, allo
 }
 
 func buildHTTPResult(resp *http.Response, elapsed int64, settings storage.HTTPSettings) (*Result, error) {
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
+	if err != nil {
+		return &Result{
+			Status:       "down",
+			ResponseTime: elapsed,
+			StatusCode:   resp.StatusCode,
+			Message:      fmt.Sprintf("response body read failed: %v", err),
+		}, nil
+	}
 
 	h := sha256.Sum256(bodyBytes)
 	headers := make(map[string]string)

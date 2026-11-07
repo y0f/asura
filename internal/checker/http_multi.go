@@ -95,8 +95,16 @@ func (c *HTTPMultiChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 			}, nil
 		}
 
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
 		resp.Body.Close()
+		if err != nil {
+			return &Result{
+				Status:       "down",
+				ResponseTime: totalRT,
+				StatusCode:   resp.StatusCode,
+				Message:      fmt.Sprintf("%s: response body read failed: %v", stepName, err),
+			}, nil
+		}
 
 		if step.ExpectedStatus > 0 && resp.StatusCode != step.ExpectedStatus {
 			return &Result{
