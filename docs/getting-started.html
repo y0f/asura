@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting started · Asura documentation</title>
+  <link rel="icon" href="static/favicon.ico">
+  <link rel="canonical" href="getting-started.html">
+  <link rel="stylesheet" href="static/docs.css">
+  <script src="static/docs.js"></script>
+</head>
+<body class="bg-surface text-muted-light font-sans">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="docs-header">
+    <a href="index.html" class="docs-brand" aria-label="Asura documentation home">Asura <span>Docs</span></a>
+    <nav aria-label="Quick links" class="docs-quick-links">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/y0f/Asura">GitHub</a>
+    </nav>
+    <button id="theme-toggle" type="button" class="docs-theme" hidden aria-label="Use dark theme">
+      <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18"></path><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"></path></svg>
+    </button>
+  </header>
+  <div class="docs-body">
+    <details class="docs-menu">
+      <summary>Documentation</summary>
+      <nav aria-label="Documentation">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html" aria-current="page">Getting started</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="monitors.html">Monitors</a>
+        <a href="notifications.html">Notifications</a>
+        <a href="escalation-policies.html">Escalation policies</a>
+        <a href="sla.html">SLA reports</a>
+        <a href="status-pages.html">Status pages</a>
+        <a href="api.html">API reference</a>
+        <a href="backup.html">Backup and restore</a>
+        <a href="deployment.html">Deployment</a>
+        <a href="architecture.html">Architecture</a>
+
+      </nav>
+    </details>
+    <main id="content" class="prose-docs" tabindex="-1"><h1 id="getting-started"><a class="heading-link" href="#getting-started">Getting Started</a></h1>
+
+<p>One binary, one config file. No runtime, no external database, no container required.</p>
+
+<h2 id="vps-install-recommended"><a class="heading-link" href="#vps-install-recommended">VPS Install (recommended)</a></h2>
+
+<pre><code>git clone https://github.com/y0f/Asura.git
+cd Asura
+sudo bash install.sh</code></pre>
+
+<p>The install script:</p>
+<ul>
+  <li>Installs Go if not present</li>
+  <li>Builds a static binary (<code>CGO_ENABLED=0</code>)</li>
+  <li>Creates a systemd service</li>
+  <li>Generates an admin API key</li>
+</ul>
+
+<p>Takes a couple minutes on a fresh Ubuntu box.</p>
+
+<blockquote>By default, Asura binds to <code>127.0.0.1:8090</code> and is <strong>not</strong> accessible from the internet. Set up a <a href="deployment.html">reverse proxy</a> to expose it.</blockquote>
+
+<pre><code>systemctl status asura
+curl http://127.0.0.1:8090/api/v1/health</code></pre>
+
+<h2 id="docker-compose"><a class="heading-link" href="#docker-compose">Docker Compose</a></h2>
+
+<pre><code>git clone https://github.com/y0f/Asura.git
+cd Asura
+cp config.docker.example.yaml config.yaml
+docker compose build
+docker compose run --rm --no-deps asura --setup
+# Save the API Key securely; put the Hash value in .env:
+# ASURA_ADMIN_KEY_HASH=your_generated_hash
+docker compose up -d</code></pre>
+
+<p>Open <code>http://127.0.0.1:8090</code> and sign in with the API Key. The Docker example listens on all container interfaces while Compose publishes only on the host's loopback address. The SQLite database lives in the named <code>asura-data</code> volume and survives container replacement. <code>docker compose down</code> preserves it; adding <code>--volumes</code> deletes it.</p>
+
+<blockquote>For public access, configure an HTTPS <a href="deployment.html">reverse proxy</a> and set <code>auth.session.cookie_secure: true</code> in <code>config.yaml</code>. Keep the API Key private; the configuration uses only its hash.</blockquote>
+
+<h2 id="from-source"><a class="heading-link" href="#from-source">From Source</a></h2>
+
+<pre><code>make build
+./asura --setup                        # generates key + hash
+cp config.example.yaml config.yaml     # paste the hash
+./asura -config config.yaml</code></pre>
+
+<h2 id="cross-compile-deploy"><a class="heading-link" href="#cross-compile-deploy">Cross-compile + Deploy</a></h2>
+
+<pre><code>make release
+scp dist/asura-linux-amd64 you@server:/usr/local/bin/asura</code></pre>
+
+<h2 id="local-development"><a class="heading-link" href="#local-development">Local Development</a></h2>
+
+<p>Requires Go 1.26+ and the <a href="https://templ.guide/" target="_blank">templ</a> CLI:</p>
+
+<pre><code>go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)</code></pre>
+
+<p>You also need the <a href="https://github.com/tailwindlabs/tailwindcss/releases" target="_blank">Tailwind CSS standalone CLI</a> binary in the project root (named <code>tailwindcss</code>).</p>
+
+<h3 id="dev-mode"><a class="heading-link" href="#dev-mode">Dev Mode</a></h3>
+
+<p>One command watches all files, rebuilds, and restarts the server automatically:</p>
+
+<pre><code># Linux / macOS / Git Bash
+make dev
+
+# Windows PowerShell
+.\dev.ps1</code></pre>
+
+<p>Save any <code>.go</code> or <code>.templ</code> file and the server restarts within seconds. Tailwind CSS also rebuilds automatically.</p>
+
+<h3 id="one-shot-build"><a class="heading-link" href="#one-shot-build">One-Shot Build</a></h3>
+
+<pre><code>templ generate                        # compile .templ → Go
+go build -o asura ./cmd/asura         # build binary
+go test -race -count=1 ./...          # run tests</code></pre>
+
+<h2 id="manual-setup"><a class="heading-link" href="#manual-setup">Manual Setup</a></h2>
+
+<p>If you want to set everything up yourself:</p>
+
+<pre><code># Build
+make build
+sudo install -m 755 asura /usr/local/bin/asura
+
+# Generate API key
+asura --setup
+
+# System user + directories
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin asura
+sudo mkdir -p /etc/asura /var/lib/asura
+sudo chown asura:asura /var/lib/asura
+sudo chmod 700 /var/lib/asura
+
+# Config
+sudo cp config.example.yaml /etc/asura/config.yaml
+# set hash, database.path, base_path, trusted_proxies
+sudo chmod 640 /etc/asura/config.yaml
+sudo chown root:asura /etc/asura/config.yaml
+
+# Systemd
+sudo cp asura.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now asura</code></pre>
+</main>
+    <footer class="docs-footer"><a href="index.html">Documentation home</a><a href="https://github.com/y0f/Asura/blob/main/LICENSE">MIT license</a></footer>
+  </div>
+</body>
+</html>

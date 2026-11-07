@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backup and restore · Asura documentation</title>
+  <link rel="icon" href="static/favicon.ico">
+  <link rel="canonical" href="backup.html">
+  <link rel="stylesheet" href="static/docs.css">
+  <script src="static/docs.js"></script>
+</head>
+<body class="bg-surface text-muted-light font-sans">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="docs-header">
+    <a href="index.html" class="docs-brand" aria-label="Asura documentation home">Asura <span>Docs</span></a>
+    <nav aria-label="Quick links" class="docs-quick-links">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/y0f/Asura">GitHub</a>
+    </nav>
+    <button id="theme-toggle" type="button" class="docs-theme" hidden aria-label="Use dark theme">
+      <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18"></path><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"></path></svg>
+    </button>
+  </header>
+  <div class="docs-body">
+    <details class="docs-menu">
+      <summary>Documentation</summary>
+      <nav aria-label="Documentation">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="monitors.html">Monitors</a>
+        <a href="notifications.html">Notifications</a>
+        <a href="escalation-policies.html">Escalation policies</a>
+        <a href="sla.html">SLA reports</a>
+        <a href="status-pages.html">Status pages</a>
+        <a href="api.html">API reference</a>
+        <a href="backup.html" aria-current="page">Backup and restore</a>
+        <a href="deployment.html">Deployment</a>
+        <a href="architecture.html">Architecture</a>
+
+      </nav>
+    </details>
+    <main id="content" class="prose-docs" tabindex="-1"><h1 id="backup-restore"><a class="heading-link" href="#backup-restore">Backup & Restore</a></h1>
+
+<p>The Settings page (<code>/settings</code> in the web UI) lets you export and import your entire configuration as JSON. Use this to create backups, migrate between instances, or share configurations.</p>
+
+<h2 id="export"><a class="heading-link" href="#export">Export</a></h2>
+
+<p>Downloads all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a single JSON file. Two options:</p>
+
+<ul>
+  <li><strong>Export</strong>. includes all data including secrets (passwords, tokens, bearer keys). Use this for backups</li>
+  <li><strong>Export (redacted)</strong>. leaves out secrets for safe sharing: notification channel settings, proxy credentials, monitor passwords, tokens and keys, and all custom header values. A redacted file cannot restore those secrets</li>
+</ul>
+
+<p>Via API:</p>
+
+<pre><code>curl -H "X-API-Key: ak_..." https://example.com/api/v1/export &gt; backup.json
+curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=true &gt; backup-safe.json</code></pre>
+
+<p>The API export is a full backup unless you add <code>?redact_secrets=true</code>; redaction is opt-in. The web UI offers both buttons.</p>
+
+<h2 id="import"><a class="heading-link" href="#import">Import</a></h2>
+
+<p>Upload a previously exported JSON file to restore or transfer configuration between instances. Two modes:</p>
+
+<table>
+  <thead>
+    <tr><th>Mode</th><th>Behavior</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Merge</strong></td><td>Creates new items, skips items that already exist (by name). Existing data is untouched.</td></tr>
+    <tr><td><strong>Replace</strong></td><td>Deletes all existing monitors, groups, proxies, channels, maintenance windows, and status pages, then imports the file contents.</td></tr>
+  </tbody>
+</table>
+
+<p>Via API:</p>
+
+<pre><code>curl -X POST -H "X-API-Key: ak_..." \
+  -H "Content-Type: application/json" --data-binary @backup.json \
+  https://example.com/api/v1/import?mode=merge</code></pre>
+
+<h2 id="best-practices"><a class="heading-link" href="#best-practices">Best Practices</a></h2>
+
+<ul>
+  <li>Schedule regular exports as part of your backup strategy</li>
+  <li>Use <strong>redacted</strong> exports when sharing configs between team members</li>
+  <li>Test imports on a separate instance before replacing production data</li>
+  <li><strong>Replace</strong> mode is destructive. it deletes everything before importing</li>
+  <li>Import and export (including redacted exports) require <code>super_admin: true</code> or the legacy <code>admin</code> role. Ordinary resource permissions cannot grant configuration transfer access</li>
+</ul>
+</main>
+    <footer class="docs-footer"><a href="index.html">Documentation home</a><a href="https://github.com/y0f/Asura/blob/main/LICENSE">MIT license</a></footer>
+  </div>
+</body>
+</html>

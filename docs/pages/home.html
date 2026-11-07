@@ -1,81 +1,26 @@
-<div class="text-center mb-12">
-  <img src="static/asura.gif" alt="Asura" class="h-7 mx-auto mb-4">
-  <p class="text-muted-light text-sm !mb-6">Uptime monitoring packed into a single Go binary with embedded SQLite.</p>
-  <div class="flex flex-wrap items-center justify-center gap-2 mb-6">
-    <img src="https://github.com/y0f/Asura/actions/workflows/ci.yml/badge.svg" alt="CI">
-    <img src="https://img.shields.io/github/stars/y0f/Asura?style=flat" alt="GitHub stars">
-    <img src="https://img.shields.io/github/go-mod/go-version/y0f/Asura" alt="Go Version">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
-    <img src="https://img.shields.io/github/v/release/y0f/Asura?include_prereleases&sort=semver" alt="Release">
-  </div>
-</div>
+<h1>Monitor your services.</h1>
 
-<div class="bg-surface-100 border border-line rounded-lg p-6 mb-8">
-  <p class="!mb-0 text-center">Asura monitors your infrastructure from a single Go binary backed by SQLite.<br>No Postgres. No Redis. No Node.js. Just <code>scp</code> a binary and go.</p>
-</div>
+<p>Asura checks services, records incidents and sends alerts. It runs as a single Go binary with SQLite storage and includes a web interface, an API and public status pages.</p>
 
-<h2>Quick Start</h2>
+<h2>Start with a guide</h2>
 
-<pre><code>git clone https://github.com/y0f/Asura.git && cd Asura && sudo bash install.sh</code></pre>
-
-<p>Handles everything. Go install, build, systemd service, admin key. Takes a couple minutes on a fresh Ubuntu box.</p>
-
-<div class="flex flex-wrap gap-3 mb-10">
-  <a href="#getting-started" class="inline-flex items-center gap-2 px-4 py-2 bg-brand hover:bg-brand/85 text-sm font-medium rounded-lg transition-colors" style="color: #fff;">
-    Get started
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-  </a>
-  <a href="#monitors" class="inline-flex items-center gap-2 px-4 py-2 border border-line text-sm rounded-lg hover:bg-surface-200/50 transition-colors text-muted-light hover:text-white">
-    Monitors
-  </a>
-  <a href="https://github.com/y0f/Asura" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 border border-line text-sm rounded-lg hover:bg-surface-200/50 transition-colors text-muted-light hover:text-white">
-    GitHub
-    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
-  </a>
-</div>
-
-<h2>Why Asura?</h2>
-
-<table>
-  <thead>
-    <tr><th>Aspect</th><th>Asura</th><th>Typical alternative</th></tr>
-  </thead>
+<table class="guide-table">
+  <thead><tr><th>Task</th><th>Guide</th></tr></thead>
   <tbody>
-    <tr><td><strong>Runtime</strong></td><td>Single static binary</td><td>Node.js / Java / Python runtime</td></tr>
-    <tr><td><strong>Database</strong></td><td>SQLite compiled in</td><td>Requires Postgres, MySQL, or Redis</td></tr>
-    <tr><td><strong>Binary size</strong></td><td>~15 MB</td><td>Varies by runtime</td></tr>
-    <tr><td><strong>Concurrency</strong></td><td>Goroutine worker pool with channel backpressure</td><td>Event loop or thread pool</td></tr>
-    <tr><td><strong>Deploy</strong></td><td><code>scp</code> binary + run</td><td>Package manager, runtime install, migrations</td></tr>
-    <tr><td><strong>Config</strong></td><td>One YAML file</td><td>Multiple config files, env vars, database setup</td></tr>
-    <tr><td><strong>RAM</strong></td><td>~20 MB idle</td><td>Varies by runtime and database</td></tr>
+    <tr><td>Install Asura and create your first monitor</td><td><a href="#getting-started">Getting started</a></td></tr>
+    <tr><td>Choose checks and define success conditions</td><td><a href="#monitors">Monitors</a></td></tr>
+    <tr><td>Send alerts to your team</td><td><a href="#notifications">Notifications</a></td></tr>
+    <tr><td>Escalate unresolved incidents</td><td><a href="#escalation-policies">Escalation policies</a></td></tr>
+    <tr><td>Publish service availability</td><td><a href="#status-pages">Status pages</a></td></tr>
+    <tr><td>Run Asura behind a proxy or in Docker</td><td><a href="#deployment">Deployment</a></td></tr>
+    <tr><td>Protect and restore your data</td><td><a href="#backup">Backup and restore</a></td></tr>
   </tbody>
 </table>
 
-<h2>Highlights</h2>
+<h2>Configure and integrate</h2>
 
-<table>
-  <thead>
-    <tr><th>Feature</th><th>Aspect</th></tr>
-  </thead>
-  <tbody>
-    <tr><td><strong>19 monitor types</strong></td><td>HTTP, HTTP Multi-Step, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain (WHOIS), Command, SMTP, SSH, Redis, PostgreSQL, UDP, Heartbeat, Manual</td></tr>
-    <tr><td><strong>Assertion engine</strong></td><td>8 condition types with AND/OR group logic</td></tr>
-    <tr><td><strong>Distributed agents</strong></td><td>Run checks from multiple locations with a lightweight agent binary</td></tr>
-    <tr><td><strong>Anomaly detection</strong></td><td>Statistical baseline with configurable sensitivity</td></tr>
-    <tr><td><strong>Incident severity</strong></td><td>Critical, major, minor, warning with auto-assignment</td></tr>
-    <tr><td><strong>13 notification channels</strong></td><td>Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify</td></tr>
-    <tr><td><strong>Escalation policies</strong></td><td>Time-based notification chains with delays and repeat</td></tr>
-    <tr><td><strong>Status pages</strong></td><td>Public pages with uptime bars, RSS feed, email/webhook subscriptions</td></tr>
-    <tr><td><strong>SLA tracking</strong></td><td>Per-monitor targets, error budgets, breach alerts</td></tr>
-    <tr><td><strong>Maintenance</strong></td><td>6 modes: manual, one-time, cron, daily, weekly, monthly</td></tr>
-    <tr><td><strong>Encryption at rest</strong></td><td>AES-256-GCM for notification secrets and proxy passwords</td></tr>
-    <tr><td><strong>Data rollup</strong></td><td>Hourly and daily aggregates for long-running instances</td></tr>
-    <tr><td><strong>~15 MB binary</strong></td><td>Cross-compiles to <code>linux/amd64</code> and <code>linux/arm64</code></td></tr>
-  </tbody>
-</table>
+<p>The <a href="#configuration">configuration reference</a> covers server, storage, authentication and monitoring settings. The <a href="#api">API reference</a> describes endpoints and the permissions needed to use them. Read the <a href="#architecture">architecture guide</a> for an overview of the application.</p>
 
-<h2>Web UI</h2>
+<p>The web interface is rendered by Go and enhanced with HTMX and Alpine.js. Static assets are included in the binary; no separate frontend server is required.</p>
 
-<p>Server-rendered Go templates (<a href="https://templ.guide" target="_blank">templ</a>), progressively enhanced with HTMX and Alpine.js, styled with Tailwind CSS. Configure monitors, build assertion groups, manage notifications, browse incidents, and set up status pages. all from the browser. You can also skip the UI entirely and use the <a href="#api">REST API</a>.</p>
-
-<img src="https://raw.githubusercontent.com/y0f/Asura/main/assets/webpanel.png" alt="Web UI" class="rounded-lg border border-line w-full max-w-full h-auto">
+<p>Asura is available under the <a href="https://github.com/y0f/Asura/blob/main/LICENSE">MIT license</a>. Source code and releases are on <a href="https://github.com/y0f/Asura">GitHub</a>.</p>

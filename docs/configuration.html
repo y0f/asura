@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuration · Asura documentation</title>
+  <link rel="icon" href="static/favicon.ico">
+  <link rel="canonical" href="configuration.html">
+  <link rel="stylesheet" href="static/docs.css">
+  <script src="static/docs.js"></script>
+</head>
+<body class="bg-surface text-muted-light font-sans">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="docs-header">
+    <a href="index.html" class="docs-brand" aria-label="Asura documentation home">Asura <span>Docs</span></a>
+    <nav aria-label="Quick links" class="docs-quick-links">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/y0f/Asura">GitHub</a>
+    </nav>
+    <button id="theme-toggle" type="button" class="docs-theme" hidden aria-label="Use dark theme">
+      <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18"></path><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"></path></svg>
+    </button>
+  </header>
+  <div class="docs-body">
+    <details class="docs-menu">
+      <summary>Documentation</summary>
+      <nav aria-label="Documentation">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="configuration.html" aria-current="page">Configuration</a>
+        <a href="monitors.html">Monitors</a>
+        <a href="notifications.html">Notifications</a>
+        <a href="escalation-policies.html">Escalation policies</a>
+        <a href="sla.html">SLA reports</a>
+        <a href="status-pages.html">Status pages</a>
+        <a href="api.html">API reference</a>
+        <a href="backup.html">Backup and restore</a>
+        <a href="deployment.html">Deployment</a>
+        <a href="architecture.html">Architecture</a>
+
+      </nav>
+    </details>
+    <main id="content" class="prose-docs" tabindex="-1"><h1 id="configuration"><a class="heading-link" href="#configuration">Configuration</a></h1>
+
+<p>Everything lives in <code>config.yaml</code>. See <a href="https://github.com/y0f/Asura/blob/main/config.example.yaml" target="_blank">config.example.yaml</a> for the full reference. Environment variables expand via <code>${VAR_NAME}</code>.</p>
+
+<h2 id="server-settings"><a class="heading-link" href="#server-settings">Server Settings</a></h2>
+
+<table>
+  <thead>
+    <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>listen</code></td><td><code>127.0.0.1:8090</code></td><td>Address to bind. Keep this localhost-only and put a reverse proxy in front</td></tr>
+    <tr><td><code>base_path</code></td><td><code>""</code></td><td>URL prefix for all routes (e.g. <code>/asura</code>)</td></tr>
+    <tr><td><code>external_url</code></td><td>auto</td><td>Public URL used in notification links</td></tr>
+    <tr><td><code>trusted_proxies</code></td><td><code>[]</code></td><td>IPs/CIDRs whose <code>X-Real-IP</code>/<code>X-Forwarded-For</code> headers are trusted</td></tr>
+    <tr><td><code>rate_limit_per_sec</code></td><td><code>30</code></td><td>Per-IP request rate limit</td></tr>
+    <tr><td><code>web_ui_enabled</code></td><td><code>true</code></td><td>Serve the web dashboard. Set <code>false</code> to run in API-only mode. all REST endpoints remain available</td></tr>
+  </tbody>
+</table>
+
+<h2 id="authentication"><a class="heading-link" href="#authentication">Authentication</a></h2>
+
+<p>API keys are hashed with SHA-256 and stored in <code>config.yaml</code>. There's no user registration and no database-stored auth.</p>
+
+<h3 id="generating-a-key"><a class="heading-link" href="#generating-a-key">Generating a Key</a></h3>
+
+<pre><code>./asura --setup</code></pre>
+
+<p>Output:</p>
+
+<pre><code>  API Key : ak_a8f3e7b2c1d9...
+  Hash    : fa223e3e1c4b96...
+
+  Put the hash in config.yaml under auth.api_keys[].hash
+  Save the API key -- it cannot be recovered.</code></pre>
+
+<p>The <code>ak_</code> prefix makes keys easy to identify in logs without leaking the secret. If you already have a key and just need the hash:</p>
+
+<pre><code>./asura --hash-key "your-secret-key"</code></pre>
+
+<h3 id="config"><a class="heading-link" href="#config">Config</a></h3>
+
+<pre><code>auth:
+  api_keys:
+    - name: "admin"
+      hash: "2c26b46b68ffc..."
+      role: "admin"</code></pre>
+
+<h3 id="roles"><a class="heading-link" href="#roles">Roles</a></h3>
+
+<table>
+  <thead>
+    <tr><th>Role</th><th>Access</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>admin</code></td><td>Super administrator access, including configuration import and export</td></tr>
+    <tr><td><code>readonly</code></td><td>All registered read scopes except subscriber contacts (<code>subscribers.read</code>)</td></tr>
+  </tbody>
+</table>
+
+<h3 id="custom-permissions"><a class="heading-link" href="#custom-permissions">Custom Permissions</a></h3>
+
+<p>Instead of a role, grant specific permissions per key:</p>
+
+<pre><code>auth:
+  api_keys:
+    - name: "ci-bot"
+      hash: "..."
+      permissions:
+        - "monitors.read"
+        - "monitors.write"
+        - "incidents.read"</code></pre>
+
+<p>Permissions use <code>resource.action</code>, for example <code>monitors.pause</code>. Each resource with mutation actions also accepts <code>resource.write</code>, which grants all of that resource's mutations. A write grant never grants read access or access to another resource. Unknown resources, actions, roles, and wildcard scopes are rejected.</p>
+<table>
+  <thead><tr><th>Resource</th><th>Actions</th></tr></thead>
+  <tbody>
+    <tr><td><code>monitors</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>pause</code>, <code>resume</code>, <code>status</code>, <code>clone</code>, <code>assign</code></td></tr>
+    <tr><td><code>incidents</code></td><td><code>read</code>, <code>acknowledge</code>, <code>resolve</code>, <code>severity</code>, <code>delete</code></td></tr>
+    <tr><td><code>notifications</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>test</code></td></tr>
+    <tr><td><code>notification_history</code></td><td><code>read</code></td></tr>
+    <tr><td><code>escalation_policies</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>maintenance</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>toggle</code></td></tr>
+    <tr><td><code>groups</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>tags</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>proxies</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>agents</code></td><td><code>read</code>, <code>create</code>, <code>delete</code></td></tr>
+    <tr><td><code>status_pages</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>subscribers</code></td><td><code>read</code>, <code>delete</code></td></tr>
+    <tr><td><code>on_call</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>override</code></td></tr>
+    <tr><td><code>request_logs</code></td><td><code>read</code></td></tr>
+    <tr><td><code>audit</code></td><td><code>read</code></td></tr>
+    <tr><td><code>settings</code></td><td><code>read</code></td></tr>
+    <tr><td><code>database</code></td><td><code>read</code>, <code>maintain</code></td></tr>
+    <tr><td><code>metrics</code></td><td><code>read</code></td></tr>
+    <tr><td><code>sla</code></td><td><code>read</code></td></tr>
+  </tbody>
+</table>
+<p>Cloning requires both <code>monitors.read</code> and <code>monitors.clone</code>. Editing an existing item through a form requires its read and update scopes. Bulk operations require the selected action; assigning a group also requires <code>monitors.assign</code> and <code>groups.read</code>. Configuration import and export require <code>super_admin: true</code> (or the legacy <code>admin</code> role), even when every ordinary permission is granted. Subscriber contact details require an explicit <code>subscribers.read</code> grant.</p>
+<h3 id="upgrading-permissions-from-v1"><a class="heading-link" href="#upgrading-permissions-from-v1">Upgrading permissions from v1</a></h3>
+<p>V2 separates resources that previously shared a scope. Existing explicit permissions are not expanded automatically. Retain the scopes you need and add the following scopes only for the corresponding features:</p>
+<table>
+  <thead><tr><th>Previous scope</th><th>Additional v2 scopes for previously shared features</th></tr></thead>
+  <tbody>
+    <tr><td><code>monitors.read</code></td><td><code>groups.read</code>, <code>tags.read</code>, <code>proxies.read</code>, <code>agents.read</code>, <code>status_pages.read</code>, <code>sla.read</code>. Subscriber listing now requires the separate sensitive grant <code>subscribers.read</code>.</td></tr>
+    <tr><td><code>monitors.write</code></td><td><code>groups.write</code>, <code>tags.write</code>, <code>proxies.write</code>, <code>agents.write</code>, <code>status_pages.write</code>, <code>subscribers.delete</code>, <code>database.maintain</code>. Import and export require super administrator access.</td></tr>
+    <tr><td><code>notifications.read</code></td><td><code>notification_history.read</code>, <code>on_call.read</code></td></tr>
+    <tr><td><code>notifications.write</code></td><td><code>on_call.write</code></td></tr>
+    <tr><td><code>metrics.read</code></td><td><code>request_logs.read</code>, <code>audit.read</code>, <code>settings.read</code>, <code>database.read</code></td></tr>
+  </tbody>
+</table>
+<p>Existing <code>incidents</code>, <code>maintenance</code>, and <code>escalation_policies</code> read/write grants remain within their own resources. Replace a write umbrella with individual actions when a key should only perform part of the workflow. A key needs access to at least one application page to start a web session; API-only permissions such as <code>metrics.read</code> still work through the API. Session requests recheck the key's current permissions.</p>
+
+<h3 id="using-a-key"><a class="heading-link" href="#using-a-key">Using a Key</a></h3>
+
+<p><strong>API</strong>: Pass the raw key (not the hash) in the <code>X-API-Key</code> header:</p>
+
+<pre><code>curl -H "X-API-Key: ak_a8f3e7b2c1d9..." https://example.com/asura/api/v1/monitors</code></pre>
+
+<p><strong>Web UI</strong>: Enter the key on the login page. Asura creates a session cookie (24h, HttpOnly, Secure). Login is rate-limited per IP. You can have multiple keys with different roles or permission sets.</p>
+
+<h2 id="monitor-settings"><a class="heading-link" href="#monitor-settings">Monitor Settings</a></h2>
+
+<table>
+  <thead>
+    <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>workers</code></td><td><code>10</code></td><td>Concurrent check workers</td></tr>
+    <tr><td><code>default_interval</code></td><td><code>60s</code></td><td>Default check interval for new monitors</td></tr>
+    <tr><td><code>default_timeout</code></td><td><code>10s</code></td><td>Default check timeout</td></tr>
+    <tr><td><code>adaptive_intervals</code></td><td><code>true</code></td><td>Dynamically adjust check frequency based on monitor stability</td></tr>
+  </tbody>
+</table>
+
+<h3 id="adaptive-intervals"><a class="heading-link" href="#adaptive-intervals">Adaptive Intervals</a></h3>
+
+<p>When enabled, the scheduler adjusts the effective check interval per monitor based on its recent behavior:</p>
+
+<ul>
+  <li><strong>Stable monitors</strong> (60+ consecutive successes) gradually slow to 2x their base interval, reducing unnecessary load</li>
+  <li><strong>Flapping monitors</strong> (failure after being slowed down) snap back to 0.5x for faster detection</li>
+  <li><strong>Recovering monitors</strong> return to the normal base interval until stability is re-established</li>
+  <li><strong>Actively failing monitors</strong> stay at the normal base interval</li>
+</ul>
+
+<p>The base interval on each monitor is never modified. adaptive intervals only change the scheduler's internal timing. Disable with <code>adaptive_intervals: false</code>.</p>
+
+<h2 id="encryption-at-rest"><a class="heading-link" href="#encryption-at-rest">Encryption at Rest</a></h2>
+
+<p>Notification channel settings (tokens, passwords, webhook secrets) and proxy auth passwords can be encrypted in the database using AES-256-GCM.</p>
+
+<pre><code>database:
+  encryption_key: "your-secret-key-here"</code></pre>
+
+<p>When set, secrets are encrypted on write and decrypted on read. Existing unencrypted data is read transparently and encrypted on the next update. The key is hashed with SHA-256 to derive the AES key.</p>
+
+<h2 id="data-rollup"><a class="heading-link" href="#data-rollup">Data Rollup</a></h2>
+
+<p>Check results are automatically aggregated into hourly and daily rollups by the retention worker. Chart queries select the appropriate tier based on the requested time range:</p>
+
+<ul>
+  <li>Less than 7 days: raw check results</li>
+  <li>7 to 90 days: hourly aggregates (avg/min/max/p95 response time, up/down counts)</li>
+  <li>Over 90 days: daily aggregates</li>
+</ul>
+
+<p>Hourly rollups are retained for 90 days, daily rollups for 365 days. This keeps the database size manageable for long-running instances.</p>
+
+<h2 id="keyboard-shortcuts"><a class="heading-link" href="#keyboard-shortcuts">Keyboard Shortcuts</a></h2>
+
+<table>
+  <thead>
+    <tr><th>Key</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>n</code></td><td>New monitor</td></tr>
+    <tr><td><code>/</code></td><td>Focus search</td></tr>
+    <tr><td><code>Escape</code></td><td>Close modal</td></tr>
+    <tr><td><code>?</code></td><td>Show shortcut help</td></tr>
+  </tbody>
+</table>
+
+<p>Shortcuts are disabled when typing in form fields.</p>
+
+<h2 id="maintenance-scheduling"><a class="heading-link" href="#maintenance-scheduling">Maintenance Scheduling</a></h2>
+
+<p>Maintenance windows support 6 scheduling modes:</p>
+
+<table>
+  <thead>
+    <tr><th>Mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>manual</code></td><td>Toggle on/off manually via the web UI or API. No schedule.</td></tr>
+    <tr><td>(empty)</td><td>One-time window with fixed start and end time.</td></tr>
+    <tr><td><code>cron</code></td><td>Cron expression (minute hour dom month dow). Window duration = end minus start time.</td></tr>
+    <tr><td><code>daily</code></td><td>Same time-of-day every day.</td></tr>
+    <tr><td><code>weekly</code></td><td>Same weekday and time every week.</td></tr>
+    <tr><td><code>monthly</code></td><td>Same day-of-month and time every month.</td></tr>
+  </tbody>
+</table>
+
+<p>During active maintenance, alerts are suppressed for affected monitors. Manual windows can be toggled via <code>POST /api/v1/maintenance/{id}/toggle</code>.</p>
+</main>
+    <footer class="docs-footer"><a href="index.html">Documentation home</a><a href="https://github.com/y0f/Asura/blob/main/LICENSE">MIT license</a></footer>
+  </div>
+</body>
+</html>

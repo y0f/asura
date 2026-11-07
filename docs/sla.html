@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SLA reports · Asura documentation</title>
+  <link rel="icon" href="static/favicon.ico">
+  <link rel="canonical" href="sla.html">
+  <link rel="stylesheet" href="static/docs.css">
+  <script src="static/docs.js"></script>
+</head>
+<body class="bg-surface text-muted-light font-sans">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="docs-header">
+    <a href="index.html" class="docs-brand" aria-label="Asura documentation home">Asura <span>Docs</span></a>
+    <nav aria-label="Quick links" class="docs-quick-links">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="https://github.com/y0f/Asura">GitHub</a>
+    </nav>
+    <button id="theme-toggle" type="button" class="docs-theme" hidden aria-label="Use dark theme">
+      <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18"></path><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"></path></svg>
+    </button>
+  </header>
+  <div class="docs-body">
+    <details class="docs-menu">
+      <summary>Documentation</summary>
+      <nav aria-label="Documentation">
+        <a href="index.html">Overview</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="monitors.html">Monitors</a>
+        <a href="notifications.html">Notifications</a>
+        <a href="escalation-policies.html">Escalation policies</a>
+        <a href="sla.html" aria-current="page">SLA reports</a>
+        <a href="status-pages.html">Status pages</a>
+        <a href="api.html">API reference</a>
+        <a href="backup.html">Backup and restore</a>
+        <a href="deployment.html">Deployment</a>
+        <a href="architecture.html">Architecture</a>
+
+      </nav>
+    </details>
+    <main id="content" class="prose-docs" tabindex="-1"><h1 id="sla-targets-reporting"><a class="heading-link" href="#sla-targets-reporting">SLA Targets &amp; Reporting</a></h1>
+
+<p>Asura tracks Service Level Agreement (SLA) compliance per monitor. Set a target uptime percentage and Asura calculates your error budget, tracks usage, and alerts when the budget is at risk.</p>
+
+<h2 id="setting-an-sla-target"><a class="heading-link" href="#setting-an-sla-target">Setting an SLA Target</a></h2>
+
+<p>Edit any monitor and select an SLA target from the dropdown (99%, 99.5%, 99.9%, 99.95%, or 99.99%). Or set it via the API:</p>
+
+<pre><code>PUT /api/v1/monitors/{id}
+{ "sla_target": 99.9 }</code></pre>
+
+<p>Set to <code>0</code> to disable SLA tracking for a monitor.</p>
+
+<h2 id="error-budget"><a class="heading-link" href="#error-budget">Error Budget</a></h2>
+
+<p>The error budget is the maximum allowed downtime in a calendar month. For a 30-day month:</p>
+
+<table>
+  <thead>
+    <tr><th>Target</th><th>Monthly Budget</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>99%</td><td>~7h 12m</td></tr>
+    <tr><td>99.5%</td><td>~3h 36m</td></tr>
+    <tr><td>99.9%</td><td>~43m 12s</td></tr>
+    <tr><td>99.95%</td><td>~21m 36s</td></tr>
+    <tr><td>99.99%</td><td>~4m 19s</td></tr>
+  </tbody>
+</table>
+
+<h2 id="sla-report"><a class="heading-link" href="#sla-report">SLA Report</a></h2>
+
+<p>The SLA Report page shows all monitors with SLA targets for a given month. Navigate between months and see at a glance which monitors are meeting their targets and which are breached or at risk.</p>
+
+<p>The report is available in the sidebar under "SLA Report" and via the API:</p>
+
+<pre><code>GET /api/v1/reports/sla?period=2025-01</code></pre>
+
+<p>Export as a JSON download:</p>
+
+<pre><code>GET /api/v1/reports/sla/export?period=2025-01</code></pre>
+
+<h2 id="breach-alerts"><a class="heading-link" href="#breach-alerts">Breach Alerts</a></h2>
+
+<p>After each check, the pipeline evaluates the monitor's current SLA status. When the SLA target is already breached, or 10% or less of the error budget remains, Asura emits an <code>sla.breach</code> notification event. This is sent at most once per hour per monitor to avoid flooding. Configure notification channels to receive these alerts.</p>
+
+<h2 id="monitor-detail"><a class="heading-link" href="#monitor-detail">Monitor Detail</a></h2>
+
+<p>When an SLA target is configured, the monitor detail page shows an SLA card with:</p>
+
+<ul>
+  <li>Current month uptime vs target</li>
+  <li>Error budget used and remaining</li>
+  <li>Status badge: Healthy, At Risk, or Breached</li>
+</ul>
+
+<h2 id="api-endpoints"><a class="heading-link" href="#api-endpoints">API Endpoints</a></h2>
+
+<table>
+  <thead>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>GET</code></td><td><code>/api/v1/monitors/{id}/sla</code></td><td>Current SLA status and error budget</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/reports/sla?period=YYYY-MM</code></td><td>Monthly SLA report for all tracked monitors</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/reports/sla/export?period=YYYY-MM</code></td><td>JSON export of SLA report</td></tr>
+  </tbody>
+</table>
+</main>
+    <footer class="docs-footer"><a href="index.html">Documentation home</a><a href="https://github.com/y0f/Asura/blob/main/LICENSE">MIT license</a></footer>
+  </div>
+</body>
+</html>
