@@ -11,9 +11,19 @@ import (
 )
 
 func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
+	return s.createMonitor(ctx, m, false, access...)
+}
+
+func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
+	return s.createMonitor(ctx, m, true, access...)
+}
+
+func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, withRelations bool, access ...MonitorAccess) error {
 	if !allowedMonitorDestination(0, m.GroupID, access) {
 		return sql.ErrNoRows
 	}
+	output := m
+	m = copyMonitorSnapshot(m)
 	tags, _ := json.Marshal(m.Tags)
 	if m.Settings == nil {
 		m.Settings = json.RawMessage("{}")
@@ -65,6 +75,13 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...M
 		`INSERT INTO monitor_status (monitor_id, status) VALUES (?, 'pending')`, id); err != nil {
 		return err
 	}
+	if withRelations {
+		created := *m
+		created.ID = id
+		if err := replaceMonitorRelations(ctx, tx, &created, MonitorRelationChanges{Notifications: true, Tags: true, Agents: true}); err != nil {
+			return err
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create monitor commit: %w", err)
@@ -73,6 +90,7 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...M
 	m.ID = id
 	m.CreatedAt = parseTime(now)
 	m.UpdatedAt = parseTime(now)
+	*output = *m
 	return nil
 }
 
@@ -179,6 +197,10 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 }
 
 func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
+	return s.updateMonitor(ctx, s.writeDB, m, access...)
+}
+
+func (s *SQLiteStore) updateMonitor(ctx context.Context, writer monitorWriteExecutor, m *Monitor, access ...MonitorAccess) error {
 	tags, _ := json.Marshal(m.Tags)
 	now := formatTime(time.Now())
 	var groupID any
@@ -206,12 +228,16 @@ func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor, access ...M
 		string(tags), settings, string(m.Assertions), boolToInt(m.TrackChanges),
 		m.FailureThreshold, m.SuccessThreshold, boolToInt(m.UpsideDown), boolToInt(m.AgentEnabled), m.ResendInterval, m.SLATarget, m.AnomalySensitivity, groupID, proxyID, escalationPolicyID, now, m.ID,
 	}
-	result, err := s.writeDB.ExecContext(ctx,
+	result, err := writer.ExecContext(ctx,
 		`UPDATE monitors SET name=?, description=?, type=?, target=?, interval_secs=?, timeout_secs=?, enabled=?,
 		 tags=?, settings=?, assertions=?, track_changes=?, failure_threshold=?, success_threshold=?,
 		 upside_down=?, agent_enabled=?, resend_interval=?, sla_target=?, anomaly_sensitivity=?, group_id=?, proxy_id=?, escalation_policy_id=?, updated_at=?
 		 WHERE id=?`+clause, append(args, accessArgs...)...)
-	return scopedMutationResult(result, err, access)
+	if err := scopedMutationResult(result, err, access); err != nil {
+		return err
+	}
+	m.UpdatedAt = parseTime(now)
+	return nil
 }
 
 func (s *SQLiteStore) DeleteMonitor(ctx context.Context, id int64, access ...MonitorAccess) error {
