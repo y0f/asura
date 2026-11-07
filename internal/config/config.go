@@ -297,6 +297,9 @@ func (c *Config) validateDatabase() error {
 	if c.Database.RetentionDays <= 0 {
 		return fmt.Errorf("database.retention_days must be positive")
 	}
+	if c.Database.RetentionPeriod <= 0 {
+		return fmt.Errorf("database.retention_period must be positive")
+	}
 	return nil
 }
 
@@ -309,6 +312,9 @@ func (c *Config) validateMonitorConfig() error {
 	}
 	if c.Monitor.DefaultInterval < 5*time.Second {
 		return fmt.Errorf("monitor.default_interval must be at least 5s")
+	}
+	if c.Monitor.HeartbeatCheckInterval <= 0 {
+		return fmt.Errorf("monitor.heartbeat_check_interval must be positive")
 	}
 	if c.Monitor.FailureThreshold <= 0 {
 		return fmt.Errorf("monitor.failure_threshold must be positive")
