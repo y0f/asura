@@ -241,6 +241,11 @@ func (k *APIKeyConfig) HasCapability(permission string) bool {
 		return false
 	}
 	access := k.roleGrants[permission]
+	// A new monitor cannot match an existing ID. Creation needs at least one
+	// group destination (or the global grant handled above).
+	if permission == "monitors.create" {
+		return len(access.GroupIDs) != 0
+	}
 	return len(access.MonitorIDs) != 0 || len(access.GroupIDs) != 0
 }
 

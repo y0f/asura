@@ -97,6 +97,24 @@ func TestRoleBindingsUnionOnlyTheSameAction(t *testing.T) {
 	}
 }
 
+func TestIDOnlyGrantDoesNotOfferMonitorCreation(t *testing.T) {
+	roles := []RoleConfig{{Name: "writer", Permissions: []string{"monitors.write"}}}
+	keys := []APIKeyConfig{{Name: "writer", Hash: "synthetic", RoleBindings: []RoleBindingConfig{{Role: "writer", Scope: MonitorAccess{MonitorIDs: []int64{1}}}}}}
+	if err := validateRolesAndAPIKeys(roles, keys); err != nil {
+		t.Fatal(err)
+	}
+	if keys[0].HasCapability("monitors.create") || keys[0].CapabilityMap()["monitors.create"] || !keys[0].HasCapability("monitors.update") {
+		t.Fatal("ID-only grant offered an unusable create route or lost ordinary editing")
+	}
+	keys[0].RoleBindings[0].Scope.GroupIDs = []int64{2}
+	if err := validateRolesAndAPIKeys(roles, keys); err != nil {
+		t.Fatal(err)
+	}
+	if !keys[0].HasCapability("monitors.create") {
+		t.Fatal("explicit group destination did not enable creation capability")
+	}
+}
+
 func TestRoleValidationRejectsAmbiguousOrInvalidAuthority(t *testing.T) {
 	base := func() ([]RoleConfig, []APIKeyConfig) {
 		return []RoleConfig{{Name: "custom", Permissions: []string{"monitors.read"}}}, []APIKeyConfig{{
