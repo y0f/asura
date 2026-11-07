@@ -136,7 +136,12 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 		EscalationTotal: len(steps),
 	}
 
-	r.dispatcher.NotifyChannels(step.NotificationChannelIDs, payload)
+	if err := r.dispatcher.NotifyChannels(ctx, step.NotificationChannelIDs, payload); err != nil {
+		// A partial admission may retry an already accepted recipient. Keeping
+		// the step pending is preferable to silently losing the other recipients.
+		r.logger.Error("escalation: queue notification", "incident_id", inc.ID, "error", err)
+		return
+	}
 
 	r.logger.Info("escalation step fired",
 		"incident_id", state.IncidentID,

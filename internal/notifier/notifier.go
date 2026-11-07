@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 )
 
-// Sender sends a notification via a specific channel type.
+// Sender implementations must honor context cancellation. RegisterSender is
+// concurrency-safe; a queued send retains the sender selected at admission.
 type Sender interface {
 	Type() string
-	Send(ctx context.Context, channel *storage.NotificationChannel, payload *Payload) error
+	Send(context.Context, *storage.NotificationChannel, *Payload) error
 }
 
-// Payload contains the notification data.
 type Payload struct {
 	EventType       string                 `json:"event_type"`
 	Incident        *storage.Incident      `json:"incident,omitempty"`
@@ -28,34 +29,24 @@ type Payload struct {
 }
 
 type Dispatcher struct {
-	store   storage.Store
-	senders map[string]Sender
-	logger  *slog.Logger
-	sem     chan struct{}
-
-	attemptTimeout time.Duration // limit for one Send call
-	baseBackoff    time.Duration // wait before the 2nd attempt, doubled after
-	queueTimeout   time.Duration // how long a send may wait for a free slot
+	store          storage.Store
+	senderMu       sync.RWMutex
+	senders        map[string]Sender
+	logger         *slog.Logger
+	queue          *deliveryQueue
+	attemptTimeout time.Duration
+	baseBackoff    time.Duration
 }
 
 const (
-	maxConcurrentSends    = 10
 	maxRetries            = 3
 	defaultAttemptTimeout = 10 * time.Second
 	defaultBaseBackoff    = 2 * time.Second
-	defaultQueueTimeout   = 5 * time.Minute
 )
 
 func NewDispatcher(store storage.Store, logger *slog.Logger, allowPrivateTargets bool) *Dispatcher {
-	d := &Dispatcher{
-		store:          store,
-		senders:        make(map[string]Sender),
-		logger:         logger,
-		sem:            make(chan struct{}, maxConcurrentSends),
-		attemptTimeout: defaultAttemptTimeout,
-		baseBackoff:    defaultBaseBackoff,
-		queueTimeout:   defaultQueueTimeout,
-	}
+	d := &Dispatcher{store: store, senders: make(map[string]Sender), logger: logger,
+		queue: newDeliveryQueue(), attemptTimeout: defaultAttemptTimeout, baseBackoff: defaultBaseBackoff}
 	d.RegisterSender(&WebhookSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&EmailSender{})
 	d.RegisterSender(&TelegramSender{})
@@ -73,191 +64,183 @@ func NewDispatcher(store storage.Store, logger *slog.Logger, allowPrivateTargets
 }
 
 func (d *Dispatcher) RegisterSender(s Sender) {
+	d.senderMu.Lock()
+	defer d.senderMu.Unlock()
 	d.senders[s.Type()] = s
 }
 
-func (d *Dispatcher) NotifyWithPayload(payload *Payload) {
-	channels, err := d.store.ListNotificationChannels(context.Background())
-	if err != nil {
-		d.logger.Error("list notification channels", "error", err)
-		return
-	}
-
-	for _, ch := range channels {
-		if !ch.Enabled || !matchesEvent(ch.Events, payload.EventType) {
-			continue
-		}
-
-		sender, ok := d.senders[ch.Type]
-		if !ok {
-			d.logger.Warn("no sender for channel type", "type", ch.Type)
-			continue
-		}
-
-		d.spawnSend(sender, ch, payload)
-	}
+func (d *Dispatcher) sender(kind string) Sender {
+	d.senderMu.RLock()
+	defer d.senderMu.RUnlock()
+	return d.senders[kind]
 }
 
-func (d *Dispatcher) NotifyForMonitor(monitorID int64, payload *Payload) {
-	channels, err := d.store.ListNotificationChannels(context.Background())
-	if err != nil {
-		d.logger.Error("list notification channels", "error", err)
-		return
-	}
+func (d *Dispatcher) Shutdown(ctx context.Context) error { return d.queue.shutdown(ctx) }
+func (d *Dispatcher) Stats() DeliveryStats               { return d.queue.stats() }
 
-	assignedIDs, err := d.store.GetMonitorNotificationChannelIDs(context.Background(), monitorID)
-	if err != nil {
-		d.logger.Error("get monitor notification channels", "error", err)
-		return
-	}
-
-	var allowed map[int64]bool
-	if len(assignedIDs) > 0 {
-		allowed = make(map[int64]bool, len(assignedIDs))
-		for _, id := range assignedIDs {
-			allowed[id] = true
-		}
-	}
-
-	for _, ch := range channels {
-		if !ch.Enabled || !matchesEvent(ch.Events, payload.EventType) {
-			continue
-		}
-		if allowed != nil && !allowed[ch.ID] {
-			continue
-		}
-		sender, ok := d.senders[ch.Type]
-		if !ok {
-			d.logger.Warn("no sender for channel type", "type", ch.Type)
-			continue
-		}
-		d.spawnSend(sender, ch, payload)
-	}
+// The caller context bounds lookup and admission. Accepted alerts use the
+// dispatcher's lifetime so an HTTP response does not cancel their delivery.
+func (d *Dispatcher) NotifyWithPayload(ctx context.Context, payload *Payload) error {
+	return d.notify(ctx, payload, 0, nil)
 }
 
-// NotifyChannels sends a notification to specific channels by ID, bypassing event subscription filters.
-func (d *Dispatcher) NotifyChannels(channelIDs []int64, payload *Payload) {
-	if len(channelIDs) == 0 {
-		return
+func (d *Dispatcher) NotifyForMonitor(ctx context.Context, monitorID int64, payload *Payload) error {
+	return d.notify(ctx, payload, monitorID, nil)
+}
+
+// NotifyChannels bypasses event filters for explicit escalation recipients.
+func (d *Dispatcher) NotifyChannels(ctx context.Context, ids []int64, payload *Payload) error {
+	if len(ids) == 0 {
+		return nil
 	}
-	channels, err := d.store.ListNotificationChannels(context.Background())
-	if err != nil {
-		d.logger.Error("list notification channels for escalation", "error", err)
-		return
-	}
-	wanted := make(map[int64]bool, len(channelIDs))
-	for _, id := range channelIDs {
+	wanted := make(map[int64]bool, len(ids))
+	for _, id := range ids {
 		wanted[id] = true
 	}
-	for _, ch := range channels {
-		if !wanted[ch.ID] || !ch.Enabled {
-			continue
-		}
-		sender, ok := d.senders[ch.Type]
-		if !ok {
-			d.logger.Warn("no sender for channel type", "type", ch.Type)
-			continue
-		}
-		d.spawnSend(sender, ch, payload)
-	}
+	return d.notify(ctx, payload, 0, wanted)
 }
 
-func (d *Dispatcher) SendTest(ch *storage.NotificationChannel, inc *storage.Incident) error {
-	sender, ok := d.senders[ch.Type]
-	if !ok {
+func (d *Dispatcher) notify(ctx context.Context, payload *Payload, monitorID int64, wanted map[int64]bool) error {
+	ctx, finish, err := d.queue.begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	channels, err := d.store.ListNotificationChannels(ctx)
+	if err != nil {
+		return fmt.Errorf("list notification channels: %w", err)
+	}
+	var assigned map[int64]bool
+	if monitorID > 0 {
+		ids, err := d.store.GetMonitorNotificationChannelIDs(ctx, monitorID)
+		if err != nil {
+			return fmt.Errorf("get monitor notification channels: %w", err)
+		}
+		if len(ids) > 0 {
+			assigned = make(map[int64]bool, len(ids))
+			for _, id := range ids {
+				assigned[id] = true
+			}
+		}
+	}
+	var firstErr error
+	var accountingCtx context.Context
+	for _, ch := range channels {
+		if !ch.Enabled || (wanted != nil && !wanted[ch.ID]) || (assigned != nil && !assigned[ch.ID]) ||
+			(wanted == nil && !matchesEvent(ch.Events, payload.EventType)) {
+			continue
+		}
+		ch, payload := snapshotChannel(ch), snapshotPayload(payload)
+		sender := d.sender(ch.Type)
+		var err error
+		if sender == nil {
+			err = fmt.Errorf("no sender for type: %s", ch.Type)
+			d.queue.rejected.Add(1)
+		} else {
+			err = d.queue.offer(ctx, deliveryJob{
+				run:  func(ctx context.Context) error { return d.sendWithRetry(ctx, sender, ch, payload) },
+				done: func(err error) { d.recordResult(ch, payload, err) },
+			})
+		}
+		if err != nil {
+			// One budget for all rejected recipients, even after caller
+			// cancellation. A blocked database cannot cost two seconds per
+			// configured channel while shutdown waits for this admission.
+			if accountingCtx == nil {
+				batchCtx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+				defer cancel()
+				accountingCtx = batchCtx
+			}
+			d.recordResultContext(accountingCtx, ch, payload, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+// SendTest uses the same bounded queue and concurrency as ordinary alerts,
+// but cancels when the request ends and makes one time-limited attempt.
+func (d *Dispatcher) SendTest(ctx context.Context, ch *storage.NotificationChannel, inc *storage.Incident) error {
+	ctx, finish, err := d.queue.begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	sender := d.sender(ch.Type)
+	if sender == nil {
 		return fmt.Errorf("no sender for type: %s", ch.Type)
 	}
-	return sender.Send(context.Background(), ch, &Payload{
-		EventType: "test",
-		Incident:  inc,
+	ch = snapshotChannel(ch)
+	payload := snapshotPayload(&Payload{EventType: "test", Incident: inc})
+	result := make(chan error, 1)
+	err = d.queue.offer(ctx, deliveryJob{
+		run: func(workerCtx context.Context) error {
+			sendCtx, cancel := context.WithTimeout(ctx, d.attemptTimeout)
+			stop := context.AfterFunc(workerCtx, cancel)
+			defer func() { stop(); cancel() }()
+			if err := sendCtx.Err(); err != nil {
+				return err
+			}
+			return sender.Send(sendCtx, ch, payload)
+		},
+		done: func(err error) { d.recordResult(ch, payload, err); result <- err },
 	})
+	if err != nil {
+		d.recordResult(ch, payload, err)
+		return err
+	}
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-// spawnSend runs the send in its own goroutine so the caller (the
-// notification forwarder) never blocks on slow channels. At most
-// maxConcurrentSends run at once and the rest wait for a slot. Timeouts only
-// start once a send holds a slot, so waiting does not eat into its attempts,
-// and a send that cannot get a slot within queueTimeout is logged and recorded
-// as failed instead of being dropped without a trace.
-func (d *Dispatcher) spawnSend(sender Sender, ch *storage.NotificationChannel, payload *Payload) {
-	go func() {
-		wait := time.NewTimer(d.queueTimeout)
-		defer wait.Stop()
-		select {
-		case d.sem <- struct{}{}:
-		case <-wait.C:
-			msg := fmt.Sprintf("not sent: no free send slot within %s", d.queueTimeout)
-			d.logger.Error("notification dropped",
-				"channel_id", ch.ID,
-				"channel_type", ch.Type,
-				"event", payload.EventType,
-				"error", msg,
-			)
-			d.recordHistory(ch, payload, "failed", msg)
-			return
-		}
-		defer func() { <-d.sem }()
-		d.sendWithRetry(sender, ch, payload)
-	}()
-}
-
-func (d *Dispatcher) sendWithRetry(sender Sender, ch *storage.NotificationChannel, payload *Payload) {
-	defer func() {
-		if r := recover(); r != nil {
-			d.logger.Error("notification sender panicked",
-				"channel_id", ch.ID,
-				"channel_type", ch.Type,
-				"panic", r,
-			)
-		}
-	}()
-
+func (d *Dispatcher) sendWithRetry(ctx context.Context, sender Sender, ch *storage.NotificationChannel, payload *Payload) error {
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if attempt > 0 {
-			time.Sleep(d.baseBackoff * time.Duration(1<<(attempt-1)))
+			timer := time.NewTimer(d.baseBackoff * time.Duration(1<<(attempt-1)))
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			}
 		}
-		// Each attempt gets its own deadline, so a slow first attempt cannot
-		// leave the retries without time.
-		ctx, cancel := context.WithTimeout(context.Background(), d.attemptTimeout)
-		err := sender.Send(ctx, ch, payload)
+		attemptCtx, cancel := context.WithTimeout(ctx, d.attemptTimeout)
+		err := sender.Send(attemptCtx, ch, payload)
 		cancel()
-		if err != nil {
-			lastErr = err
-			d.logger.Warn("notification send attempt failed",
-				"channel_id", ch.ID,
-				"channel_type", ch.Type,
-				"attempt", attempt+1,
-				"max_attempts", maxRetries,
-				"error", redactErr(err),
-			)
-			continue
+		if err == nil {
+			return nil
 		}
-		d.logger.Info("notification sent",
-			"channel_id", ch.ID,
-			"channel_type", ch.Type,
-			"event", payload.EventType,
-		)
-		d.recordHistory(ch, payload, "sent", "")
-		return
+		lastErr = err
+		d.logger.Warn("notification send attempt failed", "channel_id", ch.ID,
+			"channel_type", ch.Type, "attempt", attempt+1, "error", redactErr(err))
 	}
-	errMsg := redactErr(lastErr)
-	d.logger.Error("notification send failed after retries",
-		"channel_id", ch.ID,
-		"channel_type", ch.Type,
-		"attempts", maxRetries,
-		"error", errMsg,
-	)
-	d.recordHistory(ch, payload, "failed", errMsg)
+	return lastErr
 }
 
-func (d *Dispatcher) recordHistory(ch *storage.NotificationChannel, payload *Payload, status, errMsg string) {
-	h := &storage.NotificationHistory{
-		ChannelID: ch.ID,
-		EventType: payload.EventType,
-		Status:    status,
-		Error:     errMsg,
+func (d *Dispatcher) recordResult(ch *storage.NotificationChannel, payload *Payload, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), historyTimeout)
+	defer cancel()
+	d.recordResultContext(ctx, ch, payload, err)
+}
+
+func (d *Dispatcher) recordResultContext(ctx context.Context, ch *storage.NotificationChannel, payload *Payload, err error) {
+	status, message := "sent", ""
+	if err != nil {
+		status, message = "failed", redactErr(err)
+		d.logger.Error("notification delivery failed", "channel_id", ch.ID, "channel_type", ch.Type,
+			"event", payload.EventType, "error", message)
 	}
+	h := &storage.NotificationHistory{ChannelID: ch.ID, EventType: payload.EventType, Status: status, Error: message}
 	if payload.Incident != nil {
 		h.IncidentID = &payload.Incident.ID
 		if payload.Incident.MonitorID != 0 {
@@ -266,8 +249,12 @@ func (d *Dispatcher) recordHistory(ch *storage.NotificationChannel, payload *Pay
 	} else if payload.Monitor != nil {
 		h.MonitorID = &payload.Monitor.ID
 	}
-	if err := d.store.InsertNotificationHistory(context.Background(), h); err != nil {
-		d.logger.Warn("record notification history", "error", err)
+	if err := ctx.Err(); err != nil {
+		d.logger.Error("notification history budget exhausted", "channel_id", ch.ID, "error", err)
+		return
+	}
+	if err := d.store.InsertNotificationHistory(ctx, h); err != nil {
+		d.logger.Error("record notification history", "channel_id", ch.ID, "error", err)
 	}
 }
 

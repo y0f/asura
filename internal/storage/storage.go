@@ -168,6 +168,7 @@ type Store interface {
 	DeleteSubscriberByToken(ctx context.Context, token string) error
 	CountSubscribersByPage(ctx context.Context, pageID int64) (int64, error)
 	ListConfirmedSubscribers(ctx context.Context, pageID int64) ([]*StatusPageSubscriber, error)
+	ListConfirmedSubscribersAfter(ctx context.Context, pageID, afterID int64, limit int) ([]*StatusPageSubscriber, error)
 	DeleteSubscriber(ctx context.Context, pageID, id int64) error
 	GetStatusPageIDsForMonitor(ctx context.Context, monitorID int64) ([]int64, error)
 

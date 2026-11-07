@@ -83,10 +83,15 @@ func (b *blockingSender) Send(ctx context.Context, ch *storage.NotificationChann
 	return ctx.Err()
 }
 
-func newTestDispatcher(st storage.Store) *Dispatcher {
+func newTestDispatcher(t *testing.T, st storage.Store) *Dispatcher {
 	d := NewDispatcher(st, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	d.attemptTimeout = 100 * time.Millisecond
 	d.baseBackoff = 10 * time.Millisecond
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		d.Shutdown(ctx)
+	})
 	return d
 }
 
@@ -109,12 +114,12 @@ func TestDispatcherQueuedSendsAreNotDropped(t *testing.T) {
 	for i := 1; i <= maxConcurrentSends+1; i++ {
 		st.channels = append(st.channels, &storage.NotificationChannel{ID: int64(i), Type: "blocking", Enabled: true})
 	}
-	d := newTestDispatcher(st)
+	d := newTestDispatcher(t, st)
 	snd := &blockingSender{calls: map[int64]int{}}
 	d.RegisterSender(snd)
 
 	t0 := time.Now()
-	d.NotifyWithPayload(&Payload{EventType: "incident.created"})
+	d.NotifyWithPayload(context.Background(), &Payload{EventType: "incident.created"})
 	if blocked := time.Since(t0); blocked > 50*time.Millisecond {
 		t.Fatalf("NotifyWithPayload blocked the caller for %v", blocked)
 	}
@@ -126,22 +131,6 @@ func TestDispatcherQueuedSendsAreNotDropped(t *testing.T) {
 		if got := snd.calls[ch.ID]; got != maxRetries {
 			t.Errorf("channel %d: %d send attempts, want %d", ch.ID, got, maxRetries)
 		}
-	}
-}
-
-func TestDispatcherQueueTimeoutRecordsFailure(t *testing.T) {
-	st := &historyStore{channels: []*storage.NotificationChannel{{ID: 1, Type: "blocking", Enabled: true}}}
-	d := newTestDispatcher(st)
-	d.queueTimeout = 20 * time.Millisecond
-	d.RegisterSender(&blockingSender{calls: map[int64]int{}})
-	for i := 0; i < maxConcurrentSends; i++ {
-		d.sem <- struct{}{} // all slots busy
-	}
-
-	d.NotifyWithPayload(&Payload{EventType: "incident.created"})
-	waitFor(t, 5*time.Second, func() bool { return len(st.snapshot()) == 1 })
-	if h := st.snapshot()[0]; h.Status != "failed" || h.Error == "" {
-		t.Fatalf("expected a failed history row with an error, got %+v", h)
 	}
 }
 

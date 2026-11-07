@@ -113,10 +113,12 @@ func (h *Handler) IncidentAck(w http.ResponseWriter, r *http.Request) {
 	escalation.CancelEscalation(ctx, h.store, inc.ID)
 
 	if h.notifier != nil {
-		h.notifier.NotifyWithPayload(&notifier.Payload{
+		if err := h.notifier.NotifyWithPayload(r.Context(), &notifier.Payload{
 			EventType: "incident.acknowledged",
 			Incident:  inc,
-		})
+		}); err != nil {
+			h.logger.Error("queue incident notification", "error", err)
+		}
 	}
 
 	h.setFlash(w, "Incident acknowledged")
@@ -162,10 +164,12 @@ func (h *Handler) IncidentResolve(w http.ResponseWriter, r *http.Request) {
 	escalation.CancelEscalation(ctx, h.store, inc.ID)
 
 	if h.notifier != nil {
-		h.notifier.NotifyWithPayload(&notifier.Payload{
+		if err := h.notifier.NotifyWithPayload(r.Context(), &notifier.Payload{
 			EventType: "incident.resolved",
 			Incident:  inc,
-		})
+		}); err != nil {
+			h.logger.Error("queue incident notification", "error", err)
+		}
 	}
 
 	h.setFlash(w, "Incident resolved")

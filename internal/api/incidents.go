@@ -105,10 +105,12 @@ func (h *Handler) AckIncident(w http.ResponseWriter, r *http.Request) {
 	h.audit(r, "acknowledge", "incident", id, "")
 
 	if h.notifier != nil {
-		h.notifier.NotifyWithPayload(&notifier.Payload{
+		if err := h.notifier.NotifyWithPayload(r.Context(), &notifier.Payload{
 			EventType: "incident.acknowledged",
 			Incident:  inc,
-		})
+		}); err != nil {
+			h.logger.Error("queue incident notification", "error", err)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, inc)
@@ -156,10 +158,12 @@ func (h *Handler) ResolveIncident(w http.ResponseWriter, r *http.Request) {
 	h.audit(r, "resolve", "incident", id, "")
 
 	if h.notifier != nil {
-		h.notifier.NotifyWithPayload(&notifier.Payload{
+		if err := h.notifier.NotifyWithPayload(r.Context(), &notifier.Payload{
 			EventType: "incident.resolved",
 			Incident:  inc,
-		})
+		}); err != nil {
+			h.logger.Error("queue incident notification", "error", err)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, inc)

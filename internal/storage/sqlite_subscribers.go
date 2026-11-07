@@ -80,10 +80,16 @@ func (s *SQLiteStore) CountSubscribersByPage(ctx context.Context, pageID int64) 
 }
 
 func (s *SQLiteStore) ListConfirmedSubscribers(ctx context.Context, pageID int64) ([]*StatusPageSubscriber, error) {
+	return s.ListConfirmedSubscribersAfter(ctx, pageID, 0, -1)
+}
+
+// ListConfirmedSubscribersAfter reads a stable keyset batch without retaining
+// all recipient addresses in memory during notification fan-out.
+func (s *SQLiteStore) ListConfirmedSubscribersAfter(ctx context.Context, pageID, afterID int64, limit int) ([]*StatusPageSubscriber, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT id, status_page_id, type, email, webhook_url, confirmed, token, created_at
 		 FROM status_page_subscribers
-		 WHERE status_page_id = ? AND confirmed = 1`, pageID)
+		 WHERE status_page_id = ? AND confirmed = 1 AND id > ? ORDER BY id LIMIT ?`, pageID, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list confirmed subscribers: %w", err)
 	}

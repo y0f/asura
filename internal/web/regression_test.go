@@ -159,6 +159,11 @@ func TestSubscribeConfirmationEmailOutlivesRequest(t *testing.T) {
 	port := smtpSrv.l.Addr().(*net.TCPAddr).Port
 	h.subNotifier = notifier.NewSubscriberNotifier(store, config.SMTPConfig{Host: "127.0.0.1", Port: port, From: "status@example.com", TLSMode: "none"},
 		"http://status.example", h.logger, true)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		h.subNotifier.Shutdown(ctx)
+	})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.StatusPageSubscribe(w, r, sp.ID) }))
 	defer srv.Close()

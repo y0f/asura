@@ -18,8 +18,6 @@ import (
 const (
 	maxSubscriberEmailLen   = 254
 	maxSubscriberWebhookLen = 2048
-
-	subscriberConfirmTimeout = time.Minute
 )
 
 // ListSubscribers requires the explicit subscribers.read scope, because
@@ -179,26 +177,25 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 
 	msg := "subscribed"
 	if req.Type == "email" {
-		// SubNotifier is nil when subscriptions are disabled; the subscriber
-		// is stored all the same, as in v1.3.0.
+		err := fmt.Errorf("email subscriptions are unavailable")
 		if h.SubNotifier != nil {
-			h.sendConfirmation(r.Context(), sub, sp)
+			err = h.SubNotifier.QueueConfirmationEmail(r.Context(), sub, sp)
 		}
-		msg = "confirmation email sent"
+		if err != nil {
+			// Remove only the row created by this request, so a queue rejection
+			// does not leave an unconfirmable subscription that blocks retry.
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if cleanupErr := h.store.DeleteSubscriber(cleanupCtx, sp.ID, sub.ID); cleanupErr != nil {
+				h.logger.Error("remove rejected subscription", "subscriber_id", sub.ID, "error", cleanupErr)
+			}
+			h.logger.Error("queue confirmation email", "subscriber_id", sub.ID, "error", err)
+			writeError(w, http.StatusServiceUnavailable, "confirmation email unavailable; try again later")
+			return
+		}
+		msg = "confirmation email queued"
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"status": msg})
-}
-
-// sendConfirmation emails the confirmation link in the background; the send
-// must outlive the request, so it does not inherit its cancellation.
-func (h *Handler) sendConfirmation(ctx context.Context, sub *storage.StatusPageSubscriber, sp *storage.StatusPage) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), subscriberConfirmTimeout)
-	go func() {
-		defer cancel()
-		if err := h.SubNotifier.SendConfirmationEmail(ctx, sub, sp); err != nil {
-			h.logger.Error("api: send confirmation email", "subscriber_id", sub.ID, "error", err)
-		}
-	}()
 }
 
 func (h *Handler) validateSubscriberEmail(email string) string {

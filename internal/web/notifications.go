@@ -166,7 +166,7 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 		Cause:       "Test notification from Asura",
 	}
 
-	if err := h.notifier.SendTest(ch, testInc); err != nil {
+	if err := h.notifier.SendTest(r.Context(), ch, testInc); err != nil {
 		h.logger.Error("web: notification test failed", "channel_id", ch.ID, "error", err)
 		h.setError(w, "Test notification failed")
 	} else {

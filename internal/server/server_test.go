@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -43,6 +44,7 @@ func testServer(t *testing.T) (*Server, string) {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	srv := NewServer(cfg, store, nil, dispatcher, nil, logger, "test")
 
 	return srv, adminKey

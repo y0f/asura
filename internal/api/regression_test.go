@@ -75,7 +75,16 @@ func newTestEnv(t *testing.T, mutate func(*config.Config), withPipeline bool, su
 	if subNotifier != nil {
 		sn = subNotifier(store, cfg)
 	}
-	srv := server.NewServer(cfg, store, p, notifier.NewDispatcher(store, logger, true), sn, logger, "test")
+	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		dispatcher.Shutdown(ctx)
+		if sn != nil {
+			sn.Shutdown(ctx)
+		}
+	})
+	srv := server.NewServer(cfg, store, p, dispatcher, sn, logger, "test")
 	t.Cleanup(srv.Close)
 	return &testEnv{srv: srv, store: store, dbPath: f.Name()}
 }
@@ -150,7 +159,7 @@ func TestAPIEmailSubscribeSendsConfirmation(t *testing.T) {
 	sp := env.createStatusPage(t, `{"slug":"s1","title":"S1","enabled":true,"api_enabled":true}`)
 
 	w := env.do("POST", "/api/v1/status-pages/"+strconv.FormatInt(sp.ID, 10)+"/subscribe", `{"type":"email","email":"a@example.com"}`, nil)
-	if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), "confirmation email sent") {
+	if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), "confirmation email queued") {
 		t.Fatalf("subscribe: %d %s", w.Code, w.Body.String())
 	}
 	deadline := time.Now().Add(3 * time.Second)
@@ -236,9 +245,8 @@ func TestStatusPagePasswordViaAPI(t *testing.T) {
 	}
 }
 
-// API subscribing is gated as in v1.3.0: the page must be enabled and have
-// api_enabled on; whether subscriptions are configured does not matter, and an
-// email subscription without a subscriber notifier must not crash.
+// Subscription routes require both page gates. Webhooks can be registered
+// without SMTP; email registration fails visibly when confirmation is disabled.
 func TestSubscribeAPIGating(t *testing.T) {
 	env := newTestEnv(t, func(c *config.Config) {
 		c.Subscriptions.Enabled = false
@@ -256,11 +264,15 @@ func TestSubscribeAPIGating(t *testing.T) {
 		sp := env.createStatusPage(t, fmt.Sprintf(`{"slug":"s%d","title":"S","enabled":%v,"api_enabled":%v}`, i, tc.enabled, tc.apiEnabled))
 		path := "/api/v1/status-pages/" + strconv.FormatInt(sp.ID, 10) + "/subscribe"
 		for _, body := range []string{`{"type":"webhook","webhook_url":"https://example.com/hook"}`, `{"type":"email","email":"a@example.com"}`} {
-			if w := env.do("POST", path, body, nil); w.Code != tc.want {
-				t.Errorf("enabled=%v api_enabled=%v: subscribe %s returned %d %s, want %d", tc.enabled, tc.apiEnabled, body, w.Code, strings.TrimSpace(w.Body.String()), tc.want)
+			want := tc.want
+			if want == http.StatusCreated && strings.Contains(body, `"type":"email"`) {
+				want = http.StatusServiceUnavailable
+			}
+			if w := env.do("POST", path, body, nil); w.Code != want {
+				t.Errorf("enabled=%v api_enabled=%v: subscribe %s returned %d %s, want %d", tc.enabled, tc.apiEnabled, body, w.Code, strings.TrimSpace(w.Body.String()), want)
 			}
 		}
-		wantN := int64(0) // confirmed subscribers: the webhook; the email awaits confirmation
+		wantN := int64(0) // Only the webhook is stored; unavailable email can be retried.
 		if tc.want == http.StatusCreated {
 			wantN = 1
 		}

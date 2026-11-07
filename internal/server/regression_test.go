@@ -41,7 +41,9 @@ func regressionServer(t *testing.T, mutate func(*config.Config)) (*Server, stora
 		mutate(cfg)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewServer(cfg, store, nil, notifier.NewDispatcher(store, logger, true), nil, logger, "test"), store
+	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
+	return NewServer(cfg, store, nil, dispatcher, nil, logger, "test"), store
 }
 
 func headless(c *config.Config) {

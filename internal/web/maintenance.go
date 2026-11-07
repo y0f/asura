@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -109,10 +110,10 @@ func (h *Handler) MaintenanceToggle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if newActive {
 			h.setFlash(w, "Maintenance started")
-			h.notifyMaintenance(mw, "started")
+			h.notifyMaintenance(r.Context(), mw, "started")
 		} else {
 			h.setFlash(w, "Maintenance stopped")
-			h.notifyMaintenance(mw, "ended")
+			h.notifyMaintenance(r.Context(), mw, "ended")
 		}
 	}
 	h.redirect(w, r, "/maintenance")
@@ -162,13 +163,15 @@ func (h *Handler) parseMaintenanceForm(r *http.Request) (*storage.MaintenanceWin
 	return mw, nil
 }
 
-func (h *Handler) notifyMaintenance(mw *storage.MaintenanceWindow, action string) {
+func (h *Handler) notifyMaintenance(ctx context.Context, mw *storage.MaintenanceWindow, action string) {
 	if h.notifier == nil {
 		return
 	}
 	msg := fmt.Sprintf("[MAINTENANCE] %s %s: %s", mw.Name, action, mw.Name)
-	h.notifier.NotifyWithPayload(&notifier.Payload{
+	if err := h.notifier.NotifyWithPayload(ctx, &notifier.Payload{
 		EventType: "maintenance." + action,
 		Monitor:   &storage.Monitor{Name: msg},
-	})
+	}); err != nil {
+		h.logger.Error("queue maintenance notification", "error", err)
+	}
 }

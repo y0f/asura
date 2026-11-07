@@ -23,7 +23,7 @@ type SubscriberNotifier struct {
 	smtp         config.SMTPConfig
 	extURL       string
 	logger       *slog.Logger
-	sem          chan struct{}
+	queue        *deliveryQueue
 	allowPrivate bool
 }
 
@@ -33,7 +33,7 @@ func NewSubscriberNotifier(store storage.Store, smtpCfg config.SMTPConfig, extUR
 		smtp:         smtpCfg,
 		extURL:       strings.TrimRight(extURL, "/"),
 		logger:       logger,
-		sem:          make(chan struct{}, 10),
+		queue:        newDeliveryQueue(),
 		allowPrivate: allowPrivate,
 	}
 }
@@ -62,67 +62,112 @@ type subscriberIncident struct {
 	StartedAt string `json:"started_at"`
 }
 
-func (n *SubscriberNotifier) NotifyForMonitor(ctx context.Context, monitorID int64, eventType string, inc *storage.Incident, mon *storage.Monitor) {
+func (n *SubscriberNotifier) Shutdown(ctx context.Context) error { return n.queue.shutdown(ctx) }
+func (n *SubscriberNotifier) Stats() DeliveryStats               { return n.queue.stats() }
+
+func (n *SubscriberNotifier) NotifyForMonitor(ctx context.Context, monitorID int64, eventType string, inc *storage.Incident, mon *storage.Monitor) error {
+	ctx, finish, err := n.queue.begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
 	pageIDs, err := n.store.GetStatusPageIDsForMonitor(ctx, monitorID)
 	if err != nil {
-		n.logger.Error("subscriber: get status pages for monitor", "monitor_id", monitorID, "error", err)
-		return
+		return fmt.Errorf("subscriber status pages: %w", err)
 	}
-	if len(pageIDs) == 0 {
-		return
+	// Only the public display fields are needed by subscriber messages.
+	if mon != nil {
+		mon = &storage.Monitor{ID: mon.ID, Name: mon.Name}
 	}
-
+	if inc != nil {
+		inc = &storage.Incident{ID: inc.ID, MonitorID: inc.MonitorID, MonitorName: inc.MonitorName,
+			Status: inc.Status, Cause: inc.Cause, StartedAt: inc.StartedAt}
+	}
+	var firstErr error
 	for _, pageID := range pageIDs {
 		sp, err := n.store.GetStatusPage(ctx, pageID)
-		if err != nil || sp == nil || !sp.Enabled {
+		if err != nil {
+			return fmt.Errorf("subscriber status page: %w", err)
+		}
+		if sp == nil || !sp.Enabled {
 			continue
 		}
-		go n.notifyPageSubscribers(ctx, sp, eventType, inc, mon)
+		sp = publicPage(sp)
+		subject := subscriberSubject(eventType, mon, inc)
+		var afterID int64
+		for {
+			subs, err := n.store.ListConfirmedSubscribersAfter(ctx, sp.ID, afterID, maxQueuedSends)
+			if err != nil {
+				return fmt.Errorf("list subscriber batch: %w", err)
+			}
+			for _, sub := range subs {
+				sub := copyPointer(sub)
+				err := n.queue.offer(ctx, deliveryJob{
+					run: func(ctx context.Context) error {
+						ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						switch sub.Type {
+						case "email":
+							return n.sendSubscriberEmail(ctx, sub, sp, eventType, subject, inc, mon)
+						case "webhook":
+							return n.sendSubscriberWebhook(ctx, sub, sp, eventType, inc, mon)
+						default:
+							return fmt.Errorf("unknown subscriber type: %s", sub.Type)
+						}
+					},
+					done: func(err error) { n.recordResult(sub, err) },
+				})
+				if err != nil {
+					n.recordResult(sub, err)
+					if firstErr == nil {
+						firstErr = err
+					}
+				}
+				afterID = sub.ID
+			}
+			if len(subs) < maxQueuedSends {
+				break
+			}
+		}
+	}
+	return firstErr
+}
+
+func publicPage(sp *storage.StatusPage) *storage.StatusPage {
+	return &storage.StatusPage{ID: sp.ID, Slug: sp.Slug, Title: sp.Title}
+}
+
+func (n *SubscriberNotifier) recordResult(sub *storage.StatusPageSubscriber, err error) {
+	if err != nil {
+		n.logger.Error("subscriber delivery failed", "page_id", sub.StatusPageID,
+			"subscriber_id", sub.ID, "type", sub.Type, "error", redactErr(err))
 	}
 }
 
-func (n *SubscriberNotifier) notifyPageSubscribers(ctx context.Context, sp *storage.StatusPage, eventType string, inc *storage.Incident, mon *storage.Monitor) {
-	subs, err := n.store.ListConfirmedSubscribers(ctx, sp.ID)
+// QueueConfirmationEmail admits a confirmation into the owned delivery queue.
+// Once admitted, it outlives the request and is joined during shutdown.
+func (n *SubscriberNotifier) QueueConfirmationEmail(ctx context.Context, sub *storage.StatusPageSubscriber, sp *storage.StatusPage) error {
+	ctx, finish, err := n.queue.begin(ctx)
 	if err != nil {
-		n.logger.Error("subscriber: list subscribers", "page_id", sp.ID, "error", err)
-		return
+		return err
 	}
-	if len(subs) == 0 {
-		return
+	defer finish()
+	if n.smtp.Host == "" || n.smtp.From == "" {
+		return fmt.Errorf("subscription SMTP not configured")
 	}
-
-	subject := subscriberSubject(eventType, mon, inc)
-
-	for _, sub := range subs {
-		sub := sub
-		select {
-		case n.sem <- struct{}{}:
-		case <-ctx.Done():
-			return
-		}
-		go func() {
-			defer func() { <-n.sem }()
-
-			sendCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	sub, sp = copyPointer(sub), publicPage(sp)
+	err = n.queue.offer(ctx, deliveryJob{
+		run: func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, time.Minute)
 			defer cancel()
-
-			var err error
-			switch sub.Type {
-			case "email":
-				err = n.sendSubscriberEmail(sendCtx, sub, sp, eventType, subject, inc, mon)
-			case "webhook":
-				err = n.sendSubscriberWebhook(sendCtx, sub, sp, eventType, inc, mon)
-			}
-			if err != nil {
-				n.logger.Warn("subscriber: send failed",
-					"type", sub.Type,
-					"page_id", sp.ID,
-					"subscriber_id", sub.ID,
-					"error", redactErr(err),
-				)
-			}
-		}()
+			return n.SendConfirmationEmail(ctx, sub, sp)
+		},
+		done: func(err error) { n.recordResult(sub, err) },
+	})
+	if err != nil {
+		n.recordResult(sub, err)
 	}
+	return err
 }
 
 func subscriberSubject(eventType string, mon *storage.Monitor, inc *storage.Incident) string {

@@ -210,6 +210,7 @@ func TestTickProcessesState(t *testing.T) {
 	}
 
 	dispatcher := notifier.NewDispatcher(store, logger, false)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	runner := NewRunner(store, dispatcher, logger)
 
 	runner.Tick(ctx)
@@ -264,6 +265,7 @@ func TestTickDeletesStateOnResolvedIncident(t *testing.T) {
 	}
 
 	dispatcher := notifier.NewDispatcher(store, logger, false)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	runner := NewRunner(store, dispatcher, logger)
 
 	runner.Tick(ctx)
@@ -315,6 +317,7 @@ func TestTickDeletesStateOnDisabledPolicy(t *testing.T) {
 	}
 
 	dispatcher := notifier.NewDispatcher(store, logger, false)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	runner := NewRunner(store, dispatcher, logger)
 
 	runner.Tick(ctx)

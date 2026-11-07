@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -39,8 +40,6 @@ func validateSubscription(r *http.Request) (subType, email, webhookURL, errMsg s
 	}
 	return subType, email, webhookURL, ""
 }
-
-const confirmationEmailTimeout = time.Minute
 
 func (h *Handler) StatusPageSubscribe(w http.ResponseWriter, r *http.Request, pageID int64) {
 	ctx := r.Context()
@@ -81,16 +80,21 @@ func (h *Handler) StatusPageSubscribe(w http.ResponseWriter, r *http.Request, pa
 		return
 	}
 
-	if subType == "email" && h.subNotifier != nil {
-		// The request context is cancelled as soon as this handler returns,
-		// so the background send needs its own lifetime.
-		sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), confirmationEmailTimeout)
-		go func() {
+	if subType == "email" {
+		err := fmt.Errorf("email subscriptions are unavailable")
+		if h.subNotifier != nil {
+			err = h.subNotifier.QueueConfirmationEmail(ctx, sub, sp)
+		}
+		if err != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			if err := h.subNotifier.SendConfirmationEmail(sendCtx, sub, sp); err != nil {
-				h.logger.Error("web: send confirmation email", "error", err)
+			if cleanupErr := h.store.DeleteSubscriber(cleanupCtx, sp.ID, sub.ID); cleanupErr != nil {
+				h.logger.Error("remove rejected subscription", "subscriber_id", sub.ID, "error", cleanupErr)
 			}
-		}()
+			h.logger.Error("queue confirmation email", "subscriber_id", sub.ID, "error", err)
+			h.redirectToStatusPage(w, r, sp.Slug, "Confirmation email unavailable. Try again later.")
+			return
+		}
 		h.redirectToStatusPage(w, r, sp.Slug, "Check your email to confirm your subscription.")
 		return
 	}
