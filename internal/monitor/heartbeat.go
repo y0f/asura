@@ -106,36 +106,23 @@ func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heart
 		w.logger.Error("heartbeat watcher: get open incident", "monitor_id", mon.ID, "error", err)
 		return
 	}
-	if _, silenced := w.pipeline.silenced.Load(mon.ID); silenced {
-		w.announceAfterMaintenance(ctx, mon)
+	if inc.AnnouncementPending {
+		if !w.pipeline.inMaintenance(ctx, mon.ID) {
+			w.pipeline.announceIncident(ctx, mon, inc)
+		}
 		return
 	}
-	if mon.ResendInterval <= 0 {
-		return
-	}
-	if !w.pipeline.shouldResend(mon) {
+	resend := w.pipeline.shouldResend(mon)
+	if !inc.EscalationPending && !resend {
 		return
 	}
 	inMaintenance, _ := w.store.IsMonitorInMaintenance(ctx, mon.ID, time.Now())
 	if inMaintenance {
 		return
 	}
-	w.pipeline.emitNotification(ctx, "incident.reminder", inc, mon, nil)
-	w.pipeline.lastNotified.Store(mon.ID, time.Now())
-}
-
-// announceAfterMaintenance announces an incident that was opened silently
-// during a maintenance window once that window has ended.
-func (w *HeartbeatWatcher) announceAfterMaintenance(ctx context.Context, mon *storage.Monitor) {
-	if w.pipeline.inMaintenance(ctx, mon.ID) {
-		return
-	}
-	inc, err := w.store.GetOpenIncident(ctx, mon.ID)
-	if err != nil || inc == nil {
-		w.pipeline.silenced.Delete(mon.ID)
-		return
-	}
-	if w.pipeline.takeSilenced(mon.ID, inc.ID) {
-		w.pipeline.announceIncident(ctx, mon, inc)
+	w.pipeline.prepareEscalation(ctx, mon, inc)
+	if resend {
+		w.pipeline.emitNotification(ctx, "incident.reminder", inc, mon, nil)
+		w.pipeline.lastNotified.Store(mon.ID, time.Now())
 	}
 }

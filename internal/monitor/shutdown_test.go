@@ -121,3 +121,7 @@ func TestPipelineRunJoinsScheduler(t *testing.T) {
 		t.Fatal("pipeline did not finish after scheduler cleanup")
 	}
 }
+
+func (s *shutdownSchedulerStore) ListPendingIncidentIDs(context.Context, int64, int) ([]int64, error) {
+	return nil, nil
+}

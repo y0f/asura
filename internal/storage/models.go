@@ -222,17 +222,21 @@ type AgentJob struct {
 
 // Incident tracks a period of downtime or degradation.
 type Incident struct {
-	ID             int64      `json:"id"`
-	MonitorID      int64      `json:"monitor_id"`
-	MonitorName    string     `json:"monitor_name,omitempty"`
-	Status         string     `json:"status"`   // open, acknowledged, resolved
-	Severity       string     `json:"severity"` // critical, major, minor, warning
-	Cause          string     `json:"cause"`
-	StartedAt      time.Time  `json:"started_at"`
-	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
-	AcknowledgedBy string     `json:"acknowledged_by,omitempty"`
-	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
-	ResolvedBy     string     `json:"resolved_by,omitempty"`
+	// AnnouncementPending survives restarts until the initial notification has
+	// been queued. It is internal delivery state, not API-editable incident data.
+	AnnouncementPending bool       `json:"-"`
+	EscalationPending   bool       `json:"-"`
+	ID                  int64      `json:"id"`
+	MonitorID           int64      `json:"monitor_id"`
+	MonitorName         string     `json:"monitor_name,omitempty"`
+	Status              string     `json:"status"`   // open, acknowledged, resolved
+	Severity            string     `json:"severity"` // critical, major, minor, warning
+	Cause               string     `json:"cause"`
+	StartedAt           time.Time  `json:"started_at"`
+	AcknowledgedAt      *time.Time `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy      string     `json:"acknowledged_by,omitempty"`
+	ResolvedAt          *time.Time `json:"resolved_at,omitempty"`
+	ResolvedBy          string     `json:"resolved_by,omitempty"`
 }
 
 // IncidentEvent is a timeline entry within an incident.

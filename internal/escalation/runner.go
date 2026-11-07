@@ -172,19 +172,28 @@ func (r *Runner) deleteState(ctx context.Context, incidentID int64) {
 }
 
 // StartEscalation creates an escalation state for a new incident if the monitor has an escalation policy.
-func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Monitor, incidentID int64, logger *slog.Logger) {
+func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Monitor, incidentID int64, logger *slog.Logger) error {
 	if mon.EscalationPolicyID == nil {
-		return
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
 	policy, err := store.GetEscalationPolicy(ctx, *mon.EscalationPolicyID)
-	if err != nil || !policy.Enabled {
-		return
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
+	}
+	if err != nil {
+		return err
+	}
+	if !policy.Enabled {
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
 	steps, err := store.GetEscalationPolicySteps(ctx, policy.ID)
-	if err != nil || len(steps) == 0 {
-		return
+	if err != nil {
+		return err
+	}
+	if len(steps) == 0 {
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
 	state := &storage.EscalationState{
@@ -193,9 +202,11 @@ func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Moni
 		CurrentStep: 0,
 		NextFireAt:  time.Now().Add(time.Duration(steps[0].DelayMinutes) * time.Minute),
 	}
-	if err := store.CreateEscalationState(ctx, state); err != nil {
+	if err := store.PrepareIncidentEscalation(ctx, incidentID, state); err != nil {
 		logger.Error("escalation: create state", "error", err, "incident_id", incidentID)
+		return err
 	}
+	return nil
 }
 
 // CancelEscalation removes the escalation state for an incident.

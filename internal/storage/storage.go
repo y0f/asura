@@ -37,6 +37,9 @@ type Store interface {
 	// newest first, leaving out incidents resolved before resolvedSince.
 	ListRecentIncidents(ctx context.Context, monitorIDs []int64, resolvedSince time.Time, limit int) ([]*Incident, error)
 	UpdateIncident(ctx context.Context, inc *Incident) error
+	MarkIncidentAnnounced(ctx context.Context, id int64) error
+	PrepareIncidentEscalation(ctx context.Context, incidentID int64, state *EscalationState) error
+	ListPendingIncidentIDs(ctx context.Context, afterID int64, limit int) ([]int64, error)
 	DeleteIncident(ctx context.Context, id int64) error
 	GetOpenIncident(ctx context.Context, monitorID int64) (*Incident, error)
 

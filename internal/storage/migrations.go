@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 36
+const schemaVersion = 37
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -121,10 +121,14 @@ CREATE TABLE IF NOT EXISTS incidents (
 	acknowledged_at TEXT,
 	acknowledged_by TEXT    NOT NULL DEFAULT '',
 	resolved_at     TEXT,
-	resolved_by     TEXT    NOT NULL DEFAULT ''
+	resolved_by     TEXT    NOT NULL DEFAULT '',
+	announcement_pending INTEGER NOT NULL DEFAULT 0,
+	escalation_pending INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_incidents_monitor_id ON incidents(monitor_id, status);
+CREATE INDEX IF NOT EXISTS idx_incidents_pending ON incidents(id)
+WHERE status IN ('open','acknowledged') AND (announcement_pending=1 OR escalation_pending=1);
 
 CREATE TABLE IF NOT EXISTS incident_events (
 	id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -650,5 +654,12 @@ CREATE INDEX IF NOT EXISTS idx_monitor_agents_agent_id ON monitor_agents(agent_i
 		version: 36,
 		sql: `ALTER TABLE check_result_hourly ADD COLUMN sum_rt INTEGER;
 ALTER TABLE check_result_daily ADD COLUMN sum_rt INTEGER;`,
+	},
+	{
+		version: 37,
+		sql: `ALTER TABLE incidents ADD COLUMN announcement_pending INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE incidents ADD COLUMN escalation_pending INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idx_incidents_pending ON incidents(id)
+WHERE status IN ('open','acknowledged') AND (announcement_pending=1 OR escalation_pending=1);`,
 	},
 }

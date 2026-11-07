@@ -33,6 +33,16 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 			}
 		}
 	}
+	if v < 37 {
+		if _, err := s.writeDB.Exec("DROP INDEX idx_incidents_pending"); err != nil {
+			t.Fatal(err)
+		}
+		for _, column := range []string{"announcement_pending", "escalation_pending"} {
+			if _, err := s.writeDB.Exec("ALTER TABLE incidents DROP COLUMN " + column); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if downgrade != nil {
 		downgrade(s)
 	}

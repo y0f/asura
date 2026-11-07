@@ -39,11 +39,13 @@ func (m *Manager) ProcessFailure(ctx context.Context, monitorID int64, monitorNa
 	}
 
 	inc := &storage.Incident{
-		MonitorID:   monitorID,
-		MonitorName: monitorName,
-		Status:      StatusOpen,
-		Severity:    SeverityForStatus(monitorStatus),
-		Cause:       cause,
+		AnnouncementPending: true,
+		EscalationPending:   true,
+		MonitorID:           monitorID,
+		MonitorName:         monitorName,
+		Status:              StatusOpen,
+		Severity:            SeverityForStatus(monitorStatus),
+		Cause:               cause,
 	}
 	if err := m.store.CreateIncident(ctx, inc); err != nil {
 		return nil, false, err

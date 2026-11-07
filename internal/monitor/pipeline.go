@@ -43,7 +43,6 @@ type Pipeline struct {
 	sources              sync.Map // map[int64]monitorSources — per-location result streaks (guarded by statusLocks)
 	sourceCheckedAt      sync.Map // map[int64]map[string]time.Time — newest applied checked_at per location (guarded by statusLocks)
 	incidentOpen         sync.Map // map[int64]bool — false once a recovery pass found no open incident; absent = unknown
-	silenced             sync.Map // map[int64]int64 — monitor ID -> incident opened in maintenance and not yet announced
 }
 
 // lockMonitorStatus serializes the monitor_status read-modify-write for a
@@ -109,6 +108,7 @@ func (p *Pipeline) Run(ctx context.Context) {
 	defer cancel()
 	var running sync.WaitGroup
 	running.Go(func() { p.scheduler.Run(runCtx) })
+	running.Go(func() { p.reconcilePendingAnnouncements(runCtx) })
 
 	pool := NewPool(p.workers, p.registry, p.jobs, p.results, p.logger)
 	running.Go(func() { pool.Run(runCtx) })
@@ -387,35 +387,39 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mon
 	}
 	p.incidentOpen.Store(mon.ID, true)
 	if inMaintenance {
-		// Remember the silent incident so it is announced (and escalated) if
-		// it is still open once the maintenance window has ended.
-		if created {
-			p.silenced.Store(mon.ID, inc.ID)
-		}
 		return nil
 	}
-	if created || p.takeSilenced(mon.ID, inc.ID) {
+	if created || inc.AnnouncementPending {
 		p.announceIncident(ctx, mon, inc)
-	} else if p.shouldResend(mon) {
-		p.emitNotification(ctx, "incident.reminder", inc, mon, nil)
-		p.lastNotified.Store(mon.ID, time.Now())
+	} else {
+		p.prepareEscalation(ctx, mon, inc)
+		if p.shouldResend(mon) {
+			p.emitNotification(ctx, "incident.reminder", inc, mon, nil)
+			p.lastNotified.Store(mon.ID, time.Now())
+		}
 	}
 	return nil
 }
 
 // announceIncident emits incident.created and starts escalation.
 func (p *Pipeline) announceIncident(ctx context.Context, mon *storage.Monitor, inc *storage.Incident) {
-	p.emitNotification(ctx, "incident.created", inc, mon, nil)
+	if !p.emitNotification(ctx, "incident.created", inc, mon, nil) {
+		return
+	}
 	p.lastNotified.Store(mon.ID, time.Now())
-	escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger)
+	if err := p.store.MarkIncidentAnnounced(ctx, inc.ID); err != nil {
+		p.logger.Error("mark incident announced", "incident_id", inc.ID, "error", err)
+	}
+	p.prepareEscalation(ctx, mon, inc)
 	p.checkSLABreach(ctx, mon)
 }
 
-// takeSilenced reports whether incidentID was opened during maintenance and
-// never announced, and clears the marker.
-func (p *Pipeline) takeSilenced(monitorID, incidentID int64) bool {
-	v, ok := p.silenced.LoadAndDelete(monitorID)
-	return ok && v.(int64) == incidentID
+func (p *Pipeline) prepareEscalation(ctx context.Context, mon *storage.Monitor, inc *storage.Incident) {
+	if inc.EscalationPending {
+		if err := escalation.StartEscalation(ctx, p.store, mon, inc.ID, p.logger); err != nil {
+			p.logger.Error("start incident escalation", "incident_id", inc.ID, "error", err)
+		}
+	}
 }
 
 func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor) error {
@@ -436,7 +440,7 @@ func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor) er
 // monitor is in maintenance or the incident was never announced.
 func (p *Pipeline) notifyResolved(ctx context.Context, mon *storage.Monitor, inc *storage.Incident, inMaintenance bool) {
 	escalation.CancelEscalation(ctx, p.store, inc.ID)
-	if p.takeSilenced(mon.ID, inc.ID) || inMaintenance {
+	if inc.AnnouncementPending || inMaintenance {
 		return
 	}
 	p.emitNotification(ctx, "incident.resolved", inc, mon, nil)
@@ -504,7 +508,7 @@ func criticalNotification(eventType string) bool {
 	}
 }
 
-func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *storage.Incident, mon *storage.Monitor, change *storage.ContentChange) {
+func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *storage.Incident, mon *storage.Monitor, change *storage.ContentChange) bool {
 	var monitorID int64
 	if mon != nil {
 		monitorID = mon.ID
@@ -529,6 +533,7 @@ func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *
 		defer timer.Stop()
 		select {
 		case p.notifyChan <- ev:
+			return true
 		case <-ctx.Done():
 			p.droppedNotifications.Add(1)
 			p.logger.Warn("notification channel send aborted", "event", eventType, "error", ctx.Err())
@@ -536,14 +541,16 @@ func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *
 			p.droppedNotifications.Add(1)
 			p.logger.Warn("notification channel full, dropped event after timeout", "event", eventType)
 		}
-		return
+		return false
 	}
 
 	select {
 	case p.notifyChan <- ev:
+		return true
 	default:
 		p.droppedNotifications.Add(1)
 		p.logger.Warn("notification channel full, dropping event", "event", eventType)
+		return false
 	}
 }
 

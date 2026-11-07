@@ -59,7 +59,7 @@ func TestStartEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout"}
+	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout", EscalationPending: true}
 	if err := store.CreateIncident(ctx, inc); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestStartEscalationNoPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout"}
+	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout", EscalationPending: true}
 	if err := store.CreateIncident(ctx, inc); err != nil {
 		t.Fatal(err)
 	}
@@ -102,6 +102,10 @@ func TestStartEscalationNoPolicy(t *testing.T) {
 	_, err := store.GetEscalationStateByIncident(ctx, inc.ID)
 	if err == nil {
 		t.Fatal("expected error (no state created), got nil")
+	}
+	stored, err := store.GetIncident(ctx, inc.ID)
+	if err != nil || stored.EscalationPending {
+		t.Fatalf("no-policy setup remained pending: %+v %v", stored, err)
 	}
 }
 
@@ -131,7 +135,7 @@ func TestCancelEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout"}
+	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout", EscalationPending: true}
 	if err := store.CreateIncident(ctx, inc); err != nil {
 		t.Fatal(err)
 	}

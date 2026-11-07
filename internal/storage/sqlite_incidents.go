@@ -14,8 +14,8 @@ func (s *SQLiteStore) CreateIncident(ctx context.Context, inc *Incident) error {
 	}
 	now := formatTime(time.Now())
 	res, err := s.writeDB.ExecContext(ctx,
-		`INSERT INTO incidents (monitor_id, status, severity, cause, started_at) VALUES (?, ?, ?, ?, ?)`,
-		inc.MonitorID, inc.Status, inc.Severity, inc.Cause, now)
+		`INSERT INTO incidents (monitor_id, status, severity, cause, started_at, announcement_pending, escalation_pending) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		inc.MonitorID, inc.Status, inc.Severity, inc.Cause, now, boolToInt(inc.AnnouncementPending), boolToInt(inc.EscalationPending))
 	if err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func (s *SQLiteStore) CreateIncident(ctx context.Context, inc *Incident) error {
 }
 
 const incidentColumns = `i.id, i.monitor_id, i.status, i.severity, i.cause, i.started_at,
-		        i.acknowledged_at, i.acknowledged_by, i.resolved_at, i.resolved_by`
+		        i.acknowledged_at, i.acknowledged_by, i.resolved_at, i.resolved_by, i.announcement_pending, i.escalation_pending`
 
 const incidentColumnsWithName = incidentColumns + `, COALESCE(m.name, '')`
 
@@ -36,7 +36,7 @@ func scanIncident(scan func(dest ...any) error, withName bool) (*Incident, error
 	var ackAt, resAt sql.NullString
 	var dest []any
 	dest = append(dest, &inc.ID, &inc.MonitorID, &inc.Status, &inc.Severity, &inc.Cause, &startedAt,
-		&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy)
+		&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy, &inc.AnnouncementPending, &inc.EscalationPending)
 	if withName {
 		dest = append(dest, &inc.MonitorName)
 	}
@@ -159,13 +159,20 @@ func (s *SQLiteStore) UpdateIncident(ctx context.Context, inc *Incident) error {
 		resAt = formatTime(*inc.ResolvedAt)
 	}
 	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE incidents SET status=?, severity=?, cause=?, acknowledged_at=?, acknowledged_by=?, resolved_at=?, resolved_by=? WHERE id=?`,
-		inc.Status, inc.Severity, inc.Cause, ackAt, inc.AcknowledgedBy, resAt, inc.ResolvedBy, inc.ID)
+		`UPDATE incidents SET status=?, severity=?, cause=?, acknowledged_at=?, acknowledged_by=?, resolved_at=?, resolved_by=?,
+		 announcement_pending=CASE WHEN ?='resolved' THEN 0 ELSE announcement_pending END,
+		 escalation_pending=CASE WHEN ?='resolved' THEN 0 ELSE escalation_pending END WHERE id=?`,
+		inc.Status, inc.Severity, inc.Cause, ackAt, inc.AcknowledgedBy, resAt, inc.ResolvedBy, inc.Status, inc.Status, inc.ID)
 	return err
 }
 
 func (s *SQLiteStore) DeleteIncident(ctx context.Context, id int64) error {
 	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM incidents WHERE id=?", id)
+	return err
+}
+
+func (s *SQLiteStore) MarkIncidentAnnounced(ctx context.Context, id int64) error {
+	_, err := s.writeDB.ExecContext(ctx, "UPDATE incidents SET announcement_pending=0 WHERE id=?", id)
 	return err
 }
 
