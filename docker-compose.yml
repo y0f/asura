@@ -1,8 +1,9 @@
 services:
   asura:
     build: .
-    container_name: asura
     restart: unless-stopped
+    environment:
+      ASURA_ADMIN_KEY_HASH: ${ASURA_ADMIN_KEY_HASH:-}
     ports:
       - "127.0.0.1:8090:8090"
     volumes:

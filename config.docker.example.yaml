@@ -1,0 +1,18 @@
+# Copy to config.yaml before running Docker Compose.
+# Generate credentials with: docker compose run --rm --no-deps asura --setup
+# Save the Hash value in .env as ASURA_ADMIN_KEY_HASH=...
+server:
+  # Listen inside the container; Compose publishes only to the host's loopback.
+  listen: "0.0.0.0:8090"
+
+database:
+  path: "/app/data/asura.db"
+
+auth:
+  api_keys:
+    - name: admin
+      hash: "${ASURA_ADMIN_KEY_HASH}"
+      super_admin: true
+  session:
+    # Set true when serving through an HTTPS reverse proxy.
+    cookie_secure: false

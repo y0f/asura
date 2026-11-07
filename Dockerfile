@@ -1,6 +1,7 @@
-FROM golang:1.27-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
+FROM golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS builder
 
 ARG VERSION=dev
+ENV GOTOOLCHAIN=local
 
 WORKDIR /build
 
@@ -13,7 +14,8 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}"
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 RUN apk add --no-cache ca-certificates tzdata && \
-    adduser -D -H -s /sbin/nologin asura
+    adduser -D -H -s /sbin/nologin asura && \
+    mkdir -p /app/data && chown asura:asura /app/data
 
 WORKDIR /app
 COPY --from=builder /build/asura .

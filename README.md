@@ -37,11 +37,15 @@ git clone https://github.com/y0f/Asura.git && cd Asura && sudo bash install.sh
 **Docker:**
 ```bash
 git clone https://github.com/y0f/Asura.git && cd Asura
-cp config.example.yaml config.yaml
+cp config.docker.example.yaml config.yaml
+docker compose build
+docker compose run --rm --no-deps asura --setup
+# Save the API Key securely; put the Hash value in .env:
+# ASURA_ADMIN_KEY_HASH=your_generated_hash
 docker compose up -d
 ```
 
-Listens on `127.0.0.1:8090`. Use a [reverse proxy](https://y0f.github.io/asura/#deployment) (nginx/Caddy) for public access with TLS.
+Open `http://127.0.0.1:8090` and sign in with the API Key. The named volume keeps the SQLite database across container replacements. Use a [reverse proxy](https://y0f.github.io/asura/#deployment) (nginx/Caddy) for public access with TLS, and set `auth.session.cookie_secure: true` in `config.yaml`.
 
 ---
 
