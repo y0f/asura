@@ -23,12 +23,20 @@ func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateNotification(w http.ResponseWriter, r *http.Request) {
-	var ch storage.NotificationChannel
-	if err := h.readJSON(r, &ch); err != nil {
+	type channelFields storage.NotificationChannel
+	var req struct {
+		channelFields
+		Enabled *bool `json:"enabled"`
+	}
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	ch := storage.NotificationChannel(req.channelFields)
 	ch.Enabled = true
+	if req.Enabled != nil {
+		ch.Enabled = *req.Enabled
+	}
 
 	if err := validate.ValidateNotificationChannel(&ch); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
