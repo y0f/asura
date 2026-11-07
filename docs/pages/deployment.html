@@ -1,69 +1,70 @@
 <h1>Deployment</h1>
 
-<p>Asura listens on localhost only. Put a reverse proxy in front for TLS. don't expose it directly.</p>
+<p>Keep the service on a private interface and put an HTTPS reverse proxy in front. The Linux installer binds to <code>127.0.0.1:8090</code>. The Docker sample listens on <code>0.0.0.0:8090</code> inside its container and publishes only to host loopback. See <a href="getting-started.html">getting started</a> for installation and <a href="upgrading.html">upgrading</a> before replacing an existing version.</p>
 
-<h2>1. Install Asura</h2>
+<h2>Configure the public address</h2>
 
-<pre><code>git clone https://github.com/y0f/Asura.git
-cd Asura
-sudo bash install.sh</code></pre>
-
-<p>Save the admin API key printed at the end. It cannot be recovered.</p>
-
-<h2>2. Configure</h2>
-
-<p>Edit <code>/etc/asura/config.yaml</code>:</p>
+<p>For a Linux service behind a proxy on the same host, merge these settings into <code>/etc/asura/config.yaml</code>. Keep your existing <code>auth.api_keys</code> and database settings:</p>
 
 <pre><code>server:
-  # Bind to localhost only - never bind to 0.0.0.0 on a public server
   listen: "127.0.0.1:8090"
-
-  # Serve all routes under /asura (optional, remove for root)
   base_path: "/asura"
-
-  # Your public URL - used in notification links
   external_url: "https://example.com/asura"
-
-  # Trust nginx's forwarded headers for real client IP
   trusted_proxies:
     - "127.0.0.1"
     - "::1"
-
 auth:
   session:
-    cookie_secure: true    # Requires HTTPS (which nginx provides)</code></pre>
+    cookie_secure: true</code></pre>
 
-<h2>3. Nginx Reverse Proxy</h2>
+<p>Use your own domain. For a dedicated hostname such as <code>https://monitor.example.com</code>, omit <code>base_path</code> and use that URL for <code>external_url</code>. The reverse proxy must preserve the configured path. Trust only the proxy addresses Asura actually receives connections from; container networking can make these different from the proxy's host-loopback address.</p>
 
-<p>Grab the example config and swap in your domain:</p>
+<pre><code>sudo systemctl restart asura
+sudo systemctl status asura</code></pre>
+
+<p>For Docker, edit the mounted <code>config.yaml</code>, keep its container listen address and <code>/app/data/asura.db</code> path, then run <code>docker compose restart asura</code>. If you enable <code>base_path</code>, update the Compose healthcheck URL to include it; changes to Compose configuration require <code>docker compose up -d</code> to recreate the service.</p>
+
+<h2>Nginx</h2>
+
+<p>The repository's <a href="https://github.com/y0f/asura/blob/main/deploy/nginx.conf">nginx example</a> includes a sub-path configuration and a commented root-hostname alternative. Set up your domain and TLS certificates, then edit the domain, certificate paths and application path before enabling the site:</p>
 
 <pre><code>sudo cp deploy/nginx.conf /etc/nginx/sites-available/asura
-sudo sed -i 's/example.com/yourdomain.com/g' /etc/nginx/sites-available/asura
-sudo ln -s /etc/nginx/sites-available/asura /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx</code></pre>
+sudoedit /etc/nginx/sites-available/asura
+sudo ln -s /etc/nginx/sites-available/asura /etc/nginx/sites-enabled/asura
+sudo nginx -t
+sudo systemctl reload nginx</code></pre>
 
-<p>The example config (<a href="https://github.com/y0f/Asura/blob/main/deploy/nginx.conf" target="_blank">deploy/nginx.conf</a>) has both a sub-path setup (<code>example.com/asura/</code>) and a commented-out root setup (<code>monitor.example.com/</code>).</p>
-
-<h2>4. Verify</h2>
-
-<pre><code># Local health check (bypasses nginx)
-curl http://127.0.0.1:8090/asura/api/v1/health
-
-# Public health check (through nginx + TLS)
-curl https://example.com/asura/api/v1/health
-
-# Web UI
-# Open https://example.com/asura/ in your browser</code></pre>
+<p>Use <code>proxy_pass http://127.0.0.1:8090;</code> without a replacement URI when preserving <code>/asura/</code>. Forward the host, client-address and scheme headers as shown in the example. Asura sends <code>X-Accel-Buffering: no</code> for live event streams; avoid proxy settings that ignore this header. See the <a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass">nginx proxy reference</a> for URI handling.</p>
 
 <h2>Caddy</h2>
 
-<p>Caddy handles TLS automatically:</p>
+<p>For a domain pointing at this host, Caddy can manage HTTPS automatically. This configuration preserves the application prefix:</p>
 
 <pre><code>example.com {
     redir /asura /asura/ permanent
     reverse_proxy /asura/* 127.0.0.1:8090
 }</code></pre>
 
-<h2>Serving from Root (no base_path)</h2>
+<p>For a dedicated hostname with no <code>base_path</code>:</p>
 
-<p>Want <code>https://monitor.example.com/</code> instead of a sub-path? Drop <code>base_path</code> from the config and uncomment the root variant in <a href="https://github.com/y0f/Asura/blob/main/deploy/nginx.conf" target="_blank">deploy/nginx.conf</a>.</p>
+<pre><code>monitor.example.com {
+    reverse_proxy 127.0.0.1:8090
+}</code></pre>
+
+<p>See the <a href="https://caddyserver.com/docs/caddyfile/directives/reverse_proxy">Caddy reverse-proxy reference</a> for forwarded headers and streaming behavior.</p>
+
+<h2>Verify the deployment</h2>
+
+<pre><code># For the /asura base path used above
+curl --fail http://127.0.0.1:8090/asura/api/v1/health
+curl --fail https://example.com/asura/api/v1/health</code></pre>
+
+<p>Open <code>https://example.com/asura/</code> and sign in. Check that navigation, live updates and a permitted write action work. Test a restricted key as well as the administrator key. A health response confirms that the HTTP service is reachable; it does not validate monitor targets, notification credentials or role assignments.</p>
+
+<p>If the service fails, inspect <code>journalctl -u asura</code> or <code>docker compose logs asura</code>. Confirm that the process can write to its data directory, the configured credential hash is present, and the public URL and path match the proxy. Secure cookies require browser access over HTTPS.</p>
+
+<h2>Data and upgrades</h2>
+
+<p>Keep the database on persistent local storage and preserve its encryption key. The default systemd unit permits writes under <code>/var/lib/asura</code>; changing the database path requires matching directory ownership and service write permissions. Docker stores the default database in its named data volume.</p>
+
+<p>Use the <a href="backup.html">backup and restore guide</a> and test a restore before upgrading. A configuration export does not include all database state. Keep the old binary or image together with its matching database backup for rollback.</p>

@@ -1,105 +1,97 @@
-<p align="center">
-  <img src="assets/asura.gif" alt="Asura" height="28"/>
-</p>
-<p align="center">
-  Self-hosted uptime monitoring. One binary, one config file, no dependencies.
-</p>
-<p align="center">
-  <a href="https://github.com/y0f/asura/actions/workflows/ci.yml"><img src="https://github.com/y0f/asura/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/y0f/asura/stargazers"><img src="https://img.shields.io/github/stars/y0f/asura?style=flat" alt="GitHub stars"></a>
-  <a href="https://github.com/y0f/asura/blob/main/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/y0f/asura" alt="Go Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="https://github.com/y0f/asura/releases/latest"><img src="https://img.shields.io/github/v/release/y0f/asura?include_prereleases&sort=semver" alt="Release"></a>
-  <a href="https://github.com/y0f/asura/pkgs/container/asura"><img src="https://img.shields.io/badge/ghcr.io-asura-blue?logo=docker" alt="Docker"></a>
-</p>
-<p align="center">
-  <a href="https://y0f.github.io/asura/">Docs</a> &middot;
-  <a href="https://y0f.github.io/asura/#getting-started">Quick Start</a> &middot;
-  <a href="https://y0f.github.io/asura/#api">API</a> &middot;
-  <a href="CONTRIBUTING.md">Contributing</a>
-</p>
+# Asura v2
 
----
+Self-hosted uptime monitoring with a Go server, an embedded web interface and SQLite storage. Run checks, track incidents and error budgets, send alerts, and publish status pages without a separate database service.
 
-![Dashboard - monitors with problems first, sparklines, open incidents](assets/webpanel.png)
-![Monitor detail - uptime, response-time chart, SLA budget, 365-day history](assets/monitorview.png)
-![Public status page - grouped monitors with 90-day uptime bars](assets/statuspage.png)
+[Documentation](https://y0f.github.io/asura/) · [Quick start](https://y0f.github.io/asura/getting-started.html) · [Access control](https://y0f.github.io/asura/access-control.html) · [Upgrading to v2](https://y0f.github.io/asura/upgrading.html) · [Contributing](CONTRIBUTING.md)
 
----
+![Asura dashboard with monitor health, response times and incidents](assets/webpanel.png)
 
-## Install
+## What it does
 
-**One-liner (Ubuntu/Debian):**
+- **Monitoring:** HTTP and multi-step HTTP, TCP, UDP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, domain/WHOIS, command, SMTP, SSH, Redis, PostgreSQL, heartbeat and manual monitors. Add assertions, response-body change detection and remote probe agents.
+- **Alerts:** Webhook, email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix and Gotify. Route events through notification channels and escalation policies.
+- **Operations:** Live updates, bulk actions, maintenance schedules, incident history, public status pages and subscriptions.
+- **Access control:** API keys, TOTP and reusable roles with action permissions. Bind monitor access globally or to selected monitors and groups; reserve configuration transfer and full-secret export for super administrators.
+- **History:** Hourly and daily summaries, uptime charts, monthly SLA reports and error budgets. Configuration export/import is separate from a database backup.
+
+The [monitor reference](https://y0f.github.io/asura/monitors.html) describes each check's settings and limits. The [API reference](https://y0f.github.io/asura/api.html) covers automation.
+
+## Start with Docker Compose
+
 ```bash
-git clone https://github.com/y0f/Asura.git && cd Asura && sudo bash install.sh
-```
-
-**Docker:**
-```bash
-git clone https://github.com/y0f/Asura.git && cd Asura
+git clone https://github.com/y0f/asura.git
+cd asura
 cp config.docker.example.yaml config.yaml
 docker compose build
 docker compose run --rm --no-deps asura --setup
-# Save the API Key securely; put the Hash value in .env:
-# ASURA_ADMIN_KEY_HASH=your_generated_hash
-docker compose up -d
 ```
 
-Open `http://127.0.0.1:8090` and sign in with the API Key. The named volume keeps the SQLite database across container replacements. Use a [reverse proxy](https://y0f.github.io/asura/#deployment) (nginx/Caddy) for public access with TLS, and set `auth.session.cookie_secure: true` in `config.yaml`.
+Save the generated **API Key**. Put its **Hash** value in a local `.env` file:
 
----
+```dotenv
+ASURA_ADMIN_KEY_HASH=your_generated_hash
+```
 
-## Features
+```bash
+docker compose up -d
+curl http://127.0.0.1:8090/api/v1/health
+```
 
-- **19 monitor types** - HTTP, HTTP Multi-Step, TCP, DNS, ICMP, TLS, WebSocket, gRPC, MQTT, Docker, Domain/WHOIS, Command, SMTP, SSH, Redis, PostgreSQL, UDP, Heartbeat, Manual
-- **13 notification channels** - Webhook, Email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, Gotify
-- **Assertions** - Status code, body text, regex, JSONPath, headers, response time, cert expiry, DNS records with AND/OR group logic
-- **Multi-step HTTP chains** - Up to 5 sequential requests with variable extraction (regex/JSONPath) between steps
-- **Distributed probe agents** - Run checks from multiple locations with a lightweight agent binary (~16MB)
-- **Anomaly detection** - Statistical baseline with configurable sensitivity, auto-degrades on response time spikes
-- **Live dashboard** - Real-time SSE push with sparklines, uptime heatmap, and bulk operations
-- **Public status pages** - 90-day uptime bars, incidents, email/webhook subscriptions, RSS feed, password protection
-- **Incident severity** - Critical, major, minor, warning levels with auto-assignment
-- **Escalation policies** - Time-based notification chains with per-step delays and repeat
-- **SLA tracking** - Per-monitor targets, error budgets, breach alerts, monthly reports
-- **Cron maintenance** - 6 scheduling modes: manual, one-time, cron, daily, weekly, monthly
-- **Encryption at rest** - AES-256-GCM for notification secrets and proxy passwords
-- **Data rollup** - Hourly and daily aggregates for long-running instances
-- **Change detection** - Line-level diffs on HTTP response bodies
-- **Security** - TOTP 2FA, role-based API keys, SSRF protection, rate limiting
+Open **http://127.0.0.1:8090** and sign in with the API Key. The container runs as a non-root user, listens on its container interface, and publishes only to the host's loopback address. Its SQLite database is stored in the named `asura-data` volume and survives container replacement.
 
----
+For public access, follow the [deployment guide](https://y0f.github.io/asura/deployment.html) to configure an HTTPS reverse proxy, `server.external_url`, trusted proxy addresses and `auth.session.cookie_secure: true`.
 
-## Why Asura?
+## Install as a Linux service
 
-| Aspect | Asura | Typical alternative |
+On Ubuntu or Debian with systemd:
+
+```bash
+git clone https://github.com/y0f/asura.git
+cd asura
+sudo bash install.sh
+```
+
+The installer builds the server, creates its service account, and installs the systemd unit. It preserves an existing configuration and data directory. A fresh installation prints an admin API key and writes configuration to `/etc/asura/config.yaml`; the database lives under `/var/lib/asura`.
+
+The service binds to `127.0.0.1:8090`. Its generated configuration requires HTTPS for session cookies; finish the [reverse proxy setup](https://y0f.github.io/asura/deployment.html) before using the web interface.
+
+For source builds or Windows development, see [CONTRIBUTING.md](CONTRIBUTING.md). Builds use Go 1.27.3; CI also tests the supported minimum, Go 1.26.10.
+
+## Upgrade from v1
+
+Read the [v2 upgrade guide](https://y0f.github.io/asura/upgrading.html) and [access-control migration notes](https://y0f.github.io/asura/access-control.html) before replacing an existing installation.
+
+1. Stop the server and back up the database directory, configuration and encryption key. Keep the previous binary or image reference.
+2. Review API key roles and permissions, then install the new version while preserving the configuration and data paths.
+3. Start the server to apply database migrations. Check health, sign-in, representative monitor results, role restrictions and alert delivery.
+
+For rollback, restore the previous binary or image together with its matching database backup. A configuration export contains configuration objects; it does not replace a backup of check history and other database state. See [backup and restore](https://y0f.github.io/asura/backup.html).
+
+## Release artifacts and verification
+
+The v2 release workflow builds these assets from sources that pass CI:
+
+| Platform | Server | Probe agent |
 |---|---|---|
-| **Install** | Single binary, `scp` + run | Runtime + database + migrations |
-| **Database** | SQLite (built in) | Needs Postgres, MySQL, or Redis |
-| **Size** | ~15 MB binary, ~20 MB RAM | 100 MB+, varies by runtime |
-| **API** | Full REST API, same as web UI | Separate or undocumented API |
-| **Scale** | 1000+ monitors on a $5 VPS | Varies by runtime |
+| Linux amd64 | `asura-linux-amd64` | `asura-agent-linux-amd64` |
+| Linux arm64 | `asura-linux-arm64` | `asura-agent-linux-arm64` |
 
----
+Download the binaries you need and `checksums.txt` from the same [release](https://github.com/y0f/asura/releases), then verify the downloaded files before installation:
 
-## Docs
+```bash
+sha256sum --check --ignore-missing checksums.txt
+```
 
-- [Getting Started](https://y0f.github.io/asura/#getting-started) - Install, configure, first monitor
-- [Deployment](https://y0f.github.io/asura/#deployment) - Reverse proxy, TLS, systemd
-- [Configuration](https://y0f.github.io/asura/#configuration) - Full config reference
-- [Monitors](https://y0f.github.io/asura/#monitors) - All types, assertions, heartbeats
-- [Notifications](https://y0f.github.io/asura/#notifications) - Channels, webhook signing, routing
-- [Escalation](https://y0f.github.io/asura/#escalation-policies) - Time-based chains
-- [API](https://y0f.github.io/asura/#api) - Endpoints with examples
-- [SLA](https://y0f.github.io/asura/#sla) - Targets, budgets, breach alerts
-- [Architecture](https://y0f.github.io/asura/#architecture) - Pipeline, storage, internals
+For a release with GitHub build attestations, verify the artifact's repository identity as well:
 
----
+```bash
+gh attestation verify ./asura-linux-amd64 --repo y0f/asura
+```
 
-## Stack
+CI checks generated templates, documentation and CSS; formatting and static analysis; tests with race detection; source and binary vulnerabilities; and both server and agent architectures. Release publication additionally generates build attestations. Local builds remain available through `make build` and `make release` without publishing artifacts.
 
-Go 1.26+, stdlib `net/http`, SQLite via `modernc.org/sqlite` (pure Go, zero CGO), [templ](https://templ.guide/), HTMX, Alpine.js, Tailwind CSS v4.
+## Project
 
-## License
+The server uses Go's `net/http`, pure Go SQLite, templ, HTMX, Alpine.js and Tailwind CSS. Assets are embedded in the server binary. The standalone Tailwind CLI and the module-pinned templ generator are build tools; Node is not required to build or run Asura.
 
-[MIT](LICENSE)
+See [architecture](https://y0f.github.io/asura/architecture.html), [contributing](CONTRIBUTING.md) and the [security policy](SECURITY.md). Licensed under [MIT](LICENSE).

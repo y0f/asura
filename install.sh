@@ -210,7 +210,7 @@ auth:
   api_keys:
     - name: "admin"
       hash: "PLACEHOLDER_HASH"
-      role: "admin"
+      super_admin: true
   session:
     lifetime: 24h
     cookie_secure: true  # Secure cookies; set false only for direct HTTP access without a TLS reverse proxy
