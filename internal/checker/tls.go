@@ -86,23 +86,21 @@ func (c *TLSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 	cert := state.PeerCertificates[0]
 	expiry := cert.NotAfter
 	expiryUnix := expiry.Unix()
-	daysUntilExpiry := int(time.Until(expiry).Hours() / 24)
+	status, daysUntilExpiry := expiryStatus(expiry, time.Now(), warnDays)
 	sum := sha256.Sum256(cert.Raw)
 	fingerprint := hex.EncodeToString(sum[:])
 
 	result := &Result{
-		Status:          "up",
+		Status:          status,
 		ResponseTime:    elapsed,
 		CertExpiry:      &expiryUnix,
 		CertFingerprint: fingerprint,
 		Message:         fmt.Sprintf("cert expires in %d days (%s)", daysUntilExpiry, expiry.Format("2006-01-02")),
 	}
 
-	if daysUntilExpiry <= 0 {
-		result.Status = "down"
+	if status == "down" {
 		result.Message = fmt.Sprintf("certificate expired on %s", expiry.Format("2006-01-02"))
-	} else if daysUntilExpiry <= warnDays {
-		result.Status = "degraded"
+	} else if status == "degraded" {
 		result.Message = fmt.Sprintf("cert expires in %d days (warning threshold: %d)", daysUntilExpiry, warnDays)
 	}
 

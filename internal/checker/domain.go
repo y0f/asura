@@ -125,19 +125,17 @@ func evaluateDomainExpiry(body string, elapsed int64, warnDays int) (*Result, er
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("could not parse expiry date: %v", err), Body: body}, nil
 	}
 
-	days := int(time.Until(expiry).Hours() / 24)
+	status, days := expiryStatus(expiry, time.Now(), warnDays)
 	result := &Result{
-		Status:       "up",
+		Status:       status,
 		ResponseTime: elapsed,
 		Message:      fmt.Sprintf("domain expires in %d days (%s)", days, expiry.Format("2006-01-02")),
 		Body:         body,
 	}
 
-	if days <= 0 {
-		result.Status = "down"
+	if status == "down" {
 		result.Message = fmt.Sprintf("domain expired on %s", expiry.Format("2006-01-02"))
-	} else if days <= warnDays {
-		result.Status = "degraded"
+	} else if status == "degraded" {
 		result.Message = fmt.Sprintf("domain expires in %d days (warning threshold: %d)", days, warnDays)
 	}
 	return result, nil
