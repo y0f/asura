@@ -390,6 +390,7 @@ type MonitorGroup struct {
 
 // MonitorListFilter holds filter parameters for listing monitors.
 type MonitorListFilter struct {
+	Access  []MonitorAccess // every supplied filter is required; nil is internal/unrestricted
 	Type    string
 	Search  string
 	GroupID *int64

@@ -8,15 +8,15 @@ import (
 // Store defines the complete storage interface.
 type Store interface {
 	// Monitors
-	CreateMonitor(ctx context.Context, m *Monitor) error
-	GetMonitor(ctx context.Context, id int64) (*Monitor, error)
+	CreateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error
+	GetMonitor(ctx context.Context, id int64, access ...MonitorAccess) (*Monitor, error)
 	ListMonitors(ctx context.Context, f MonitorListFilter, p Pagination) (*PaginatedResult, error)
-	UpdateMonitor(ctx context.Context, m *Monitor) error
-	DeleteMonitor(ctx context.Context, id int64) error
-	SetMonitorEnabled(ctx context.Context, id int64, enabled bool) error
-	BulkSetMonitorsEnabled(ctx context.Context, ids []int64, enabled bool) (int64, error)
-	BulkDeleteMonitors(ctx context.Context, ids []int64) (int64, error)
-	BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64) (int64, error)
+	UpdateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error
+	DeleteMonitor(ctx context.Context, id int64, access ...MonitorAccess) error
+	SetMonitorEnabled(ctx context.Context, id int64, enabled bool, access ...MonitorAccess) error
+	BulkSetMonitorsEnabled(ctx context.Context, ids []int64, enabled bool, access ...MonitorAccess) (int64, error)
+	BulkDeleteMonitors(ctx context.Context, ids []int64, access ...MonitorAccess) (int64, error)
+	BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64, access ...MonitorAccess) (int64, error)
 	GetAllEnabledMonitors(ctx context.Context) ([]*Monitor, error)
 
 	// Monitor status (runtime state)

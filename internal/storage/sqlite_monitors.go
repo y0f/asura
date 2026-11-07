@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor) error {
+func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
+	if !allowedMonitorDestination(0, m.GroupID, access) {
+		return sql.ErrNoRows
+	}
 	tags, _ := json.Marshal(m.Tags)
 	if m.Settings == nil {
 		m.Settings = json.RawMessage("{}")
@@ -73,7 +76,9 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor) error {
 	return nil
 }
 
-func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64) (*Monitor, error) {
+func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64, access ...MonitorAccess) (*Monitor, error) {
+	clause, args := monitorAccessSQL("m", access)
+	args = append([]any{id}, args...)
 	row := s.readDB.QueryRowContext(ctx,
 		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
 		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
@@ -81,13 +86,14 @@ func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64) (*Monitor, error
 		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0)
 		 FROM monitors m
 		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id
-		 WHERE m.id = ?`, id)
+		 WHERE m.id = ?`+clause, args...)
 	return s.scanMonitor(row)
 }
 
 func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p Pagination) (*PaginatedResult, error) {
 	where := "1=1"
-	var args []any
+	clause, args := monitorAccessSQL("m", f.Access)
+	where += clause
 
 	if f.Type != "" {
 		where += " AND m.type=?"
@@ -172,7 +178,7 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 	}, nil
 }
 
-func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor) error {
+func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
 	tags, _ := json.Marshal(m.Tags)
 	now := formatTime(time.Now())
 	var groupID any
@@ -191,74 +197,52 @@ func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor) error {
 	if err != nil {
 		return fmt.Errorf("encrypt settings: %w", err)
 	}
-	_, err = s.writeDB.ExecContext(ctx,
-		`UPDATE monitors SET name=?, description=?, type=?, target=?, interval_secs=?, timeout_secs=?, enabled=?,
-		 tags=?, settings=?, assertions=?, track_changes=?, failure_threshold=?, success_threshold=?,
-		 upside_down=?, agent_enabled=?, resend_interval=?, sla_target=?, anomaly_sensitivity=?, group_id=?, proxy_id=?, escalation_policy_id=?, updated_at=?
-		 WHERE id=?`,
+	clause, accessArgs := monitorAccessSQL("", access)
+	destinationClause, destinationArgs := monitorDestinationSQL(&monitorDestination{groupID: m.GroupID}, access)
+	clause += destinationClause
+	accessArgs = append(accessArgs, destinationArgs...)
+	args := []any{
 		m.Name, m.Description, m.Type, m.Target, m.Interval, m.Timeout, boolToInt(m.Enabled),
 		string(tags), settings, string(m.Assertions), boolToInt(m.TrackChanges),
 		m.FailureThreshold, m.SuccessThreshold, boolToInt(m.UpsideDown), boolToInt(m.AgentEnabled), m.ResendInterval, m.SLATarget, m.AnomalySensitivity, groupID, proxyID, escalationPolicyID, now, m.ID,
-	)
-	return err
+	}
+	result, err := s.writeDB.ExecContext(ctx,
+		`UPDATE monitors SET name=?, description=?, type=?, target=?, interval_secs=?, timeout_secs=?, enabled=?,
+		 tags=?, settings=?, assertions=?, track_changes=?, failure_threshold=?, success_threshold=?,
+		 upside_down=?, agent_enabled=?, resend_interval=?, sla_target=?, anomaly_sensitivity=?, group_id=?, proxy_id=?, escalation_policy_id=?, updated_at=?
+		 WHERE id=?`+clause, append(args, accessArgs...)...)
+	return scopedMutationResult(result, err, access)
 }
 
-func (s *SQLiteStore) DeleteMonitor(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM monitors WHERE id=?", id)
-	return err
+func (s *SQLiteStore) DeleteMonitor(ctx context.Context, id int64, access ...MonitorAccess) error {
+	clause, args := monitorAccessSQL("", access)
+	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM monitors WHERE id=?"+clause, append([]any{id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
-func (s *SQLiteStore) SetMonitorEnabled(ctx context.Context, id int64, enabled bool) error {
+func (s *SQLiteStore) SetMonitorEnabled(ctx context.Context, id int64, enabled bool, access ...MonitorAccess) error {
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		"UPDATE monitors SET enabled=?, updated_at=? WHERE id=?",
-		boolToInt(enabled), now, id)
-	return err
+	clause, args := monitorAccessSQL("", access)
+	result, err := s.writeDB.ExecContext(ctx,
+		"UPDATE monitors SET enabled=?, updated_at=? WHERE id=?"+clause,
+		append([]any{boolToInt(enabled), now, id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
-func (s *SQLiteStore) BulkSetMonitorsEnabled(ctx context.Context, ids []int64, enabled bool) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders, args := bulkArgs(ids)
-	args = append([]any{boolToInt(enabled), formatTime(time.Now())}, args...)
-	res, err := s.writeDB.ExecContext(ctx,
-		"UPDATE monitors SET enabled=?, updated_at=? WHERE id IN ("+placeholders+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+func (s *SQLiteStore) BulkSetMonitorsEnabled(ctx context.Context, ids []int64, enabled bool, access ...MonitorAccess) (int64, error) {
+	return s.mutateMonitorSet(ctx, ids, access, nil, "UPDATE monitors SET enabled=?, updated_at=?", []any{boolToInt(enabled), formatTime(time.Now())})
 }
 
-func (s *SQLiteStore) BulkDeleteMonitors(ctx context.Context, ids []int64) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders, args := bulkArgs(ids)
-	res, err := s.writeDB.ExecContext(ctx,
-		"DELETE FROM monitors WHERE id IN ("+placeholders+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+func (s *SQLiteStore) BulkDeleteMonitors(ctx context.Context, ids []int64, access ...MonitorAccess) (int64, error) {
+	return s.mutateMonitorSet(ctx, ids, access, nil, "DELETE FROM monitors", nil)
 }
 
-func (s *SQLiteStore) BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders, args := bulkArgs(ids)
+func (s *SQLiteStore) BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64, access ...MonitorAccess) (int64, error) {
 	var gid any
 	if groupID != nil {
 		gid = *groupID
 	}
-	args = append([]any{gid, formatTime(time.Now())}, args...)
-	res, err := s.writeDB.ExecContext(ctx,
-		"UPDATE monitors SET group_id=?, updated_at=? WHERE id IN ("+placeholders+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+	return s.mutateMonitorSet(ctx, ids, access, &monitorDestination{groupID: groupID}, "UPDATE monitors SET group_id=?, updated_at=?", []any{gid, formatTime(time.Now())})
 }
 
 func bulkArgs(ids []int64) (string, []any) {
