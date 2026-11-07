@@ -179,9 +179,11 @@ func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID 
 	return
 }
 
-func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context) (map[int64]int64, error) {
+func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context, access ...MonitorAccess) (map[int64]int64, error) {
+	clause, args := monitorAccessSQL("m", access)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT monitor_id, last_response_time FROM monitor_status`)
+		`SELECT ms.monitor_id, ms.last_response_time FROM monitor_status ms
+		 JOIN monitors m ON m.id = ms.monitor_id WHERE 1=1`+clause, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +214,8 @@ func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from,
 	return
 }
 
-func (s *SQLiteStore) CountMonitorsByStatus(ctx context.Context) (up, down, degraded, paused int64, err error) {
+func (s *SQLiteStore) CountMonitorsByStatus(ctx context.Context, access ...MonitorAccess) (up, down, degraded, paused int64, err error) {
+	clause, args := monitorAccessSQL("m", access)
 	err = s.readDB.QueryRowContext(ctx,
 		`SELECT
 		   COALESCE(SUM(CASE WHEN m.enabled=1 AND COALESCE(ms.status,'') NOT IN ('down','degraded') THEN 1 ELSE 0 END), 0),
@@ -220,7 +223,7 @@ func (s *SQLiteStore) CountMonitorsByStatus(ctx context.Context) (up, down, degr
 		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='degraded' THEN 1 ELSE 0 END), 0),
 		   COALESCE(SUM(CASE WHEN m.enabled=0 THEN 1 ELSE 0 END), 0)
 		 FROM monitors m
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id`).
+		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id WHERE 1=1`+clause, args...).
 		Scan(&up, &down, &degraded, &paused)
 	return
 }

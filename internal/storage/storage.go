@@ -86,8 +86,8 @@ type Store interface {
 	GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time) (float64, error)
 	GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time) (p50, p95, p99 float64, err error)
 	GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time) (total, up, down, degraded int64, err error)
-	CountMonitorsByStatus(ctx context.Context) (up, down, degraded, paused int64, err error)
-	GetLatestResponseTimes(ctx context.Context) (map[int64]int64, error)
+	CountMonitorsByStatus(ctx context.Context, access ...MonitorAccess) (up, down, degraded, paused int64, err error)
+	GetLatestResponseTimes(ctx context.Context, access ...MonitorAccess) (map[int64]int64, error)
 
 	// Monitor notification routing
 	GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64) ([]int64, error)
@@ -135,8 +135,8 @@ type Store interface {
 	// Request logs
 	InsertRequestLogBatch(ctx context.Context, logs []*RequestLog) error
 	ListRequestLogs(ctx context.Context, f RequestLogFilter, p Pagination) (*PaginatedResult, error)
-	ListTopClientIPs(ctx context.Context, from, to time.Time, limit int) ([]string, error)
-	GetRequestLogStats(ctx context.Context, from, to time.Time) (*RequestLogStats, error)
+	ListTopClientIPs(ctx context.Context, from, to time.Time, limit int, access ...MonitorAccess) ([]string, error)
+	GetRequestLogStats(ctx context.Context, from, to time.Time, access ...MonitorAccess) (*RequestLogStats, error)
 	RollupRequestLogs(ctx context.Context, date string) error
 	PurgeOldRequestLogs(ctx context.Context, before time.Time) (int64, error)
 

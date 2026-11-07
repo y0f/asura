@@ -24,7 +24,8 @@ func (s *SQLiteStore) InsertNotificationHistory(ctx context.Context, h *Notifica
 
 func (s *SQLiteStore) ListNotificationHistory(ctx context.Context, f NotifHistoryFilter, p Pagination) (*PaginatedResult, error) {
 	where := "1=1"
-	var args []any
+	clause, args := monitorOwnerAccessSQL("nh.monitor_id", f.Access)
+	where += clause
 
 	if f.ChannelID > 0 {
 		where += " AND nh.channel_id=?"
@@ -53,7 +54,7 @@ func (s *SQLiteStore) ListNotificationHistory(ctx context.Context, f NotifHistor
 
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT nh.id, nh.channel_id, nc.name, nc.type,
-		        nh.monitor_id, COALESCE(m.name, ''),
+		        nh.monitor_id, COALESCE(m.name, ''), m.group_id,
 		        nh.incident_id, nh.event_type, nh.status, nh.error, nh.sent_at
 		 FROM notification_history nh
 		 JOIN notification_channels nc ON nc.id = nh.channel_id
@@ -75,7 +76,7 @@ func (s *SQLiteStore) ListNotificationHistory(ctx context.Context, f NotifHistor
 		var incidentID *int64
 		if err := rows.Scan(
 			&h.ID, &h.ChannelID, &h.ChannelName, &h.ChannelType,
-			&monitorID, &monitorName,
+			&monitorID, &monitorName, &h.MonitorGroupID,
 			&incidentID, &h.EventType, &h.Status, &h.Error, &sentAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan notification history: %w", err)

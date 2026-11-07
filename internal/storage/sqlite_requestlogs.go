@@ -46,7 +46,8 @@ func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*Request
 
 func buildRequestLogWhere(f RequestLogFilter) (string, []any) {
 	where := "1=1"
-	var args []any
+	clause, args := monitorOwnerAccessSQL("monitor_id", f.Access)
+	where += clause
 
 	if f.Method != "" {
 		where += " AND method=?"
@@ -138,12 +139,12 @@ func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p
 	}, nil
 }
 
-func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, limit int) ([]string, error) {
+func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, limit int, access ...MonitorAccess) ([]string, error) {
+	where, args := buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT client_ip FROM request_logs
-		 WHERE created_at >= ? AND created_at < ? AND client_ip != ''
-		 GROUP BY client_ip ORDER BY COUNT(*) DESC LIMIT ?`,
-		formatTime(from), formatTime(to), limit)
+		 WHERE `+where+` AND client_ip != ''
+		 GROUP BY client_ip ORDER BY COUNT(*) DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -160,23 +161,21 @@ func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, 
 	return ips, rows.Err()
 }
 
-func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time) (*RequestLogStats, error) {
-	fromStr := formatTime(from)
-	toStr := formatTime(to)
+func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time, access ...MonitorAccess) (*RequestLogStats, error) {
+	where, args := buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
 
 	var stats RequestLogStats
 	err := s.readDB.QueryRowContext(ctx,
 		`SELECT COUNT(*), COUNT(DISTINCT client_ip), CAST(COALESCE(AVG(latency_ms), 0) AS INTEGER)
-		 FROM request_logs WHERE created_at >= ? AND created_at < ?`,
-		fromStr, toStr).Scan(&stats.TotalRequests, &stats.UniqueVisitors, &stats.AvgLatencyMs)
+		 FROM request_logs WHERE `+where, args...).Scan(&stats.TotalRequests, &stats.UniqueVisitors, &stats.AvgLatencyMs)
 	if err != nil {
 		return nil, err
 	}
 
 	topPaths, err := s.readDB.QueryContext(ctx,
 		`SELECT path, COUNT(*) as cnt FROM request_logs
-		 WHERE created_at >= ? AND created_at < ?
-		 GROUP BY path ORDER BY cnt DESC LIMIT 10`, fromStr, toStr)
+		 WHERE `+where+`
+		 GROUP BY path ORDER BY cnt DESC LIMIT 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,8 +197,8 @@ func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time
 
 	topReferers, err := s.readDB.QueryContext(ctx,
 		`SELECT referer, COUNT(*) as cnt FROM request_logs
-		 WHERE created_at >= ? AND created_at < ? AND referer != ''
-		 GROUP BY referer ORDER BY cnt DESC LIMIT 10`, fromStr, toStr)
+		 WHERE `+where+` AND referer != ''
+		 GROUP BY referer ORDER BY cnt DESC LIMIT 10`, args...)
 	if err != nil {
 		return nil, err
 	}

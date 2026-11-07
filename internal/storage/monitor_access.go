@@ -57,6 +57,16 @@ func monitorAccessSQL(alias string, access []MonitorAccess) (string, []any) {
 	return clauses.String(), args
 }
 
+// monitorOwnerAccessSQL filters a related record through its current monitor.
+// Global access includes records without a monitor; scoped access never does.
+func monitorOwnerAccessSQL(ownerID string, access []MonitorAccess) (string, []any) {
+	clause, args := monitorAccessSQL("access_monitor", access)
+	if clause == "" {
+		return "", nil
+	}
+	return " AND " + ownerID + " IN (SELECT access_monitor.id FROM monitors access_monitor WHERE 1=1" + clause + ")", args
+}
+
 func allowedMonitorDestination(id int64, groupID *int64, access []MonitorAccess) bool {
 	for _, filter := range access {
 		if !filter.allows(id, groupID) {
