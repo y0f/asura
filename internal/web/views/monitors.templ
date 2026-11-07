@@ -452,7 +452,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			<p class="subtitle -mt-4 mb-6 font-mono [overflow-wrap:anywhere]">{ p.meta() }</p>
 			<div x-show="refreshError" x-cloak role="status" class="mb-4 text-xs text-crit">Refresh failed, retrying.</div>
 			if p.Monitor.Type == "manual" && p.Can("monitors.write") {
-				<div id="manual-status" hx-preserve="true" class="card card-pad mb-6" x-data="{ msg: '' }">
+				<div id={ fmt.Sprintf("manual-status-%d", p.Monitor.ID) } hx-preserve="true" class="card card-pad mb-6" x-data="{ msg: '' }">
 					<h2 class="text-md font-semibold mb-3">Set status</h2>
 					<div class="flex flex-wrap items-end gap-2">
 						<div class="w-full sm:w-72">
