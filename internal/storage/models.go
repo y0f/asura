@@ -97,6 +97,7 @@ type Incident struct {
 	ID                  int64      `json:"id"`
 	MonitorID           int64      `json:"monitor_id"`
 	MonitorName         string     `json:"monitor_name,omitempty"`
+	MonitorGroupID      *int64     `json:"-"`
 	Status              string     `json:"status"`   // open, acknowledged, resolved
 	Severity            string     `json:"severity"` // critical, major, minor, warning
 	Cause               string     `json:"cause"`
@@ -264,6 +265,14 @@ type MonitorListFilter struct {
 	TagID   *int64
 	Status  string // up, down, degraded, paused
 	Sort    string // name, status, last_check, response_time
+}
+
+type IncidentListFilter struct {
+	MonitorID         int64
+	Status            string
+	Search            string
+	Access            []MonitorAccess
+	MonitorReadAccess []MonitorAccess
 }
 
 // AuditLogFilter holds filter parameters for listing audit log entries.

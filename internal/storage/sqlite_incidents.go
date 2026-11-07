@@ -28,7 +28,7 @@ func (s *SQLiteStore) CreateIncident(ctx context.Context, inc *Incident) error {
 const incidentColumns = `i.id, i.monitor_id, i.status, i.severity, i.cause, i.started_at,
 		        i.acknowledged_at, i.acknowledged_by, i.resolved_at, i.resolved_by, i.announcement_pending, i.escalation_pending`
 
-const incidentColumnsWithName = incidentColumns + `, COALESCE(m.name, '')`
+const incidentColumnsWithName = incidentColumns + `, COALESCE(m.name, ''), m.group_id`
 
 func scanIncident(scan func(dest ...any) error, withName bool) (*Incident, error) {
 	var inc Incident
@@ -38,7 +38,7 @@ func scanIncident(scan func(dest ...any) error, withName bool) (*Incident, error
 	dest = append(dest, &inc.ID, &inc.MonitorID, &inc.Status, &inc.Severity, &inc.Cause, &startedAt,
 		&ackAt, &inc.AcknowledgedBy, &resAt, &inc.ResolvedBy, &inc.AnnouncementPending, &inc.EscalationPending)
 	if withName {
-		dest = append(dest, &inc.MonitorName)
+		dest = append(dest, &inc.MonitorName, &inc.MonitorGroupID)
 	}
 	if err := scan(dest...); err != nil {
 		return nil, err
@@ -49,28 +49,36 @@ func scanIncident(scan func(dest ...any) error, withName bool) (*Incident, error
 	return &inc, nil
 }
 
-func (s *SQLiteStore) GetIncident(ctx context.Context, id int64) (*Incident, error) {
+func (s *SQLiteStore) GetIncident(ctx context.Context, id int64, access ...MonitorAccess) (*Incident, error) {
+	clause, args := monitorAccessSQL("m", access)
 	row := s.readDB.QueryRowContext(ctx,
 		`SELECT `+incidentColumnsWithName+`
 		 FROM incidents i LEFT JOIN monitors m ON m.id = i.monitor_id
-		 WHERE i.id=?`, id)
+		 WHERE i.id=?`+clause, append([]any{id}, args...)...)
 	return scanIncident(row.Scan, true)
 }
 
 func (s *SQLiteStore) ListIncidents(ctx context.Context, monitorID int64, status string, search string, p Pagination) (*PaginatedResult, error) {
+	return s.ListIncidentsFiltered(ctx, IncidentListFilter{MonitorID: monitorID, Status: status, Search: search}, p)
+}
+
+func (s *SQLiteStore) ListIncidentsFiltered(ctx context.Context, f IncidentListFilter, p Pagination) (*PaginatedResult, error) {
 	where := "1=1"
-	args := []any{}
-	if monitorID > 0 {
+	clause, args := monitorAccessSQL("m", f.Access)
+	where += clause
+	nameClause, nameArgs := monitorAccessSQL("m", f.MonitorReadAccess)
+	if f.MonitorID > 0 {
 		where += " AND i.monitor_id=?"
-		args = append(args, monitorID)
+		args = append(args, f.MonitorID)
 	}
-	if status != "" {
+	if f.Status != "" {
 		where += " AND i.status=?"
-		args = append(args, status)
+		args = append(args, f.Status)
 	}
-	if search != "" {
-		where += " AND (COALESCE(m.name, '') LIKE '%' || ? || '%' OR i.cause LIKE '%' || ? || '%')"
-		args = append(args, search, search)
+	if f.Search != "" {
+		where += " AND (((1=1" + nameClause + ") AND COALESCE(m.name, '') LIKE '%' || ? || '%') OR i.cause LIKE '%' || ? || '%')"
+		args = append(args, nameArgs...)
+		args = append(args, f.Search, f.Search)
 	}
 
 	var total int64
@@ -84,10 +92,11 @@ func (s *SQLiteStore) ListIncidents(ctx context.Context, monitorID int64, status
 
 	offset := (p.Page - 1) * p.PerPage
 	args = append(args, p.PerPage, offset)
+	selectArgs := append(append([]any{}, nameArgs...), args...)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT `+incidentColumnsWithName+`
+		`SELECT `+incidentColumns+`, CASE WHEN (1=1`+nameClause+`) THEN COALESCE(m.name, '') ELSE '' END, m.group_id
 		 FROM incidents i LEFT JOIN monitors m ON m.id = i.monitor_id
-		 WHERE `+where+` ORDER BY i.started_at DESC LIMIT ? OFFSET ?`, args...)
+		 WHERE `+where+` ORDER BY i.started_at DESC, i.id DESC LIMIT ? OFFSET ?`, selectArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,9 +175,10 @@ func (s *SQLiteStore) UpdateIncident(ctx context.Context, inc *Incident) error {
 	return err
 }
 
-func (s *SQLiteStore) DeleteIncident(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM incidents WHERE id=?", id)
-	return err
+func (s *SQLiteStore) DeleteIncident(ctx context.Context, id int64, access ...MonitorAccess) error {
+	clause, args := monitorOwnerAccessSQL("monitor_id", access)
+	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM incidents WHERE id=?"+clause, append([]any{id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
 func (s *SQLiteStore) MarkIncidentAnnounced(ctx context.Context, id int64) error {

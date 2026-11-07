@@ -34,8 +34,9 @@ type Store interface {
 
 	// Incidents
 	CreateIncident(ctx context.Context, inc *Incident) error
-	GetIncident(ctx context.Context, id int64) (*Incident, error)
+	GetIncident(ctx context.Context, id int64, access ...MonitorAccess) (*Incident, error)
 	ListIncidents(ctx context.Context, monitorID int64, status string, search string, p Pagination) (*PaginatedResult, error)
+	ListIncidentsFiltered(ctx context.Context, f IncidentListFilter, p Pagination) (*PaginatedResult, error)
 	// ListRecentIncidents returns up to limit incidents of the given monitors,
 	// newest first, leaving out incidents resolved before resolvedSince.
 	ListRecentIncidents(ctx context.Context, monitorIDs []int64, resolvedSince time.Time, limit int) ([]*Incident, error)
@@ -43,7 +44,7 @@ type Store interface {
 	MarkIncidentAnnounced(ctx context.Context, id int64) error
 	PrepareIncidentEscalation(ctx context.Context, incidentID int64, state *EscalationState) error
 	ListPendingIncidentIDs(ctx context.Context, afterID int64, limit int) ([]int64, error)
-	DeleteIncident(ctx context.Context, id int64) error
+	DeleteIncident(ctx context.Context, id int64, access ...MonitorAccess) error
 	GetOpenIncident(ctx context.Context, monitorID int64) (*Incident, error)
 
 	// Incident events
