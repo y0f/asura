@@ -132,6 +132,10 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.requireStatusPageAuth(w, r, sp) {
+		return
+	}
+
 	var req struct {
 		Type       string `json:"type"`
 		Email      string `json:"email"`

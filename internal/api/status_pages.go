@@ -228,26 +228,8 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if sp.PasswordHash != "" {
-		valid, limited := false, false
-		if r.Header.Get(statusPagePasswordHeader) != "" {
-			// Password guesses in the header share the web password form's
-			// limiter. Only failed attempts use it up, so a client sending
-			// the right password is never throttled by its own requests.
-			valid, limited = h.loginRL.LimitFailures(httputil.ExtractIP(r, h.cfg.TrustedNets()), func() bool {
-				return statusPageAuthValid(r, sp.ID, sp.PasswordHash)
-			})
-		} else {
-			valid = statusPageAuthValid(r, sp.ID, sp.PasswordHash)
-		}
-		if limited {
-			writeError(w, http.StatusTooManyRequests, "too many password attempts")
-			return
-		}
-		if !valid {
-			writeError(w, http.StatusUnauthorized, "status page is password protected")
-			return
-		}
+	if !h.requireStatusPageAuth(w, r, sp) {
+		return
 	}
 
 	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
@@ -302,6 +284,30 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		"monitors":       result,
 		"incidents":      incidents,
 	})
+}
+
+func (h *Handler) requireStatusPageAuth(w http.ResponseWriter, r *http.Request, sp *storage.StatusPage) bool {
+	if sp.PasswordHash == "" {
+		return true
+	}
+	valid, limited := false, false
+	if r.Header.Get(statusPagePasswordHeader) != "" {
+		// Failed header passwords share the web login attempt budget.
+		valid, limited = h.loginRL.LimitFailures(httputil.ExtractIP(r, h.cfg.TrustedNets()), func() bool {
+			return statusPageAuthValid(r, sp.ID, sp.PasswordHash)
+		})
+	} else {
+		valid = statusPageAuthValid(r, sp.ID, sp.PasswordHash)
+	}
+	if limited {
+		writeError(w, http.StatusTooManyRequests, "too many password attempts")
+		return false
+	}
+	if !valid {
+		writeError(w, http.StatusUnauthorized, "status page is password protected")
+		return false
+	}
+	return true
 }
 
 // statusPagePasswordHeader lets API clients without the web UI's auth cookie
