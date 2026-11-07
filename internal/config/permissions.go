@@ -1,7 +1,5 @@
 package config
 
-import "strings"
-
 var permissionResources = []struct {
 	name    string
 	actions []string
@@ -61,6 +59,9 @@ func (k *APIKeyConfig) HasPermission(scope string) bool {
 	if k.SuperAdmin {
 		return true
 	}
+	if k.roleGrants[scope].All {
+		return true
+	}
 	for _, grant := range k.Permissions {
 		if grant == scope || (parent != "" && grant == parent) {
 			return true
@@ -91,14 +92,14 @@ func (k *APIKeyConfig) PermissionMap() map[string]bool {
 	return permissions
 }
 
-// ReadPermissions is the legacy readonly role. Subscriber contacts still need
-// an explicit grant, as they were never part of ordinary read-only access.
+// ReadPermissions preserves the exact legacy readonly grant set. New resources
+// must not silently widen old principals. Prefer an explicitly bound viewer role
+// for new accounts; subscriber contacts have always needed an explicit grant.
 func ReadPermissions() []string {
-	var permissions []string
-	for _, scope := range AllPermissions {
-		if strings.HasSuffix(scope, ".read") && scope != "subscribers.read" {
-			permissions = append(permissions, scope)
-		}
+	return []string{
+		"monitors.read", "incidents.read", "notifications.read", "notification_history.read",
+		"escalation_policies.read", "maintenance.read", "groups.read", "tags.read", "proxies.read",
+		"agents.read", "status_pages.read", "on_call.read", "request_logs.read", "audit.read",
+		"settings.read", "database.read", "metrics.read", "sla.read",
 	}
-	return permissions
 }

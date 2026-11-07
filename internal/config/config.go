@@ -68,6 +68,7 @@ type DatabaseConfig struct {
 
 type AuthConfig struct {
 	APIKeys []APIKeyConfig `yaml:"api_keys"`
+	Roles   []RoleConfig   `yaml:"roles,omitempty"`
 	Session SessionConfig  `yaml:"session"`
 	Login   LoginConfig    `yaml:"login"`
 	TOTP    TOTPConfig     `yaml:"totp"`
@@ -88,12 +89,16 @@ type LoginConfig struct {
 }
 
 type APIKeyConfig struct {
-	Name        string   `yaml:"name"`
-	Hash        string   `yaml:"hash"`
-	Role        string   `yaml:"role,omitempty"`
-	SuperAdmin  bool     `yaml:"super_admin,omitempty"`
-	Permissions []string `yaml:"permissions,omitempty"`
-	TOTP        bool     `yaml:"totp,omitempty"`
+	Name         string              `yaml:"name"`
+	Hash         string              `yaml:"hash"`
+	Role         string              `yaml:"role,omitempty"`
+	SuperAdmin   bool                `yaml:"super_admin,omitempty"`
+	Permissions  []string            `yaml:"permissions,omitempty"`
+	RoleBindings []RoleBindingConfig `yaml:"role_bindings,omitempty"`
+	TOTP         bool                `yaml:"totp,omitempty"`
+
+	// Compiled role grants belong to a validated, immutable configuration.
+	roleGrants map[string]MonitorAccess
 }
 
 type MonitorConfig struct {
@@ -203,7 +208,7 @@ func (c *Config) Validate() error {
 	if err := c.validateAuth(); err != nil {
 		return err
 	}
-	if err := validateAPIKeys(c.Auth.APIKeys); err != nil {
+	if err := validateRolesAndAPIKeys(c.Auth.Roles, c.Auth.APIKeys); err != nil {
 		return err
 	}
 	return validateLogLevel(c.Logging.Level)
@@ -291,44 +296,7 @@ func (c *Config) validateMonitorConfig() error {
 }
 
 func validateAPIKeys(keys []APIKeyConfig) error {
-	validPerms := make(map[string]bool)
-	for _, p := range AllPermissions {
-		validPerms[p] = true
-	}
-
-	// Sessions, TOTP secrets and audit entries are keyed by name.
-	seen := make(map[string]int, len(keys))
-	for i := range keys {
-		key := &keys[i]
-		if key.Name == "" {
-			return fmt.Errorf("auth.api_keys[%d].name is required", i)
-		}
-		if j, dup := seen[key.Name]; dup {
-			return fmt.Errorf("auth.api_keys[%d].name %q duplicates auth.api_keys[%d]", i, key.Name, j)
-		}
-		seen[key.Name] = i
-		if key.Hash == "" {
-			return fmt.Errorf("auth.api_keys[%d].hash is required", i)
-		}
-		if key.Role == "admin" {
-			key.SuperAdmin = true
-			key.Role = ""
-		} else if key.Role == "readonly" {
-			key.Permissions = ReadPermissions()
-			key.Role = ""
-		} else if key.Role != "" {
-			return fmt.Errorf("auth.api_keys[%d] invalid role: %s", i, key.Role)
-		}
-		if !key.SuperAdmin && len(key.Permissions) == 0 {
-			return fmt.Errorf("auth.api_keys[%d] must have super_admin or permissions", i)
-		}
-		for _, p := range key.Permissions {
-			if !validPerms[p] {
-				return fmt.Errorf("auth.api_keys[%d] invalid permission: %s", i, p)
-			}
-		}
-	}
-	return nil
+	return validateRolesAndAPIKeys(nil, keys)
 }
 
 func validateLogLevel(level string) error {
