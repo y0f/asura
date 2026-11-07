@@ -63,36 +63,31 @@ func toneText(tone string) string {
 // $dispatch('confirm', {message, onConfirm}) (runs a callback).
 templ ConfirmModal() {
 	<div
-		x-data="{ open: false, url: '', message: '', callback: null, opener: null }"
+		x-data="{ open: false, url: '', message: '', callback: null }"
 		x-cloak
-		@confirm.window="opener = document.activeElement; url = $event.detail.url || ''; message = $event.detail.message; callback = $event.detail.onConfirm || null; open = true; $nextTick(() => $refs.cancel && $refs.cancel.focus())"
-		@keydown.escape.window="if (open) { open = false; opener && opener.focus() }"
+		@confirm.window="url = $event.detail.url || ''; message = $event.detail.message; callback = $event.detail.onConfirm || null; open = true"
 	>
-		<div x-show="open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-			<div x-show="open" class="modal-backdrop fixed inset-0 bg-black/70" @click="open = false"></div>
+		<dialog class="modal-dialog w-[calc(100%-2rem)] max-w-md" x-effect={ dialogEffect("open") }
+			@cancel.prevent="open = false" @close="if (!$el.open) open = false" @click={ dialogBackdropClose("open") } @keydown.tab={ dialogTabCycle() }
+			role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-msg">
 			<div
-				x-show="open"
-				role="alertdialog"
-				aria-modal="true"
-				aria-labelledby="confirm-title"
-				aria-describedby="confirm-msg"
-				class="modal-panel relative z-10 w-full max-w-md border border-line-light rounded-card bg-surface-100 p-5"
+				class="modal-panel w-full border border-line-light rounded-card bg-surface-100 p-5"
 			>
 				<h2 id="confirm-title" class="text-lg font-semibold text-white mb-2">Are you sure?</h2>
 				<p id="confirm-msg" class="text-sm text-muted-light mb-5" x-text="message"></p>
 				<div class="flex items-center justify-end gap-2">
-					<button x-ref="cancel" @click="open = false; opener && opener.focus()" type="button" class="btn-secondary">Cancel</button>
+					<button autofocus @click="open = false" type="button" class="btn-secondary">Cancel</button>
 					<template x-if="url">
 						<form method="POST" :action="url">
 							<button type="submit" class="btn-danger">Continue</button>
 						</form>
 					</template>
-					<template x-if="!url && callback">
+					<template x-if="!url && !!callback">
 						<button type="button" @click="callback(); open = false" class="btn-danger">Continue</button>
 					</template>
 				</div>
 			</div>
-		</div>
+		</dialog>
 	</div>
 }
 
@@ -192,21 +187,18 @@ templ EmptyStateModal(message, clickExpr, actionLabel string) {
 // bind (e.g. "showForm"), maxWidth a max-w-* class, and titleExpr an Alpine
 // expression for the heading. Backdrop click and Escape close it.
 templ FormModal(show, maxWidth, titleExpr string) {
-	<div
-		x-show={ show }
+	<dialog
 		x-cloak
-		@keydown.escape.window={ show + " = false" }
-		@click.self={ show + " = false" }
-		x-effect={ "if (" + show + ") $nextTick(() => { const f = $el.querySelector('input:not([type=hidden]),select,textarea'); f && f.focus() })" }
-		class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+		x-effect={ dialogEffect(show) + "; if (" + show + ") $nextTick(() => { const f = $el.querySelector('input:not([type=hidden]):not(:disabled),select:not(:disabled),textarea:not(:disabled)'); if (f) f.focus() })" }
+		@cancel.prevent={ show + " = false" }
+		@close={ "if (!$el.open) " + show + " = false" }
+		@click={ dialogBackdropClose(show) }
+		@keydown.tab={ dialogTabCycle() }
+		aria-labelledby={ show + "-title" }
+		class={ "modal-dialog w-[calc(100%-2rem)]", maxWidth }
 	>
 		<div
-			x-show={ show }
-			@click.stop
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby={ show + "-title" }
-			class={ "modal-panel relative w-full max-h-[85vh] overflow-y-auto rounded-card border border-line-light bg-surface-100", maxWidth }
+			class="modal-panel relative w-full max-h-[85vh] overflow-y-auto rounded-card border border-line-light bg-surface-100"
 		>
 			<div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface-100 px-5 py-3">
 				<h2 id={ show + "-title" } class="text-lg font-semibold text-white" x-text={ titleExpr }></h2>
@@ -218,7 +210,22 @@ templ FormModal(show, maxWidth, titleExpr string) {
 				{ children... }
 			</div>
 		</div>
-	</div>
+	</dialog>
+}
+
+// Native modal dialogs provide background inertness and focus
+// restoration, including nested confirmations, without an extra Alpine plugin.
+func dialogEffect(show string) string {
+	return "if (" + show + ") { if (!$el.open) $el.showModal() } else if ($el.open) $el.close()"
+}
+
+// Keep Tab within the document as well: native dialog focus can otherwise move
+// to browser chrome at the first or last control in some browsers.
+func dialogTabCycle() string {
+	return "const controls = [...$el.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')].filter(el => !el.matches(':disabled') && el.tabIndex >= 0 && el.getClientRects().length); const first = controls[0], last = controls[controls.length - 1]; if (!first) { $event.preventDefault(); $el.focus() } else if ($event.shiftKey && document.activeElement === first) { $event.preventDefault(); last.focus() } else if (!$event.shiftKey && document.activeElement === last) { $event.preventDefault(); first.focus() }"
+}
+func dialogBackdropClose(show string) string {
+	return "if ($event.target === $el) { const r = $el.getBoundingClientRect(); if ($event.clientX < r.left || $event.clientX > r.right || $event.clientY < r.top || $event.clientY > r.bottom) " + show + " = false }"
 }
 
 // StatusIcon uses distinct silhouettes so a status never depends on colour.

@@ -163,6 +163,10 @@ textarea.form-input { height: auto; padding-top: 0.5rem; padding-bottom: 0.5rem;
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--color-brand); outline-offset: 1px; }
 
 /* Command palette */
+.modal-dialog { margin: auto; padding: 0; border: 0; background: transparent; color: inherit; max-height: calc(100dvh - 2rem); }
+.modal-dialog:not([open]) { display: none; }
+.modal-dialog::backdrop { background: rgb(0 0 0 / 0.7); }
+html:has(dialog[open]) { overflow: hidden; }
 .cmdk-input:focus,
 .cmdk-input:focus-visible { outline: none !important; }
 .cmdk-hit:hover { background-color: var(--color-surface-200); }

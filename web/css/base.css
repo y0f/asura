@@ -77,7 +77,7 @@ table tbody tr:hover { background-color: color-mix(in srgb, var(--color-surface-
 /* Motion */
 @keyframes vFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .modal-backdrop { animation: vFadeIn 120ms ease-out; }
-.modal-panel { animation: vFadeIn 120ms ease-out; }
+/* Dialog surfaces remain opaque while opening. */
 @keyframes vToastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .toast-in { animation: vToastIn 160ms ease-out both; }
 .htmx-indicator { opacity: 0; transition: opacity 120ms ease-in; }

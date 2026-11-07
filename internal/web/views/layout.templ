@@ -75,6 +75,7 @@ templ Layout(p LayoutParams) {
 			if p.Can("monitors.create") {
 				<script>
 				document.addEventListener('keydown',function(e){
+					if(document.querySelector('dialog[open]'))return;
 					if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;
 					if(e.key==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){var l=document.querySelector('[href$="/monitors/new"]');if(l){e.preventDefault();window.location.href=l.href}}
 				});
@@ -155,6 +156,9 @@ templ boostScript() {
 			let refreshFocus = null;
 			document.addEventListener("htmx:beforeSwap", function (event) {
 				const target = event.detail.target, active = document.activeElement;
+				if (target && target.id === "content" && event.detail.shouldSwap) {
+					document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
+				}
 				if (!target || target.id !== "dashboard-content") return;
 				refreshFocus = event.detail.shouldSwap && target.contains(active) && active.tagName === "A" ? active.getAttribute("href") : null;
 			});

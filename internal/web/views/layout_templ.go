@@ -290,7 +290,7 @@ func Layout(p LayoutParams) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if p.Can("monitors.create") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<script>\n\t\t\t\tdocument.addEventListener('keydown',function(e){\n\t\t\t\t\tif(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;\n\t\t\t\t\tif(e.key==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){var l=document.querySelector('[href$=\"/monitors/new\"]');if(l){e.preventDefault();window.location.href=l.href}}\n\t\t\t\t});\n\t\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<script>\n\t\t\t\tdocument.addEventListener('keydown',function(e){\n\t\t\t\t\tif(document.querySelector('dialog[open]'))return;\n\t\t\t\t\tif(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;\n\t\t\t\t\tif(e.key==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){var l=document.querySelector('[href$=\"/monitors/new\"]');if(l){e.preventDefault();window.location.href=l.href}}\n\t\t\t\t});\n\t\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -359,7 +359,7 @@ func boostScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<script>\n\t\t(function () {\n\t\t\tfunction syncTitle() {\n\t\t\t\tvar c = document.getElementById(\"content\");\n\t\t\t\tvar t = c && c.getAttribute(\"data-title\");\n\t\t\t\tif (!t) return;\n\t\t\t\tdocument.title = t + \" · Asura\";\n\t\t\t\tvar h = document.getElementById(\"page-title\");\n\t\t\t\tif (h) h.textContent = t;\n\t\t\t}\n\t\t\tfunction syncActive() {\n\t\t\t\tvar path = location.pathname;\n\t\t\t\tvar links = document.querySelectorAll(\"#sidenav .nav-link\");\n\t\t\t\tvar exact = null, best = null, bestLen = -1;\n\t\t\t\tlinks.forEach(function (a) {\n\t\t\t\t\ta.removeAttribute(\"aria-current\");\n\t\t\t\t\tvar href = a.getAttribute(\"href\") || \"\";\n\t\t\t\t\tvar u; try { u = new URL(href, location.origin).pathname; } catch (e) { u = href; }\n\t\t\t\t\tif (u === path) exact = a;\n\t\t\t\t\telse if (u !== \"/\" && path.indexOf(u) === 0 && u.length > bestLen) { best = a; bestLen = u.length; }\n\t\t\t\t});\n\t\t\t\tvar win = exact || best;\n\t\t\t\tif (win) win.setAttribute(\"aria-current\", \"page\");\n\t\t\t}\n\t\t\tfunction sync() { syncTitle(); syncActive(); }\n\t\t\t// Alpine observes inserted nodes itself. Shared component definitions\n\t\t\t// load before Alpine starts, including on later boosted navigations.\n\t\t\tlet refreshFocus = null;\n\t\t\tdocument.addEventListener(\"htmx:beforeSwap\", function (event) {\n\t\t\t\tconst target = event.detail.target, active = document.activeElement;\n\t\t\t\tif (!target || target.id !== \"dashboard-content\") return;\n\t\t\t\trefreshFocus = event.detail.shouldSwap && target.contains(active) && active.tagName === \"A\" ? active.getAttribute(\"href\") : null;\n\t\t\t});\n\t\t\tdocument.addEventListener(\"htmx:afterSettle\", function (event) {\n\t\t\t\tsync();\n\t\t\t\tif (event.target.id !== \"dashboard-content\" || !refreshFocus) return;\n\t\t\t\tconst href = refreshFocus; refreshFocus = null;\n\t\t\t\tif (document.activeElement !== document.body) return;\n\t\t\t\tconst link = Array.from(event.target.querySelectorAll(\"a[href]\")).find(a => a.getAttribute(\"href\") === href);\n\t\t\t\tif (link) link.focus({ preventScroll: true });\n\t\t\t});\n\t\t\tdocument.addEventListener(\"htmx:historyRestore\", sync);\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<script>\n\t\t(function () {\n\t\t\tfunction syncTitle() {\n\t\t\t\tvar c = document.getElementById(\"content\");\n\t\t\t\tvar t = c && c.getAttribute(\"data-title\");\n\t\t\t\tif (!t) return;\n\t\t\t\tdocument.title = t + \" · Asura\";\n\t\t\t\tvar h = document.getElementById(\"page-title\");\n\t\t\t\tif (h) h.textContent = t;\n\t\t\t}\n\t\t\tfunction syncActive() {\n\t\t\t\tvar path = location.pathname;\n\t\t\t\tvar links = document.querySelectorAll(\"#sidenav .nav-link\");\n\t\t\t\tvar exact = null, best = null, bestLen = -1;\n\t\t\t\tlinks.forEach(function (a) {\n\t\t\t\t\ta.removeAttribute(\"aria-current\");\n\t\t\t\t\tvar href = a.getAttribute(\"href\") || \"\";\n\t\t\t\t\tvar u; try { u = new URL(href, location.origin).pathname; } catch (e) { u = href; }\n\t\t\t\t\tif (u === path) exact = a;\n\t\t\t\t\telse if (u !== \"/\" && path.indexOf(u) === 0 && u.length > bestLen) { best = a; bestLen = u.length; }\n\t\t\t\t});\n\t\t\t\tvar win = exact || best;\n\t\t\t\tif (win) win.setAttribute(\"aria-current\", \"page\");\n\t\t\t}\n\t\t\tfunction sync() { syncTitle(); syncActive(); }\n\t\t\t// Alpine observes inserted nodes itself. Shared component definitions\n\t\t\t// load before Alpine starts, including on later boosted navigations.\n\t\t\tlet refreshFocus = null;\n\t\t\tdocument.addEventListener(\"htmx:beforeSwap\", function (event) {\n\t\t\t\tconst target = event.detail.target, active = document.activeElement;\n\t\t\t\tif (target && target.id === \"content\" && event.detail.shouldSwap) {\n\t\t\t\t\tdocument.querySelectorAll(\"dialog[open]\").forEach(dialog => dialog.close());\n\t\t\t\t}\n\t\t\t\tif (!target || target.id !== \"dashboard-content\") return;\n\t\t\t\trefreshFocus = event.detail.shouldSwap && target.contains(active) && active.tagName === \"A\" ? active.getAttribute(\"href\") : null;\n\t\t\t});\n\t\t\tdocument.addEventListener(\"htmx:afterSettle\", function (event) {\n\t\t\t\tsync();\n\t\t\t\tif (event.target.id !== \"dashboard-content\" || !refreshFocus) return;\n\t\t\t\tconst href = refreshFocus; refreshFocus = null;\n\t\t\t\tif (document.activeElement !== document.body) return;\n\t\t\t\tconst link = Array.from(event.target.querySelectorAll(\"a[href]\")).find(a => a.getAttribute(\"href\") === href);\n\t\t\t\tif (link) link.focus({ preventScroll: true });\n\t\t\t});\n\t\t\tdocument.addEventListener(\"htmx:historyRestore\", sync);\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -418,7 +418,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.HomePath())).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 212, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 216, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -431,7 +431,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/static/logo.gif").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 213, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 217, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
@@ -449,7 +449,7 @@ func Sidebar(p LayoutParams) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(p.Version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 215, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 219, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -467,7 +467,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.HomePath())).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 218, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 222, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
@@ -480,7 +480,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/static/favicon.ico").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 219, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 223, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
@@ -998,7 +998,7 @@ func navGroup(title string, visible bool) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 319, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 323, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -1051,7 +1051,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + href)).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 332, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 336, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 			if templ_7745c5c3_Err != nil {
@@ -1064,7 +1064,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templruntime.NewAttributeExpression(key).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 333, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 337, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 			if templ_7745c5c3_Err != nil {
@@ -1077,7 +1077,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 336, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 340, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 			if templ_7745c5c3_Err != nil {
@@ -1108,7 +1108,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 344, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 348, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -1149,7 +1149,7 @@ func topbar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/static/logo.gif").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 356, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 360, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -1162,7 +1162,7 @@ func topbar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 357, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 361, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1203,7 +1203,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(initial(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 374, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 378, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
@@ -1216,7 +1216,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 375, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 379, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
@@ -1229,7 +1229,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 386, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 390, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
@@ -1242,7 +1242,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/logout")).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 406, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 410, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 		if templ_7745c5c3_Err != nil {
@@ -1294,7 +1294,7 @@ func PrevPageBtn(href string) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 430, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 434, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {
@@ -1332,7 +1332,7 @@ func NextPageBtn(href string) templ.Component {
 		var templ_7745c5c3_Var62 string
 		templ_7745c5c3_Var62, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 436, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 440, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 		if templ_7745c5c3_Err != nil {
