@@ -36,6 +36,7 @@ templ Layout(p LayoutParams) {
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="htmx-config" content='{"historyCacheSize":0,"refreshOnHistoryMiss":true}'/>
 		@themeScript()
 		<title>{ p.Title } · Asura</title>
 		<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
