@@ -324,7 +324,7 @@ templ Pager(page, totalPages int, summary, prevHref, nextHref string) {
 // sse:refresh trigger on the given target element id.
 templ MonitorListListener(basePath, targetID string) {
 	<div class="hidden" data-sse-url={ basePath + "/events" } data-sse-target={ targetID }></div>
-	<script src={ basePath + "/static/sse-refresh.js" } defer></script>
+	<script src={ Asset(basePath, "sse-refresh.js") } defer></script>
 }
 
 // Settings field helpers shared by the per-type monitor settings blocks.

@@ -793,7 +793,7 @@ func MonitorListPage(p MonitorListParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<div id=\"monitor-list\" x-data=\"{ refreshError: false }\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-list\" hx-swap=\"outerHTML\" hx-push-url=\"false\" hx-on::before-request=\"refreshError = false\" hx-on::response-error=\"refreshError = true\" hx-on::send-error=\"refreshError = true\" class=\"panel\"><div x-show=\"refreshError\" x-cloak role=\"status\" class=\"px-4 py-2 border-b border-line text-xs text-crit\">Refresh failed, retrying.</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<div id=\"monitor-list\" x-data=\"{ refreshError: false }\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-list\" hx-swap=\"outerHTML\" hx-push-url=\"false\" @htmx:after-request=\"if ($event.detail.successful) refreshError = false\" @htmx:response-error=\"refreshError = true\" @htmx:send-error=\"refreshError = true\" class=\"panel\"><div x-show=\"refreshError\" x-cloak role=\"status\" class=\"px-4 py-2 border-b border-line text-xs text-crit\">Refresh failed, retrying.</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1198,7 +1198,7 @@ func MonitorDetailPage(p MonitorDetailParams) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "\"></script> <div id=\"monitor-detail\" x-data=\"{ refreshError: false }\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-detail\" hx-swap=\"outerHTML\" hx-push-url=\"false\" hx-on::before-request=\"refreshError = false\" hx-on::response-error=\"refreshError = true\" hx-on::send-error=\"refreshError = true\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "\"></script> <div id=\"monitor-detail\" x-data=\"{ refreshError: false }\" hx-get=\"\" hx-trigger=\"sse:refresh, every 30s\" hx-select=\"#monitor-detail\" hx-swap=\"outerHTML\" hx-push-url=\"false\" @htmx:after-request=\"if ($event.detail.successful) refreshError = false\" @htmx:response-error=\"refreshError = true\" @htmx:send-error=\"refreshError = true\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

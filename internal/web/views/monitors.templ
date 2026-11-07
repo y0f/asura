@@ -304,9 +304,9 @@ templ MonitorListPage(p MonitorListParams) {
 				</div>
 			}
 			<div id="monitor-list" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
-				hx-on::before-request="refreshError = false"
-				hx-on::response-error="refreshError = true"
-				hx-on::send-error="refreshError = true"
+				@htmx:after-request="if ($event.detail.successful) refreshError = false"
+				@htmx:response-error="refreshError = true"
+				@htmx:send-error="refreshError = true"
 				class="panel">
 				<div x-show="refreshError" x-cloak role="status" class="px-4 py-2 border-b border-line text-xs text-crit">Refresh failed, retrying.</div>
 				if ms := p.monitors(); len(ms) > 0 {
@@ -420,9 +420,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 	@Layout(p.LayoutParams) {
 		<script src={ Asset(p.BasePath, "monitor-chart.js") }></script>
 		<div id="monitor-detail" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false"
-			hx-on::before-request="refreshError = false"
-			hx-on::response-error="refreshError = true"
-			hx-on::send-error="refreshError = true">
+			@htmx:after-request="if ($event.detail.successful) refreshError = false"
+			@htmx:response-error="refreshError = true"
+			@htmx:send-error="refreshError = true">
 			@PageHeader(PageHeaderParams{Title: p.Monitor.Name, BackHref: p.BasePath + "/monitors", BackLabel: "Monitors"}) {
 				@StatusPill(p.Monitor.Status)
 				if p.Can("monitors.write") {
