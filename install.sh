@@ -4,7 +4,7 @@ set -euo pipefail
 # Asura – one-command VPS installer
 # Usage: sudo bash install.sh
 
-GO_VERSION="1.26.8"
+GO_VERSION="1.27.3"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/asura"
@@ -67,8 +67,8 @@ install_go() {
 
     local expected_sha
     case "$GOARCH" in
-        amd64) expected_sha="d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b" ;;
-        arm64) expected_sha="211ffced9dcb9633a55eac6364816ec0ddd951389a740e88fa8b3337971bdda0" ;;
+        amd64) expected_sha="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+        arm64) expected_sha="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
         *)     error "No pinned Go checksum for ${GOARCH}" ;;
     esac
 

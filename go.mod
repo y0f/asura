@@ -1,6 +1,8 @@
 module github.com/y0f/asura
 
-go 1.26.0
+go 1.26.10
+
+toolchain go1.27.3
 
 require (
 	github.com/a-h/templ v0.3.1100
