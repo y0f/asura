@@ -261,6 +261,9 @@ func (c *Config) validateServer() error {
 	if c.Server.Listen == "" {
 		return fmt.Errorf("server.listen is required")
 	}
+	if (c.Server.TLSCert == "") != (c.Server.TLSKey == "") {
+		return fmt.Errorf("server.tls_cert and server.tls_key must be set together")
+	}
 	if c.Server.MaxBodySize <= 0 {
 		return fmt.Errorf("server.max_body_size must be positive")
 	}
