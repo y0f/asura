@@ -21,7 +21,7 @@ templ PageHeader(h PageHeaderParams) {
 	<div class="mb-6">
 		if h.BackHref != "" {
 			<a href={ templ.SafeURL(h.BackHref) } class="inline-flex items-center gap-1 mb-2 text-sm text-muted hover:text-white">
-				<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+				<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 				{ h.BackLabel }
 			</a>
 		}
@@ -109,7 +109,9 @@ templ Toast(kind, msg string) {
 		}
 		class="toast-in fixed bottom-4 right-4 z-[60] w-[calc(100%-2rem)] max-w-sm flex items-start gap-3 px-4 py-3 border border-line-light rounded-card bg-surface-100 text-sm text-white shadow-lg shadow-black/30"
 	>
-		<span class={ "dot mt-1.5", templ.KV("bg-ok", kind == "success"), templ.KV("bg-crit", kind == "error"), templ.KV("bg-warn", kind == "warning") }></span>
+		<span class={ "mt-0.5", templ.KV("text-ok", kind == "success"), templ.KV("text-crit", kind == "error"), templ.KV("text-warn", kind == "warning") }>
+			@StatusIcon(kind)
+		</span>
 		<span class="flex-1 break-words">{ msg }</span>
 		<button type="button" @click="show=false" aria-label="Dismiss" class="-mr-1 -mt-0.5 text-muted hover:text-white">
 			@iconX()
@@ -129,23 +131,23 @@ func toastInit(kind string) string {
 }
 
 templ iconX() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
 }
 
 templ iconPlus() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
 }
 
 templ iconEdit() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5 4 4M4 16l-1 5 5-1L20 8a2.83 2.83 0 0 0-4-4Z"></path></svg>
 }
 
 templ iconEye() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2-4.7 5.3-7 10-7s8 2.3 10 7c-2 4.7-5.3 7-10 7S4 16.7 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
 }
 
 templ iconTrash() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m4 4v7m6-7v7"></path><path d="M9 6V3h6v3"></path></svg>
 }
 
 // DeleteButton is the row-level delete action; it asks for confirmation first.
@@ -219,10 +221,35 @@ templ FormModal(show, maxWidth, titleExpr string) {
 	</div>
 }
 
-// StatusPill renders a status as a coloured dot plus its label.
+// StatusIcon uses distinct silhouettes so a status never depends on colour.
+// Icons share a 24px grid, 2px strokes and round joins with the action icons.
+// The adjacent text supplies the accessible name.
+templ StatusIcon(status string) {
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		switch status {
+			case "up", "resolved", "operational", "sent", "success":
+				<circle cx="12" cy="12" r="9"></circle>
+				<path d="m8 12 2.5 2.5L16 9"></path>
+			case "down", "open", "created", "major_outage", "failed", "error":
+				<path d="M8 3h8l5 5v8l-5 5H8l-5-5V8Z"></path>
+				<path d="m9 9 6 6m0-6-6 6"></path>
+			case "degraded", "acknowledged", "warning":
+				<path d="m12 3 10 18H2Z"></path>
+				<path d="M12 9v5m0 3h.01"></path>
+			case "paused":
+				<circle cx="12" cy="12" r="9"></circle>
+				<path d="M9 8v8m6-8v8"></path>
+			default:
+				<circle cx="12" cy="12" r="9"></circle>
+				<path d="M12 7v5l3 2"></path>
+		}
+	</svg>
+}
+
+// StatusPill renders a status as a distinct icon and a readable label.
 templ StatusPill(status string) {
 	<span class={ "inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap", StatusColor(status) }>
-		<span class={ "dot", StatusDot(status) }></span>
+		@StatusIcon(status)
 		{ StatusLabel(status) }
 	</span>
 }
@@ -251,7 +278,7 @@ templ ToolbarNewButtonClick(clickExpr, label string) {
 // SearchInput renders the standard search field with a leading magnifier icon.
 templ SearchInput(name, value, placeholder string) {
 	<div class="relative w-full sm:w-64">
-		<svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+		<svg aria-hidden="true" focusable="false" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
 		<input type="search" name={ name } value={ value } placeholder={ placeholder } aria-label={ placeholder } class="form-input h-8 pl-8"/>
 	</div>
 }
@@ -277,13 +304,13 @@ templ MonitorRowActions(basePath string, m *storage.Monitor, canWrite bool) {
 			if m.Enabled {
 				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", basePath, m.ID)) } class="contents">
 					<button type="submit" class="row-action" title="Pause" aria-label={ "Pause " + m.Name }>
-						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+						<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
 					</button>
 				</form>
 			} else {
 				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", basePath, m.ID)) } class="contents">
 					<button type="submit" class="row-action" title="Resume" aria-label={ "Resume " + m.Name }>
-						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+						<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
 					</button>
 				</form>
 			}

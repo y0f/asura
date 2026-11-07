@@ -7,16 +7,17 @@
 /* Map Tailwind's dark: variant onto data-theme. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-@theme {
+/* Keep tokens consumed by inline SVG and chart JavaScript, even without a utility. */
+@theme static {
   /* Accent (blue is the primary colour)
      brand         = active navigation, focus rings, links, selected filters
      brand-button  = the one filled (primary) button colour */
-  --color-brand: rgb(56 152 255);
-  --color-brand-strong: rgb(96 174 255);
+  --color-brand: rgb(108 178 255);
+  --color-brand-strong: rgb(148 199 255);
   --color-brand-fg: rgb(255 255 255);
-  --color-brand-button: rgb(0 108 236);
-  --color-brand-button-hover: rgb(20 124 250);
-  --color-chart-line: rgb(56 152 255);
+  --color-brand-button: rgb(0 95 204);
+  --color-brand-button-hover: rgb(0 80 180);
+  --color-chart-line: rgb(108 178 255);
   --color-chart-empty: rgb(40 40 40);
 
   /* Neutral ramp (flat, near-black, no tint)
@@ -33,21 +34,23 @@
 
   --color-line: rgb(36 36 36);
   --color-line-light: rgb(50 50 50);
+  --color-control-line: rgb(112 112 112);
 
   /* Text
      white        = headings and primary values
      muted-light  = body text
-     muted        = secondary text, meta (AA on surface and surface-50) */
+     muted        = secondary text, meta (AA across the neutral ramp) */
   --color-white: rgb(255 255 255);
-  --color-muted-light: rgb(163 163 163);
-  --color-muted: rgb(138 138 138);
+  --color-muted-light: rgb(190 190 190);
+  --color-muted: rgb(156 156 156);
 
-  /* Status tones - the only colours that carry meaning. */
-  --color-ok: rgb(34 197 94);
-  --color-warn: rgb(252 212 82);
-  --color-major: rgb(251 146 60);
-  --color-crit: rgb(239 68 68);
-  --color-info: rgb(96 165 250);
+  /* Status is communicated by wording and shape. Semantic aliases keep the
+     same grayscale/blue palette in charts, tables, forms and public pages. */
+  --color-ok: rgb(190 190 190);
+  --color-warn: rgb(235 235 235);
+  --color-major: rgb(108 178 255);
+  --color-crit: rgb(108 178 255);
+  --color-info: rgb(108 178 255);
 
   --font-sans: "Inter", "system-ui", "-apple-system", "sans-serif";
   --font-mono: "JetBrains Mono", "Menlo", "Consolas", "monospace";
@@ -68,12 +71,12 @@
 }
 
 html[data-theme="light"] {
-  --color-brand: rgb(0 112 243);
-  --color-brand-strong: rgb(0 98 224);
+  --color-brand: rgb(0 91 191);
+  --color-brand-strong: rgb(0 75 158);
   --color-brand-fg: rgb(255 255 255);
-  --color-brand-button: rgb(0 112 243);
-  --color-brand-button-hover: rgb(0 98 224);
-  --color-chart-line: rgb(0 112 243);
+  --color-brand-button: rgb(0 95 204);
+  --color-brand-button-hover: rgb(0 80 180);
+  --color-chart-line: rgb(0 91 191);
   --color-chart-empty: rgb(229 229 229);
 
   --color-surface: rgb(250 250 250);
@@ -84,14 +87,15 @@ html[data-theme="light"] {
 
   --color-line: rgb(229 229 229);
   --color-line-light: rgb(212 212 212);
+  --color-control-line: rgb(132 132 132);
 
   --color-white: rgb(10 10 10);
-  --color-muted-light: rgb(82 82 82);
-  --color-muted: rgb(105 105 105);
+  --color-muted-light: rgb(64 64 64);
+  --color-muted: rgb(96 96 96);
 
-  --color-ok: rgb(22 163 74);
-  --color-warn: rgb(180 120 0);
-  --color-major: rgb(194 65 12);
-  --color-crit: rgb(220 38 38);
-  --color-info: rgb(37 99 235);
+  --color-ok: rgb(64 64 64);
+  --color-warn: rgb(32 32 32);
+  --color-major: rgb(0 91 191);
+  --color-crit: rgb(0 91 191);
+  --color-info: rgb(0 91 191);
 }

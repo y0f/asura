@@ -32,7 +32,7 @@ internal/web/views/       # templ templates
 ## Design system
 
 The look is flat and dense: a near-black neutral ramp, a blue accent, 1px borders, 4px radii,
-32px controls, bold page headings, and colour otherwise reserved for status.
+32px controls and clear page headings. Both themes use grayscale and blue only.
 
 **Theme.** `data-theme` on `<html>` (`dark` default, `light` remap) is resolved before first paint
 by `themeScript`. Every neutral utility (`bg-surface`, `text-muted`, `border-line`, …) resolves to a
@@ -42,12 +42,18 @@ visitor's OS preference.
 **Colour.**
 - Neutrals: `surface` (canvas) → `surface-50` (cards, inputs, sidebar) → `surface-100` (dialogs) →
   `surface-200` (hover, selected) → `surface-300` (strong controls); `line` / `line-light` borders;
-  `white` / `muted-light` / `muted` text.
+  `white` / `muted-light` / `muted` text. `control-line` gives form boundaries stronger contrast.
 - Accent: blue is the primary colour. `brand` marks active navigation, focus rings, links and
   selection; `brand-button` is the single filled primary button colour.
-- Status tones: `ok`, `warn`, `major`, `crit`, `info`. Use them through `StatusTone`,
+- Status tones: `ok`, `warn`, `major`, `crit`, `info` are semantic aliases for grayscale or blue.
+  Every status needs a text label; `StatusPill` adds a distinct shape. Use the aliases through `StatusTone`,
   `UptimeTone`, `StatusPill` and the `text-*` / `bg-*` utilities. Never use raw Tailwind palette
   colours (`emerald-400`, `red-500`, …) or hex values in templates, Go or JS.
+
+**Icons.** Keep inline vectors on a 24px viewBox with 2px strokes and round caps/joins.
+Use the shared action and status templates at 16px, and inspect larger uses at 20px and 24px.
+Decorative icons use `aria-hidden="true" focusable="false"`; the adjacent label or the control
+supplies the accessible name. No icon font, raster asset or external icon library is needed.
 
 **Type scale.** One source of truth in `tokens.css`. Use the named steps, never `text-[Npx]`:
 
@@ -65,7 +71,7 @@ visitor's OS preference.
 **Components.** Reach for these before writing markup:
 - Page structure: `PageHeader` (the page's single `<h1>`, back link, subtitle, actions) and
   `StatCard`.
-- Status and time: `StatusPill` (dot + label), `SeverityPill`, `Pager`, `RelTime` (relative time
+- Status and time: `StatusPill` (distinct SVG shape + label), `SeverityPill`, `Pager`, `RelTime` (relative time
   with the absolute UTC time on hover).
 - Actions and empty states: `ToolbarNewButton` / `ToolbarNewButtonClick`, `DeleteButton`,
   `EmptyState` / `EmptyStateModal`.
