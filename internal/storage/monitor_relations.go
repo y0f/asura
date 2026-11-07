@@ -11,6 +11,13 @@ type monitorWriteExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
+// MonitorCreateOptions carries dependent state that must be created with a
+// monitor. Heartbeat credentials are hashed by storage, and caller-owned output
+// values are populated only after the complete transaction commits.
+type MonitorCreateOptions struct {
+	Heartbeat *Heartbeat
+}
+
 // MonitorRelationChanges identifies explicitly authorized changes. Unselected
 // fields/relationships retain their current transactional values, not a form's
 // stale snapshot. Enabled is separate from configuration editing authority.

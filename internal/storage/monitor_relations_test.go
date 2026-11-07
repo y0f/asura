@@ -43,7 +43,7 @@ func TestMonitorRelationSaveRollsBackEveryField(t *testing.T) {
 		})
 	}
 	created := &Monitor{Name: "must not exist", Type: "http", Target: "https://example.test", Interval: 60, Timeout: 10, NotificationChannelIDs: []int64{999999}}
-	if err := store.CreateMonitorWithRelations(ctx, created, MonitorAccess{All: true}); err == nil || created.ID != 0 || created.Settings != nil {
+	if err := store.CreateMonitorWithRelations(ctx, created, MonitorCreateOptions{}, MonitorAccess{All: true}); err == nil || created.ID != 0 || created.Settings != nil {
 		t.Fatalf("failed create mutated caller or committed partial data: %+v, %v", created, err)
 	}
 	list, err := store.ListMonitors(ctx, MonitorListFilter{}, Pagination{Page: 1, PerPage: 100})

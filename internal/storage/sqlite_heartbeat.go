@@ -7,13 +7,20 @@ import (
 )
 
 func (s *SQLiteStore) CreateHeartbeat(ctx context.Context, h *Heartbeat) error {
-	res, err := s.writeDB.ExecContext(ctx,
+	return createHeartbeat(ctx, s.writeDB, h)
+}
+
+func createHeartbeat(ctx context.Context, writer monitorWriteExecutor, h *Heartbeat) error {
+	res, err := writer.ExecContext(ctx,
 		`INSERT INTO heartbeats (monitor_id, token, grace, status) VALUES (?, ?, ?, ?)`,
 		h.MonitorID, sha256Hex(h.Token), h.Grace, h.Status)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
 	h.ID = id
 	return nil
 }

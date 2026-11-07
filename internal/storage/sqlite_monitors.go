@@ -11,14 +11,21 @@ import (
 )
 
 func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
-	return s.createMonitor(ctx, m, false, access...)
+	return s.createMonitor(ctx, m, nil, access...)
 }
 
-func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
-	return s.createMonitor(ctx, m, true, access...)
+func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor, options MonitorCreateOptions, access ...MonitorAccess) error {
+	if m.Type == "heartbeat" {
+		if options.Heartbeat == nil || options.Heartbeat.Token == "" || options.Heartbeat.Grace < 0 || options.Heartbeat.MonitorID != 0 || options.Heartbeat.ID != 0 {
+			return fmt.Errorf("a new heartbeat credential and nonnegative grace period are required")
+		}
+	} else if options.Heartbeat != nil {
+		return fmt.Errorf("heartbeat credentials require a heartbeat monitor")
+	}
+	return s.createMonitor(ctx, m, &options, access...)
 }
 
-func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, withRelations bool, access ...MonitorAccess) error {
+func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) error {
 	if !allowedMonitorDestination(0, m.GroupID, access) {
 		return sql.ErrNoRows
 	}
@@ -75,11 +82,20 @@ func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, withRelatio
 		`INSERT INTO monitor_status (monitor_id, status) VALUES (?, 'pending')`, id); err != nil {
 		return err
 	}
-	if withRelations {
+	var heartbeat *Heartbeat
+	if options != nil {
 		created := *m
 		created.ID = id
 		if err := replaceMonitorRelations(ctx, tx, &created, MonitorRelationChanges{Notifications: true, Tags: true, Agents: true}); err != nil {
 			return err
+		}
+		if options.Heartbeat != nil {
+			copy := *options.Heartbeat
+			heartbeat = &copy
+			heartbeat.MonitorID, heartbeat.Status, heartbeat.LastPingAt = id, "pending", nil
+			if err := createHeartbeat(ctx, tx, heartbeat); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -91,6 +107,9 @@ func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, withRelatio
 	m.CreatedAt = parseTime(now)
 	m.UpdatedAt = parseTime(now)
 	*output = *m
+	if heartbeat != nil {
+		*options.Heartbeat = *heartbeat
+	}
 	return nil
 }
 
