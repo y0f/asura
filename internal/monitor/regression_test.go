@@ -91,6 +91,18 @@ func (s *countingStore) GetHeartbeatByMonitorID(ctx context.Context, id int64) (
 	return s.SQLiteStore.GetHeartbeatByMonitorID(ctx, id)
 }
 
+func (s *countingStore) ExpireHeartbeat(ctx context.Context, id int64) (bool, error) {
+	// This fixture supplies synthetic expired snapshots to test escalation. Real
+	// deadline checks and atomic status writes have separate SQLite tests.
+	for _, hb := range s.expired {
+		if hb.MonitorID == id {
+			err := s.SQLiteStore.UpdateHeartbeatStatus(ctx, id, "down")
+			return err == nil, err
+		}
+	}
+	return s.SQLiteStore.ExpireHeartbeat(ctx, id)
+}
+
 func newCountingPipeline(t *testing.T) (*countingStore, *Pipeline) {
 	t.Helper()
 	ps := &countingStore{SQLiteStore: testStore(t)}

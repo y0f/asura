@@ -3,8 +3,10 @@ package monitor
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -377,11 +379,11 @@ func (p *Pipeline) mayHaveOpenIncident(monitorID int64) bool {
 	return !ok || v.(bool)
 }
 
-func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, monitorStatus, message string, inMaintenance bool) {
+func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, monitorStatus, message string, inMaintenance bool) error {
 	inc, created, err := p.incMgr.ProcessFailure(ctx, mon.ID, mon.Name, monitorStatus, message)
 	if err != nil {
 		p.logger.Error("process failure", "error", err)
-		return
+		return err
 	}
 	p.incidentOpen.Store(mon.ID, true)
 	if inMaintenance {
@@ -390,7 +392,7 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mon
 		if created {
 			p.silenced.Store(mon.ID, inc.ID)
 		}
-		return
+		return nil
 	}
 	if created || p.takeSilenced(mon.ID, inc.ID) {
 		p.announceIncident(ctx, mon, inc)
@@ -398,6 +400,7 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mon
 		p.emitNotification(ctx, "incident.reminder", inc, mon, nil)
 		p.lastNotified.Store(mon.ID, time.Now())
 	}
+	return nil
 }
 
 // announceIncident emits incident.created and starts escalation.
@@ -415,17 +418,18 @@ func (p *Pipeline) takeSilenced(monitorID, incidentID int64) bool {
 	return ok && v.(int64) == incidentID
 }
 
-func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor) {
+func (p *Pipeline) processRecovery(ctx context.Context, mon *storage.Monitor) error {
 	inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
 	if err != nil {
 		p.logger.Error("process recovery", "error", err)
-		return
+		return err
 	}
 	p.incidentOpen.Store(mon.ID, false)
 	if resolved {
 		p.notifyResolved(ctx, mon, inc, p.inMaintenance(ctx, mon.ID))
 	}
 	p.lastNotified.Delete(mon.ID)
+	return nil
 }
 
 // notifyResolved cancels escalation and emits incident.resolved, unless the
@@ -543,34 +547,28 @@ func (p *Pipeline) emitNotification(ctx context.Context, eventType string, inc *
 	}
 }
 
-// ProcessHeartbeatRecovery handles recovery when a heartbeat ping is received for a down monitor.
-func (p *Pipeline) ProcessHeartbeatRecovery(ctx context.Context, mon *storage.Monitor) {
-	now := time.Now()
-	status := &storage.MonitorStatus{
-		MonitorID:       mon.ID,
-		Status:          "up",
-		LastCheckAt:     &now,
-		ConsecSuccesses: mon.SuccessThreshold,
-		ConsecFails:     0,
-	}
-	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
-		p.logger.Error("heartbeat recovery: upsert status", "error", err)
-	}
-
-	inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
+// ProcessHeartbeatPing serializes ping/recovery with expiry and incident creation.
+// Every accepted ping updates the dashboard, including the first pending ping.
+func (p *Pipeline) ProcessHeartbeatPing(ctx context.Context, monitorID int64, token string) error {
+	unlock := p.lockMonitorStatus(monitorID)
+	defer unlock()
+	mon, err := p.store.GetMonitor(ctx, monitorID)
 	if err != nil {
-		p.logger.Error("heartbeat recovery: process recovery", "error", err)
-		return
+		return err
 	}
-	p.incidentOpen.Store(mon.ID, false)
-	if resolved {
-		p.notifyResolved(ctx, mon, inc, p.inMaintenance(ctx, mon.ID))
+	if err := p.store.UpdateHeartbeatPing(ctx, monitorID, token); err != nil {
+		return err
 	}
-	p.lastNotified.Delete(mon.ID)
+	if p.mayHaveOpenIncident(mon.ID) {
+		return p.processRecovery(ctx, mon)
+	}
+	return nil
 }
 
 // ProcessManualStatus handles a user-set status change for a manual monitor.
-func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor, newStatus, message string) {
+func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor, newStatus, message string) error {
+	unlock := p.lockMonitorStatus(mon.ID)
+	defer unlock()
 	now := time.Now()
 
 	cr := &storage.CheckResult{
@@ -580,15 +578,16 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 	}
 	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
 		p.logger.Error("manual status: insert check result", "error", err)
-		return
+		return err
 	}
 
 	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		status = &storage.MonitorStatus{MonitorID: mon.ID}
+	} else if err != nil {
+		return err
 	}
 
-	prevStatus := status.Status
 	status.Status = newStatus
 	status.LastCheckAt = &now
 
@@ -602,29 +601,26 @@ func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor
 
 	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
 		p.logger.Error("manual status: upsert status", "error", err)
+		return err
 	}
 
 	inMaintenance := p.inMaintenance(ctx, mon.ID)
 
-	if newStatus == "up" && prevStatus != "up" {
+	if newStatus == "up" {
 		inc, resolved, err := p.incMgr.ProcessRecovery(ctx, mon.ID)
 		if err != nil {
 			p.logger.Error("manual status: process recovery", "error", err)
-			return
+			return err
 		}
 		p.incidentOpen.Store(mon.ID, false)
 		if resolved {
 			p.notifyResolved(ctx, mon, inc, inMaintenance)
 		}
 		p.lastNotified.Delete(mon.ID)
-		return
+		return nil
 	}
-	// Re-processing a still-down manual monitor announces an incident that was
-	// opened silently during a maintenance window that has since ended.
-	_, silenced := p.silenced.Load(mon.ID)
-	if newStatus != "up" && (prevStatus == "up" || prevStatus == "" || prevStatus == "pending" || silenced) {
-		p.processFailure(ctx, mon, newStatus, message, inMaintenance)
-	}
+	// Continued failures may raise severity or announce an incident after maintenance.
+	return p.processFailure(ctx, mon, newStatus, message, inMaintenance)
 }
 
 func HashBody(body string) string {

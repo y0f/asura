@@ -72,8 +72,9 @@ type Store interface {
 	CreateHeartbeat(ctx context.Context, h *Heartbeat) error
 	GetHeartbeatByToken(ctx context.Context, token string) (*Heartbeat, error)
 	GetHeartbeatByMonitorID(ctx context.Context, monitorID int64) (*Heartbeat, error)
-	UpdateHeartbeatPing(ctx context.Context, token string) error
+	UpdateHeartbeatPing(ctx context.Context, monitorID int64, token string) error
 	ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, error)
+	ExpireHeartbeat(ctx context.Context, monitorID int64) (bool, error)
 	UpdateHeartbeatStatus(ctx context.Context, monitorID int64, status string) error
 	DeleteHeartbeat(ctx context.Context, monitorID int64) error
 

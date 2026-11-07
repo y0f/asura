@@ -39,8 +39,14 @@ func (h *Handler) SetManualStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.pipeline != nil {
-		h.pipeline.ProcessManualStatus(r.Context(), mon, req.Status, req.Message)
+	if h.pipeline == nil {
+		writeError(w, http.StatusServiceUnavailable, "monitoring is unavailable")
+		return
+	}
+	if err := h.pipeline.ProcessManualStatus(r.Context(), mon, req.Status, req.Message); err != nil {
+		h.logger.Error("set manual status", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to set monitor status")
+		return
 	}
 
 	h.audit(r, "set_status", "monitor", id, req.Status)

@@ -269,7 +269,7 @@ func TestHeartbeatCRUD(t *testing.T) {
 	})
 
 	t.Run("UpdatePing", func(t *testing.T) {
-		if err := store.UpdateHeartbeatPing(ctx, "abc123def456"); err != nil {
+		if err := store.UpdateHeartbeatPing(ctx, m.ID, "abc123def456"); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := store.GetHeartbeatByToken(ctx, "abc123def456")

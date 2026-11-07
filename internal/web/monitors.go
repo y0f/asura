@@ -973,8 +973,15 @@ func (h *Handler) MonitorSetManualStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	message := r.FormValue("message")
-	if h.pipeline != nil {
-		h.pipeline.ProcessManualStatus(r.Context(), mon, status, message)
+	if h.pipeline == nil {
+		http.Error(w, "Monitoring is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.pipeline.ProcessManualStatus(r.Context(), mon, status, message); err != nil {
+		h.logger.Error("set manual status", "error", err)
+		h.setError(w, "Failed to set monitor status")
+		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
+		return
 	}
 
 	h.audit(r, "set_status", "monitor", id, status)
