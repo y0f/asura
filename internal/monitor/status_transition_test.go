@@ -98,27 +98,66 @@ func TestManualFailureRaisesExistingSeverity(t *testing.T) {
 	}
 }
 
-type unavailableStatusStore struct{ *storage.SQLiteStore }
+type unavailableManualStatusStore struct{ *storage.SQLiteStore }
 
-func (s *unavailableStatusStore) GetMonitorStatus(context.Context, int64) (*storage.MonitorStatus, error) {
-	return nil, errors.New("injected status read failure")
+func (s *unavailableManualStatusStore) RecordManualStatus(context.Context, int64, string, string, ...storage.MonitorAccess) (*storage.Monitor, error) {
+	return nil, errors.New("injected transition failure")
 }
 
-func TestManualStatusDoesNotReplaceUnreadableState(t *testing.T) {
-	s := &unavailableStatusStore{SQLiteStore: testStore(t)}
+func TestManualStatusPersistenceFailureHasNoIncidentEffects(t *testing.T) {
+	s := &unavailableManualStatusStore{SQLiteStore: testStore(t)}
 	mon := createTestMonitor(t, s, &storage.Monitor{Type: "manual"})
 	logger := discardLogger()
 	p := NewPipeline(s, checker.NewRegistry(), incident.NewManager(s, logger), 1, false, logger)
 	ctx := context.Background()
 	if err := p.ProcessManualStatus(ctx, mon, "down", "failure"); err == nil {
-		t.Fatal("status read failure reported success")
+		t.Fatal("transition failure reported success")
 	}
 	got, err := s.SQLiteStore.GetMonitorStatus(ctx, mon.ID)
 	if err != nil || got.Status != "pending" {
-		t.Fatalf("unreadable monitor status was overwritten: %+v %v", got, err)
+		t.Fatalf("failed transition changed monitor status: %+v %v", got, err)
+	}
+	if _, err := s.GetOpenIncident(ctx, mon.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("failed transition created an incident: %v", err)
 	}
 	if events := drainEvents(p); len(events) != 0 {
 		t.Fatalf("failed transition emitted events: %v", events)
+	}
+}
+
+func TestManualStatusUsesCurrentConfigurationAndScope(t *testing.T) {
+	s, p := newCountingPipeline(t)
+	ctx := context.Background()
+	stale := createTestMonitor(t, s, &storage.Monitor{Type: "manual", Name: "before"})
+	current := *stale
+	current.Name = "after"
+	current.FailureThreshold = 7
+	if err := s.UpdateMonitor(ctx, &current); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.ProcessManualStatus(ctx, stale, "down", "denied", storage.MonitorAccess{}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("pipeline omitted the supplied deny filter: %v", err)
+	}
+	if _, err := s.GetOpenIncident(ctx, stale.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("denied transition created incident: %v", err)
+	}
+	if events := drainEvents(p); len(events) != 0 {
+		t.Fatalf("denied transition emitted events: %v", events)
+	}
+	if err := p.ProcessManualStatus(ctx, stale, "down", "authorized", storage.MonitorAccess{MonitorIDs: []int64{stale.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := s.GetMonitorStatus(ctx, stale.ID)
+	if err != nil || status.ConsecFails != 7 {
+		t.Fatalf("used stale thresholds: %+v %v", status, err)
+	}
+	select {
+	case ev := <-p.notifyChan:
+		if ev.EventType != "incident.created" || ev.Monitor == nil || ev.Monitor.Name != "after" {
+			t.Fatalf("notification used stale configuration: %+v", ev)
+		}
+	default:
+		t.Fatal("no incident notification")
 	}
 }
 

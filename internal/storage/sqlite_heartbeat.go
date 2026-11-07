@@ -61,7 +61,7 @@ func (s *SQLiteStore) UpdateHeartbeatPing(ctx context.Context, monitorID int64, 
 	if err != nil {
 		return err
 	}
-	if err := setHeartbeatMonitorStatus(ctx, tx, id, "up", now); err != nil {
+	if err := setExplicitMonitorStatus(ctx, tx, id, "up", now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -89,24 +89,13 @@ func (s *SQLiteStore) ExpireHeartbeat(ctx context.Context, monitorID int64) (boo
 	if err != nil || n == 0 {
 		return false, err
 	}
-	if err := setHeartbeatMonitorStatus(ctx, tx, monitorID, "down", now); err != nil {
+	if err := setExplicitMonitorStatus(ctx, tx, monitorID, "down", now); err != nil {
 		return false, err
 	}
 	if err := tx.Commit(); err != nil {
 		return false, err
 	}
 	return true, nil
-}
-
-func setHeartbeatMonitorStatus(ctx context.Context, tx *sql.Tx, monitorID int64, status, now string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO monitor_status
-		(monitor_id, status, last_check_at, consec_fails, consec_successes)
-		SELECT id, ?, ?, CASE WHEN ?='down' THEN failure_threshold ELSE 0 END,
-			CASE WHEN ?='up' THEN success_threshold ELSE 0 END FROM monitors WHERE id=?
-		ON CONFLICT(monitor_id) DO UPDATE SET status=excluded.status, last_check_at=excluded.last_check_at,
-			consec_fails=excluded.consec_fails, consec_successes=excluded.consec_successes`,
-		status, now, status, status, monitorID)
-	return err
 }
 
 func (s *SQLiteStore) ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, error) {

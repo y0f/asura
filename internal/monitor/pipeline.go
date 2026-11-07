@@ -3,10 +3,8 @@ package monitor
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -573,41 +571,11 @@ func (p *Pipeline) ProcessHeartbeatPing(ctx context.Context, monitorID int64, to
 }
 
 // ProcessManualStatus handles a user-set status change for a manual monitor.
-func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor, newStatus, message string) error {
+func (p *Pipeline) ProcessManualStatus(ctx context.Context, mon *storage.Monitor, newStatus, message string, access ...storage.MonitorAccess) error {
 	unlock := p.lockMonitorStatus(mon.ID)
 	defer unlock()
-	now := time.Now()
-
-	cr := &storage.CheckResult{
-		MonitorID: mon.ID,
-		Status:    newStatus,
-		Message:   message,
-	}
-	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
-		p.logger.Error("manual status: insert check result", "error", err)
-		return err
-	}
-
-	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
-	if errors.Is(err, sql.ErrNoRows) {
-		status = &storage.MonitorStatus{MonitorID: mon.ID}
-	} else if err != nil {
-		return err
-	}
-
-	status.Status = newStatus
-	status.LastCheckAt = &now
-
-	if newStatus == "up" {
-		status.ConsecSuccesses = mon.SuccessThreshold
-		status.ConsecFails = 0
-	} else {
-		status.ConsecFails = mon.FailureThreshold
-		status.ConsecSuccesses = 0
-	}
-
-	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
-		p.logger.Error("manual status: upsert status", "error", err)
+	mon, err := p.store.RecordManualStatus(ctx, mon.ID, newStatus, message, access...)
+	if err != nil {
 		return err
 	}
 

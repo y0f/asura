@@ -22,6 +22,7 @@ type Store interface {
 	// Monitor status (runtime state)
 	GetMonitorStatus(ctx context.Context, monitorID int64) (*MonitorStatus, error)
 	UpsertMonitorStatus(ctx context.Context, s *MonitorStatus) error
+	RecordManualStatus(ctx context.Context, monitorID int64, status, message string, access ...MonitorAccess) (*Monitor, error)
 
 	// Check results
 	InsertCheckResult(ctx context.Context, r *CheckResult) error

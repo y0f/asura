@@ -76,17 +76,17 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...M
 	return nil
 }
 
-func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64, access ...MonitorAccess) (*Monitor, error) {
-	clause, args := monitorAccessSQL("m", access)
-	args = append([]any{id}, args...)
-	row := s.readDB.QueryRowContext(ctx,
-		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
+const selectMonitorSQL = `SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
 		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
 		        m.upside_down, m.agent_enabled, m.resend_interval, m.sla_target, m.anomaly_sensitivity, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
 		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0)
 		 FROM monitors m
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id
-		 WHERE m.id = ?`+clause, args...)
+		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id`
+
+func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64, access ...MonitorAccess) (*Monitor, error) {
+	clause, args := monitorAccessSQL("m", access)
+	args = append([]any{id}, args...)
+	row := s.readDB.QueryRowContext(ctx, selectMonitorSQL+` WHERE m.id = ?`+clause, args...)
 	return s.scanMonitor(row)
 }
 
