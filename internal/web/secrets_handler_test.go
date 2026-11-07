@@ -43,7 +43,7 @@ func adminRequest(method, target string, form url.Values) *http.Request {
 	} else {
 		r = httptest.NewRequest(method, target, nil)
 	}
-	key := &config.APIKeyConfig{Name: "admin", Role: "admin"}
+	key := &config.APIKeyConfig{Name: "admin", SuperAdmin: true}
 	return r.WithContext(context.WithValue(r.Context(), httputil.CtxKeyAPIKey, key))
 }
 

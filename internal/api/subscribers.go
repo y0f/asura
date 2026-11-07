@@ -44,6 +44,12 @@ func (h *Handler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 	if subs == nil {
 		subs = []*storage.StatusPageSubscriber{}
 	}
+	for i, sub := range subs {
+		copy := *sub
+		// Webhook URLs can contain bearer credentials in their path or query.
+		copy.WebhookURL = ""
+		subs[i] = &copy
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"count": count, "data": subs})
 }

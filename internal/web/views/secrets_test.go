@@ -2,11 +2,27 @@ package views
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/y0f/asura/internal/storage"
 )
+
+func TestNotificationEditHidesWebhookURL(t *testing.T) {
+	channel := &storage.NotificationChannel{Type: "webhook", Settings: json.RawMessage(`{"url":"https://example.com/private-token","secret":"private-signature"}`)}
+	raw := ChannelEditJSON(channel)
+	var edit struct {
+		Settings   map[string]string `json:"settings"`
+		SecretsSet []string          `json:"secrets_set"`
+	}
+	if err := json.Unmarshal([]byte(raw), &edit); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "private-") || edit.Settings["url"] != "" || !slices.Contains(edit.SecretsSet, "url") {
+		t.Fatalf("webhook editor did not hide and mark the saved URL: %s", raw)
+	}
+}
 
 func TestRedactSettings(t *testing.T) {
 	raw := json.RawMessage(`{"method":"GET","bearer_token":"s3cret","basic_auth_pass":""}`)

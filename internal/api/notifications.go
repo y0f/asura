@@ -8,6 +8,7 @@ import (
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/incident"
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 )
@@ -18,6 +19,9 @@ func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("list notifications", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list notification channels")
 		return
+	}
+	for i, channel := range channels {
+		channels[i] = redact.Notification(channel)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": channels})
 }
@@ -50,7 +54,7 @@ func (h *Handler) CreateNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit(r, "create", "notification_channel", ch.ID, "")
-	writeJSON(w, http.StatusCreated, ch)
+	writeJSON(w, http.StatusCreated, notificationResponse(r, &ch))
 }
 
 func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +64,7 @@ func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.store.GetNotificationChannel(r.Context(), id)
+	existing, err := h.store.GetNotificationChannel(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "notification channel not found")
@@ -71,12 +75,23 @@ func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ch storage.NotificationChannel
-	if err := h.readJSON(r, &ch); err != nil {
+	type channelFields storage.NotificationChannel
+	var req struct {
+		channelFields
+		ClearSecrets []string `json:"clear_secrets"`
+	}
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	ch := storage.NotificationChannel(req.channelFields)
 	ch.ID = id
+	if ch.Type == existing.Type {
+		if len(ch.Settings) == 0 {
+			ch.Settings = existing.Settings
+		}
+		ch.Settings = redact.MergeSecrets(ch.Settings, existing.Settings, redact.NotificationSecretKeys[ch.Type], secretClearSet(req.ClearSecrets))
+	}
 
 	if err := validate.ValidateNotificationChannel(&ch); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -90,7 +105,7 @@ func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit(r, "update", "notification_channel", ch.ID, "")
-	writeJSON(w, http.StatusOK, ch)
+	writeJSON(w, http.StatusOK, notificationResponse(r, &ch))
 }
 
 func (h *Handler) DeleteNotification(w http.ResponseWriter, r *http.Request) {

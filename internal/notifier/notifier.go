@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -328,6 +329,11 @@ func FormatMessage(p *Payload) string {
 }
 
 func marshalPayload(p *Payload) ([]byte, error) {
+	if p != nil {
+		copy := *p
+		copy.Monitor = redact.Monitor(p.Monitor)
+		p = &copy
+	}
 	b, err := json.Marshal(p)
 	if err != nil {
 		return nil, fmt.Errorf("marshal payload: %w", err)

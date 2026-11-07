@@ -167,7 +167,8 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.notifier.SendTest(ch, testInc); err != nil {
-		h.setError(w, "Test failed: "+err.Error())
+		h.logger.Error("web: notification test failed", "channel_id", ch.ID, "error", err)
+		h.setError(w, "Test notification failed")
 	} else {
 		h.setFlash(w, "Test notification sent")
 	}

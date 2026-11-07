@@ -421,6 +421,7 @@ templ SettingCheckbox(label, name string, checked bool) {
 templ HeaderListEditor(modelName, keyName, valName string) {
 	<div>
 		<div class="form-label">Headers</div>
+		<p class="form-hint mb-2">Saved values stay hidden. Leave a value blank to keep it; remove its row to delete it.</p>
 		<div class="space-y-2">
 			<template x-for={ "(h, i) in " + modelName } :key="i">
 				<div class="flex gap-2">

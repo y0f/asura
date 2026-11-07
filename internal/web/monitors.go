@@ -14,6 +14,7 @@ import (
 	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
@@ -43,7 +44,7 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 
 	fd.SettingsJSON = "{}"
 	if len(mon.Settings) > 0 {
-		redacted, _ := views.RedactSettings(mon.Settings, views.MonitorSecretKeys[mon.Type])
+		redacted, _ := redact.MonitorSettings(mon.Settings)
 		fd.SettingsJSON = string(redacted)
 	}
 	fd.AssertionsRaw = "{}"
@@ -53,6 +54,7 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 
 	unmarshalMonitorSettings(fd, mon)
 	applyHTTPDefaults(fd)
+	fd.Monitor = redact.Monitor(mon)
 
 	fd.HeadersJSON = headersToJSON(fd.HTTP.Headers)
 	fd.WsHeadersJSON = headersToJSON(fd.WS.Headers)
@@ -823,7 +825,22 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	// is built from what was submitted, so it never contains a stored secret.
 	submittedSettings := mon.Settings
 	if sameType {
-		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, activeMonitorSecretKeys(mon.Type, mon.Settings, existingSettings), views.ClearSet(r.Form["clear_secrets"]))
+		clear := views.ClearSet(r.Form["clear_secrets"])
+		keys := activeMonitorSecretKeys(mon.Type, mon.Settings, existingSettings)
+		key := httputil.GetAPIKey(r.Context())
+		if key == nil || !key.SuperAdmin {
+			if err := redact.CheckMonitorDestination(mon, existing, keys, clear); err != nil {
+				h.renderMonitorEditError(w, r, err.Error(), mon, storedSecrets, channelIDs, monTags)
+				return
+			}
+		}
+		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, keys, clear)
+		mon.Settings, err = redact.MergeMonitorHeaders(mon.Settings, existingSettings, clear)
+		if err != nil {
+			mon.Settings = submittedSettings
+			h.renderMonitorEditError(w, r, err.Error(), mon, storedSecrets, channelIDs, monTags)
+			return
+		}
 	}
 
 	if err := h.validateMonitorFormAgents(r, mon); err != nil {
@@ -1296,6 +1313,19 @@ func blankMonitorSecrets(fd *views.MonitorFormParams) {
 	fd.HTTP.MTLSClientKey = ""
 	fd.MQTT.Password = ""
 	fd.Redis.Password = ""
+	for name := range fd.HTTP.Headers {
+		fd.HTTP.Headers[name] = ""
+	}
+	for name := range fd.WS.Headers {
+		fd.WS.Headers[name] = ""
+	}
+	for _, step := range fd.MultiStep.Steps {
+		for name := range step.Headers {
+			step.Headers[name] = ""
+		}
+	}
+	fd.HeadersJSON = headersToJSON(fd.HTTP.Headers)
+	fd.WsHeadersJSON = headersToJSON(fd.WS.Headers)
 }
 
 // validateMonitorForm rejects invalid JSON typed in the advanced editors before

@@ -13,6 +13,7 @@ import (
 	"github.com/y0f/asura/internal/checker"
 	"github.com/y0f/asura/internal/config"
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 )
@@ -34,6 +35,11 @@ func (h *Handler) ListMonitors(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("list monitors", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list monitors")
 		return
+	}
+	if monitors, ok := result.Data.([]*storage.Monitor); ok {
+		for i, monitor := range monitors {
+			monitors[i] = redact.Monitor(monitor)
+		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -66,15 +72,17 @@ func (h *Handler) GetMonitor(w http.ResponseWriter, r *http.Request) {
 	if m.Type == "heartbeat" {
 		hb, err := h.store.GetHeartbeatByMonitorID(r.Context(), m.ID)
 		if err == nil && hb != nil {
+			// Storage returns a credential hash, never the original bearer token.
+			hb.Token = ""
 			writeJSON(w, http.StatusOK, map[string]any{
-				"monitor":   m,
+				"monitor":   redact.Monitor(m),
 				"heartbeat": hb,
 			})
 			return
 		}
 	}
 
-	writeJSON(w, http.StatusOK, m)
+	writeJSON(w, http.StatusOK, redact.Monitor(m))
 }
 
 func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
@@ -131,12 +139,12 @@ func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 
 	if heartbeat != nil {
 		writeJSON(w, http.StatusCreated, map[string]any{
-			"monitor":   m,
+			"monitor":   monitorResponse(r, &m),
 			"heartbeat": heartbeat,
 		})
 		return
 	}
-	writeJSON(w, http.StatusCreated, m)
+	writeJSON(w, http.StatusCreated, monitorResponse(r, &m))
 }
 
 func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
@@ -157,14 +165,37 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var m storage.Monitor
-	if err := h.readJSON(r, &m); err != nil {
+	var req struct {
+		monitorAlias
+		ClearSecrets []string `json:"clear_secrets"`
+	}
+	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	m := storage.Monitor(req.monitorAlias)
 	m.ID = existing.ID
 	m.CreatedAt = existing.CreatedAt
 	m.Enabled = existing.Enabled
+	if m.Type == existing.Type {
+		clear := secretClearSet(req.ClearSecrets)
+		key := httputil.GetAPIKey(r.Context())
+		if key == nil || !key.SuperAdmin {
+			if err := redact.CheckMonitorDestination(&m, existing, redact.MonitorSecretKeys[m.Type], clear); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		}
+		if len(m.Settings) == 0 {
+			m.Settings = existing.Settings
+		}
+		m.Settings = redact.MergeSecrets(m.Settings, existing.Settings, redact.MonitorSecretKeys[m.Type], clear)
+		m.Settings, err = redact.MergeMonitorHeaders(m.Settings, existing.Settings, clear)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 
 	if err := validate.ValidateMonitor(&m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -210,9 +241,9 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 	updated, _ := h.store.GetMonitor(r.Context(), id)
 	if updated != nil {
 		updated.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), id)
-		writeJSON(w, http.StatusOK, updated)
+		writeJSON(w, http.StatusOK, monitorResponse(r, updated))
 	} else {
-		writeJSON(w, http.StatusOK, m)
+		writeJSON(w, http.StatusOK, monitorResponse(r, &m))
 	}
 }
 
@@ -394,7 +425,7 @@ func (h *Handler) CloneMonitor(w http.ResponseWriter, r *http.Request) {
 		h.pipeline.ReloadMonitors()
 	}
 
-	writeJSON(w, http.StatusCreated, clone)
+	writeJSON(w, http.StatusCreated, monitorResponse(r, clone))
 }
 
 type bulkRequest struct {
