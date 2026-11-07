@@ -1,63 +1,59 @@
 #!/usr/bin/env bash
-# dev.sh — single-command local development
-# Watches .go, .templ, and .css files. Rebuilds and restarts on change.
-# Usage: ./dev.sh
-# Stop:  Ctrl+C
+# Rebuild templates, CSS and the embedded server when application sources change.
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
-set -e
-
-BINARY="./asura-dev"
-CONFIG="config.yaml"
-TAILWIND="./tailwindcss"
+BINARY=./asura-dev
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) BINARY+=.exe ;; esac
+NEXT="${BINARY}.next"
+CONFIG=config.yaml
+TAILWIND=./tailwindcss
+[[ ! -x ./tailwindcss.exe ]] || TAILWIND=./tailwindcss.exe
+[[ -x "$TAILWIND" ]] || { echo '[dev] Download the standalone Tailwind CLI first (see CONTRIBUTING.md).' >&2; exit 1; }
 PID=""
 
-cleanup() {
-    [ -n "$PID" ] && kill "$PID" 2>/dev/null
-    [ -n "$TEMPL_PID" ] && kill "$TEMPL_PID" 2>/dev/null
-    [ -n "$TW_PID" ] && kill "$TW_PID" 2>/dev/null
-    rm -f "$BINARY" "$BINARY.exe"
-    exit 0
-}
-trap cleanup INT TERM
-
-build_and_run() {
-    [ -n "$PID" ] && kill "$PID" 2>/dev/null && wait "$PID" 2>/dev/null
-    sleep 0.3
-    echo "[dev] building..."
-    templ generate 2>&1 | tail -1
-    if go build -o "$BINARY" ./cmd/asura 2>&1; then
-        echo "[dev] starting server on $(grep 'listen:' "$CONFIG" | head -1 | awk '{print $2}' | tr -d '\"')"
-        "$BINARY" -config "$CONFIG" &
-        PID=$!
-    else
-        echo "[dev] build failed"
+stop_server() {
+    if [[ -n "$PID" ]]; then
+        kill "$PID" 2>/dev/null || true
+        wait "$PID" 2>/dev/null || true
         PID=""
     fi
 }
+cleanup() {
+    stop_server
+    rm -f -- "$BINARY" "$NEXT"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-# Start tailwind watcher in background
-if [ -x "$TAILWIND" ] || [ -x "${TAILWIND}.exe" ]; then
-    TW="${TAILWIND}"
-    [ -x "${TAILWIND}.exe" ] && TW="${TAILWIND}.exe"
-    $TW -i web/tailwind.input.css -o web/static/tailwind.css --watch &>/dev/null &
-    TW_PID=$!
-    echo "[dev] tailwind watcher started"
-fi
+build_and_run() {
+    local templ_version
+    templ_version=$(go list -m -f '{{.Version}}' github.com/a-h/templ) || return 1
+    echo '[dev] generating templates and CSS...'
+    go run "github.com/a-h/templ/cmd/templ@${templ_version}" generate || return 1
+    "$TAILWIND" -i web/tailwind.input.css -o web/static/tailwind.css || return 1
+    echo '[dev] building...'
+    CGO_ENABLED=0 go build -o "$NEXT" ./cmd/asura || return 1
+    stop_server
+    mv -f -- "$NEXT" "$BINARY" || return 1
+    echo '[dev] starting server...'
+    "$BINARY" -config "$CONFIG" &
+    PID=$!
+}
 
-# Initial build
-build_and_run
+snapshot() {
+    # Generated outputs are refreshed together; watch their inputs and other assets.
+    { find cmd internal web -type f ! -name '*_templ.go' ! -path web/static/tailwind.css -exec cksum {} +; cksum go.mod go.sum; } | LC_ALL=C sort
+}
 
-# Watch for .go and .templ file changes
-echo "[dev] watching for changes... (Ctrl+C to stop)"
-LAST_HASH=""
-while true; do
-    # Hash all .go and .templ files to detect changes
-    HASH=$(find cmd internal -name '*.go' -o -name '*.templ' 2>/dev/null | sort | xargs stat -c '%Y%n' 2>/dev/null || find cmd internal -name '*.go' -o -name '*.templ' 2>/dev/null | sort | xargs stat -f '%m%N' 2>/dev/null || echo "")
-    if [ -n "$HASH" ] && [ "$HASH" != "$LAST_HASH" ] && [ -n "$LAST_HASH" ]; then
-        echo ""
-        echo "[dev] change detected, rebuilding..."
-        build_and_run
+LAST_HASH=$(snapshot)
+build_and_run || echo '[dev] build failed; waiting for a source change.' >&2
+echo '[dev] watching application sources and embedded assets (Ctrl+C to stop)...'
+while sleep 2; do
+    HASH=$(snapshot)
+    if [[ "$HASH" != "$LAST_HASH" ]]; then
+        LAST_HASH=$HASH
+        build_and_run || echo '[dev] build failed; keeping the previous server.' >&2
     fi
-    LAST_HASH="$HASH"
-    sleep 2
 done
