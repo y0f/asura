@@ -26,40 +26,45 @@ cleanup() {
         echo -e "${YELLOW}[!]${NC} Partial state may remain — review before re-running."
     fi
 }
-trap cleanup EXIT
-
-# ── Pre-flight checks ──────────────────────────────────────────────
-
-[[ $EUID -ne 0 ]] && error "Run this script as root (sudo bash install.sh)"
-
-command -v systemctl >/dev/null 2>&1 || error "systemd is required"
-command -v curl >/dev/null 2>&1 || error "curl is required (apt install curl)"
-
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64)  GOARCH="amd64" ;;
-    aarch64) GOARCH="arm64" ;;
-    *)       error "Unsupported architecture: $ARCH" ;;
-esac
-
-# ── Version check helper ──────────────────────────────────────────
 
 version_ge() {
     printf '%s\n%s\n' "$2" "$1" | sort -V -C
 }
 
-# ── Required Go version ───────────────────────────────────────────
+local_go_version() {
+    local output
+    output=$(GOTOOLCHAIN=local "$1" version 2>/dev/null) || return 1
+    [[ "$output" =~ ^go\ version\ go([0-9]+\.[0-9]+\.[0-9]+)\  ]] || return 1
+    printf '%s\n' "${BASH_REMATCH[1]}"
+}
 
-# Derive the minimum from go.mod so the pin below can never silently drift
-# behind what the module actually requires.
-GO_MIN_VERSION=$(grep -oP '^go \K\d+\.\d+(\.\d+)?' "${SCRIPT_DIR}/go.mod" 2>/dev/null || true)
-[[ -z "$GO_MIN_VERSION" ]] && error "Could not read the required Go version from ${SCRIPT_DIR}/go.mod"
+supported_go_version() {
+    version_ge "$1" "$GO_MIN_VERSION" || return 1
+    # The newer supported release line also needs its security patches.
+    if [[ "${1%.*}" == "${GO_VERSION%.*}" ]]; then
+        version_ge "$1" "$GO_VERSION" || return 1
+    fi
+}
 
-if ! version_ge "$GO_VERSION" "$GO_MIN_VERSION"; then
-    error "Pinned Go ${GO_VERSION} is older than go.mod requires (${GO_MIN_VERSION}) — bump GO_VERSION and its checksums in this script"
-fi
+select_go() {
+    GO_MIN_VERSION=$(awk '$1 == "go" { print $2; exit }' "${SCRIPT_DIR}/go.mod")
+    [[ "$GO_MIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || error "Could not read the required Go version from ${SCRIPT_DIR}/go.mod"
+    version_ge "$GO_VERSION" "$GO_MIN_VERSION" || error "Pinned Go ${GO_VERSION} is older than go.mod requires (${GO_MIN_VERSION})"
 
-# ── Install Go if missing or too old ─────────────────────────────
+    GO_BIN=$(type -P go || true)
+    if [[ -n "$GO_BIN" ]]; then
+        GO_BIN="$(cd "$(dirname "$GO_BIN")" && pwd)/$(basename "$GO_BIN")"
+    fi
+    local current_go
+    if [[ -z "$GO_BIN" ]] || ! current_go=$(local_go_version "$GO_BIN") || ! supported_go_version "$current_go"; then
+        warn "Installing a patched Go toolchain (minimum ${GO_MIN_VERSION}, preferred ${GO_VERSION})"
+        install_go
+    fi
+
+    current_go=$(local_go_version "$GO_BIN") || error "Could not verify Go at ${GO_BIN}"
+    supported_go_version "$current_go" || error "Go ${current_go} at ${GO_BIN} is not supported"
+    info "Using Go ${current_go}: ${GO_BIN}"
+}
 
 install_go() {
     info "Installing Go ${GO_VERSION} (${GOARCH})..."
@@ -83,33 +88,38 @@ install_go() {
     rm -rf /usr/local/go
     tar -C /usr/local -xzf "/tmp/${TARBALL}"
     rm -f "/tmp/${TARBALL}"
-    export PATH="/usr/local/go/bin:$PATH"
-    info "Go installed: $(go version)"
+    GO_BIN="/usr/local/go/bin/go"
 }
 
-if command -v go >/dev/null 2>&1; then
-    CURRENT_GO=$(go version | grep -oP '\d+\.\d+(\.\d+)?' | head -1)
-    if version_ge "$CURRENT_GO" "$GO_MIN_VERSION"; then
-        info "Go already installed: $(go version)"
-    else
-        warn "Go ${CURRENT_GO} is too old (need >= ${GO_MIN_VERSION})"
-        install_go
-    fi
-else
-    install_go
-fi
+build_asura() {
+    # Use the same executable and local toolchain that select_go verified.
+    GOTOOLCHAIN=local CGO_ENABLED=0 "$GO_BIN" build -trimpath -ldflags="-s -w -X main.version=$1" -o asura ./cmd/asura
+}
 
-export PATH="/usr/local/go/bin:$PATH"
+# Sourcing exposes the toolchain helpers without installing a service.
+[[ "${BASH_SOURCE[0]}" != "$0" ]] && return
 
-# ── Build ──────────────────────────────────────────────────────────
+trap cleanup EXIT
+
+[[ $EUID -ne 0 ]] && error "Run this script as root (sudo bash install.sh)"
+
+command -v systemctl >/dev/null 2>&1 || error "systemd is required"
+command -v curl >/dev/null 2>&1 || error "curl is required (apt install curl)"
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)  GOARCH="amd64" ;;
+    aarch64) GOARCH="arm64" ;;
+    *)       error "Unsupported architecture: $ARCH" ;;
+esac
+
+select_go
 
 VERSION=$(git -C "$SCRIPT_DIR" describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 info "Building asura ${VERSION} from ${SCRIPT_DIR}..."
 cd "$SCRIPT_DIR"
-# GOTOOLCHAIN=local keeps the build on the toolchain we just checksum-verified.
-# Without it Go silently downloads a different toolchain, bypassing the pin above.
-GOTOOLCHAIN=local CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o asura ./cmd/asura
+build_asura "$VERSION"
 install -m 755 asura "${INSTALL_DIR}/asura"
 rm -f asura
 info "Binary installed to ${INSTALL_DIR}/asura"
