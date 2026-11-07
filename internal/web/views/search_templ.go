@@ -37,9 +37,9 @@ func CommandPalette(p LayoutParams) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templruntime.NewAttributeExpression(navIndexJSON(p.BasePath)).Resolve(ctx)
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templruntime.NewAttributeExpression(navIndexJSON(p)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 12, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 12, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -101,7 +101,7 @@ func kbdIcon(d string) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 90, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 87, Col: 152}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -147,28 +147,35 @@ type navSearchItem struct {
 	Group string `json:"group"`
 }
 
-func navIndexJSON(basePath string) string {
+func navIndexJSON(p LayoutParams) string {
 	items := []navSearchItem{
-		{"Dashboard", "Overview of monitors and incidents", basePath + "/", "Home"},
-		{"Monitors", "All monitors and their status", basePath + "/monitors", "Monitoring"},
-		{"New Monitor", "Create a new monitor", basePath + "/monitors/new", "Monitoring"},
-		{"Groups", "Monitor groups", basePath + "/groups", "Monitoring"},
-		{"Tags", "Monitor tags", basePath + "/tags", "Monitoring"},
-		{"Incidents", "Incident history and active incidents", basePath + "/incidents", "Alerting"},
-		{"Notifications", "Notification channels", basePath + "/notifications", "Alerting"},
-		{"Notification History", "Sent notification log", basePath + "/notifications/history", "Alerting"},
-		{"Escalation Policies", "On-call escalation rules", basePath + "/escalation-policies", "Alerting"},
-		{"On-Call", "On-call rotations", basePath + "/on-call", "Alerting"},
-		{"SLA Report", "Uptime and SLA reporting", basePath + "/sla", "Operations"},
-		{"Maintenance", "Scheduled maintenance windows", basePath + "/maintenance", "Operations"},
-		{"Status Pages", "Public status pages", basePath + "/status-pages", "Operations"},
-		{"Request Logs", "HTTP requests served by Asura", basePath + "/logs", "System"},
-		{"Audit Log", "Who changed what", basePath + "/audit", "System"},
-		{"Agents", "Remote monitoring agents", basePath + "/agents", "System"},
-		{"Proxies", "Outbound proxies", basePath + "/proxies", "System"},
-		{"Settings", "Application settings", basePath + "/settings", "System"},
+		{"Dashboard", "Overview of monitors and incidents", "/", "Home"},
+		{"Monitors", "All monitors and their status", "/monitors", "Monitoring"},
+		{"New Monitor", "Create a new monitor", "/monitors/new", "Monitoring"},
+		{"Groups", "Monitor groups", "/groups", "Monitoring"},
+		{"Tags", "Monitor tags", "/tags", "Monitoring"},
+		{"Incidents", "Incident history and active incidents", "/incidents", "Alerting"},
+		{"Notifications", "Notification channels", "/notifications", "Alerting"},
+		{"Notification History", "Sent notification log", "/notifications/history", "Alerting"},
+		{"Escalation Policies", "On-call escalation rules", "/escalation-policies", "Alerting"},
+		{"On-Call", "On-call rotations", "/on-call", "Alerting"},
+		{"SLA Report", "Uptime and SLA reporting", "/sla", "Operations"},
+		{"Maintenance", "Scheduled maintenance windows", "/maintenance", "Operations"},
+		{"Status Pages", "Public status pages", "/status-pages", "Operations"},
+		{"Request Logs", "HTTP requests served by Asura", "/logs", "System"},
+		{"Audit Log", "Who changed what", "/audit", "System"},
+		{"Agents", "Remote monitoring agents", "/agents", "System"},
+		{"Proxies", "Outbound proxies", "/proxies", "System"},
+		{"Settings", "Application settings", "/settings", "System"},
 	}
-	b, err := json.Marshal(items)
+	allowed := make([]navSearchItem, 0, len(items))
+	for _, item := range items {
+		if p.CanVisit(item.Href) {
+			item.Href = p.BasePath + item.Href
+			allowed = append(allowed, item)
+		}
+	}
+	b, err := json.Marshal(allowed)
 	if err != nil {
 		return "[]"
 	}

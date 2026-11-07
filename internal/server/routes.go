@@ -52,7 +52,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 		mux.Handle("POST "+s.p("/logout"), webAuth(http.HandlerFunc(s.web.Logout)))
 
-		mux.Handle("GET "+s.p("/{$}"), webPerm("monitors.read", s.web.Dashboard))
+		mux.Handle("GET "+s.p("/{$}"), webAuth(http.HandlerFunc(s.web.Home)))
 		mux.Handle("GET "+s.p("/monitors"), webPerm("monitors.read", s.web.Monitors))
 		mux.Handle("GET "+s.p("/monitors/new"), webPerm("monitors.write", s.web.MonitorForm))
 		mux.Handle("GET "+s.p("/monitors/{id}"), webPerm("monitors.read", s.web.MonitorDetail))

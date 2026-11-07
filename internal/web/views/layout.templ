@@ -1,18 +1,18 @@
 package views
 
 type LayoutParams struct {
-	Title     string
-	Active    string
-	Username  string
-	Perms     map[string]bool
+	Title    string
+	Active   string
+	Username string
+	Perms    map[string]bool
 	// SuperAdmin gates actions that need more than a permission (import,
 	// database maintenance).
 	SuperAdmin bool
-	Version   string
-	ToastKind string
-	ToastMsg  string
-	Error     string
-	BasePath  string
+	Version    string
+	ToastKind  string
+	ToastMsg   string
+	Error      string
+	BasePath   string
 }
 
 // Can reports whether the signed-in key holds the given permission.
@@ -33,52 +33,52 @@ templ themeScript() {
 templ Layout(p LayoutParams) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="dark">
-	<head>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-		<meta name="htmx-config" content='{"historyCacheSize":0,"refreshOnHistoryMiss":true}'/>
-		@themeScript()
-		<title>{ p.Title } · Asura</title>
-		<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
-		<link rel="preload" href={ p.BasePath + "/static/fonts/inter.woff2" } as="font" type="font/woff2" crossorigin/>
-		<link rel="stylesheet" href={ Asset(p.BasePath, "tailwind.css") }/>
-		<link rel="stylesheet" href={ Asset(p.BasePath, "uplot.min.css") }/>
-		<script src={ Asset(p.BasePath, "uplot.iife.min.js") } defer></script>
-		<script src={ Asset(p.BasePath, "htmx.min.js") } defer></script>
-		<script defer src={ Asset(p.BasePath, "alpine.min.js") }></script>
-		@shellScript()
-	</head>
-	<body class="bg-surface text-muted-light font-sans antialiased">
-		<a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
-		<div x-data="shell" class="flex min-h-screen" @keydown.escape.window="nav=false">
-			@Sidebar(p)
-			<div x-show="nav" x-cloak @click="nav=false" class="modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden"></div>
-			<div class="flex-1 flex flex-col min-w-0">
-				@topbar(p)
-				@CommandPalette(p)
-				<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-					<div class="max-w-7xl mx-auto">
-						if p.ToastMsg != "" {
-							@Toast(p.ToastKind, p.ToastMsg)
-						}
-						if p.Error != "" {
-							@Toast("error", p.Error)
-						}
-						{ children... }
-					</div>
-				</main>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="htmx-config" content='{"historyCacheSize":0,"refreshOnHistoryMiss":true}'/>
+			@themeScript()
+			<title>{ p.Title } · Asura</title>
+			<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
+			<link rel="preload" href={ p.BasePath + "/static/fonts/inter.woff2" } as="font" type="font/woff2" crossorigin/>
+			<link rel="stylesheet" href={ Asset(p.BasePath, "tailwind.css") }/>
+			<link rel="stylesheet" href={ Asset(p.BasePath, "uplot.min.css") }/>
+			<script src={ Asset(p.BasePath, "uplot.iife.min.js") } defer></script>
+			<script src={ Asset(p.BasePath, "htmx.min.js") } defer></script>
+			<script defer src={ Asset(p.BasePath, "alpine.min.js") }></script>
+			@shellScript()
+		</head>
+		<body class="bg-surface text-muted-light font-sans antialiased">
+			<a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
+			<div x-data="shell" class="flex min-h-screen" @keydown.escape.window="nav=false">
+				@Sidebar(p)
+				<div x-show="nav" x-cloak @click="nav=false" class="modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden"></div>
+				<div class="flex-1 flex flex-col min-w-0">
+					@topbar(p)
+					@CommandPalette(p)
+					<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+						<div class="max-w-7xl mx-auto">
+							if p.ToastMsg != "" {
+								@Toast(p.ToastKind, p.ToastMsg)
+							}
+							if p.Error != "" {
+								@Toast("error", p.Error)
+							}
+							{ children... }
+						</div>
+					</main>
+				</div>
+				@ConfirmModal()
 			</div>
-			@ConfirmModal()
-		</div>
-		if p.Can("monitors.write") {
-			<script>
+			if p.Can("monitors.write") {
+				<script>
 				document.addEventListener('keydown',function(e){
 					if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;
 					if(e.key==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){var l=document.querySelector('[href$="/monitors/new"]');if(l){e.preventDefault();window.location.href=l.href}}
 				});
 			</script>
-		}
-	</body>
+			}
+		</body>
 	</html>
 }
 
@@ -198,13 +198,13 @@ templ Sidebar(p LayoutParams) {
 		aria-label="Main navigation"
 	>
 		<div class="h-14 flex items-center shrink-0 px-4 gap-2" :class="collapsed ? 'md:justify-center md:px-0' : 'justify-between'">
-			<a href={ templ.SafeURL(p.BasePath + "/") } class="flex items-center gap-2 min-w-0" x-show="!collapsed">
+			<a href={ templ.SafeURL(p.HomePath()) } class="flex items-center gap-2 min-w-0" x-show="!collapsed">
 				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
 				if p.Version != "" {
 					<span class="font-mono text-2xs text-muted truncate">{ p.Version }</span>
 				}
 			</a>
-			<a href={ templ.SafeURL(p.BasePath + "/") } x-cloak x-show="collapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
+			<a href={ templ.SafeURL(p.HomePath()) } x-cloak x-show="collapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
 				<img src={ p.BasePath + "/static/favicon.ico" } alt="" class="h-6 w-6"/>
 			</a>
 			<button @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
@@ -232,12 +232,14 @@ templ Sidebar(p LayoutParams) {
 			</button>
 		</div>
 		<nav id="sidenav" hx-boost="true" hx-target="#content" hx-select="#content" hx-swap="outerHTML show:window:top" hx-sync="this:replace" class="flex-1 px-3 pb-3 overflow-y-auto overflow-x-hidden space-y-4">
-			<div class="space-y-0.5">
-				@navLink(p, "/", "dashboard", "Dashboard") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
-				}
-			</div>
-			@navGroup("Monitoring") {
+			if p.CanVisit("/") {
+				<div class="space-y-0.5">
+					@navLink(p, "/", "dashboard", "Dashboard") {
+						<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+					}
+				</div>
+			}
+			@navGroup("Monitoring", p.Can("monitors.read")) {
 				@navLink(p, "/monitors", "monitors", "Monitors") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
 				}
@@ -248,7 +250,7 @@ templ Sidebar(p LayoutParams) {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
 				}
 			}
-			@navGroup("Alerting") {
+			@navGroup("Alerting", p.Can("incidents.read") || p.Can("notifications.read") || p.Can("escalation_policies.read")) {
 				@navLink(p, "/incidents", "incidents", "Incidents") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 				}
@@ -262,7 +264,7 @@ templ Sidebar(p LayoutParams) {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
 				}
 			}
-			@navGroup("Operations") {
+			@navGroup("Operations", p.Can("monitors.read") || p.Can("maintenance.read")) {
 				@navLink(p, "/sla", "sla", "SLA Report") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
 				}
@@ -273,7 +275,7 @@ templ Sidebar(p LayoutParams) {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 				}
 			}
-			@navGroup("System") {
+			@navGroup("System", p.Can("monitors.read") || p.Can("metrics.read")) {
 				@navLink(p, "/logs", "logs", "Request Logs") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
 				}
@@ -297,11 +299,13 @@ templ Sidebar(p LayoutParams) {
 
 // navGroup renders a labelled cluster of nav links. The label hides when the
 // sidebar is collapsed to the icon rail.
-templ navGroup(title string) {
-	<div class="space-y-0.5">
-		<div x-show="!collapsed" class="px-2 pb-1 text-xs font-medium text-muted">{ title }</div>
-		{ children... }
-	</div>
+templ navGroup(title string, visible bool) {
+	if visible {
+		<div class="space-y-0.5">
+			<div x-show="!collapsed" class="px-2 pb-1 text-xs font-medium text-muted">{ title }</div>
+			{ children... }
+		</div>
+	}
 }
 
 // navLink renders one sidebar entry. Active state is driven by aria-current + the
@@ -309,21 +313,23 @@ templ navGroup(title string) {
 // link on the persistent sidebar without re-rendering it. The icon is passed as
 // children (an SVG carrying the .nav-icon class).
 templ navLink(p LayoutParams, href, key, label string) {
-	<a
-		href={ templ.SafeURL(p.BasePath + href) }
-		data-nav-key={ key }
-		@click="nav=false"
-		:title="collapsed ? $el.dataset.label : null"
-		data-label={ label }
-		if key == p.Active {
-			aria-current="page"
-		}
-		class="nav-link flex items-center gap-2.5 rounded-control px-2 h-8 text-sm"
-		:class="collapsed && 'md:justify-center md:px-0'"
-	>
-		{ children... }
-		<span class="flex-1 truncate" x-show="!collapsed">{ label }</span>
-	</a>
+	if p.CanVisit(href) {
+		<a
+			href={ templ.SafeURL(p.BasePath + href) }
+			data-nav-key={ key }
+			@click="nav=false"
+			:title="collapsed ? $el.dataset.label : null"
+			data-label={ label }
+			if key == p.Active {
+				aria-current="page"
+			}
+			class="nav-link flex items-center gap-2.5 rounded-control px-2 h-8 text-sm"
+			:class="collapsed && 'md:justify-center md:px-0'"
+		>
+			{ children... }
+			<span class="flex-1 truncate" x-show="!collapsed">{ label }</span>
+		</a>
+	}
 }
 
 // topbar is only shown below md: the menu button and logo. On desktop the

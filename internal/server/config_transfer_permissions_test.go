@@ -70,7 +70,12 @@ func TestConfigurationTransferRequiresSuperAdmin(t *testing.T) {
 				req.Header.Set("Content-Type", contentType)
 				if tc.web {
 					req.Header.Set("Origin", "http://example.com")
+					if role == "monitor writer" {
+						// Exercise a surviving session after its read permission is removed.
+						srv.cfg.Auth.APIKeys[len(srv.cfg.Auth.APIKeys)-1].Permissions = []string{"monitors.read", "monitors.write"}
+					}
 					req.AddCookie(webLoginCookie(t, srv, "transfer-key"))
+					srv.cfg.Auth.APIKeys[len(srv.cfg.Auth.APIKeys)-1].Permissions = key.Permissions
 				} else {
 					req.Header.Set("X-API-Key", "transfer-key")
 				}

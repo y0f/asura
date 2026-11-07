@@ -90,8 +90,17 @@ func TestWebReadPermissions(t *testing.T) {
 				w := httptest.NewRecorder()
 				srv.ServeHTTP(&cancelOnFlush{w, cancel}, req.WithContext(ctx))
 				cancel()
-				if !allowed && w.Code != http.StatusForbidden {
-					t.Errorf("without %s: status = %d, want 403", tc.perm, w.Code)
+				if !allowed {
+					want := http.StatusForbidden
+					if tc.path == "/" {
+						want = http.StatusSeeOther
+						if got := w.Header().Get("Location"); got != "/incidents" {
+							t.Errorf("home without monitor access redirects to %q, want /incidents", got)
+						}
+					}
+					if w.Code != want {
+						t.Errorf("without %s: status = %d, want %d", tc.perm, w.Code, want)
+					}
 				}
 				if allowed && w.Code != http.StatusOK && w.Code != http.StatusNotFound && (w.Code != http.StatusSeeOther || w.Header().Get("Location") == "/login") {
 					t.Errorf("with %s: unexpected status %d, location %q", tc.perm, w.Code, w.Header().Get("Location"))
