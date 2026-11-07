@@ -1,4 +1,4 @@
-function notifChannels(basePath) {
+function notifChannels(basePath, eventTypes) {
     return {
         basePath: basePath,
         showForm: false,
@@ -7,7 +7,10 @@ function notifChannels(basePath) {
         originalType: '',
         advancedNotifSettings: false,
         formData: { name: '', type: 'webhook', enabled: true, settings_json: '{}' },
-        events: { created: true, resolved: true, acknowledged: false, reminder: true, changed: false, certChanged: false },
+        allEvents: false,
+        eventTypes: eventTypes,
+        selectedEvents: ['incident.created', 'incident.resolved', 'incident.reminder'],
+        get unknownEvents() { return this.selectedEvents.filter(event => !this.eventTypes.includes(event)); },
         webhook: { url: '', secret: '' },
         telegram: { bot_token: '', chat_id: '' },
         discord: { webhook_url: '' },
@@ -36,7 +39,8 @@ function notifChannels(basePath) {
             this.originalType = '';
             this.advancedNotifSettings = false;
             this.formData = { name: '', type: 'webhook', enabled: true, settings_json: '{}' };
-            this.events = { created: true, resolved: true, acknowledged: false, reminder: true, changed: false, certChanged: false };
+            this.allEvents = false;
+            this.selectedEvents = ['incident.created', 'incident.resolved', 'incident.reminder'];
             this.webhook = { url: '', secret: '' };
             this.telegram = { bot_token: '', chat_id: '' };
             this.discord = { webhook_url: '' };
@@ -60,17 +64,8 @@ function notifChannels(basePath) {
             this.formData.type = ch.type;
             this.formData.enabled = ch.enabled;
             this.formData.settings_json = JSON.stringify(ch.settings || {});
-            this.events = { created: false, resolved: false, acknowledged: false, reminder: false, changed: false, certChanged: false };
-            if (ch.events) {
-                ch.events.forEach(e => {
-                    if (e === 'incident.created') this.events.created = true;
-                    if (e === 'incident.resolved') this.events.resolved = true;
-                    if (e === 'incident.acknowledged') this.events.acknowledged = true;
-                    if (e === 'incident.reminder') this.events.reminder = true;
-                    if (e === 'content.changed') this.events.changed = true;
-                    if (e === 'cert.changed') this.events.certChanged = true;
-                });
-            }
+            this.allEvents = !ch.events || ch.events.length === 0;
+            this.selectedEvents = [...(ch.events || [])];
             let s = ch.settings || {};
             switch (ch.type) {
                 case 'webhook': this.webhook = { url: s.url || '', secret: s.secret || '' }; break;

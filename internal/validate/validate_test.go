@@ -132,6 +132,15 @@ func TestValidateNotificationChannel(t *testing.T) {
 			"",
 		},
 		{
+			"emitted SLA, escalation and maintenance events",
+			&storage.NotificationChannel{
+				Name: "Hook", Type: "webhook",
+				Settings: json.RawMessage(`{"url":"https://example.com"}`),
+				Events:   []string{"sla.breach", "incident.escalated", "maintenance.started", "maintenance.ended"},
+			},
+			"",
+		},
+		{
 			"empty name",
 			&storage.NotificationChannel{Name: "", Type: "webhook", Settings: json.RawMessage("{}")},
 			"name is required",

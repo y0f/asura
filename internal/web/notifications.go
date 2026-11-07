@@ -30,6 +30,11 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
 	ch := h.parseNotificationForm(r)
+	if err := notificationEventSelectionError(r, ch.Events); err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/notifications")
+		return
+	}
 
 	if err := notificationJSONError(r); err != nil {
 		h.setError(w, err.Error())
@@ -61,6 +66,11 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	ch := h.parseNotificationForm(r)
 	ch.ID = id
+	if err := notificationEventSelectionError(r, ch.Events); err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/notifications")
+		return
+	}
 
 	// Reject a bad JSON editor submission before merging, otherwise the stored
 	// secrets alone would pass "settings is required" and wipe everything else.
@@ -218,6 +228,16 @@ func (h *Handler) parseNotificationForm(r *http.Request) *storage.NotificationCh
 }
 
 func parseNotificationEvents(r *http.Request) []string {
+	if r.FormValue("event_mode") == "all" {
+		return nil
+	}
+	if r.FormValue("event_mode") == "selected" {
+		// Keep every submitted value: shared validation rejects unsupported
+		// selections instead of silently broadening the channel to all events.
+		return r.Form["event_types"]
+	}
+	// Keep legacy submissions compatible; the current form always supplies a
+	// mode, so an unchecked selection can never implicitly mean all events.
 	var events []string
 	eventKeys := []string{
 		"event_incident_created",
@@ -252,6 +272,17 @@ func parseNotificationEvents(r *http.Request) []string {
 		}
 	}
 	return events
+}
+
+func notificationEventSelectionError(r *http.Request, events []string) error {
+	mode := r.FormValue("event_mode")
+	if mode != "" && mode != "all" && mode != "selected" {
+		return fmt.Errorf("invalid event selection mode")
+	}
+	if mode == "selected" && len(events) == 0 {
+		return fmt.Errorf("select at least one event or choose all events")
+	}
+	return nil
 }
 
 func assembleNotificationSettings(r *http.Request, chType string) json.RawMessage {

@@ -2,11 +2,12 @@
 
 <p>13 notification channels. Each one can be scoped to specific event types and routed to specific monitors. All delivery attempts are recorded in notification history.</p>
 
-<p>Events: <code>incident.created</code>, <code>incident.acknowledged</code>, <code>incident.resolved</code>, <code>incident.reminder</code>, <code>incident.escalated</code>, <code>content.changed</code>, <code>cert.changed</code>, <code>sla.breach</code>, <code>maintenance.started</code>, <code>maintenance.ended</code></p>
+<p>Events: <code>incident.created</code>, <code>incident.acknowledged</code>, <code>incident.resolved</code>, <code>incident.reminder</code>, <code>incident.escalated</code>, <code>content.changed</code>, <code>cert.changed</code>, <code>sla.breach</code>, <code>maintenance.started</code>, <code>maintenance.ended</code>. Maintenance events are sent when a maintenance window is toggled manually in the web interface.</p>
 
 <p>The <code>incident.reminder</code> event fires when a monitor's <code>resend_interval</code> elapses while an incident is still open, re-alerting channels that subscribe to it.</p>
 
 <p>A channel with no event filter set receives <strong>all</strong> event types. To limit a channel to specific events, set its event list — only the listed events are then delivered.</p>
+<p>In the web form, choose <strong>All events</strong> explicitly or select at least one event. Editing a channel preserves its existing selection, including escalation and SLA alerts. Choosing all events also includes event types added in future versions.</p>
 
 <h2>Webhook</h2>
 

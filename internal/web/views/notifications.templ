@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/internal/validate"
 )
 
 type NotificationListParams struct {
@@ -12,7 +13,7 @@ type NotificationListParams struct {
 }
 
 func notifChannelsXData(basePath string) string {
-	return "notifChannels('" + JSEscapeString(basePath) + "')"
+	return "notifChannels('" + JSEscapeString(basePath) + "', " + ToJSON(validate.NotificationEventTypes()) + ")"
 }
 
 func eventLabel(ev string) string {
@@ -25,6 +26,14 @@ func eventLabel(ev string) string {
 		return "Incident acknowledged"
 	case "incident.reminder":
 		return "Reminder"
+	case "incident.escalated":
+		return "Incident escalated"
+	case "sla.breach":
+		return "SLA budget exhausted"
+	case "maintenance.started":
+		return "Maintenance started"
+	case "maintenance.ended":
+		return "Maintenance ended"
 	case "content.changed":
 		return "Content changed"
 	case "cert.changed":
@@ -167,41 +176,36 @@ templ NotificationListPage(p NotificationListParams) {
 						@notifMatrixFields()
 						@notifGotifyFields()
 					</div>
-					<div>
-						<div class="form-label">Send on</div>
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" name="event_incident_created" :checked="events.created" class="form-checkbox"/>
-								<span class="text-sm text-muted-light">Incident opened</span>
-							</label>
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" name="event_incident_resolved" :checked="events.resolved" class="form-checkbox"/>
-								<span class="text-sm text-muted-light">Incident resolved</span>
-							</label>
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" name="event_incident_acknowledged" :checked="events.acknowledged" class="form-checkbox"/>
-								<span class="text-sm text-muted-light">Incident acknowledged</span>
-							</label>
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" name="event_incident_reminder" :checked="events.reminder" class="form-checkbox"/>
-								<span class="text-sm text-muted-light">Reminder while open</span>
-							</label>
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" name="event_content_changed" :checked="events.changed" class="form-checkbox"/>
-								<span class="text-sm text-muted-light">Content changed</span>
-							</label>
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" name="event_cert_changed" :checked="events.certChanged" class="form-checkbox"/>
-								<span class="text-sm text-muted-light">Certificate changed</span>
-							</label>
-						</div>
-					</div>
+					<fieldset class="space-y-3">
+						<legend class="form-label">Send on</legend>
+						<input type="hidden" name="event_mode" :value="allEvents ? 'all' : 'selected'"/>
+						<label class="flex items-center gap-2 cursor-pointer">
+							<input type="checkbox" x-model="allEvents" class="form-checkbox"/>
+							<span class="text-sm text-white">All events, including events added in future versions</span>
+						</label>
+						<fieldset :disabled="allEvents" x-show="!allEvents" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+							<legend class="sr-only">Selected events</legend>
+							for _, event := range validate.NotificationEventTypes() {
+								<label class="flex items-center gap-2 cursor-pointer">
+									<input type="checkbox" name="event_types" value={ event } x-model="selectedEvents" class="form-checkbox"/>
+									<span class="text-sm text-muted-light">{ eventLabel(event) }</span>
+								</label>
+							}
+							<template x-for="event in unknownEvents" :key="event">
+								<label class="flex items-center gap-2 cursor-pointer sm:col-span-2">
+									<input type="checkbox" name="event_types" :value="event" x-model="selectedEvents" class="form-checkbox"/>
+									<span class="text-sm text-muted-light" x-text="event + ' (unsupported; remove to save)' "></span>
+								</label>
+							</template>
+						</fieldset>
+						<p x-show="!allEvents && !selectedEvents.length" role="status" class="form-hint">Select at least one event or choose all events.</p>
+					</fieldset>
 					<label class="flex items-center gap-2 cursor-pointer">
 						<input type="checkbox" name="enabled" :checked="formData.enabled" class="form-checkbox"/>
 						<span class="text-sm text-muted-light">Enabled</span>
 					</label>
 					<div class="flex items-center gap-2 pt-1">
-						<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create channel'"></button>
+						<button type="submit" :disabled="!allEvents && !selectedEvents.length" class="btn-primary" x-text="editId ? 'Save changes' : 'Create channel'"></button>
 						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
 					</div>
 				</form>

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/y0f/asura/internal/assertion"
@@ -39,14 +40,15 @@ var _validNotificationTypes = map[string]bool{
 	"googlechat": true, "matrix": true, "gotify": true,
 }
 
-var _validNotificationEvents = map[string]bool{
-	"incident.created":      true,
-	"incident.acknowledged": true,
-	"incident.resolved":     true,
-	"incident.reminder":     true,
-	"incident.escalated":    true,
-	"content.changed":       true,
-	"cert.changed":          true,
+// NotificationEventTypes lists selectable events in display order. Validation,
+// channel forms and history filters share this contract. Test notifications are
+// sent explicitly and do not participate in channel event filtering.
+func NotificationEventTypes() []string {
+	return []string{
+		"incident.created", "incident.acknowledged", "incident.resolved",
+		"incident.reminder", "incident.escalated", "content.changed",
+		"cert.changed", "sla.breach", "maintenance.started", "maintenance.ended",
+	}
 }
 
 func ValidateEscalationPolicy(ep *storage.EscalationPolicy) error {
@@ -266,7 +268,7 @@ func ValidateNotificationChannel(ch *storage.NotificationChannel) error {
 		return fmt.Errorf("settings is required")
 	}
 	for _, ev := range ch.Events {
-		if !_validNotificationEvents[ev] {
+		if !slices.Contains(NotificationEventTypes(), ev) {
 			return fmt.Errorf("invalid event: %s", ev)
 		}
 	}

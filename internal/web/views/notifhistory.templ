@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/internal/validate"
 )
 
 type NotificationHistoryParams struct {
@@ -38,8 +39,6 @@ func (p NotificationHistoryParams) pageHref(page int) string {
 	return p.BasePath + "/notifications/history?" + q.Encode()
 }
 
-var notificationEventTypes = []string{"incident.created", "incident.resolved", "incident.acknowledged", "incident.reminder", "content.changed", "cert.changed", "test"}
-
 templ NotificationHistoryPage(p NotificationHistoryParams) {
 	@Layout(p.LayoutParams) {
 		@PageHeader(PageHeaderParams{Title: "Notification History", Subtitle: "Every notification Asura tried to send, and whether it was delivered.", BackHref: p.BasePath + "/notifications", BackLabel: "Notifications"})
@@ -57,9 +56,10 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 			</select>
 			<select name="event_type" class="form-select-sm" onchange="this.form.submit()" aria-label="Event">
 				<option value="">All events</option>
-				for _, et := range notificationEventTypes {
+				for _, et := range validate.NotificationEventTypes() {
 					<option value={ et } selected?={ p.Filter.EventType == et }>{ eventLabel(et) }</option>
 				}
+				<option value="test" selected?={ p.Filter.EventType == "test" }>Test</option>
 			</select>
 			<noscript><button type="submit" class="btn-secondary btn-sm">Apply</button></noscript>
 			if p.Filter.ChannelID != 0 || p.Filter.Status != "" || p.Filter.EventType != "" {
