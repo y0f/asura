@@ -96,41 +96,6 @@ type APIKeyConfig struct {
 	TOTP        bool     `yaml:"totp,omitempty"`
 }
 
-var AllPermissions = []string{
-	"monitors.read", "monitors.write",
-	"incidents.read", "incidents.write",
-	"notifications.read", "notifications.write",
-	"escalation_policies.read", "escalation_policies.write",
-	"maintenance.read", "maintenance.write",
-	"metrics.read",
-}
-
-func (k *APIKeyConfig) HasPermission(perm string) bool {
-	if k.SuperAdmin {
-		return true
-	}
-	for _, p := range k.Permissions {
-		if p == perm {
-			return true
-		}
-	}
-	return false
-}
-
-func (k *APIKeyConfig) PermissionMap() map[string]bool {
-	m := make(map[string]bool)
-	if k.SuperAdmin {
-		for _, p := range AllPermissions {
-			m[p] = true
-		}
-		return m
-	}
-	for _, p := range k.Permissions {
-		m[p] = true
-	}
-	return m
-}
-
 type MonitorConfig struct {
 	Workers                int           `yaml:"workers"`
 	DefaultTimeout         time.Duration `yaml:"default_timeout"`
@@ -349,12 +314,10 @@ func validateAPIKeys(keys []APIKeyConfig) error {
 			key.SuperAdmin = true
 			key.Role = ""
 		} else if key.Role == "readonly" {
-			key.Permissions = []string{
-				"monitors.read", "incidents.read",
-				"notifications.read", "escalation_policies.read",
-				"maintenance.read", "metrics.read",
-			}
+			key.Permissions = ReadPermissions()
 			key.Role = ""
+		} else if key.Role != "" {
+			return fmt.Errorf("auth.api_keys[%d] invalid role: %s", i, key.Role)
 		}
 		if !key.SuperAdmin && len(key.Permissions) == 0 {
 			return fmt.Errorf("auth.api_keys[%d] must have super_admin or permissions", i)
