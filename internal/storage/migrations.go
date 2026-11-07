@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 37
+const schemaVersion = 38
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -345,6 +345,7 @@ CREATE TABLE IF NOT EXISTS on_call_rotations (
 	channel_ids         TEXT    NOT NULL DEFAULT '[]',
 	period              TEXT    NOT NULL DEFAULT 'daily',
 	current_index       INTEGER NOT NULL DEFAULT 0,
+	period_started_at   TEXT NOT NULL DEFAULT '',
 	override_channel_id INTEGER DEFAULT NULL,
 	override_until      TEXT,
 	created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -661,5 +662,10 @@ ALTER TABLE check_result_daily ADD COLUMN sum_rt INTEGER;`,
 ALTER TABLE incidents ADD COLUMN escalation_pending INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX idx_incidents_pending ON incidents(id)
 WHERE status IN ('open','acknowledged') AND (announcement_pending=1 OR escalation_pending=1);`,
+	},
+	{
+		version: 38,
+		sql: `ALTER TABLE on_call_rotations ADD COLUMN period_started_at TEXT NOT NULL DEFAULT '';
+UPDATE on_call_rotations SET period_started_at=updated_at;`,
 	},
 }

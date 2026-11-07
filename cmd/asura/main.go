@@ -323,6 +323,19 @@ func runBaselineWorker(ctx context.Context, store storage.Store, logger *slog.Lo
 }
 
 func runRotationAdvancer(ctx context.Context, store storage.Store, logger *slog.Logger) {
+	advance := func() {
+		rotations, err := store.ListOnCallRotations(ctx)
+		if err != nil {
+			logger.Error("rotation advancer: list", "error", err)
+			return
+		}
+		for _, rot := range rotations {
+			if err := store.AdvanceRotation(ctx, rot.ID); err != nil {
+				logger.Error("rotation advancer: advance", "id", rot.ID, "error", err)
+			}
+		}
+	}
+	advance()
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -330,16 +343,7 @@ func runRotationAdvancer(ctx context.Context, store storage.Store, logger *slog.
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rotations, err := store.ListOnCallRotations(ctx)
-			if err != nil {
-				logger.Error("rotation advancer: list", "error", err)
-				continue
-			}
-			for _, rot := range rotations {
-				if err := store.AdvanceRotation(ctx, rot.ID); err != nil {
-					logger.Error("rotation advancer: advance", "id", rot.ID, "error", err)
-				}
-			}
+			advance()
 		}
 	}
 }

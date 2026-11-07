@@ -195,7 +195,7 @@ type Store interface {
 	CreateOnCallRotation(ctx context.Context, r *OnCallRotation) error
 	GetOnCallRotation(ctx context.Context, id int64) (*OnCallRotation, error)
 	ListOnCallRotations(ctx context.Context) ([]*OnCallRotation, error)
-	UpdateOnCallRotation(ctx context.Context, r *OnCallRotation) error
+	UpdateOnCallRotation(ctx context.Context, id int64, edit func(*OnCallRotation) error) (*OnCallRotation, error)
 	DeleteOnCallRotation(ctx context.Context, id int64) error
 	AdvanceRotation(ctx context.Context, id int64) error
 

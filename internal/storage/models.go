@@ -70,6 +70,7 @@ type OnCallRotation struct {
 	ChannelIDs        []int64    `json:"channel_ids"`
 	Period            string     `json:"period"` // daily, weekly
 	CurrentIndex      int        `json:"current_index"`
+	PeriodStartedAt   time.Time  `json:"period_started_at"`
 	OverrideChannelID *int64     `json:"override_channel_id,omitempty"`
 	OverrideUntil     *time.Time `json:"override_until,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`

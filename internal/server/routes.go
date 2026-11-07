@@ -230,6 +230,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET "+s.p("/api/v1/on-call/current"), apiPerm(s.api.GetCurrentOnCall, "on_call.read"))
 	mux.Handle("POST "+s.p("/api/v1/on-call"), apiPerm(s.api.CreateOnCallRotation, "on_call.create"))
 	mux.Handle("PUT "+s.p("/api/v1/on-call/{id}"), apiPerm(s.api.UpdateOnCallRotation, "on_call.update"))
+	mux.Handle("POST "+s.p("/api/v1/on-call/{id}/override"), apiPerm(s.api.OnCallOverride, "on_call.override"))
 	mux.Handle("DELETE "+s.p("/api/v1/on-call/{id}"), apiPerm(s.api.DeleteOnCallRotation, "on_call.delete"))
 
 	// Agent admin endpoints (API key auth)

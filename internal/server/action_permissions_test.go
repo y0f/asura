@@ -40,8 +40,12 @@ func permissionRoutes() []permissionRoute {
 		{"maintenance", "maintenance"}, {"groups", "groups"}, {"tags", "tags"}, {"proxies", "proxies"},
 		{"status_pages", "status-pages"}, {"on_call", "on-call"}, {"agents", "agents"},
 	} {
-		add(false, "POST", "/api/v1/"+resource.path, resource.scope+".create")
-		add(true, "POST", "/"+resource.path, resource.scope+".create")
+		createScopes := []string{resource.scope + ".create"}
+		if resource.scope == "on_call" {
+			createScopes = append(createScopes, "notifications.read")
+		}
+		add(false, "POST", "/api/v1/"+resource.path, createScopes...)
+		add(true, "POST", "/"+resource.path, createScopes...)
 		add(false, "DELETE", "/api/v1/"+resource.path+"/999", resource.scope+".delete")
 		add(true, "POST", "/"+resource.path+"/999/delete", resource.scope+".delete")
 		if resource.scope != "agents" {
@@ -77,6 +81,7 @@ func permissionRoutes() []permissionRoute {
 		add(true, "POST", "/"+action.path, action.scope)
 	}
 	add(true, "POST", "/on-call/999/override", "on_call.override")
+	add(false, "POST", "/api/v1/on-call/999/override", "on_call.override")
 	for _, resource := range []struct{ scope, path string }{
 		{"monitors", "monitors/999"}, {"monitors", "monitors/999/checks"}, {"monitors", "monitors/999/metrics"},
 		{"monitors", "monitors/999/changes"}, {"monitors", "monitors/999/chart"}, {"monitors", "overview"},

@@ -43,6 +43,11 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 			}
 		}
 	}
+	if v < 38 {
+		if _, err := s.writeDB.Exec("ALTER TABLE on_call_rotations DROP COLUMN period_started_at"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if downgrade != nil {
 		downgrade(s)
 	}
