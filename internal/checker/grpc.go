@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"time"
@@ -20,6 +21,8 @@ import (
 type GRPCChecker struct {
 	AllowPrivate bool
 }
+
+const maxGRPCResponseBytes = 4096
 
 func (c *GRPCChecker) Type() string { return "grpc" }
 
@@ -62,7 +65,13 @@ func (c *GRPCChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	req.Header.Set("Content-Type", "application/grpc")
 	req.Header.Set("TE", "trailers")
 
-	client := &http.Client{Transport: transport, Timeout: timeout}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	// Each check builds its own transport; release its pooled connection (and
 	// readLoop goroutine) once the response body is closed.
 	defer client.CloseIdleConnections()
@@ -80,7 +89,14 @@ func (c *GRPCChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxGRPCResponseBytes+1))
+	elapsed = time.Since(start).Milliseconds()
+	if err != nil {
+		return grpcFailure(resp.StatusCode, elapsed, "gRPC response read failed: %v", err), nil
+	}
+	if len(body) > maxGRPCResponseBytes {
+		return grpcFailure(resp.StatusCode, elapsed, "gRPC response exceeds %d bytes", maxGRPCResponseBytes), nil
+	}
 	return evaluateGRPCResponse(resp, body, elapsed)
 }
 
@@ -115,35 +131,43 @@ func grpcTransport(settings storage.GRPCSettings, target string, dialFn func(con
 }
 
 func evaluateGRPCResponse(resp *http.Response, body []byte, elapsed int64) (*Result, error) {
-	grpcStatus := resp.Trailer.Get("grpc-status")
-	if grpcStatus == "" {
-		grpcStatus = resp.Header.Get("grpc-status")
+	if resp.StatusCode != http.StatusOK {
+		return grpcFailure(resp.StatusCode, elapsed, "gRPC HTTP status: %d", resp.StatusCode), nil
+	}
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || (mediaType != "application/grpc" && mediaType != "application/grpc+proto") {
+		return grpcFailure(resp.StatusCode, elapsed, "invalid gRPC content type: %q", resp.Header.Get("Content-Type")), nil
 	}
 
-	if grpcStatus != "" && grpcStatus != "0" {
-		grpcMsg := resp.Trailer.Get("grpc-message")
-		if grpcMsg == "" {
-			grpcMsg = resp.Header.Get("grpc-message")
+	statusHeaders := resp.Trailer
+	if len(resp.Header.Values("Grpc-Status")) > 0 {
+		// Status in the initial headers is valid only for a trailers-only response.
+		if len(body) != 0 || len(resp.Trailer.Values("Grpc-Status")) != 0 {
+			return grpcFailure(resp.StatusCode, elapsed, "unexpected gRPC status in response headers"), nil
 		}
-		return &Result{
-			Status:       "down",
-			ResponseTime: elapsed,
-			StatusCode:   resp.StatusCode,
-			Message:      fmt.Sprintf("gRPC error: status=%s message=%s", grpcStatus, grpcMsg),
-		}, nil
+		statusHeaders = resp.Header
+	}
+	statuses := statusHeaders.Values("Grpc-Status")
+	if len(statuses) != 1 || statuses[0] == "" {
+		return grpcFailure(resp.StatusCode, elapsed, "missing or repeated gRPC status"), nil
+	}
+	if statuses[0] != "0" {
+		return grpcFailure(resp.StatusCode, elapsed, "gRPC error: status=%s message=%s", statuses[0], statusHeaders.Get("Grpc-Message")), nil
 	}
 
 	payload, err := decodeGRPCFrame(body)
 	if err != nil {
-		return &Result{
-			Status:       "down",
-			ResponseTime: elapsed,
-			StatusCode:   resp.StatusCode,
-			Message:      fmt.Sprintf("invalid gRPC frame: %v", err),
-		}, nil
+		return grpcFailure(resp.StatusCode, elapsed, "invalid gRPC frame: %v", err), nil
 	}
+	status, err := decodeHealthResponse(payload)
+	if err != nil {
+		return grpcFailure(resp.StatusCode, elapsed, "invalid gRPC health response: %v", err), nil
+	}
+	return grpcHealthResult(status, resp.StatusCode, elapsed), nil
+}
 
-	return grpcHealthResult(decodeHealthResponse(payload), resp.StatusCode, elapsed), nil
+func grpcFailure(statusCode int, elapsed int64, format string, args ...any) *Result {
+	return &Result{Status: "down", ResponseTime: elapsed, StatusCode: statusCode, Message: fmt.Sprintf(format, args...)}
 }
 
 func grpcHealthResult(status int32, statusCode int, elapsed int64) *Result {
@@ -174,11 +198,14 @@ func decodeGRPCFrame(data []byte) ([]byte, error) {
 	if len(data) < 5 {
 		return nil, fmt.Errorf("frame too short: %d bytes", len(data))
 	}
-	length := binary.BigEndian.Uint32(data[1:5])
-	if uint32(len(data)-5) < length {
-		return nil, fmt.Errorf("frame truncated: want %d, have %d", length, len(data)-5)
+	if data[0] != 0 {
+		return nil, fmt.Errorf("unsupported compression flag: %d", data[0])
 	}
-	return data[5 : 5+length], nil
+	length := binary.BigEndian.Uint32(data[1:5])
+	if uint64(len(data)-5) != uint64(length) {
+		return nil, fmt.Errorf("unary frame length: want %d, have %d", length, len(data)-5)
+	}
+	return data[5:], nil
 }
 
 func encodeHealthRequest(service string) []byte {
@@ -188,43 +215,87 @@ func encodeHealthRequest(service string) []byte {
 	serviceBytes := []byte(service)
 	buf := make([]byte, 0, 2+len(serviceBytes))
 	buf = append(buf, 0x0a) // field 1, wire type 2 (length-delimited)
-	buf = append(buf, byte(len(serviceBytes)))
+	buf = binary.AppendUvarint(buf, uint64(len(serviceBytes)))
 	buf = append(buf, serviceBytes...)
 	return buf
 }
 
-func decodeHealthResponse(data []byte) int32 {
-	if len(data) == 0 {
-		return 1 // empty response = SERVING
-	}
-	for i := 0; i < len(data); {
-		if i >= len(data) {
-			break
+func decodeHealthResponse(data []byte) (int32, error) {
+	var status int32 // Omitted proto3 enum fields have their zero value (UNKNOWN).
+	for len(data) > 0 {
+		tag, n := binary.Uvarint(data)
+		if n <= 0 || tag>>3 == 0 || tag>>3 > 1<<29-1 {
+			return 0, fmt.Errorf("invalid protobuf field tag")
 		}
-		tag := data[i]
-		fieldNum := tag >> 3
-		wireType := tag & 0x07
-		i++
-		if fieldNum == 1 && wireType == 0 {
-			if i < len(data) {
-				return int32(data[i])
+		data = data[n:]
+		if tag>>3 == 1 {
+			if tag&7 != 0 {
+				return 0, fmt.Errorf("invalid health status wire type")
 			}
+			value, n := binary.Uvarint(data)
+			if n <= 0 || int64(value) < -1<<31 || int64(value) > 1<<31-1 {
+				return 0, fmt.Errorf("invalid health status varint")
+			}
+			status = int32(value) // For repeated singular fields, the last value wins.
+			data = data[n:]
+			continue
 		}
-		// skip unknown fields
-		switch wireType {
-		case 0: // varint
-			for i < len(data) && data[i]&0x80 != 0 {
-				i++
-			}
-			i++
-		case 2: // length-delimited
-			if i < len(data) {
-				l := int(data[i])
-				i += 1 + l
-			}
-		default:
-			return 0
+		var err error
+		data, err = skipProtoField(data, tag, 0)
+		if err != nil {
+			return 0, err
 		}
 	}
-	return 0
+	return status, nil
+}
+
+func skipProtoField(data []byte, tag uint64, depth int) ([]byte, error) {
+	var size uint64
+	switch tag & 7 {
+	case 0:
+		_, n := binary.Uvarint(data)
+		if n <= 0 {
+			return nil, fmt.Errorf("invalid protobuf varint")
+		}
+		size = uint64(n)
+	case 1:
+		size = 8
+	case 2:
+		length, n := binary.Uvarint(data)
+		if n <= 0 {
+			return nil, fmt.Errorf("invalid protobuf length")
+		}
+		data, size = data[n:], length
+	case 3:
+		if depth >= 32 {
+			return nil, fmt.Errorf("protobuf groups nested too deeply")
+		}
+		for len(data) > 0 {
+			next, n := binary.Uvarint(data)
+			if n <= 0 || next>>3 == 0 || next>>3 > 1<<29-1 {
+				return nil, fmt.Errorf("invalid protobuf group tag")
+			}
+			data = data[n:]
+			if next&7 == 4 {
+				if next>>3 != tag>>3 {
+					return nil, fmt.Errorf("mismatched protobuf end group")
+				}
+				return data, nil
+			}
+			var err error
+			data, err = skipProtoField(data, next, depth+1)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return nil, fmt.Errorf("unterminated protobuf group")
+	case 5:
+		size = 4
+	default:
+		return nil, fmt.Errorf("invalid protobuf wire type: %d", tag&7)
+	}
+	if size > uint64(len(data)) {
+		return nil, fmt.Errorf("truncated protobuf field")
+	}
+	return data[size:], nil
 }
