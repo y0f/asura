@@ -395,7 +395,7 @@ func (s *SQLiteStore) ListCheckResults(ctx context.Context, monitorID int64, p P
 	offset := (p.Page - 1) * p.PerPage
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT id, monitor_id, status, response_time, status_code, message, body_hash, cert_expiry, dns_records, created_at
-		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		monitorID, p.PerPage, offset)
 	if err != nil {
 		return nil, err
@@ -438,7 +438,7 @@ func (s *SQLiteStore) GetLatestCheckResult(ctx context.Context, monitorID int64)
 	var createdAt string
 	err := s.readDB.QueryRowContext(ctx,
 		`SELECT id, monitor_id, status, response_time, status_code, message, body, body_hash, cert_expiry, dns_records, created_at
-		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC LIMIT 1`, monitorID).
+		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT 1`, monitorID).
 		Scan(&r.ID, &r.MonitorID, &r.Status, &r.ResponseTime, &r.StatusCode,
 			&r.Message, &r.Body, &r.BodyHash, &certExp, &r.DNSRecords, &createdAt)
 	if err != nil {
@@ -459,7 +459,7 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 	// ROW_NUMBER() query over all monitors would number every retained row.
 	stmt, err := s.readDB.PrepareContext(ctx,
 		`SELECT status, response_time FROM check_results
-		 WHERE monitor_id=? ORDER BY created_at DESC LIMIT ?`)
+		 WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}

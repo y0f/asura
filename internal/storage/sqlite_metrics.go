@@ -96,7 +96,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 			`SELECT created_at, response_time, status
 			 FROM check_results
 			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-			 ORDER BY created_at ASC`,
+			 ORDER BY created_at ASC, id ASC`,
 			monitorID, fromStr, toStr)
 	} else {
 		bucketSecs := int64(to.Sub(from).Seconds()) / int64(maxPoints)
