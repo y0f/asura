@@ -373,6 +373,16 @@ func ValidateMaintenanceWindow(mw *storage.MaintenanceWindow) error {
 	if strings.TrimSpace(mw.Name) == "" {
 		return fmt.Errorf("name is required")
 	}
+	seenIDs := make(map[int64]bool, len(mw.MonitorIDs))
+	for _, id := range mw.MonitorIDs {
+		if id <= 0 {
+			return fmt.Errorf("monitor_ids must contain positive monitor IDs")
+		}
+		if seenIDs[id] {
+			return fmt.Errorf("monitor_ids contains duplicate monitor ID %d", id)
+		}
+		seenIDs[id] = true
+	}
 	if mw.Recurring != "manual" {
 		if mw.StartTime.IsZero() {
 			return fmt.Errorf("start_time is required")

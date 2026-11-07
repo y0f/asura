@@ -28,7 +28,12 @@ func (h *Handler) Maintenance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) MaintenanceCreate(w http.ResponseWriter, r *http.Request) {
-	mw := h.parseMaintenanceForm(r)
+	mw, err := h.parseMaintenanceForm(r)
+	if err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/maintenance")
+		return
+	}
 	if err := validate.ValidateMaintenanceWindow(mw); err != nil {
 		h.setError(w, err.Error())
 		h.redirect(w, r, "/maintenance")
@@ -50,7 +55,12 @@ func (h *Handler) MaintenanceUpdate(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/maintenance")
 		return
 	}
-	mw := h.parseMaintenanceForm(r)
+	mw, err := h.parseMaintenanceForm(r)
+	if err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/maintenance")
+		return
+	}
 	mw.ID = id
 	if err := validate.ValidateMaintenanceWindow(mw); err != nil {
 		h.setError(w, err.Error())
@@ -108,8 +118,10 @@ func (h *Handler) MaintenanceToggle(w http.ResponseWriter, r *http.Request) {
 	h.redirect(w, r, "/maintenance")
 }
 
-func (h *Handler) parseMaintenanceForm(r *http.Request) *storage.MaintenanceWindow {
-	r.ParseForm()
+func (h *Handler) parseMaintenanceForm(r *http.Request) (*storage.MaintenanceWindow, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, fmt.Errorf("invalid maintenance form")
+	}
 
 	recurring := r.FormValue("recurring")
 
@@ -131,15 +143,23 @@ func (h *Handler) parseMaintenanceForm(r *http.Request) *storage.MaintenanceWind
 		Active:    r.FormValue("active") == "on",
 	}
 
-	if ids := r.FormValue("monitor_ids"); ids != "" {
+	for _, ids := range r.Form["monitor_ids"] {
+		if strings.TrimSpace(ids) == "" {
+			continue
+		}
 		for _, idStr := range strings.Split(ids, ",") {
-			if id, err := strconv.ParseInt(strings.TrimSpace(idStr), 10, 64); err == nil {
-				mw.MonitorIDs = append(mw.MonitorIDs, id)
+			id, err := strconv.ParseInt(strings.TrimSpace(idStr), 10, 64)
+			if err != nil || id <= 0 {
+				return nil, fmt.Errorf("monitor_ids must contain positive monitor IDs")
 			}
+			mw.MonitorIDs = append(mw.MonitorIDs, id)
 		}
 	}
+	if r.FormValue("all_monitors") != "" && len(mw.MonitorIDs) != 0 {
+		return nil, fmt.Errorf("choose either all monitors or selected monitor IDs")
+	}
 
-	return mw
+	return mw, nil
 }
 
 func (h *Handler) notifyMaintenance(mw *storage.MaintenanceWindow, action string) {

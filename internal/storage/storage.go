@@ -60,12 +60,12 @@ type Store interface {
 	ListNotificationHistory(ctx context.Context, f NotifHistoryFilter, p Pagination) (*PaginatedResult, error)
 
 	// Maintenance windows
-	CreateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow) error
-	GetMaintenanceWindow(ctx context.Context, id int64) (*MaintenanceWindow, error)
-	ListMaintenanceWindows(ctx context.Context) ([]*MaintenanceWindow, error)
-	UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow) error
-	DeleteMaintenanceWindow(ctx context.Context, id int64) error
-	ToggleMaintenanceWindow(ctx context.Context, id int64, active bool) error
+	CreateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error
+	GetMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) (*MaintenanceWindow, error)
+	ListMaintenanceWindows(ctx context.Context, access ...MonitorAccess) ([]*MaintenanceWindow, error)
+	UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error
+	DeleteMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) error
+	ToggleMaintenanceWindow(ctx context.Context, id int64, active bool, access ...MonitorAccess) error
 	IsMonitorInMaintenance(ctx context.Context, monitorID int64, at time.Time) (bool, error)
 
 	// Content changes
