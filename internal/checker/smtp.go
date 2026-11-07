@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -54,18 +55,19 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 
 	host, _, _ := net.SplitHostPort(target)
 
-	if settings.ExpectBanner != "" {
-		buf := make([]byte, 512)
-		n, rerr := conn.Read(buf)
-		if rerr != nil {
-			return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("failed to read banner: %v", rerr)}, nil
-		}
-		if !strings.Contains(string(buf[:n]), settings.ExpectBanner) {
-			return &Result{Status: "down", ResponseTime: elapsed, Message: "banner mismatch"}, nil
-		}
-		// Replay the consumed greeting so smtp.NewClient still reads the 220 line.
-		conn = &prefixedConn{Conn: conn, r: io.MultiReader(bytes.NewReader(buf[:n]), conn)}
+	reader := bufio.NewReaderSize(conn, 512)
+	greeting, err := readSMTPGreeting(reader)
+	if err != nil {
+		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("failed to read banner: %v", err)}, nil
 	}
+	if settings.ExpectBanner != "" && !strings.Contains(string(greeting), settings.ExpectBanner) {
+		return &Result{Status: "down", ResponseTime: elapsed, Message: "banner mismatch"}, nil
+	}
+	// net/smtp requires a space after a bare reply code.
+	if len(greeting) == 5 || bytes.HasSuffix(greeting, []byte("\r\n220\r\n")) {
+		greeting = append(greeting[:len(greeting)-2], ' ', '\r', '\n')
+	}
+	conn = &prefixedConn{Conn: conn, r: io.MultiReader(bytes.NewReader(greeting), reader)}
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -95,9 +97,30 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	return &Result{Status: "up", ResponseTime: elapsed, Message: "SMTP OK"}, nil
 }
 
-// prefixedConn replays bytes already read from the connection to the next
-// reader, so the SMTP greeting can be inspected for a banner match before
-// smtp.NewClient consumes it.
+func readSMTPGreeting(reader *bufio.Reader) ([]byte, error) {
+	var greeting []byte
+	for {
+		line, err := reader.ReadSlice('\n')
+		if err != nil {
+			return nil, err
+		}
+		if len(line) > 512 || len(greeting)+len(line) > 64*1024 {
+			return nil, fmt.Errorf("SMTP greeting too large")
+		}
+		if len(line) < 5 || !bytes.HasSuffix(line, []byte("\r\n")) || string(line[:3]) != "220" {
+			return nil, fmt.Errorf("invalid SMTP greeting")
+		}
+		greeting = append(greeting, line...)
+		if len(line) == 5 || line[3] == ' ' {
+			return greeting, nil
+		}
+		if line[3] != '-' {
+			return nil, fmt.Errorf("invalid SMTP greeting separator")
+		}
+	}
+}
+
+// prefixedConn replays the inspected greeting and preserves buffered bytes.
 type prefixedConn struct {
 	net.Conn
 	r io.Reader
