@@ -62,16 +62,23 @@ func (c *TCPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 
 	if settings.ExpectData != "" {
 		buf := make([]byte, 4096)
-		n, err := conn.Read(buf)
-		if err != nil {
-			return &Result{
-				Status:       "down",
-				ResponseTime: elapsed,
-				Message:      fmt.Sprintf("read failed: %v", err),
-			}, nil
+		matched := false
+		for total := 0; total < len(buf); {
+			n, err := conn.Read(buf[total:])
+			total += n
+			if strings.Contains(string(buf[:total]), settings.ExpectData) {
+				matched = true
+				break
+			}
+			if err != nil {
+				return &Result{
+					Status:       "down",
+					ResponseTime: elapsed,
+					Message:      fmt.Sprintf("read failed: %v", err),
+				}, nil
+			}
 		}
-		received := string(buf[:n])
-		if !strings.Contains(received, settings.ExpectData) {
+		if !matched {
 			return &Result{
 				Status:       "down",
 				ResponseTime: elapsed,
