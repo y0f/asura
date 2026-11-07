@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type PostgreSQLChecker struct {
@@ -21,8 +21,8 @@ type PostgreSQLChecker struct {
 
 func (c *PostgreSQLChecker) Type() string { return "postgresql" }
 
-func (c *PostgreSQLChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.PostgreSQLSettings
+func (c *PostgreSQLChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.PostgreSQLSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil

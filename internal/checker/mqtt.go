@@ -10,8 +10,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type MQTTChecker struct {
@@ -20,8 +20,8 @@ type MQTTChecker struct {
 
 func (c *MQTTChecker) Type() string { return "mqtt" }
 
-func (c *MQTTChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.MQTTSettings
+func (c *MQTTChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.MQTTSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -110,7 +110,7 @@ func mqttTLSUpgrade(ctx context.Context, conn net.Conn, target string) (net.Conn
 	return tlsConn, nil
 }
 
-func mqttHandshake(conn net.Conn, clientID string, settings storage.MQTTSettings) error {
+func mqttHandshake(conn net.Conn, clientID string, settings model.MQTTSettings) error {
 	if _, err := conn.Write(buildConnectPacket(clientID, settings.Username, settings.Password)); err != nil {
 		return fmt.Errorf("MQTT CONNECT send failed: %w", err)
 	}

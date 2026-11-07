@@ -7,8 +7,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type DNSChecker struct {
@@ -17,8 +17,8 @@ type DNSChecker struct {
 
 func (c *DNSChecker) Type() string { return "dns" }
 
-func (c *DNSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.DNSSettings
+func (c *DNSChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.DNSSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil

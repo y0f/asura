@@ -10,8 +10,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type TLSChecker struct {
@@ -20,8 +20,8 @@ type TLSChecker struct {
 
 func (c *TLSChecker) Type() string { return "tls" }
 
-func (c *TLSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.TLSSettings
+func (c *TLSChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.TLSSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil

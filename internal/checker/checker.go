@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/internal/model"
 )
 
 // Result holds the outcome of a protocol check.
@@ -27,7 +27,7 @@ type Checker interface {
 	// Type returns the protocol type this checker handles.
 	Type() string
 	// Check performs the health check.
-	Check(ctx context.Context, monitor *storage.Monitor) (*Result, error)
+	Check(ctx context.Context, monitor *model.Monitor) (*Result, error)
 }
 
 // Registry holds all registered checkers by type.

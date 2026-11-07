@@ -13,8 +13,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 	"golang.org/x/net/http2"
 )
 
@@ -26,8 +26,8 @@ const maxGRPCResponseBytes = 4096
 
 func (c *GRPCChecker) Type() string { return "grpc" }
 
-func (c *GRPCChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.GRPCSettings
+func (c *GRPCChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.GRPCSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -100,7 +100,7 @@ func (c *GRPCChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	return evaluateGRPCResponse(resp, body, elapsed)
 }
 
-func grpcTransport(settings storage.GRPCSettings, target string, dialFn func(context.Context, string, string) (net.Conn, error)) (string, http.RoundTripper) {
+func grpcTransport(settings model.GRPCSettings, target string, dialFn func(context.Context, string, string) (net.Conn, error)) (string, http.RoundTripper) {
 	if settings.UseTLS {
 		host, _, _ := net.SplitHostPort(target)
 		return "https", &http2.Transport{

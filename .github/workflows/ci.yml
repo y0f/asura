@@ -35,6 +35,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go-version }}
+      - name: Check agent database independence
+        run: bash scripts/test-agent-deps.sh
       - name: Vet
         run: go vet ./...
       - name: Check source vulnerabilities

@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -21,7 +21,7 @@ type ICMPChecker struct {
 
 func (c *ICMPChecker) Type() string { return "icmp" }
 
-func (c *ICMPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
+func (c *ICMPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
 	timeout := time.Duration(monitor.Timeout) * time.Second
 	start := time.Now()
 

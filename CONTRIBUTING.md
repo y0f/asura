@@ -64,6 +64,7 @@ go test -race -count=1 ./...
 bash scripts/test-install.sh
 bash scripts/test-dev.sh
 bash scripts/test-release-tag.sh
+bash scripts/test-agent-deps.sh
 ```
 
 Note: `-race` requires CGO on Windows. CI runs tests on Linux with race detection.

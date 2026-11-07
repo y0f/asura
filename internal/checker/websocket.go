@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type WebSocketChecker struct {
@@ -21,8 +21,8 @@ type WebSocketChecker struct {
 
 func (c *WebSocketChecker) Type() string { return "websocket" }
 
-func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.WebSocketSettings
+func (c *WebSocketChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.WebSocketSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type TCPChecker struct {
@@ -18,8 +18,8 @@ type TCPChecker struct {
 
 func (c *TCPChecker) Type() string { return "tcp" }
 
-func (c *TCPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.TCPSettings
+func (c *TCPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.TCPSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil

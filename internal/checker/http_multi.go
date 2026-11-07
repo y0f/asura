@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type HTTPMultiChecker struct {
@@ -21,8 +21,8 @@ type HTTPMultiChecker struct {
 
 func (c *HTTPMultiChecker) Type() string { return "http_multi" }
 
-func (c *HTTPMultiChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.MultiStepHTTPSettings
+func (c *HTTPMultiChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.MultiStepHTTPSettings
 	if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 		return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
 	}

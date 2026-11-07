@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/internal/model"
 )
 
 var version = "dev"
@@ -205,7 +205,7 @@ func (a *agent) runCycle(ctx context.Context) {
 }
 
 func runCheck(ctx context.Context, c checker.Checker, j job) *result {
-	mon := &storage.Monitor{
+	mon := &model.Monitor{
 		ID:       j.ID,
 		Name:     j.Name,
 		Type:     j.Type,

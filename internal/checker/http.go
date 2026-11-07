@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/y0f/asura/internal/model"
 	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
 )
 
 const maxBodyRead = 1 << 20 // 1MB
@@ -37,8 +37,8 @@ type HTTPChecker struct {
 
 func (c *HTTPChecker) Type() string { return "http" }
 
-func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.HTTPSettings
+func (c *HTTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.HTTPSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -168,7 +168,7 @@ func proxiedRedirectPolicy(next func(*http.Request, []*http.Request) error, allo
 	}
 }
 
-func buildHTTPResult(resp *http.Response, elapsed int64, settings storage.HTTPSettings) (*Result, error) {
+func buildHTTPResult(resp *http.Response, elapsed int64, settings model.HTTPSettings) (*Result, error) {
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
 	if err != nil {
 		return &Result{
@@ -220,7 +220,7 @@ func cacheBustURL(target string) string {
 	return target + sep + "_=" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
-func applyBodyAndHeaders(req *http.Request, settings storage.HTTPSettings) {
+func applyBodyAndHeaders(req *http.Request, settings model.HTTPSettings) {
 	if settings.Body != "" {
 		switch settings.BodyEncoding {
 		case "xml":
@@ -236,7 +236,7 @@ func applyBodyAndHeaders(req *http.Request, settings storage.HTTPSettings) {
 	}
 }
 
-func applyAuthentication(req *http.Request, settings storage.HTTPSettings) {
+func applyAuthentication(req *http.Request, settings model.HTTPSettings) {
 	switch settings.AuthMethod {
 	case "basic":
 		if settings.BasicAuthUser != "" {
@@ -253,7 +253,7 @@ func applyAuthentication(req *http.Request, settings storage.HTTPSettings) {
 	}
 }
 
-func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTTPSettings, allowPrivate bool) (string, error) {
+func fetchOAuth2Token(ctx context.Context, monitorID int64, settings model.HTTPSettings, allowPrivate bool) (string, error) {
 	val, _ := oauth2TokenCache.LoadOrStore(monitorID, &oauth2CachedToken{})
 	cached := val.(*oauth2CachedToken)
 
@@ -324,7 +324,7 @@ func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTT
 	return cached.token, nil
 }
 
-func applyMTLS(tlsCfg *tls.Config, settings storage.HTTPSettings) error {
+func applyMTLS(tlsCfg *tls.Config, settings model.HTTPSettings) error {
 	cert, err := tls.X509KeyPair([]byte(settings.MTLSClientCert), []byte(settings.MTLSClientKey))
 	if err != nil {
 		return fmt.Errorf("parse client cert/key: %w", err)
@@ -346,7 +346,7 @@ func ClearOAuth2TokenCache(monitorID int64) {
 	oauth2TokenCache.Delete(monitorID)
 }
 
-func resolveMaxRedirects(s storage.HTTPSettings) int {
+func resolveMaxRedirects(s model.HTTPSettings) int {
 	if s.MaxRedirects > 0 {
 		return s.MaxRedirects
 	}
