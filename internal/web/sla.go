@@ -10,21 +10,17 @@ import (
 )
 
 func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
-	now := time.Now().UTC()
-	year := now.Year()
-	month := now.Month()
-
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err == nil {
-			year = t.Year()
-			month = t.Month()
-		}
+	year, month, err := sla.ParsePeriod(r.URL.Query().Get("period"), time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
 	if err != nil {
 		h.logger.Error("web: compute sla report", "error", err)
+		http.Error(w, "failed to compute SLA report", http.StatusInternalServerError)
+		return
 	}
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
@@ -41,16 +37,10 @@ func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SLAExport(w http.ResponseWriter, r *http.Request) {
-	now := time.Now().UTC()
-	year := now.Year()
-	month := now.Month()
-
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err == nil {
-			year = t.Year()
-			month = t.Month()
-		}
+	year, month, err := sla.ParsePeriod(r.URL.Query().Get("period"), time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)

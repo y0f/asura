@@ -41,18 +41,10 @@ func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
-	now := time.Now().UTC()
-	year := now.Year()
-	month := now.Month()
-
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid period format, use YYYY-MM")
-			return
-		}
-		year = t.Year()
-		month = t.Month()
+	year, month, err := sla.ParsePeriod(r.URL.Query().Get("period"), time.Now().UTC())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
@@ -82,18 +74,10 @@ func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SLAReportExport(w http.ResponseWriter, r *http.Request) {
-	now := time.Now().UTC()
-	year := now.Year()
-	month := now.Month()
-
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid period format, use YYYY-MM")
-			return
-		}
-		year = t.Year()
-		month = t.Month()
+	year, month, err := sla.ParsePeriod(r.URL.Query().Get("period"), time.Now().UTC())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)

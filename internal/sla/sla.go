@@ -2,11 +2,41 @@ package sla
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/y0f/asura/internal/storage"
 )
+
+var ErrFuturePeriod = errors.New("SLA reports are only available for the current or a past month")
+
+// ParsePeriod validates the common web/API report selector.
+func ParsePeriod(value string, now time.Time) (int, time.Month, error) {
+	period := now.UTC()
+	if value != "" {
+		var err error
+		period, err = time.Parse("2006-01", value)
+		if err != nil || period.Year() < 1 || period.Year() > 9999 {
+			return 0, 0, fmt.Errorf("invalid period format, use YYYY-MM")
+		}
+	}
+	start := time.Date(period.Year(), period.Month(), 1, 0, 0, 0, 0, time.UTC)
+	if start.After(now.UTC()) {
+		return 0, 0, ErrFuturePeriod
+	}
+	return period.Year(), period.Month(), nil
+}
+
+func monthlyBudget(target, uptime float64, totalSecs, elapsedSecs int64) (total, used, remain int64, breached bool) {
+	total = ErrorBudgetSecs(target, totalSecs)
+	used = DowntimeSecs(uptime, elapsedSecs)
+	remain = max(total-used, 0)
+	// Compare before whole-second display rounding. The allowance always
+	// covers the full month, while usage covers only elapsed time.
+	breached = target > 0 && float64(elapsedSecs)*(100-uptime) > float64(totalSecs)*(100-min(target, 100))
+	return
+}
 
 // Status represents the current SLA compliance state.
 type Status struct {
@@ -60,12 +90,7 @@ func computeAt(ctx context.Context, store storage.Store, monitorID int64, target
 
 	totalSecsMonth := int64(monthEnd.Sub(monthStart).Seconds())
 	elapsedSecs := int64(now.Sub(monthStart).Seconds())
-	budgetTotal := ErrorBudgetSecs(target, totalSecsMonth)
-	budgetUsed := DowntimeSecs(uptimeMonth, elapsedSecs)
-	budgetRemain := budgetTotal - budgetUsed
-	if budgetRemain < 0 {
-		budgetRemain = 0
-	}
+	budgetTotal, budgetUsed, budgetRemain, breached := monthlyBudget(target, uptimeMonth, totalSecsMonth, elapsedSecs)
 
 	var budgetRemainPct float64
 	if budgetTotal > 0 {
@@ -84,70 +109,79 @@ func computeAt(ctx context.Context, store storage.Store, monitorID int64, target
 		BudgetRemainSecs:  budgetRemain,
 		BudgetRemainPct:   budgetRemainPct,
 		BudgetRemainHuman: FormatDuration(budgetRemain),
-		// The SLA is for the whole month, so it is only breached once the
-		// downtime so far exceeds the month's error budget (compared unrounded). Comparing the
-		// month-to-date ratio with the target would flag the first short outage
-		// of every month while nearly all of the budget is left.
-		Breached: target > 0 && float64(elapsedSecs)*(100-uptimeMonth) > float64(totalSecsMonth)*(100-min(target, 100)),
+		Breached:          breached,
 	}, nil
 }
 
 // ComputeReport generates an SLA report for all monitors with SLA targets for a given month.
 func ComputeReport(ctx context.Context, store storage.Store, year int, month time.Month) ([]*ReportEntry, error) {
-	monitors, err := store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 10000})
-	if err != nil {
-		return nil, fmt.Errorf("list monitors: %w", err)
-	}
-	monList, ok := monitors.Data.([]*storage.Monitor)
-	if !ok {
-		return nil, nil
-	}
+	return computeReportAt(ctx, store, year, month, time.Now().UTC())
+}
 
+func computeReportAt(ctx context.Context, store storage.Store, year int, month time.Month, now time.Time) ([]*ReportEntry, error) {
+	if year < 1 || year > 9999 || month < time.January || month > time.December {
+		return nil, fmt.Errorf("invalid SLA report month")
+	}
 	monthStart := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0)
-	now := time.Now().UTC()
-	if monthEnd.After(now) {
-		monthEnd = now
+	if monthStart.After(now) {
+		return nil, ErrFuturePeriod
 	}
 	totalSecs := int64(monthEnd.Sub(monthStart).Seconds())
+	until := monthEnd
+	if until.After(now) {
+		until = now
+	}
+	elapsedSecs := int64(until.Sub(monthStart).Seconds())
 
 	var entries []*ReportEntry
-	for _, m := range monList {
-		if m.SLATarget <= 0 {
-			continue
-		}
-
-		uptimePct, err := store.GetUptimePercent(ctx, m.ID, monthStart, monthEnd)
+	for page := 1; ; page++ {
+		monitors, err := store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: page, PerPage: 500})
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("list monitors: %w", err)
 		}
-
-		total, up, down, _, err := store.GetCheckCounts(ctx, m.ID, monthStart, monthEnd)
-		if err != nil {
-			continue
+		monList, ok := monitors.Data.([]*storage.Monitor)
+		if !ok {
+			return nil, fmt.Errorf("unexpected monitor list type %T", monitors.Data)
 		}
+		for _, m := range monList {
+			if m.SLATarget <= 0 {
+				continue
+			}
 
-		budgetSecs := ErrorBudgetSecs(m.SLATarget, totalSecs)
-		elapsedSecs := totalSecs
-		usedSecs := DowntimeSecs(uptimePct, elapsedSecs)
-		remainSecs := budgetSecs - usedSecs
-		if remainSecs < 0 {
-			remainSecs = 0
+			days, err := store.GetDailyUptime(ctx, m.ID, monthStart, until)
+			if err != nil {
+				return nil, fmt.Errorf("get uptime for monitor %d: %w", m.ID, err)
+			}
+			var total, up, down int64
+			for _, day := range days {
+				total += day.TotalChecks
+				up += day.UpChecks
+				down += day.DownChecks
+			}
+			uptimePct := 100.0
+			if total > 0 {
+				uptimePct = float64(up) / float64(total) * 100
+			}
+			budgetSecs, usedSecs, remainSecs, breached := monthlyBudget(m.SLATarget, uptimePct, totalSecs, elapsedSecs)
+
+			entries = append(entries, &ReportEntry{
+				MonitorID:   m.ID,
+				MonitorName: m.Name,
+				Target:      m.SLATarget,
+				UptimePct:   uptimePct,
+				TotalChecks: total,
+				UpChecks:    up,
+				DownChecks:  down,
+				BudgetSecs:  budgetSecs,
+				UsedSecs:    usedSecs,
+				RemainSecs:  remainSecs,
+				Breached:    breached,
+			})
 		}
-
-		entries = append(entries, &ReportEntry{
-			MonitorID:   m.ID,
-			MonitorName: m.Name,
-			Target:      m.SLATarget,
-			UptimePct:   uptimePct,
-			TotalChecks: total,
-			UpChecks:    up,
-			DownChecks:  down,
-			BudgetSecs:  budgetSecs,
-			UsedSecs:    usedSecs,
-			RemainSecs:  remainSecs,
-			Breached:    uptimePct < m.SLATarget,
-		})
+		if page >= monitors.TotalPages {
+			break
+		}
 	}
 	return entries, nil
 }
