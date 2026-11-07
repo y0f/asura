@@ -42,13 +42,17 @@ func navigationPermission(path string) string {
 }
 
 func (p LayoutParams) CanVisit(path string) bool {
-	return p.Can(navigationPermission(path))
+	return p.HasCapability(navigationPermission(path))
 }
 
 // LandingPath returns the first readable page, or empty when no page is allowed.
 func LandingPath(perms map[string]bool) string {
+	return landingPath(func(permission string) bool { return perms[permission] })
+}
+
+func landingPath(can func(string) bool) string {
 	for _, path := range []string{"/", "/incidents", "/notifications", "/escalation-policies", "/maintenance", "/groups", "/tags", "/sla", "/status-pages", "/agents", "/proxies", "/on-call", "/notifications/history", "/logs", "/audit", "/settings"} {
-		if perms[navigationPermission(path)] {
+		if can(navigationPermission(path)) {
 			return path
 		}
 	}
@@ -56,7 +60,7 @@ func LandingPath(perms map[string]bool) string {
 }
 
 func (p LayoutParams) HomePath() string {
-	path := LandingPath(p.Perms)
+	path := landingPath(p.HasCapability)
 	if path == "" {
 		path = "/login"
 	}

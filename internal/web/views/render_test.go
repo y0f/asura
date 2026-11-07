@@ -10,6 +10,7 @@ import (
 	"github.com/a-h/templ"
 	"golang.org/x/net/html"
 
+	"github.com/y0f/asura/internal/config"
 	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
 )
@@ -22,7 +23,7 @@ import (
 func testLayout(title string, write bool) LayoutParams {
 	perms := map[string]bool{}
 	if write {
-		for _, p := range []string{"monitors.write", "incidents.write", "notifications.write", "maintenance.write", "escalation_policies.write"} {
+		for _, p := range config.AllPermissions {
 			perms[p] = true
 		}
 	}
@@ -253,8 +254,19 @@ func TestSettingsTransferNeedsSuperAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if strings.Contains(out, "/settings/import") || strings.Contains(out, "/settings/export") || strings.Contains(out, "/settings/vacuum") {
-		t.Fatal("configuration transfer or vacuum shown to a key that is not super admin")
+	if strings.Contains(out, "/settings/import") || strings.Contains(out, "/settings/export") {
+		t.Fatal("configuration transfer shown to a key that is not super admin")
+	}
+	if !strings.Contains(out, "/settings/vacuum") {
+		t.Fatal("database.maintain should expose vacuum without super admin")
+	}
+	delete(lp.Perms, "database.maintain")
+	buf.Reset()
+	if err := SettingsPage(SettingsParams{LayoutParams: lp}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "/settings/vacuum") {
+		t.Fatal("vacuum shown without database.maintain")
 	}
 }
 

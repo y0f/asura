@@ -67,9 +67,17 @@ templ ConfirmModal() {
 		x-cloak
 		@confirm.window="url = $event.detail.url || ''; message = $event.detail.message; callback = $event.detail.onConfirm || null; open = true"
 	>
-		<dialog class="modal-dialog w-[calc(100%-2rem)] max-w-md" x-effect={ dialogEffect("open") }
-			@cancel.prevent="open = false" @close="if (!$el.open) open = false" @click={ dialogBackdropClose("open") } @keydown.tab={ dialogTabCycle() }
-			role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-msg">
+		<dialog
+			class="modal-dialog w-[calc(100%-2rem)] max-w-md"
+			x-effect={ dialogEffect("open") }
+			@cancel.prevent="open = false"
+			@close="if (!$el.open) open = false"
+			@click={ dialogBackdropClose("open") }
+			@keydown.tab={ dialogTabCycle() }
+			role="alertdialog"
+			aria-labelledby="confirm-title"
+			aria-describedby="confirm-msg"
+		>
 			<div
 				class="modal-panel w-full border border-line-light rounded-card bg-surface-100 p-5"
 			>
@@ -291,10 +299,10 @@ templ SearchInput(name, value, placeholder string) {
 }
 
 // IncidentRow renders an active-incident summary row linking to the incident.
-templ IncidentRow(basePath string, inc *storage.Incident) {
-	<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", basePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200">
+templ IncidentRow(p LayoutParams, inc *storage.Incident) {
+	<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200">
 		<div class="flex items-center justify-between gap-3 mb-1">
-			<span class="text-sm font-medium text-white truncate">{ inc.MonitorName }</span>
+			<span class="text-sm font-medium text-white truncate">{ p.MonitorLabel(inc.MonitorName, inc.MonitorID, inc.MonitorGroupID) }</span>
 			@StatusPill(inc.Status)
 		</div>
 		<div class="text-xs text-muted truncate">{ inc.Cause }</div>
@@ -302,26 +310,25 @@ templ IncidentRow(basePath string, inc *storage.Incident) {
 	</a>
 }
 
-// MonitorRowActions renders the pause/resume + view + edit action cluster shared
-// by the monitor list table and the group detail table. canWrite gates the
-// mutating actions.
-templ MonitorRowActions(basePath string, m *storage.Monitor, canWrite bool) {
+// MonitorRowActions checks each action against this monitor's current scope.
+templ MonitorRowActions(p LayoutParams, m *storage.Monitor) {
 	<div class="flex items-center justify-end gap-0.5">
-		if canWrite {
-			if m.Enabled {
-				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", basePath, m.ID)) } class="contents">
-					<button type="submit" class="row-action" title="Pause" aria-label={ "Pause " + m.Name }>
-						<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-					</button>
-				</form>
-			} else {
-				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", basePath, m.ID)) } class="contents">
-					<button type="submit" class="row-action" title="Resume" aria-label={ "Resume " + m.Name }>
-						<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-					</button>
-				</form>
-			}
-			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", basePath, m.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + m.Name }>
+		if m.Enabled && p.CanMonitor("monitors.pause", m.ID, m.GroupID) {
+			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, m.ID)) } class="contents">
+				<button type="submit" class="row-action" title="Pause" aria-label={ "Pause " + m.Name }>
+					<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+				</button>
+			</form>
+		}
+		if !m.Enabled && p.CanMonitor("monitors.resume", m.ID, m.GroupID) {
+			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, m.ID)) } class="contents">
+				<button type="submit" class="row-action" title="Resume" aria-label={ "Resume " + m.Name }>
+					<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 5 11 7-11 7Z"></path></svg>
+				</button>
+			</form>
+		}
+		if p.CanMonitor("monitors.read", m.ID, m.GroupID) && p.CanMonitor("monitors.update", m.ID, m.GroupID) {
+			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, m.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + m.Name }>
 				@iconEdit()
 			</a>
 		}
@@ -378,13 +385,19 @@ templ SettingText(label, name, value, placeholder, inputType string) {
 templ SettingPassword(label, name, key, value string, stored bool, placeholder string) {
 	<div>
 		<label class="form-label" for={ name }>{ label }</label>
-		<input id={ name } type="password" name={ name } value={ value } autocomplete="new-password"
+		<input
+			id={ name }
+			type="password"
+			name={ name }
+			value={ value }
+			autocomplete="new-password"
 			if stored && value == "" {
 				placeholder="Saved. Leave blank to keep it."
 			} else {
 				placeholder={ placeholder }
 			}
-			class="form-input"/>
+			class="form-input"
+		/>
 		if stored {
 			@ClearSecretCheckbox(key)
 		}
@@ -413,11 +426,14 @@ templ SettingNumber(label, name, value, placeholder, min, max, extraClass string
 // state of the box.
 templ SettingCheckbox(label, name string, checked bool) {
 	<label class="flex items-center gap-2 cursor-pointer">
-		<input type="checkbox" name={ name }
+		<input
+			type="checkbox"
+			name={ name }
 			if checked {
 				checked
 			}
-			class="form-checkbox"/>
+			class="form-checkbox"
+		/>
 		<span class="text-sm text-muted-light">{ label }</span>
 	</label>
 }

@@ -69,6 +69,17 @@ func StatusDot(status string) string {
 	return "bg-muted"
 }
 
+// TagTone keeps tag markers within the interface palette. Existing custom
+// values remain stored and editable, but do not introduce arbitrary UI hues.
+func TagTone(color string) string {
+	switch strings.ToLower(color) {
+	case "#005bbf", "#0070f3", "#1484ff":
+		return "bg-brand"
+	default:
+		return "bg-muted"
+	}
+}
+
 func TimeAgo(t any) string {
 	var tm time.Time
 	switch v := t.(type) {

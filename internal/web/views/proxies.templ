@@ -22,7 +22,7 @@ type ProxyFormParams struct {
 templ ProxyListPage(p ProxyListParams) {
 	@Layout(p.LayoutParams) {
 		@PageHeader(PageHeaderParams{Title: "Proxies", Subtitle: "Outbound HTTP or SOCKS5 proxies that monitors can route their checks through."}) {
-			if p.Can("monitors.write") {
+			if p.Can("proxies.create") {
 				@ToolbarNewButton(p.BasePath+"/proxies/new", "New proxy")
 			}
 		}
@@ -50,12 +50,16 @@ templ ProxyListPage(p ProxyListParams) {
 									}
 								</td>
 								<td class="px-4 py-3">
-									if p.Can("monitors.write") {
+									if p.Can("proxies.update") || p.Can("proxies.delete") {
 										<div class="flex items-center justify-end gap-0.5">
-											<a href={ templ.SafeURL(fmt.Sprintf("%s/proxies/%d/edit", p.BasePath, proxy.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + proxy.Name }>
-												@iconEdit()
-											</a>
-											@DeleteButton(fmt.Sprintf("%s/proxies/%d/delete", p.BasePath, proxy.ID), "Delete this proxy? Monitors using it will connect directly.")
+											if p.Can("proxies.update") {
+												<a href={ templ.SafeURL(fmt.Sprintf("%s/proxies/%d/edit", p.BasePath, proxy.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + proxy.Name }>
+													@iconEdit()
+												</a>
+											}
+											if p.Can("proxies.delete") {
+												@DeleteButton(fmt.Sprintf("%s/proxies/%d/delete", p.BasePath, proxy.ID), "Delete this proxy? Monitors using it will connect directly.")
+											}
 										</div>
 									}
 								</td>
@@ -64,7 +68,7 @@ templ ProxyListPage(p ProxyListParams) {
 					</tbody>
 				</table>
 			</div>
-		} else if p.Can("monitors.write") {
+		} else if p.Can("proxies.create") {
 			@EmptyState("No proxies yet.", p.BasePath+"/proxies/new", "Add a proxy")
 		} else {
 			@EmptyState("No proxies yet.", "", "")
@@ -112,11 +116,17 @@ templ ProxyFormPage(p ProxyFormParams) {
 					</div>
 					<div>
 						<label class="form-label" for="auth_pass">Password <span class="text-muted font-normal">(optional)</span></label>
-						<input id="auth_pass" type="password" name="auth_pass" value={ p.Proxy.AuthPass } autocomplete="new-password"
+						<input
+							id="auth_pass"
+							type="password"
+							name="auth_pass"
+							value={ p.Proxy.AuthPass }
+							autocomplete="new-password"
 							if p.PasswordStored && p.Proxy.AuthPass == "" {
 								placeholder="Saved. Leave blank to keep it."
 							}
-							class="form-input"/>
+							class="form-input"
+						/>
 						if p.PasswordStored {
 							<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
 								<input type="checkbox" name="clear_auth_pass" class="form-checkbox"/>

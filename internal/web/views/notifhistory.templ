@@ -24,6 +24,14 @@ func (p NotificationHistoryParams) entries() []*storage.NotificationHistory {
 	return entries
 }
 
+func (p NotificationHistoryParams) header() PageHeaderParams {
+	h := PageHeaderParams{Title: "Notification History", Subtitle: "Every notification Asura tried to send, and whether it was delivered."}
+	if p.Can("notifications.read") {
+		h.BackHref, h.BackLabel = p.BasePath+"/notifications", "Notifications"
+	}
+	return h
+}
+
 func (p NotificationHistoryParams) pageHref(page int) string {
 	q := url.Values{}
 	q.Set("page", strconv.Itoa(page))
@@ -41,14 +49,16 @@ func (p NotificationHistoryParams) pageHref(page int) string {
 
 templ NotificationHistoryPage(p NotificationHistoryParams) {
 	@Layout(p.LayoutParams) {
-		@PageHeader(PageHeaderParams{Title: "Notification History", Subtitle: "Every notification Asura tried to send, and whether it was delivered.", BackHref: p.BasePath + "/notifications", BackLabel: "Notifications"})
+		@PageHeader(p.header())
 		<form method="GET" action={ templ.SafeURL(p.BasePath + "/notifications/history") } class="flex flex-wrap items-center gap-2 mb-4">
-			<select name="channel_id" class="form-select-sm" onchange="this.form.submit()" aria-label="Channel">
-				<option value="">All channels</option>
-				for _, ch := range p.Channels {
-					<option value={ fmt.Sprint(ch.ID) } selected?={ ch.ID == p.Filter.ChannelID }>{ ch.Name }</option>
-				}
-			</select>
+			if p.Can("notifications.read") {
+				<select name="channel_id" class="form-select-sm" onchange="this.form.submit()" aria-label="Channel">
+					<option value="">All channels</option>
+					for _, ch := range p.Channels {
+						<option value={ fmt.Sprint(ch.ID) } selected?={ ch.ID == p.Filter.ChannelID }>{ ch.Name }</option>
+					}
+				</select>
+			}
 			<select name="status" class="form-select-sm" onchange="this.form.submit()" aria-label="Delivery status">
 				<option value="">All results</option>
 				<option value="sent" selected?={ p.Filter.Status == "sent" }>Sent</option>
@@ -85,13 +95,23 @@ templ NotificationHistoryPage(p NotificationHistoryParams) {
 								<tr>
 									<td class="px-4 py-2.5 text-sm text-muted whitespace-nowrap">@RelTime(e.SentAt)</td>
 									<td class="px-4 py-2.5">
-										<div class="text-sm text-white">{ e.ChannelName }</div>
-										<div class="text-xs text-muted">{ channelTypeLabel(e.ChannelType) }</div>
+										if p.Can("notifications.read") && e.ChannelName != "" {
+											<div class="text-sm text-white">{ e.ChannelName }</div>
+										} else {
+											<div class="text-sm text-white">{ fmt.Sprintf("Channel #%d", e.ChannelID) }</div>
+										}
+										if p.Can("notifications.read") && e.ChannelType != "" {
+											<div class="text-xs text-muted">{ channelTypeLabel(e.ChannelType) }</div>
+										}
 									</td>
 									<td class="px-4 py-2.5 text-sm text-muted-light whitespace-nowrap">{ eventLabel(e.EventType) }</td>
 									<td class="px-4 py-2.5 text-sm text-muted-light">
-										if e.MonitorName != "" {
-											{ e.MonitorName }
+										if e.MonitorID != nil {
+											if e.MonitorName != "" && p.CanMonitor("monitors.read", *e.MonitorID, e.MonitorGroupID) {
+												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, *e.MonitorID)) } class="hover:underline">{ e.MonitorName }</a>
+											} else {
+												{ fmt.Sprintf("Monitor #%d", *e.MonitorID) }
+											}
 										} else {
 											<span class="text-muted">—</span>
 										}

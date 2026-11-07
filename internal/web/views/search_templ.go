@@ -52,7 +52,7 @@ func CommandPalette(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templruntime.NewAttributeExpression(dialogEffect("open")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 17, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 20, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -65,7 +65,7 @@ func CommandPalette(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(dialogBackdropClose("open")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 17, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 23, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -78,21 +78,21 @@ func CommandPalette(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(dialogTabCycle()).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 17, Col: 170}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 24, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><div class=\"w-full\"><div class=\"modal-panel overflow-hidden rounded-card border border-line-light bg-surface-100 shadow-lg shadow-black/40\"><div class=\"flex items-center gap-3 px-4 border-b border-line\"><svg class=\"w-4 h-4 text-muted shrink-0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.35-4.35\"></path></svg> <input x-ref=\"input\" autofocus type=\"search\" autocomplete=\"off\" role=\"combobox\" aria-controls=\"cmd-list\" aria-label=\"Go to page\" :aria-expanded=\"results.length > 0\" :aria-activedescendant=\"results.length ? 'cmd-opt-' + active : null\" placeholder=\"Go to page…\" class=\"cmdk-input flex-1 appearance-none border-0 bg-transparent py-3 text-sm text-white placeholder-muted outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none\" x-model=\"q\" @input=\"filter()\" @keydown.down.prevent=\"move(1)\" @keydown.up.prevent=\"move(-1)\" @keydown.enter.prevent=\"go()\"></div><div id=\"cmd-list\" role=\"listbox\" aria-label=\"Search results\" x-ref=\"list\" class=\"max-h-[22rem] overflow-y-auto p-1.5\"><template x-for=\"(h, i) in results\" :key=\"h.href\"><a :href=\"h.href\" :id=\"'cmd-opt-' + i\" role=\"option\" :aria-selected=\"i === active\" :data-active=\"i === active\" @mouseenter=\"active = i\" class=\"cmdk-hit group flex items-center gap-3 rounded-control px-3 py-2 cursor-pointer text-muted-light\" :class=\"i === active && 'is-active'\"><span class=\"min-w-0 flex-1\"><span class=\"block truncate text-sm text-white\" x-text=\"h.label\"></span> <span class=\"block truncate text-xs text-muted\" x-text=\"h.group + ' · ' + h.desc\"></span></span></a></template><div x-show=\"results.length === 0\" class=\"px-4 py-10 text-center text-sm text-muted\">No results for \"<span class=\"text-muted-light\" x-text=\"q\"></span>\".</div></div><div class=\"flex items-center gap-4 border-t border-line px-4 py-2 text-xs text-muted\"><span class=\"flex items-center gap-1.5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><div class=\"w-full\"><div class=\"modal-panel overflow-hidden rounded-card border border-line-light bg-surface-100 shadow-lg shadow-black/40\"><div class=\"flex items-center gap-3 px-4 border-b border-line\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4 text-muted shrink-0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.35-4.35\"></path></svg> <input x-ref=\"input\" autofocus type=\"search\" autocomplete=\"off\" role=\"combobox\" aria-controls=\"cmd-list\" aria-label=\"Go to page\" :aria-expanded=\"results.length > 0\" :aria-activedescendant=\"results.length ? 'cmd-opt-' + active : null\" placeholder=\"Go to page…\" class=\"cmdk-input flex-1 appearance-none border-0 bg-transparent py-3 text-sm text-white placeholder-muted outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none\" x-model=\"q\" @input=\"filter()\" @keydown.down.prevent=\"move(1)\" @keydown.up.prevent=\"move(-1)\" @keydown.enter.prevent=\"go()\"></div><div id=\"cmd-list\" role=\"listbox\" aria-label=\"Search results\" x-ref=\"list\" class=\"max-h-[22rem] overflow-y-auto p-1.5\"><template x-for=\"(h, i) in results\" :key=\"h.href\"><a :href=\"h.href\" :id=\"'cmd-opt-' + i\" role=\"option\" :aria-selected=\"i === active\" :data-active=\"i === active\" @mouseenter=\"active = i\" class=\"cmdk-hit group flex items-center gap-3 rounded-control px-3 py-2 cursor-pointer text-muted-light\" :class=\"i === active && 'is-active'\"><span class=\"min-w-0 flex-1\"><span class=\"block truncate text-sm text-white\" x-text=\"h.label\"></span> <span class=\"block truncate text-xs text-muted\" x-text=\"h.group + ' · ' + h.desc\"></span></span></a></template><div x-show=\"results.length === 0\" class=\"px-4 py-10 text-center text-sm text-muted\">No results for \"<span class=\"text-muted-light\" x-text=\"q\"></span>\".</div></div><div class=\"flex items-center gap-4 border-t border-line px-4 py-2 text-xs text-muted\"><span class=\"flex items-center gap-1.5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = kbdIcon("M12 19V5M5 12l7-7 7 7").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = kbdIcon("Up arrow", "M12 19V5M5 12l7-7 7 7").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = kbdIcon("M12 5v14M19 12l-7 7-7-7").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = kbdIcon("Down arrow", "M12 5v14M19 12l-7 7-7-7").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -100,7 +100,7 @@ func CommandPalette(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = kbdIcon("M9 10l-5 5 5 5M4 15h11a4 4 0 0 0 4-4V4").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = kbdIcon("Enter", "M9 10l-5 5 5 5M4 15h11a4 4 0 0 0 4-4V4").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -116,7 +116,7 @@ func CommandPalette(p LayoutParams) templ.Component {
 	})
 }
 
-func kbdIcon(d string) templ.Component {
+func kbdIcon(label, d string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -133,20 +133,33 @@ func kbdIcon(d string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<kbd class=\"inline-flex h-5 w-5 items-center justify-center rounded-[3px] border border-line-light text-muted\"><svg class=\"w-3 h-3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<kbd class=\"inline-flex h-5 w-5 items-center justify-center rounded-[3px] border border-line-light text-muted\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-3 h-3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 87, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 95, Col: 189}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"></path></svg></kbd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"></path></svg> <span class=\"sr-only\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var8 string
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/search.templ`, Line: 96, Col: 31}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</span></kbd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -171,7 +184,7 @@ func cmdPaletteScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<script>\n\t\tfunction cmdPalette() {\n\t\t\treturn {\n\t\t\t\topen: false, q: \"\", active: 0, all: [], results: [],\n\t\t\t\tinit() {\n\t\t\t\t\ttry { this.all = JSON.parse(this.$el.dataset.nav || \"[]\"); }\n\t\t\t\t\tcatch (e) { this.all = []; }\n\t\t\t\t\tthis.results = this.all;\n\t\t\t\t},\n\t\t\t\thotkey(e) {\n\t\t\t\t\tif (!this.open && document.querySelector('dialog[open]')) return;\n\t\t\t\t\tconst cmdK = (e.key === \"k\" || e.key === \"K\") && (e.metaKey || e.ctrlKey);\n\t\t\t\t\tconst slash = e.key === \"/\" && !this.typing(e.target);\n\t\t\t\t\tif (cmdK || slash) { e.preventDefault(); this.toggle(); }\n\t\t\t\t},\n\t\t\t\ttyping(t) { return t && (t.tagName === \"INPUT\" || t.tagName === \"TEXTAREA\" || t.tagName === \"SELECT\" || t.isContentEditable); },\n\t\t\t\ttoggle() { this.open ? this.close() : this.openPalette(); },\n\t\t\t\topenPalette() {\n\t\t\t\t\tthis.open = true; this.q = \"\"; this.filter();\n\t\t\t\t\tthis.$nextTick(() => { if (this.$refs.input) this.$refs.input.focus(); });\n\t\t\t\t},\n\t\t\t\tclose() { this.open = false; this.q = \"\"; },\n\t\t\t\tfilter() {\n\t\t\t\t\tconst q = this.q.trim().toLowerCase();\n\t\t\t\t\tthis.results = q\n\t\t\t\t\t\t? this.all.filter(h => (h.label + \" \" + h.desc + \" \" + h.group).toLowerCase().includes(q))\n\t\t\t\t\t\t: this.all;\n\t\t\t\t\tthis.active = 0;\n\t\t\t\t},\n\t\t\t\tmove(d) {\n\t\t\t\t\tif (!this.results.length) return;\n\t\t\t\t\tthis.active = (this.active + d + this.results.length) % this.results.length;\n\t\t\t\t\tthis.$nextTick(() => {\n\t\t\t\t\t\tconst el = this.$refs.list && this.$refs.list.querySelector('[data-active=\"true\"]');\n\t\t\t\t\t\tif (el) el.scrollIntoView({ block: \"nearest\" });\n\t\t\t\t\t});\n\t\t\t\t},\n\t\t\t\tgo() { const h = this.results[this.active]; if (h) window.location.href = h.href; },\n\t\t\t};\n\t\t}\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<script>\n\t\tfunction cmdPalette() {\n\t\t\treturn {\n\t\t\t\topen: false, q: \"\", active: 0, all: [], results: [],\n\t\t\t\tinit() {\n\t\t\t\t\ttry { this.all = JSON.parse(this.$el.dataset.nav || \"[]\"); }\n\t\t\t\t\tcatch (e) { this.all = []; }\n\t\t\t\t\tthis.results = this.all;\n\t\t\t\t},\n\t\t\t\thotkey(e) {\n\t\t\t\t\tif (!this.open && document.querySelector('dialog[open]')) return;\n\t\t\t\t\tconst cmdK = (e.key === \"k\" || e.key === \"K\") && (e.metaKey || e.ctrlKey);\n\t\t\t\t\tconst slash = e.key === \"/\" && !this.typing(e.target);\n\t\t\t\t\tif (cmdK || slash) { e.preventDefault(); this.toggle(); }\n\t\t\t\t},\n\t\t\t\ttyping(t) { return t && (t.tagName === \"INPUT\" || t.tagName === \"TEXTAREA\" || t.tagName === \"SELECT\" || t.isContentEditable); },\n\t\t\t\ttoggle() { this.open ? this.close() : this.openPalette(); },\n\t\t\t\topenPalette() {\n\t\t\t\t\tthis.open = true; this.q = \"\"; this.filter();\n\t\t\t\t\tthis.$nextTick(() => { if (this.$refs.input) this.$refs.input.focus(); });\n\t\t\t\t},\n\t\t\t\tclose() { this.open = false; this.q = \"\"; },\n\t\t\t\tfilter() {\n\t\t\t\t\tconst q = this.q.trim().toLowerCase();\n\t\t\t\t\tthis.results = q\n\t\t\t\t\t\t? this.all.filter(h => (h.label + \" \" + h.desc + \" \" + h.group).toLowerCase().includes(q))\n\t\t\t\t\t\t: this.all;\n\t\t\t\t\tthis.active = 0;\n\t\t\t\t},\n\t\t\t\tmove(d) {\n\t\t\t\t\tif (!this.results.length) return;\n\t\t\t\t\tthis.active = (this.active + d + this.results.length) % this.results.length;\n\t\t\t\t\tthis.$nextTick(() => {\n\t\t\t\t\t\tconst el = this.$refs.list && this.$refs.list.querySelector('[data-active=\"true\"]');\n\t\t\t\t\t\tif (el) el.scrollIntoView({ block: \"nearest\" });\n\t\t\t\t\t});\n\t\t\t\t},\n\t\t\t\tgo() { const h = this.results[this.active]; if (h) window.location.href = h.href; },\n\t\t\t};\n\t\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

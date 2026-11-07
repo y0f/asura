@@ -32,14 +32,15 @@ func formatBytes(b int64) string {
 templ settingsFact(label string) {
 	<div class="py-2">
 		<dt class="text-xs text-muted">{ label }</dt>
-		<dd class="text-sm text-white font-medium mt-0.5">{ children... }
-</dd>
+		<dd class="text-sm text-white font-medium mt-0.5">
+			{ children... }
+		</dd>
 	</div>
 }
 
 templ SettingsPage(p SettingsParams) {
 	@Layout(p.LayoutParams) {
-		@PageHeader(PageHeaderParams{Title: "Settings", Subtitle: "Instance information, configuration backup and database maintenance."})
+		@PageHeader(PageHeaderParams{Title: "Settings", Subtitle: "Instance information, configuration transfer and database maintenance."})
 		<div class="space-y-6 max-w-5xl">
 			<section class="card card-pad" aria-labelledby="sys-title">
 				<h2 id="sys-title" class="text-lg font-semibold mb-2">System</h2>
@@ -86,7 +87,7 @@ templ SettingsPage(p SettingsParams) {
 					</section>
 					<section class="card card-pad" aria-labelledby="import-title">
 						<h2 id="import-title" class="text-lg font-semibold">Import</h2>
-						<p class="subtitle mt-1 mb-4">Restore or merge a previously exported file.</p>
+						<p class="subtitle mt-1 mb-4">Import supported configuration from an exported file. Historical data requires a database backup.</p>
 						<form
 							action={ templ.SafeURL(p.BasePath + "/settings/import") }
 							method="POST"
@@ -99,7 +100,7 @@ templ SettingsPage(p SettingsParams) {
 								<label class="form-label" for="import-mode">Mode</label>
 								<select id="import-mode" name="mode" x-model="mode" class="form-select">
 									<option value="merge">Merge: keep existing, skip duplicates</option>
-									<option value="replace">Replace: overwrite everything</option>
+									<option value="replace">Replace supported configuration</option>
 								</select>
 							</div>
 							<div>
@@ -117,6 +118,8 @@ templ SettingsPage(p SettingsParams) {
 						</form>
 					</section>
 				</div>
+			}
+			if p.Can("database.maintain") {
 				<section class="card card-pad" aria-labelledby="db-title">
 					<h2 id="db-title" class="text-lg font-semibold">Database</h2>
 					<p class="subtitle mt-1 mb-4">VACUUM reclaims space left by deleted rows and rebuilds the database file. Large databases can take a while.</p>

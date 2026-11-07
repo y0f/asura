@@ -47,6 +47,7 @@
 }
 /* Textareas grow; the fixed control height only applies to single-line fields. */
 textarea.form-input { height: auto; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+select.form-input[multiple] { height: auto; min-height: 9rem; padding: 0.5rem; }
 
 .form-checkbox::before {
   content: ""; width: 0.6em; height: 0.6em; transform: scale(0);

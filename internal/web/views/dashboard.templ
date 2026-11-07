@@ -41,7 +41,7 @@ func sparklineSVG(points []*storage.SparklinePoint) string {
 		copy(padded[n-len(points):], points)
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<svg width="%d" height="%d" viewBox="0 0 %d %d" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">`, totalW, barH, totalW, barH))
+	sb.WriteString(fmt.Sprintf(`<svg focusable="false" width="%d" height="%d" viewBox="0 0 %d %d" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">`, totalW, barH, totalW, barH))
 	for i, p := range padded {
 		x := i * (barW + gap)
 		color := "var(--color-chart-empty)"
@@ -91,100 +91,108 @@ func toneIf(cond bool, tone string) string {
 
 templ DashboardPage(p DashboardParams) {
 	@Layout(p.LayoutParams) {
-		<div id="dashboard-content" x-data="{ refreshError: false }"
-			hx-get={ p.pageHref(p.Page) } hx-trigger="sse:refresh, every 30s"
-			hx-select="#dashboard-content" hx-swap="outerHTML" hx-push-url="false"
+		<div
+			id="dashboard-content"
+			x-data="{ refreshError: false }"
+			hx-get={ p.pageHref(p.Page) }
+			hx-trigger="sse:refresh, every 30s"
+			hx-select="#dashboard-content"
+			hx-swap="outerHTML"
+			hx-push-url="false"
 			@htmx:after-request="if ($event.detail.successful) refreshError = false"
 			@htmx:response-error="refreshError = true"
-			@htmx:send-error="refreshError = true">
+			@htmx:send-error="refreshError = true"
+		>
 			<div x-show="refreshError" x-cloak role="status" class="mb-4 text-xs text-crit">Refresh failed. Showing the last loaded dashboard; retrying.</div>
-		@PageHeader(PageHeaderParams{Title: "Dashboard", Subtitle: p.summary()})
-		<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-			@StatCard("Up", fmt.Sprint(p.Up), toneIf(p.Up > 0, "ok"))
-			@StatCard("Down", fmt.Sprint(p.Down), toneIf(p.Down > 0, "crit"))
-			@StatCard("Degraded", fmt.Sprint(p.Degraded), toneIf(p.Degraded > 0, "warn"))
-			if p.Can("incidents.read") {
-				@StatCard("Open incidents", fmt.Sprint(p.OpenIncidents), toneIf(p.OpenIncidents > 0, "crit"))
-			} else {
-				@StatCard("Paused", fmt.Sprint(p.Paused), "muted")
-			}
-		</div>
-		<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-			<section class={ "min-w-0", templ.KV("xl:col-span-2", p.Can("incidents.read")), templ.KV("xl:col-span-3", !p.Can("incidents.read")) } aria-labelledby="dash-monitors">
-				<div class="flex items-center gap-3 mb-3">
-					<h2 id="dash-monitors" class="text-xl font-bold">Monitors</h2>
-					if p.Can("monitors.create") {
-						<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary btn-sm">+ Add</a>
-					}
-					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
-				</div>
-				<div id="monitor-grid" class="panel">
-					if len(p.Monitors) > 0 {
-						<ul class="divide-y divide-line">
-							for _, m := range p.Monitors {
-								<li>
-									<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) }
-										class="flex items-center justify-between gap-4 px-4 py-3 hover:bg-surface-200 group">
-										<div class="min-w-0">
-											<div class="text-sm font-medium text-white truncate">{ m.Name }</div>
-											<div class="text-xs text-muted truncate">{ TypeLabel(m.Type) } · <span class="font-mono">{ m.Target }</span></div>
-										</div>
-										<div class="flex items-center gap-4 shrink-0">
-											<span class="hidden sm:block w-14 text-right text-xs text-muted tabular-nums font-mono">
-												if rt := p.ResponseTimes[m.ID]; rt > 0 {
-													{ FormatMs(rt) }
-												}
-											</span>
-											<span class="hidden md:flex w-[79px] justify-end items-center">
-												if pts := p.Sparklines[m.ID]; len(pts) > 0 {
-													@templ.Raw(sparklineSVG(pts))
-												}
-											</span>
-											<span class="w-24 flex justify-end">
-												@StatusPill(m.Status)
-											</span>
-										</div>
-									</a>
-								</li>
-							}
-						</ul>
-					} else if p.Filter != "" {
-						<div class="px-4 py-10 text-center text-sm text-muted">{ fmt.Sprintf("No %s monitors.", TypeLabel(p.Filter)) }</div>
-					} else {
-						<div class="px-4 py-10 text-center">
-							<p class="text-sm text-muted-light">No monitors yet.</p>
-							if p.Can("monitors.create") {
-								<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary mt-4">Create your first monitor</a>
+			@PageHeader(PageHeaderParams{Title: "Dashboard", Subtitle: p.summary()})
+			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+				@StatCard("Up", fmt.Sprint(p.Up), toneIf(p.Up > 0, "ok"))
+				@StatCard("Down", fmt.Sprint(p.Down), toneIf(p.Down > 0, "crit"))
+				@StatCard("Degraded", fmt.Sprint(p.Degraded), toneIf(p.Degraded > 0, "warn"))
+				if p.HasCapability("incidents.read") {
+					@StatCard("Open incidents", fmt.Sprint(p.OpenIncidents), toneIf(p.OpenIncidents > 0, "crit"))
+				} else {
+					@StatCard("Paused", fmt.Sprint(p.Paused), "muted")
+				}
+			</div>
+			<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+				<section class={ "min-w-0", templ.KV("xl:col-span-2", p.HasCapability("incidents.read")), templ.KV("xl:col-span-3", !p.HasCapability("incidents.read")) } aria-labelledby="dash-monitors">
+					<div class="flex items-center gap-3 mb-3">
+						<h2 id="dash-monitors" class="text-xl font-bold">Monitors</h2>
+						if p.HasCapability("monitors.create") {
+							<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary btn-sm">+ Add</a>
+						}
+						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
+					</div>
+					<div id="monitor-grid" class="panel">
+						if len(p.Monitors) > 0 {
+							<ul class="divide-y divide-line">
+								for _, m := range p.Monitors {
+									<li>
+										<a
+											href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) }
+											class="flex items-center justify-between gap-4 px-4 py-3 hover:bg-surface-200 group"
+										>
+											<div class="min-w-0">
+												<div class="text-sm font-medium text-white truncate">{ m.Name }</div>
+												<div class="text-xs text-muted truncate">{ TypeLabel(m.Type) } · <span class="font-mono">{ m.Target }</span></div>
+											</div>
+											<div class="flex items-center gap-4 shrink-0">
+												<span class="hidden sm:block w-14 text-right text-xs text-muted tabular-nums font-mono">
+													if rt := p.ResponseTimes[m.ID]; rt > 0 {
+														{ FormatMs(rt) }
+													}
+												</span>
+												<span class="hidden md:flex w-[79px] justify-end items-center">
+													if pts := p.Sparklines[m.ID]; len(pts) > 0 {
+														@templ.Raw(sparklineSVG(pts))
+													}
+												</span>
+												<span class="w-24 flex justify-end">
+													@StatusPill(m.Status)
+												</span>
+											</div>
+										</a>
+									</li>
+								}
+							</ul>
+						} else if p.Filter != "" {
+							<div class="px-4 py-10 text-center text-sm text-muted">{ fmt.Sprintf("No %s monitors.", TypeLabel(p.Filter)) }</div>
+						} else {
+							<div class="px-4 py-10 text-center">
+								<p class="text-sm text-muted-light">No monitors yet.</p>
+								if p.HasCapability("monitors.create") {
+									<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary mt-4">Create your first monitor</a>
+								}
+							</div>
+						}
+						if p.TotalPages > 1 {
+							@Pager(p.Page, p.TotalPages, fmt.Sprintf("Page %d of %d", p.Page, p.TotalPages), p.pageHref(p.Page-1), p.pageHref(p.Page+1))
+						}
+					</div>
+				</section>
+				if p.HasCapability("incidents.read") {
+					<section class="min-w-0" aria-labelledby="dash-incidents">
+						<div class="flex items-center gap-3 mb-3">
+							<h2 id="dash-incidents" class="text-xl font-bold">Open incidents</h2>
+							<a href={ templ.SafeURL(p.BasePath + "/incidents") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
+						</div>
+						<div class="panel">
+							if len(p.Incidents) > 0 {
+								<div class="divide-y divide-line">
+									for _, inc := range p.Incidents {
+										@IncidentRow(p.LayoutParams, inc)
+									}
+								</div>
+							} else {
+								<div class="px-4 py-10 text-center">
+									<p class="text-sm text-muted-light">No open incidents.</p>
+								</div>
 							}
 						</div>
-					}
-					if p.TotalPages > 1 {
-						@Pager(p.Page, p.TotalPages, fmt.Sprintf("Page %d of %d", p.Page, p.TotalPages), p.pageHref(p.Page-1), p.pageHref(p.Page+1))
-					}
-				</div>
-			</section>
-			if p.Can("incidents.read") {
-			<section class="min-w-0" aria-labelledby="dash-incidents">
-				<div class="flex items-center gap-3 mb-3">
-					<h2 id="dash-incidents" class="text-xl font-bold">Open incidents</h2>
-					<a href={ templ.SafeURL(p.BasePath + "/incidents") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
-				</div>
-				<div class="panel">
-					if len(p.Incidents) > 0 {
-						<div class="divide-y divide-line">
-							for _, inc := range p.Incidents {
-								@IncidentRow(p.BasePath, inc)
-							}
-						</div>
-					} else {
-						<div class="px-4 py-10 text-center">
-							<p class="text-sm text-muted-light">No open incidents.</p>
-						</div>
-					}
-				</div>
-			</section>
-			}
-		</div>
+					</section>
+				}
+			</div>
 		</div>
 		@MonitorListListener(p.BasePath, "dashboard-content")
 	}

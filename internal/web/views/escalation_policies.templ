@@ -13,13 +13,17 @@ type EscalationPolicyListParams struct {
 	Channels []*storage.NotificationChannel
 }
 
-func channelNames(channels []*storage.NotificationChannel, ids []int64) string {
+func (p EscalationPolicyListParams) channelNames(ids []int64) string {
 	if len(ids) == 0 {
 		return "no channels"
 	}
 	names := make([]string, 0, len(ids))
 	for _, id := range ids {
-		names = append(names, channelName(channels, id))
+		if p.Can("notifications.read") {
+			names = append(names, channelName(p.Channels, id))
+		} else {
+			names = append(names, fmt.Sprintf("Channel #%d", id))
+		}
 	}
 	return strings.Join(names, ", ")
 }
@@ -28,12 +32,12 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data={ escalationXData(p) }>
 			@PageHeader(PageHeaderParams{Title: "Escalation Policies", Subtitle: "Notify more channels the longer an incident stays open."}) {
-				if p.Can("escalation_policies.write") {
+				if p.Can("escalation_policies.create") && p.Can("notifications.read") {
 					@ToolbarNewButtonClick("openCreate()", "New policy")
 				}
 			}
 			if len(p.Policies) == 0 {
-				if p.Can("escalation_policies.write") {
+				if p.Can("escalation_policies.create") && p.Can("notifications.read") {
 					@EmptyStateModal("No escalation policies yet.", "openCreate()", "Create a policy")
 				} else {
 					@EmptyState("No escalation policies yet.", "", "")
@@ -59,12 +63,16 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 										<p class="text-sm text-muted mt-1">{ ep.Description }</p>
 									}
 								</div>
-								if p.Can("escalation_policies.write") {
+								if p.Can("escalation_policies.update") || p.Can("escalation_policies.delete") {
 									<div class="flex items-center gap-0.5 shrink-0">
-										<button type="button" @click={ fmt.Sprintf("openEdit(%s)", ToJSON(ep)) } class="row-action" title="Edit" aria-label={ "Edit " + ep.Name }>
-											@iconEdit()
-										</button>
-										@DeleteButton(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID), "Delete this escalation policy?")
+										if p.Can("escalation_policies.update") {
+											<button type="button" @click={ fmt.Sprintf("openEdit(%s)", ToJSON(ep)) } class="row-action" title="Edit" aria-label={ "Edit " + ep.Name }>
+												@iconEdit()
+											</button>
+										}
+										if p.Can("escalation_policies.delete") {
+											@DeleteButton(fmt.Sprintf("%s/escalation-policies/%d/delete", p.BasePath, ep.ID), "Delete this escalation policy?")
+										}
 									</div>
 								}
 							</div>
@@ -79,7 +87,7 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 												{ fmt.Sprintf("After %d min", step.DelayMinutes) }
 											}
 										</span>
-										<span class="text-muted-light min-w-0">→ { channelNames(p.Channels, step.NotificationChannelIDs) }</span>
+										<span class="text-muted-light min-w-0">→ { p.channelNames(step.NotificationChannelIDs) }</span>
 									</li>
 								}
 							</ol>
@@ -87,72 +95,76 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 					}
 				</div>
 			}
-			@FormModal("showForm", "max-w-lg", "editId ? 'Edit escalation policy' : 'New escalation policy'") {
-				<form method="POST" :action="formAction" class="space-y-4">
-					<div>
-						<label class="form-label" for="ep-name">Name</label>
-						<input type="text" id="ep-name" name="name" x-model="formData.name" class="form-input" required/>
-					</div>
-					<div>
-						<label class="form-label" for="ep-description">Description <span class="text-muted font-normal">(optional)</span></label>
-						<input type="text" id="ep-description" name="description" x-model="formData.description" class="form-input"/>
-					</div>
-					<div class="flex flex-wrap items-center gap-5">
-						<label class="flex items-center gap-2 cursor-pointer">
-							<input type="checkbox" name="enabled" x-model="formData.enabled" class="form-checkbox"/>
-							<span class="text-sm text-muted-light">Enabled</span>
-						</label>
-						<label class="flex items-center gap-2 cursor-pointer">
-							<input type="checkbox" name="repeat" x-model="formData.repeat" class="form-checkbox"/>
-							<span class="text-sm text-muted-light">Repeat after the last step</span>
-						</label>
-					</div>
-					<div>
-						<div class="form-label">Steps</div>
-						<div class="space-y-2">
-							<template x-for="(step, idx) in formData.steps" :key="idx">
-								<fieldset class="rounded-control border border-line-light p-3 space-y-3">
-									<div class="flex items-center justify-between">
-										<legend class="text-sm font-medium text-white" x-text="'Step ' + (idx + 1)"></legend>
-										<div class="flex items-center gap-0.5">
-											<button type="button" @click="moveStep(idx, -1)" x-show="idx > 0" aria-label="Move step up" title="Move up" class="row-action">
-												<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg>
-											</button>
-											<button type="button" @click="moveStep(idx, 1)" x-show="idx < formData.steps.length - 1" aria-label="Move step down" title="Move down" class="row-action">
-												<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
-											</button>
-											<button type="button" @click="removeStep(idx)" aria-label="Remove step" title="Remove" class="row-action hover:text-crit!">
-												@iconX()
-											</button>
-										</div>
-									</div>
-									<div>
-										<label class="form-label-sm" :for="'step-delay-' + idx">Delay (minutes)</label>
-										<input type="number" min="0" :id="'step-delay-' + idx" x-model.number="step.delay_minutes" class="form-input w-28 h-8"/>
-										<input type="hidden" name="step_delay_minutes[]" :value="step.delay_minutes"/>
-									</div>
-									<div>
-										<div class="form-label-sm">Notify</div>
-										<div class="flex flex-wrap gap-1.5">
-											for _, ch := range p.Channels {
-												<label class="inline-flex items-center gap-2 rounded-control border border-line-light px-2 h-8 text-sm cursor-pointer select-none hover:bg-surface-200" :class={ fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand'", ch.ID) }>
-													<input type="checkbox" :checked={ fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID) } @change={ fmt.Sprintf("toggleChannel(idx, %d)", ch.ID) } class="form-checkbox"/>
-													<span class="text-white">{ ch.Name }</span>
-												</label>
-											}
-										</div>
-										<input type="hidden" name="step_channels[]" :value="JSON.stringify(step.channel_ids)"/>
-									</div>
-								</fieldset>
-							</template>
+			if (p.Can("escalation_policies.create") && p.Can("notifications.read")) || p.Can("escalation_policies.update") {
+				@FormModal("showForm", "max-w-lg", "editId ? 'Edit escalation policy' : 'New escalation policy'") {
+					<form method="POST" :action="formAction" class="space-y-4">
+						<div>
+							<label class="form-label" for="ep-name">Name</label>
+							<input type="text" id="ep-name" name="name" x-model="formData.name" class="form-input" required/>
 						</div>
-						<button type="button" @click="addStep()" class="btn-secondary btn-sm mt-2">Add step</button>
-					</div>
-					<div class="flex items-center gap-2 pt-1">
-						<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create policy'"></button>
-						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
-					</div>
-				</form>
+						<div>
+							<label class="form-label" for="ep-description">Description <span class="text-muted font-normal">(optional)</span></label>
+							<input type="text" id="ep-description" name="description" x-model="formData.description" class="form-input"/>
+						</div>
+						<div class="flex flex-wrap items-center gap-5">
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input type="checkbox" name="enabled" x-model="formData.enabled" class="form-checkbox"/>
+								<span class="text-sm text-muted-light">Enabled</span>
+							</label>
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input type="checkbox" name="repeat" x-model="formData.repeat" class="form-checkbox"/>
+								<span class="text-sm text-muted-light">Repeat after the last step</span>
+							</label>
+						</div>
+						if p.Can("notifications.read") {
+							<div>
+								<div class="form-label">Steps</div>
+								<div class="space-y-2">
+									<template x-for="(step, idx) in formData.steps" :key="idx">
+										<fieldset class="rounded-control border border-line-light p-3 space-y-3">
+											<div class="flex items-center justify-between">
+												<legend class="text-sm font-medium text-white" x-text="'Step ' + (idx + 1)"></legend>
+												<div class="flex items-center gap-0.5">
+													<button type="button" @click="moveStep(idx, -1)" x-show="idx > 0" aria-label="Move step up" title="Move up" class="row-action">
+														<svg focusable="false" aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg>
+													</button>
+													<button type="button" @click="moveStep(idx, 1)" x-show="idx < formData.steps.length - 1" aria-label="Move step down" title="Move down" class="row-action">
+														<svg focusable="false" aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+													</button>
+													<button type="button" @click="removeStep(idx)" aria-label="Remove step" title="Remove" class="row-action hover:text-crit!">
+														@iconX()
+													</button>
+												</div>
+											</div>
+											<div>
+												<label class="form-label-sm" :for="'step-delay-' + idx">Delay (minutes)</label>
+												<input type="number" min="0" :id="'step-delay-' + idx" x-model.number="step.delay_minutes" class="form-input w-28 h-8"/>
+												<input type="hidden" name="step_delay_minutes[]" :value="step.delay_minutes"/>
+											</div>
+											<div>
+												<div class="form-label-sm">Notify</div>
+												<div class="flex flex-wrap gap-1.5">
+													for _, ch := range p.Channels {
+														<label class="inline-flex items-center gap-2 rounded-control border border-line-light px-2 h-8 text-sm cursor-pointer select-none hover:bg-surface-200" :class={ fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand'", ch.ID) }>
+															<input type="checkbox" :checked={ fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID) } @change={ fmt.Sprintf("toggleChannel(idx, %d)", ch.ID) } class="form-checkbox"/>
+															<span class="text-white">{ ch.Name }</span>
+														</label>
+													}
+												</div>
+												<input type="hidden" name="step_channels[]" :value="JSON.stringify(step.channel_ids)"/>
+											</div>
+										</fieldset>
+									</template>
+								</div>
+								<button type="button" @click="addStep()" class="btn-secondary btn-sm mt-2">Add step</button>
+							</div>
+						}
+						<div class="flex items-center gap-2 pt-1">
+							<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create policy'"></button>
+							<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
+						</div>
+					</form>
+				}
 			}
 		</div>
 	}
