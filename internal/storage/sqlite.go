@@ -142,11 +142,19 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	if hasSchemaTbl == 0 {
-		if _, err := db.Exec(schema); err != nil {
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin base schema: %w", err)
+		}
+		defer tx.Rollback()
+		if _, err := tx.Exec(schema); err != nil {
 			return fmt.Errorf("apply base schema: %w", err)
 		}
-		if _, err := db.Exec("INSERT INTO schema_version (version) VALUES (?)", schemaVersion); err != nil {
+		if _, err := tx.Exec("INSERT INTO schema_version (version) VALUES (?)", schemaVersion); err != nil {
 			return fmt.Errorf("stamp schema version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit base schema: %w", err)
 		}
 		return nil
 	}
@@ -154,6 +162,9 @@ func runMigrations(db *sql.DB) error {
 	var currentVersion int
 	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&currentVersion); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
+	}
+	if currentVersion > schemaVersion {
+		return fmt.Errorf("database schema v%d is newer than supported v%d; use a newer Asura binary", currentVersion, schemaVersion)
 	}
 
 	if len(migrations) > 0 {
