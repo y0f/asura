@@ -91,26 +91,34 @@ func toneIf(cond bool, tone string) string {
 
 templ DashboardPage(p DashboardParams) {
 	@Layout(p.LayoutParams) {
+		<div id="dashboard-content" x-data="{ refreshError: false }"
+			hx-get={ p.pageHref(p.Page) } hx-trigger="sse:refresh, every 30s"
+			hx-select="#dashboard-content" hx-swap="outerHTML" hx-push-url="false"
+			@htmx:after-request="if ($event.detail.successful) refreshError = false"
+			@htmx:response-error="refreshError = true"
+			@htmx:send-error="refreshError = true">
+			<div x-show="refreshError" x-cloak role="status" class="mb-4 text-xs text-crit">Refresh failed. Showing the last loaded dashboard; retrying.</div>
 		@PageHeader(PageHeaderParams{Title: "Dashboard", Subtitle: p.summary()})
 		<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
 			@StatCard("Up", fmt.Sprint(p.Up), toneIf(p.Up > 0, "ok"))
 			@StatCard("Down", fmt.Sprint(p.Down), toneIf(p.Down > 0, "crit"))
 			@StatCard("Degraded", fmt.Sprint(p.Degraded), toneIf(p.Degraded > 0, "warn"))
-			@StatCard("Open incidents", fmt.Sprint(p.OpenIncidents), toneIf(p.OpenIncidents > 0, "crit"))
+			if p.Can("incidents.read") {
+				@StatCard("Open incidents", fmt.Sprint(p.OpenIncidents), toneIf(p.OpenIncidents > 0, "crit"))
+			} else {
+				@StatCard("Paused", fmt.Sprint(p.Paused), "muted")
+			}
 		</div>
 		<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-			<section class="xl:col-span-2 min-w-0" aria-labelledby="dash-monitors">
+			<section class={ "min-w-0", templ.KV("xl:col-span-2", p.Can("incidents.read")), templ.KV("xl:col-span-3", !p.Can("incidents.read")) } aria-labelledby="dash-monitors">
 				<div class="flex items-center gap-3 mb-3">
 					<h2 id="dash-monitors" class="text-xl font-bold">Monitors</h2>
-					if p.Can("monitors.write") {
+					if p.Can("monitors.create") {
 						<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary btn-sm">+ Add</a>
 					}
 					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
 				</div>
-				<div id="monitor-grid"
-					hx-get={ p.pageHref(p.Page) }
-					hx-trigger="sse:refresh, every 30s" hx-select="#monitor-grid" hx-swap="outerHTML" hx-push-url="false"
-					class="panel">
+				<div id="monitor-grid" class="panel">
 					if len(p.Monitors) > 0 {
 						<ul class="divide-y divide-line">
 							for _, m := range p.Monitors {
@@ -145,7 +153,7 @@ templ DashboardPage(p DashboardParams) {
 					} else {
 						<div class="px-4 py-10 text-center">
 							<p class="text-sm text-muted-light">No monitors yet.</p>
-							if p.Can("monitors.write") {
+							if p.Can("monitors.create") {
 								<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary mt-4">Create your first monitor</a>
 							}
 						</div>
@@ -155,6 +163,7 @@ templ DashboardPage(p DashboardParams) {
 					}
 				</div>
 			</section>
+			if p.Can("incidents.read") {
 			<section class="min-w-0" aria-labelledby="dash-incidents">
 				<div class="flex items-center gap-3 mb-3">
 					<h2 id="dash-incidents" class="text-xl font-bold">Open incidents</h2>
@@ -174,7 +183,9 @@ templ DashboardPage(p DashboardParams) {
 					}
 				</div>
 			</section>
+			}
 		</div>
-		@MonitorListListener(p.BasePath, "monitor-grid")
+		</div>
+		@MonitorListListener(p.BasePath, "dashboard-content")
 	}
 }

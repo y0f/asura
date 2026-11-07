@@ -418,7 +418,6 @@ templ configRow(label string) {
 
 templ MonitorDetailPage(p MonitorDetailParams) {
 	@Layout(p.LayoutParams) {
-		<script src={ Asset(p.BasePath, "monitor-chart.js") }></script>
 		<div id="monitor-detail" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false"
 			@htmx:after-request="if ($event.detail.successful) refreshError = false"
 			@htmx:response-error="refreshError = true"
@@ -486,7 +485,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					}
 				}
 			</div>
-			<div id="response-chart" hx-preserve="true"
+			<div id={ fmt.Sprintf("response-chart-%d", p.Monitor.ID) } hx-preserve="true"
 				data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
 				class="card card-pad mb-6"
 				x-data="monitorChart()" x-cloak>
@@ -501,10 +500,16 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						</template>
 					</div>
 				</div>
-				<div x-show="loading" class="h-[200px] flex items-center justify-center text-sm text-muted">Loading…</div>
-				<div x-show="!loading && !points.length" class="h-[200px] flex items-center justify-center text-sm text-muted">No data for this range.</div>
-				<div x-show="!loading && points.length" class="relative">
-					<div x-ref="chart"></div>
+				<div role="status" class="text-xs text-muted mb-2" x-show="loading || error">
+					<span x-text="error || (points.length ? 'Updating chart…' : 'Loading chart…')"></span>
+					<span x-show="error && points.length" x-text="' Showing the last loaded ' + loadedRange + ' range.'"></span>
+					<button type="button" x-show="error" @click="fetchData()" class="ml-2 text-brand underline">Retry</button>
+				</div>
+				<div x-show="!points.length" class="h-[200px] flex items-center justify-center text-sm text-muted">
+					<span x-text="loading ? 'Loading…' : error ? 'Chart unavailable.' : 'No data for this range.'"></span>
+				</div>
+				<div x-show="points.length" class="relative">
+					<div x-ref="chart" role="img" :aria-label="summary"></div>
 					<div x-ref="tooltip" class="absolute pointer-events-none bg-surface-100 border border-line-light rounded-control px-2 py-1.5 z-10" style="display:none">
 						<div class="tip-date text-xs text-muted"></div>
 						<div class="tip-value text-sm text-white font-mono"></div>

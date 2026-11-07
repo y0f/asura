@@ -71,7 +71,6 @@ func channelTypeLabel(t string) string {
 
 templ NotificationListPage(p NotificationListParams) {
 	@Layout(p.LayoutParams) {
-		<script src={ Asset(p.BasePath, "notifications-form.js") }></script>
 		<div x-data={ notifChannelsXData(p.BasePath) }>
 			@PageHeader(PageHeaderParams{Title: "Notifications", Subtitle: "Where alerts are sent when incidents open, change or resolve."}) {
 				if p.Can("notifications.write") {

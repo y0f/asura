@@ -45,6 +45,8 @@ templ Layout(p LayoutParams) {
 			<link rel="stylesheet" href={ Asset(p.BasePath, "uplot.min.css") }/>
 			<script src={ Asset(p.BasePath, "uplot.iife.min.js") } defer></script>
 			<script src={ Asset(p.BasePath, "htmx.min.js") } defer></script>
+			<script src={ Asset(p.BasePath, "notifications-form.js") } defer></script>
+			<script src={ Asset(p.BasePath, "monitor-chart.js") } defer></script>
 			<script defer src={ Asset(p.BasePath, "alpine.min.js") }></script>
 			@shellScript()
 		</head>
@@ -148,13 +150,22 @@ templ boostScript() {
 				if (win) win.setAttribute("aria-current", "page");
 			}
 			function sync() { syncTitle(); syncActive(); }
-			function reinit(e) {
-				var t = e && e.target;
-				if (!t || t.id !== "content" || !window.Alpine) return;
-				Alpine.destroyTree(t);
-				Alpine.initTree(t);
-			}
-			document.addEventListener("htmx:afterSettle", function (e) { reinit(e); sync(); });
+			// Alpine observes inserted nodes itself. Shared component definitions
+			// load before Alpine starts, including on later boosted navigations.
+			let refreshFocus = null;
+			document.addEventListener("htmx:beforeSwap", function (event) {
+				const target = event.detail.target, active = document.activeElement;
+				if (!target || target.id !== "dashboard-content") return;
+				refreshFocus = event.detail.shouldSwap && target.contains(active) && active.tagName === "A" ? active.getAttribute("href") : null;
+			});
+			document.addEventListener("htmx:afterSettle", function (event) {
+				sync();
+				if (event.target.id !== "dashboard-content" || !refreshFocus) return;
+				const href = refreshFocus; refreshFocus = null;
+				if (document.activeElement !== document.body) return;
+				const link = Array.from(event.target.querySelectorAll("a[href]")).find(a => a.getAttribute("href") === href);
+				if (link) link.focus({ preventScroll: true });
+			});
 			document.addEventListener("htmx:historyRestore", sync);
 		})();
 	</script>
