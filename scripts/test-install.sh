@@ -89,29 +89,90 @@ selection_case old-preferred go1.27.2 install
 selection_case prerelease go1.28rc1 install
 selection_case malformed unknown install
 
-# A failed download or checksum must stop before removing an installed toolchain.
-for failure in download checksum; do
-    failure_log="$TEST_DIR/$failure.log"
+# All paths and executables below belong to the disposable fixture.
+installation_case() (
+    local failure=$1 case_dir="$TEST_DIR/install-$1"
+    mkdir -p "$case_dir"
+    GO_INSTALL_ROOT="$case_dir/go"
+    GOARCH=amd64
+    export INSTALL_TEST_LOG="$case_dir/go.log"
+    export INSTALL_TEST_BUILT_WITH="$case_dir/built-with"
+    if [[ "$failure" != fresh ]]; then
+        write_go "$GO_INSTALL_ROOT/bin" go1.26.0
+        printf 'preserve me\n' > "$GO_INSTALL_ROOT/old-marker"
+    fi
+
+    curl() {
+        [[ "$failure" != download ]] || return 22
+        local archive=${@: -1}
+        [[ "$archive" == "$GO_INSTALL_ROOT".stage.*/go*.tar.gz ]] || return 94
+        [[ "$(stat -c %a "$(dirname "$archive")")" == 700 ]] || return 95
+        printf 'fixture archive\n' > "$archive"
+    }
+    sha256sum() { [[ "$failure" != checksum ]]; }
+    tar() {
+        [[ "$1" == -C && "$3" == -xzf ]] || return 96
+        [[ "$2" == "$GO_INSTALL_ROOT".stage.* ]] || return 97
+        [[ "$failure" != extraction ]] || return 2
+        local version=go1.27.3
+        [[ "$failure" != version ]] || version=go1.27.2
+        write_go "$2/go/bin" "$version"
+        if [[ "$failure" == executable ]]; then
+            printf '#!/usr/bin/env bash\nexit 1\n' > "$2/go/bin/go"
+        fi
+    }
+    mv() {
+        local src=$3 dst=$4
+        if [[ "$src" == "$GO_INSTALL_ROOT" && "$failure" == backup ]]; then
+            return 73
+        fi
+        if [[ "$src" == "$GO_INSTALL_ROOT".stage.*/go ]]; then
+            if [[ "$failure" == replacement || "$failure" == rollback ]]; then
+                return 74
+            fi
+            if [[ "$failure" == interrupted ]]; then
+                kill -TERM "$BASHPID"
+            fi
+        fi
+        if [[ "$src" == "$GO_INSTALL_ROOT".stage.*/previous && "$failure" == rollback ]]; then
+            return 75
+        fi
+        command mv "$@"
+    }
+
     set +e
     (
         set -e
-        GOARCH=amd64
-        curl() {
-            [[ "$failure" != download ]] || return 22
-        }
-        sha256sum() { return 1; }
-        rm() { printf 'rm %s\n' "$*" >> "$failure_log"; }
-        tar() { printf 'tar %s\n' "$*" >> "$failure_log"; }
         install_go
-        echo 'unexpected success'
-    ) > "$TEST_DIR/$failure.output" 2>&1
+        [[ "$GO_BIN" == "$GO_INSTALL_ROOT/bin/go" ]]
+    ) > "$case_dir/output" 2>&1
     code=$?
     set -e
-    [[ "$code" -ne 0 ]]
-    if [[ -e "$failure_log" ]]; then
-        ! grep -qE '/usr/local|^tar ' "$failure_log"
+
+    if [[ "$failure" == success || "$failure" == fresh ]]; then
+        [[ "$code" == 0 ]]
+        [[ "$(local_go_version "$GO_INSTALL_ROOT/bin/go")" == 1.27.3 ]]
+        [[ ! -e "$GO_INSTALL_ROOT/old-marker" ]]
+    elif [[ "$failure" == rollback ]]; then
+        [[ "$code" != 0 ]]
+        local previous
+        previous=$(find "$case_dir" -path '*/previous/old-marker')
+        [[ -n "$previous" && "$(cat "$previous")" == 'preserve me' ]]
+        [[ "$(local_go_version "$(dirname "$previous")/bin/go")" == 1.26.0 ]]
+        grep -q 'Previous Go installation preserved' "$case_dir/output"
+    else
+        [[ "$code" != 0 ]]
+        [[ "$(cat "$GO_INSTALL_ROOT/old-marker")" == 'preserve me' ]]
+        [[ "$(local_go_version "$GO_INSTALL_ROOT/bin/go")" == 1.26.0 ]]
     fi
-    echo "PASS $failure-failure"
+    if [[ "$failure" != rollback ]]; then
+        [[ -z "$(find "$case_dir" -maxdepth 1 -name 'go.stage.*' -print -quit)" ]]
+    fi
+    echo "PASS install-$failure"
+)
+
+for failure in fresh success download checksum extraction version executable backup replacement interrupted rollback; do
+    installation_case "$failure"
 done
 
 # A replacement must be validated again, including its local toolchain version.

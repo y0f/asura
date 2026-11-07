@@ -10,6 +10,7 @@ INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/asura"
 DATA_DIR="/var/lib/asura"
 SERVICE_USER="asura"
+GO_INSTALL_ROOT="/usr/local/go"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -66,9 +67,9 @@ select_go() {
     info "Using Go ${current_go}: ${GO_BIN}"
 }
 
-install_go() {
+stage_go_install() (
     info "Installing Go ${GO_VERSION} (${GOARCH})..."
-    TARBALL="go${GO_VERSION}.linux-${GOARCH}.tar.gz"
+    local tarball="go${GO_VERSION}.linux-${GOARCH}.tar.gz"
 
     local expected_sha
     case "$GOARCH" in
@@ -77,18 +78,47 @@ install_go() {
         *)     error "No pinned Go checksum for ${GOARCH}" ;;
     esac
 
-    curl -fsSL "https://go.dev/dl/${TARBALL}" -o "/tmp/${TARBALL}"
+    local stage installed=0
+    stage=$(mktemp -d "${GO_INSTALL_ROOT}.stage.XXXXXX") || error "Could not create Go staging directory"
+    cleanup_go_stage() {
+        local status=$?
+        trap - EXIT HUP INT TERM
+        if [[ "$installed" == 0 && ( -e "$stage/previous" || -L "$stage/previous" ) ]]; then
+            if [[ -e "$GO_INSTALL_ROOT" || -L "$GO_INSTALL_ROOT" ]] || ! mv -T -- "$stage/previous" "$GO_INSTALL_ROOT"; then
+                warn "Previous Go installation preserved at ${stage}/previous; restore it before retrying"
+                return 1
+            fi
+        fi
+        rm -rf -- "$stage" || return 1
+        return "$status"
+    }
+    trap cleanup_go_stage EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    curl -fsSL "https://go.dev/dl/${tarball}" -o "$stage/$tarball" || error "Go download failed"
 
     # Verify authenticity against the pinned SHA-256 before extracting as root
-    if ! echo "${expected_sha}  /tmp/${TARBALL}" | sha256sum -c - >/dev/null 2>&1; then
-        rm -f "/tmp/${TARBALL}"
-        error "Go tarball checksum mismatch for ${TARBALL} — refusing to install"
+    if ! echo "${expected_sha}  ${stage}/${tarball}" | sha256sum -c - >/dev/null 2>&1; then
+        error "Go tarball checksum mismatch for ${tarball} — refusing to install"
     fi
 
-    rm -rf /usr/local/go
-    tar -C /usr/local -xzf "/tmp/${TARBALL}"
-    rm -f "/tmp/${TARBALL}"
-    GO_BIN="/usr/local/go/bin/go"
+    tar -C "$stage" -xzf "$stage/$tarball" || error "Could not extract Go archive"
+    local staged_version
+    staged_version=$(local_go_version "$stage/go/bin/go") || error "Could not verify staged Go executable"
+    [[ "$staged_version" == "$GO_VERSION" ]] || error "Staged Go version does not match ${GO_VERSION}"
+
+    if [[ -e "$GO_INSTALL_ROOT" || -L "$GO_INSTALL_ROOT" ]]; then
+        mv -T -- "$GO_INSTALL_ROOT" "$stage/previous" || error "Could not preserve the previous Go installation"
+    fi
+    mv -T -- "$stage/go" "$GO_INSTALL_ROOT" || error "Could not install staged Go"
+    installed=1
+)
+
+install_go() {
+    stage_go_install || return
+    GO_BIN="${GO_INSTALL_ROOT}/bin/go"
 }
 
 build_asura() {
