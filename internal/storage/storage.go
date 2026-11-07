@@ -209,6 +209,7 @@ type Store interface {
 	SetMonitorAgentIDs(ctx context.Context, monitorID int64, agentIDs []int64) error
 
 	// Data rollup
+	RollupPending(ctx context.Context, now time.Time) error
 	RollupHourly(ctx context.Context, hour string) error
 	RollupDaily(ctx context.Context, day string) error
 	PurgeHourlyBefore(ctx context.Context, before time.Time) (int64, error)

@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -18,10 +19,11 @@ import (
 
 // SQLiteStore implements Store using SQLite with WAL mode.
 type SQLiteStore struct {
-	readDB  *sql.DB
-	writeDB *sql.DB
-	dbPath  string
-	enc     *Encryptor
+	readDB   *sql.DB
+	writeDB  *sql.DB
+	dbPath   string
+	enc      *Encryptor
+	rollupMu sync.Mutex
 }
 
 func (s *SQLiteStore) SetEncryptor(enc *Encryptor) {

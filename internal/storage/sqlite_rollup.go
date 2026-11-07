@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 )
@@ -38,12 +37,14 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 		        agg.sum_rt, agg.avg_rt, agg.min_rt, agg.max_rt,
 		        COALESCE(p95.p95_rt, 0),
 		        agg.up_count, agg.down_count, agg.total
-		 FROM agg LEFT JOIN p95 ON p95.monitor_id = agg.monitor_id`,
+		 FROM agg LEFT JOIN p95 ON p95.monitor_id = agg.monitor_id
+		 WHERE ? >= COALESCE((SELECT value FROM meta WHERE key='raw_purged_before'), '')
+		 OR NOT EXISTS (SELECT 1 FROM check_result_hourly h WHERE h.monitor_id=agg.monitor_id AND h.hour=?)`,
 		hour+":00:00Z",
 		hourEnd(hour)+":00:00Z",
 		hour+":00:00Z",
 		hourEnd(hour)+":00:00Z",
-		hour)
+		hour, hour+":00:00Z", hour)
 	return err
 }
 
@@ -61,42 +62,34 @@ func (s *SQLiteStore) RollupDaily(ctx context.Context, day string) error {
 		        SUM(up_count),
 		        SUM(down_count),
 		        SUM(total)
-		 FROM check_result_hourly
+		 FROM check_result_hourly h
 		 WHERE hour >= ? AND hour < ?
+		 AND (? >= COALESCE((SELECT value FROM meta WHERE key='hourly_purged_before'), '')
+		      OR NOT EXISTS (SELECT 1 FROM check_result_daily d WHERE d.monitor_id=h.monitor_id AND d.day=?))
 		 GROUP BY monitor_id`,
 		day,
 		day+"T00",
-		day+"T24")
+		day+"T24", day+"T00", day)
 	return err
 }
 
-// RollupProgress reports the newest hourly and daily rollup and the oldest raw
-// check result. Each is the zero time when there is none.
-func (s *SQLiteStore) RollupProgress(ctx context.Context) (lastHour, lastDay, oldestCheck time.Time, err error) {
-	var h, d, c sql.NullString
-	err = s.readDB.QueryRowContext(ctx,
-		`SELECT (SELECT MAX(hour) FROM check_result_hourly),
-		        (SELECT MAX(day) FROM check_result_daily),
-		        (SELECT MIN(created_at) FROM check_results)`).Scan(&h, &d, &c)
-	if err != nil {
-		return
-	}
-	if h.Valid {
-		lastHour, _ = time.Parse("2006-01-02T15", h.String)
-	}
-	if d.Valid {
-		lastDay, _ = time.Parse("2006-01-02", d.String)
-	}
-	if c.Valid {
-		oldestCheck = parseTime(c.String)
-	}
-	return
-}
-
 func (s *SQLiteStore) PurgeHourlyBefore(ctx context.Context, before time.Time) (int64, error) {
+	now := time.Now().UTC()
+	if err := s.RollupPending(ctx, now); err != nil {
+		return 0, err
+	}
+	// Retain whole source days. A durable floor prevents a restart or late
+	// result from replacing a complete daily summary with partial hourly data.
+	if before.After(now) {
+		before = now
+	}
+	cutoff := before.UTC().Truncate(24 * time.Hour).Format("2006-01-02T15")
+	if err := s.advancePurgeFloor(ctx, "hourly_purged_before", cutoff); err != nil {
+		return 0, err
+	}
 	res, err := s.writeDB.ExecContext(ctx,
 		`DELETE FROM check_result_hourly WHERE hour < ?`,
-		before.Format("2006-01-02T15"))
+		cutoff)
 	if err != nil {
 		return 0, err
 	}

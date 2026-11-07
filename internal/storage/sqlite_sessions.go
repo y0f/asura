@@ -255,12 +255,26 @@ func (s *SQLiteStore) DeleteExpiredSessions(ctx context.Context) (int64, error) 
 // --- Retention ---
 
 func (s *SQLiteStore) PurgeOldData(ctx context.Context, before time.Time) (int64, error) {
+	now := time.Now().UTC()
+	if err := s.RollupPending(ctx, now); err != nil {
+		return 0, err
+	}
 	ts := formatTime(before)
 	var totalDeleted int64
 
-	n, err := s.deleteInBatches(ctx, "check_results", "created_at < ?", ts)
-	if err != nil {
+	// Keep complete hours; persist the protection before the first batch so
+	// cancellation or process termination cannot expose partial source data.
+	rawBefore := before.UTC()
+	if rawBefore.After(now) {
+		rawBefore = now
+	}
+	cutoff := formatTime(rawBefore.Truncate(time.Hour))
+	if err := s.advancePurgeFloor(ctx, "raw_purged_before", cutoff); err != nil {
 		return 0, err
+	}
+	n, err := s.deleteInBatches(ctx, "check_results", "created_at < ?", cutoff)
+	if err != nil {
+		return n, err
 	}
 	totalDeleted += n
 
