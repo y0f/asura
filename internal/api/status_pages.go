@@ -274,7 +274,11 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 	overall := httputil.OverallStatus(monitors)
 	incidents := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
 
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	if sp.PasswordHash == "" {
+		w.Header().Set("Cache-Control", "public, max-age=30")
+	} else {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"page": map[string]string{
 			"title":       sp.Title,

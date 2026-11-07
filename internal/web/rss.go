@@ -91,7 +91,11 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 	}
 
 	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	if sp.PasswordHash == "" {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+	} else {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.Write([]byte(xml.Header))
 	xml.NewEncoder(w).Encode(feed)
 }
