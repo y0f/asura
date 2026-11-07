@@ -103,12 +103,17 @@ func (p *Pipeline) DroppedNotifications() int64 {
 }
 
 func (p *Pipeline) Run(ctx context.Context) {
-	go p.scheduler.Run(ctx)
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var running sync.WaitGroup
+	running.Go(func() { p.scheduler.Run(runCtx) })
 
 	pool := NewPool(p.workers, p.registry, p.jobs, p.results, p.logger)
-	go pool.Run(ctx)
+	running.Go(func() { pool.Run(runCtx) })
 
-	p.processResults(ctx)
+	p.processResults(runCtx)
+	cancel()
+	running.Wait()
 }
 
 func (p *Pipeline) processResults(ctx context.Context) {
