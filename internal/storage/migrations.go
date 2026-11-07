@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 35
+const schemaVersion = 36
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -289,6 +289,7 @@ CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(t
 CREATE TABLE IF NOT EXISTS check_result_hourly (
 	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	hour       TEXT    NOT NULL,
+	sum_rt     INTEGER,
 	avg_rt     INTEGER NOT NULL DEFAULT 0,
 	min_rt     INTEGER NOT NULL DEFAULT 0,
 	max_rt     INTEGER NOT NULL DEFAULT 0,
@@ -302,6 +303,7 @@ CREATE TABLE IF NOT EXISTS check_result_hourly (
 CREATE TABLE IF NOT EXISTS check_result_daily (
 	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	day        TEXT    NOT NULL,
+	sum_rt     INTEGER,
 	avg_rt     INTEGER NOT NULL DEFAULT 0,
 	min_rt     INTEGER NOT NULL DEFAULT 0,
 	max_rt     INTEGER NOT NULL DEFAULT 0,
@@ -643,5 +645,10 @@ ALTER TABLE totp_keys ADD COLUMN last_counter INTEGER NOT NULL DEFAULT 0;`,
 );
 
 CREATE INDEX IF NOT EXISTS idx_monitor_agents_agent_id ON monitor_agents(agent_id);`,
+	},
+	{
+		version: 36,
+		sql: `ALTER TABLE check_result_hourly ADD COLUMN sum_rt INTEGER;
+ALTER TABLE check_result_daily ADD COLUMN sum_rt INTEGER;`,
 	},
 }

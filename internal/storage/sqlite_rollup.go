@@ -9,7 +9,7 @@ import (
 
 func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 	_, err := s.writeDB.ExecContext(ctx,
-		`INSERT OR REPLACE INTO check_result_hourly (monitor_id, hour, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
+		`INSERT OR REPLACE INTO check_result_hourly (monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
 		 WITH windowed AS (
 		   SELECT monitor_id, response_time,
 		          ROW_NUMBER() OVER (PARTITION BY monitor_id ORDER BY response_time) AS rn,
@@ -23,6 +23,7 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 		 ),
 		 agg AS (
 		   SELECT monitor_id,
+		          SUM(response_time) AS sum_rt,
 		          CAST(AVG(response_time) AS INTEGER) AS avg_rt,
 		          MIN(response_time) AS min_rt,
 		          MAX(response_time) AS max_rt,
@@ -34,7 +35,7 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 		   GROUP BY monitor_id
 		 )
 		 SELECT agg.monitor_id, ? AS hour,
-		        agg.avg_rt, agg.min_rt, agg.max_rt,
+		        agg.sum_rt, agg.avg_rt, agg.min_rt, agg.max_rt,
 		        COALESCE(p95.p95_rt, 0),
 		        agg.up_count, agg.down_count, agg.total
 		 FROM agg LEFT JOIN p95 ON p95.monitor_id = agg.monitor_id`,
@@ -47,10 +48,13 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 }
 
 func (s *SQLiteStore) RollupDaily(ctx context.Context, day string) error {
+	// Old hourly rows have only rounded means; weight those by their sample count.
+	// New rows retain the exact sum so daily means do not compound rounding loss.
 	_, err := s.writeDB.ExecContext(ctx,
-		`INSERT OR REPLACE INTO check_result_daily (monitor_id, day, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
+		`INSERT OR REPLACE INTO check_result_daily (monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
 		 SELECT monitor_id, ? AS day,
-		        CAST(AVG(avg_rt) AS INTEGER),
+		        SUM(COALESCE(sum_rt, avg_rt * total)),
+		        COALESCE(CAST(SUM(COALESCE(sum_rt, avg_rt * total)) / NULLIF(SUM(total), 0) AS INTEGER), 0),
 		        MIN(min_rt),
 		        MAX(max_rt),
 		        MAX(p95_rt),
@@ -112,7 +116,7 @@ func (s *SQLiteStore) PurgeDailyBefore(ctx context.Context, before time.Time) (i
 func (s *SQLiteStore) GetTimeSeriesFromHourly(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT hour || ':00:00Z', avg_rt,
-		        CASE WHEN down_count > 0 THEN 'down' WHEN up_count > 0 THEN 'up' ELSE 'up' END
+		        CASE WHEN down_count > 0 THEN 'down' WHEN total > up_count + down_count THEN 'degraded' ELSE 'up' END
 		 FROM check_result_hourly
 		 WHERE monitor_id=? AND hour >= ? AND hour < ?
 		 ORDER BY hour`,
@@ -138,7 +142,7 @@ func (s *SQLiteStore) GetTimeSeriesFromHourly(ctx context.Context, monitorID int
 func (s *SQLiteStore) GetTimeSeriesFromDaily(ctx context.Context, monitorID int64, from, to time.Time) ([]*TimeSeriesPoint, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT day || 'T00:00:00Z', avg_rt,
-		        CASE WHEN down_count > 0 THEN 'down' WHEN up_count > 0 THEN 'up' ELSE 'up' END
+		        CASE WHEN down_count > 0 THEN 'down' WHEN total > up_count + down_count THEN 'degraded' ELSE 'up' END
 		 FROM check_result_daily
 		 WHERE monitor_id=? AND day >= ? AND day < ?
 		 ORDER BY day`,

@@ -25,103 +25,93 @@ func (s *SQLiteStore) IsMonitorOnStatusPage(ctx context.Context, monitorID int64
 }
 
 func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time) ([]*DailyUptime, error) {
-	// Days strictly before today are served from the daily rollups; the current
-	// (uncovered) day falls back to a raw scan so it reflects fresh checks.
-	todayStart := time.Now().UTC().Truncate(24 * time.Hour)
-	rollupEnd := todayStart
-	if rollupEnd.After(to) {
-		rollupEnd = to
+	from, to = from.UTC(), to.UTC()
+	results := make([]*DailyUptime, 0)
+	if !from.Before(to) {
+		return results, nil
 	}
-
-	byDay := make(map[string]*DailyUptime)
-	var order []string
-
-	add := func(d *DailyUptime) {
+	rollupEnd := to
+	if today := time.Now().UTC().Truncate(24 * time.Hour); rollupEnd.After(today) {
+		rollupEnd = today
+	}
+	firstDay := from.Truncate(24 * time.Hour)
+	if firstDay.Before(from) {
+		firstDay = firstDay.AddDate(0, 0, 1)
+	}
+	// Read rollups and uncovered raw intervals in one snapshot. Limiting the
+	// raw scans to gaps keeps long reports proportional to unsummarized data.
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx,
+		`SELECT day, total, up_count, down_count FROM check_result_daily
+		 WHERE monitor_id=? AND day>=? AND day<? ORDER BY day`,
+		monitorID, firstDay.Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("get daily uptime rollup: %w", err)
+	}
+	var gaps [][2]time.Time
+	cursor := from
+	for rows.Next() {
+		var d DailyUptime
+		if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		day, err := time.Parse("2006-01-02", d.Date)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("parse rollup day: %w", err)
+		}
+		if cursor.Before(day) {
+			gaps = append(gaps, [2]time.Time{cursor, day})
+		}
+		cursor = day.AddDate(0, 0, 1)
+		results = append(results, &d)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if cursor.Before(to) {
+		gaps = append(gaps, [2]time.Time{cursor, to})
+	}
+	for _, gap := range gaps {
+		rows, err := tx.QueryContext(ctx,
+			`SELECT SUBSTR(created_at,1,10) AS day, COUNT(*),
+			 COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END),0),
+			 COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END),0)
+			 FROM check_results WHERE monitor_id=? AND created_at>=? AND created_at<?
+			 GROUP BY SUBSTR(created_at,1,10)`, monitorID, formatTime(gap[0]), formatTime(gap[1]))
+		if err != nil {
+			return nil, fmt.Errorf("get daily uptime gap: %w", err)
+		}
+		for rows.Next() {
+			var d DailyUptime
+			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			results = append(results, &d)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	for _, d := range results {
 		if d.TotalChecks > 0 {
 			d.UptimePct = float64(d.UpChecks) / float64(d.TotalChecks) * 100
 		}
-		if _, ok := byDay[d.Date]; !ok {
-			order = append(order, d.Date)
-		}
-		byDay[d.Date] = d
 	}
-
-	rawFrom := todayStart
-
-	if rollupEnd.After(from) {
-		rows, err := s.readDB.QueryContext(ctx,
-			`SELECT day, total, up_count, down_count
-			 FROM check_result_daily
-			 WHERE monitor_id=? AND day >= ? AND day < ?
-			 ORDER BY day ASC`,
-			monitorID, from.UTC().Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
-		if err != nil {
-			return nil, fmt.Errorf("get daily uptime rollup: %w", err)
-		}
-		var maxRolled string
-		for rows.Next() {
-			var d DailyUptime
-			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			add(&d)
-			maxRolled = d.Date
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-		// Extend the raw fallback to cover recent days the rollup has not yet
-		// produced (e.g. yesterday before the rollup tick runs); otherwise those
-		// days would render with no data even though raw rows exist.
-		if maxRolled == "" {
-			rawFrom = from
-		} else if t, perr := time.Parse("2006-01-02", maxRolled); perr == nil {
-			if cand := t.AddDate(0, 0, 1); cand.Before(rawFrom) {
-				rawFrom = cand
-			}
-		}
-	}
-
-	if rawFrom.Before(from) {
-		rawFrom = from
-	}
-	if rawFrom.Before(to) {
-		rows, err := s.readDB.QueryContext(ctx,
-			`SELECT DATE(created_at) as day,
-			        COUNT(*) as total,
-			        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
-			        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0)
-			 FROM check_results
-			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-			 GROUP BY DATE(created_at)
-			 ORDER BY day ASC`,
-			monitorID, formatTime(rawFrom), formatTime(to))
-		if err != nil {
-			return nil, fmt.Errorf("get daily uptime: %w", err)
-		}
-		for rows.Next() {
-			var d DailyUptime
-			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			add(&d)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	}
-
-	sort.Strings(order)
-	results := make([]*DailyUptime, 0, len(order))
-	for _, day := range order {
-		results = append(results, byDay[day])
-	}
+	sort.Slice(results, func(i, j int) bool { return results[i].Date < results[j].Date })
 	return results, nil
 }
 
