@@ -409,6 +409,15 @@ func (h *Handler) BulkMonitors(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	scopes := httputil.MonitorBulkPermissions(req.Action)
+	if scopes == nil {
+		writeError(w, http.StatusBadRequest, "action must be one of: pause, resume, delete, set_group")
+		return
+	}
+	if !httputil.GetAPIKey(r.Context()).HasAllPermissions(scopes...) {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return
+	}
 	if len(req.IDs) == 0 {
 		writeError(w, http.StatusBadRequest, "ids is required")
 		return
@@ -431,9 +440,6 @@ func (h *Handler) BulkMonitors(w http.ResponseWriter, r *http.Request) {
 		affected, err = h.store.BulkDeleteMonitors(ctx, req.IDs)
 	case "set_group":
 		affected, err = h.store.BulkSetMonitorGroup(ctx, req.IDs, req.GroupID)
-	default:
-		writeError(w, http.StatusBadRequest, "action must be one of: pause, resume, delete, set_group")
-		return
 	}
 
 	if err != nil {

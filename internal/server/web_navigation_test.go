@@ -15,8 +15,8 @@ import (
 )
 
 func TestWebNavigationPermissions(t *testing.T) {
-	monitorPages := []string{"/", "/monitors", "/groups", "/tags", "/sla", "/status-pages", "/agents", "/proxies"}
-	allPages := append(slices.Clone(monitorPages), "/incidents", "/notifications", "/escalation-policies", "/on-call", "/maintenance", "/logs", "/audit", "/settings")
+	monitorPages := []string{"/", "/monitors"}
+	allPages := append(slices.Clone(monitorPages), "/groups", "/tags", "/sla", "/status-pages", "/agents", "/proxies", "/incidents", "/notifications", "/notifications/history", "/escalation-policies", "/on-call", "/maintenance", "/logs", "/audit", "/settings")
 	for _, basePath := range []string{"", "/asura"} {
 		for _, tc := range []struct {
 			name, landing string
@@ -27,12 +27,23 @@ func TestWebNavigationPermissions(t *testing.T) {
 			{name: "monitors", landing: "/", permissions: []string{"monitors.read"}, pages: monitorPages},
 			{name: "monitor editor", landing: "/", permissions: []string{"monitors.read", "monitors.write"}, pages: monitorPages, extra: []string{"/monitors/new"}},
 			{name: "incidents", landing: "/incidents", permissions: []string{"incidents.read"}, pages: []string{"/incidents"}},
-			{name: "notifications", landing: "/notifications", permissions: []string{"notifications.read"}, pages: []string{"/notifications", "/on-call"}, extra: []string{"/notifications/history"}},
+			{name: "notifications", landing: "/notifications", permissions: []string{"notifications.read"}, pages: []string{"/notifications"}},
 			{name: "escalation", landing: "/escalation-policies", permissions: []string{"escalation_policies.read"}, pages: []string{"/escalation-policies"}},
 			{name: "maintenance", landing: "/maintenance", permissions: []string{"maintenance.read"}, pages: []string{"/maintenance"}},
-			{name: "metrics", landing: "/logs", permissions: []string{"metrics.read"}, pages: []string{"/logs", "/audit", "/settings"}},
-			{name: "mixed", landing: "/incidents", permissions: []string{"incidents.read", "metrics.read"}, pages: []string{"/incidents", "/logs", "/audit", "/settings"}},
-			{name: "admin", landing: "/", superAdmin: true, pages: allPages, extra: []string{"/monitors/new", "/notifications/history"}},
+			{name: "groups", landing: "/groups", permissions: []string{"groups.read"}, pages: []string{"/groups"}},
+			{name: "tags", landing: "/tags", permissions: []string{"tags.read"}, pages: []string{"/tags"}},
+			{name: "SLA", landing: "/sla", permissions: []string{"sla.read"}, pages: []string{"/sla"}},
+			{name: "status pages", landing: "/status-pages", permissions: []string{"status_pages.read"}, pages: []string{"/status-pages"}},
+			{name: "agents", landing: "/agents", permissions: []string{"agents.read"}, pages: []string{"/agents"}},
+			{name: "proxies", landing: "/proxies", permissions: []string{"proxies.read"}, pages: []string{"/proxies"}},
+			{name: "on-call", landing: "/on-call", permissions: []string{"on_call.read"}, pages: []string{"/on-call"}},
+			{name: "history", landing: "/notifications/history", permissions: []string{"notification_history.read"}, pages: []string{"/notifications/history"}},
+			{name: "logs", landing: "/logs", permissions: []string{"request_logs.read"}, pages: []string{"/logs"}},
+			{name: "audit", landing: "/audit", permissions: []string{"audit.read"}, pages: []string{"/audit"}},
+			{name: "settings", landing: "/settings", permissions: []string{"settings.read"}, pages: []string{"/settings"}},
+			{name: "API metrics only", permissions: []string{"metrics.read"}},
+			{name: "mixed", landing: "/incidents", permissions: []string{"incidents.read", "audit.read"}, pages: []string{"/incidents", "/audit"}},
+			{name: "admin", landing: "/", superAdmin: true, pages: allPages, extra: []string{"/monitors/new"}},
 			{name: "write only", permissions: []string{"monitors.write"}},
 		} {
 			t.Run(basePath+"/"+tc.name, func(t *testing.T) {

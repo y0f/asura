@@ -414,9 +414,15 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 }
 
 func (h *Handler) RequirePerm(perm string, next http.Handler) http.Handler {
+	return h.RequirePermissions(next, perm)
+}
+
+// RequirePermissions checks every scope and the origin of form submissions.
+// With no scopes, the handler must authorize its operation itself.
+func (h *Handler) RequirePermissions(next http.Handler, scopes ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		k := httputil.GetAPIKey(r.Context())
-		if k == nil || !k.HasPermission(perm) {
+		if !k.HasAllPermissions(scopes...) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

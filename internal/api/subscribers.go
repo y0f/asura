@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/safenet"
 	"github.com/y0f/asura/internal/storage"
 )
@@ -23,10 +22,8 @@ const (
 	subscriberConfirmTimeout = time.Minute
 )
 
-// ListSubscribers returns the total subscriber count for a page. Keys that
-// may manage subscribers (monitors.write) also get the confirmed subscribers,
-// whose IDs can be passed to DeleteSubscriber. Read-only keys get only the
-// count: emails are personal data and webhook URLs often embed tokens.
+// ListSubscribers requires the explicit subscribers.read scope, because
+// addresses and webhook URLs are not ordinary status-page metadata.
 func (h *Handler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -37,10 +34,6 @@ func (h *Handler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 	count, err := h.store.CountSubscribersByPage(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to count subscribers")
-		return
-	}
-	if key := httputil.GetAPIKey(r.Context()); key == nil || !key.HasPermission("monitors.write") {
-		writeJSON(w, http.StatusOK, map[string]any{"count": count})
 		return
 	}
 	subs, err := h.store.ListConfirmedSubscribers(r.Context(), id)

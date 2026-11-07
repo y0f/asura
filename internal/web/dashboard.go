@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
@@ -34,7 +35,10 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	displayMonitors, page, totalPages := h.loadMonitorPage(ctx, typeFilter, page, perPage)
 
-	incidentList := h.loadOpenIncidents(ctx)
+	var incidentList []*storage.Incident
+	if httputil.GetAPIKey(ctx).HasPermission("incidents.read") {
+		incidentList = h.loadOpenIncidents(ctx)
+	}
 
 	responseTimes, _ := h.store.GetLatestResponseTimes(ctx)
 	if responseTimes == nil {

@@ -35,8 +35,8 @@ curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=tru
 <p>Via API:</p>
 
 <pre><code>curl -X POST -H "X-API-Key: ak_..." \
-  -F "file=@backup.json" -F "mode=merge" \
-  https://example.com/api/v1/import</code></pre>
+  -H "Content-Type: application/json" --data-binary @backup.json \
+  https://example.com/api/v1/import?mode=merge</code></pre>
 
 <h2>Best Practices</h2>
 
@@ -45,5 +45,5 @@ curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=tru
   <li>Use <strong>redacted</strong> exports when sharing configs between team members</li>
   <li>Test imports on a separate instance before replacing production data</li>
   <li><strong>Replace</strong> mode is destructive. it deletes everything before importing</li>
-  <li>Import requires the <code>monitors.write</code> permission. Any key with this scope (not just admin) can run a destructive Replace import, so scope keys carefully</li>
+  <li>Import and export (including redacted exports) require <code>super_admin: true</code> or the legacy <code>admin</code> role. Ordinary resource permissions cannot grant configuration transfer access</li>
 </ul>

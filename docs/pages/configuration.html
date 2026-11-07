@@ -53,8 +53,8 @@
     <tr><th>Role</th><th>Access</th></tr>
   </thead>
   <tbody>
-    <tr><td><code>admin</code></td><td>Full read/write access to all resources</td></tr>
-    <tr><td><code>readonly</code></td><td>Read-only access (monitors, incidents, notifications, escalation policies, maintenance, metrics)</td></tr>
+    <tr><td><code>admin</code></td><td>Super administrator access, including configuration import and export</td></tr>
+    <tr><td><code>readonly</code></td><td>All registered read scopes except subscriber contacts (<code>subscribers.read</code>)</td></tr>
   </tbody>
 </table>
 
@@ -71,7 +71,45 @@
         - "monitors.write"
         - "incidents.read"</code></pre>
 
-<p>Available permissions: <code>monitors.read</code>, <code>monitors.write</code>, <code>incidents.read</code>, <code>incidents.write</code>, <code>notifications.read</code>, <code>notifications.write</code>, <code>escalation_policies.read</code>, <code>escalation_policies.write</code>, <code>maintenance.read</code>, <code>maintenance.write</code>, <code>metrics.read</code>.</p>
+<p>Permissions use <code>resource.action</code>, for example <code>monitors.pause</code>. Each resource with mutation actions also accepts <code>resource.write</code>, which grants all of that resource's mutations. A write grant never grants read access or access to another resource. Unknown resources, actions, roles, and wildcard scopes are rejected.</p>
+<table>
+  <thead><tr><th>Resource</th><th>Actions</th></tr></thead>
+  <tbody>
+    <tr><td><code>monitors</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>pause</code>, <code>resume</code>, <code>status</code>, <code>clone</code>, <code>assign</code></td></tr>
+    <tr><td><code>incidents</code></td><td><code>read</code>, <code>acknowledge</code>, <code>resolve</code>, <code>severity</code>, <code>delete</code></td></tr>
+    <tr><td><code>notifications</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>test</code></td></tr>
+    <tr><td><code>notification_history</code></td><td><code>read</code></td></tr>
+    <tr><td><code>escalation_policies</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>maintenance</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>toggle</code></td></tr>
+    <tr><td><code>groups</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>tags</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>proxies</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>agents</code></td><td><code>read</code>, <code>create</code>, <code>delete</code></td></tr>
+    <tr><td><code>status_pages</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code></td></tr>
+    <tr><td><code>subscribers</code></td><td><code>read</code>, <code>delete</code></td></tr>
+    <tr><td><code>on_call</code></td><td><code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>override</code></td></tr>
+    <tr><td><code>request_logs</code></td><td><code>read</code></td></tr>
+    <tr><td><code>audit</code></td><td><code>read</code></td></tr>
+    <tr><td><code>settings</code></td><td><code>read</code></td></tr>
+    <tr><td><code>database</code></td><td><code>read</code>, <code>maintain</code></td></tr>
+    <tr><td><code>metrics</code></td><td><code>read</code></td></tr>
+    <tr><td><code>sla</code></td><td><code>read</code></td></tr>
+  </tbody>
+</table>
+<p>Cloning requires both <code>monitors.read</code> and <code>monitors.clone</code>. Editing an existing item through a form requires its read and update scopes. Bulk operations require the selected action; assigning a group also requires <code>monitors.assign</code> and <code>groups.read</code>. Configuration import and export require <code>super_admin: true</code> (or the legacy <code>admin</code> role), even when every ordinary permission is granted. Subscriber contact details require an explicit <code>subscribers.read</code> grant.</p>
+<h3>Upgrading permissions from v1</h3>
+<p>V2 separates resources that previously shared a scope. Existing explicit permissions are not expanded automatically. Retain the scopes you need and add the following scopes only for the corresponding features:</p>
+<table>
+  <thead><tr><th>Previous scope</th><th>Additional v2 scopes for previously shared features</th></tr></thead>
+  <tbody>
+    <tr><td><code>monitors.read</code></td><td><code>groups.read</code>, <code>tags.read</code>, <code>proxies.read</code>, <code>agents.read</code>, <code>status_pages.read</code>, <code>sla.read</code>. Subscriber listing now requires the separate sensitive grant <code>subscribers.read</code>.</td></tr>
+    <tr><td><code>monitors.write</code></td><td><code>groups.write</code>, <code>tags.write</code>, <code>proxies.write</code>, <code>agents.write</code>, <code>status_pages.write</code>, <code>subscribers.delete</code>, <code>database.maintain</code>. Import and export require super administrator access.</td></tr>
+    <tr><td><code>notifications.read</code></td><td><code>notification_history.read</code>, <code>on_call.read</code></td></tr>
+    <tr><td><code>notifications.write</code></td><td><code>on_call.write</code></td></tr>
+    <tr><td><code>metrics.read</code></td><td><code>request_logs.read</code>, <code>audit.read</code>, <code>settings.read</code>, <code>database.read</code></td></tr>
+  </tbody>
+</table>
+<p>Existing <code>incidents</code>, <code>maintenance</code>, and <code>escalation_policies</code> read/write grants remain within their own resources. Replace a write umbrella with individual actions when a key should only perform part of the workflow. A key needs access to at least one application page to start a web session; API-only permissions such as <code>metrics.read</code> still work through the API. Session requests recheck the key's current permissions.</p>
 
 <h3>Using a Key</h3>
 

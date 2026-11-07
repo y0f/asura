@@ -7,7 +7,9 @@ import (
 	"github.com/y0f/asura/internal/httputil"
 )
 
-func (h *Handler) Auth(perm string) func(http.Handler) http.Handler {
+// Auth authenticates the key and requires every scope. With no scopes, the
+// handler must enforce its own authorization (for example a bulk action).
+func (h *Handler) Auth(scopes ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get("X-API-Key")
@@ -22,7 +24,7 @@ func (h *Handler) Auth(perm string) func(http.Handler) http.Handler {
 				return
 			}
 
-			if !apiKey.HasPermission(perm) {
+			if !apiKey.HasAllPermissions(scopes...) {
 				writeError(w, http.StatusForbidden, "forbidden")
 				return
 			}

@@ -762,8 +762,8 @@ func TestStatusPagePasswordLimiterSharedWithWebForm(t *testing.T) {
 	})
 }
 
-// Read-only keys see only the subscriber count, never emails or webhook URLs.
-func TestSubscriberListNeedsWritePermission(t *testing.T) {
+// Subscriber contacts require their own explicit scope.
+func TestSubscriberListNeedsSubscriberPermission(t *testing.T) {
 	const roKey = "regression-read-only-key"
 	env := newTestEnv(t, func(c *config.Config) {
 		c.Auth.APIKeys = append(c.Auth.APIKeys, config.APIKeyConfig{Name: "ro", Hash: config.HashAPIKey(roKey), Permissions: []string{"monitors.read"}})
@@ -781,8 +781,8 @@ func TestSubscriberListNeedsWritePermission(t *testing.T) {
 	path := "/api/v1/status-pages/" + strconv.FormatInt(sp.ID, 10) + "/subscribers"
 
 	w := env.do("GET", path, "", map[string]string{"X-API-Key": roKey})
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"count":2`) {
-		t.Fatalf("read-only key: %d %s, want count 2", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("monitor read-only key: %d %s, want 403", w.Code, w.Body.String())
 	}
 	if body := w.Body.String(); strings.Contains(body, "alice@example.com") || strings.Contains(body, "secret-token") || strings.Contains(body, `"data"`) {
 		t.Errorf("read-only key sees subscriber details: %s", body)
@@ -790,7 +790,7 @@ func TestSubscriberListNeedsWritePermission(t *testing.T) {
 
 	w = env.do("GET", path, "", admin)
 	if body := w.Body.String(); !strings.Contains(body, "alice@example.com") || !strings.Contains(body, `"data"`) {
-		t.Errorf("write key lost the subscriber list: %s", body)
+		t.Errorf("admin lost the subscriber list: %s", body)
 	}
 }
 

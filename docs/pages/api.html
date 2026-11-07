@@ -6,7 +6,8 @@
 
 <h2>Permissions</h2>
 
-<p>Each endpoint requires a specific permission scope. A key's scopes come from its <code>role</code> (<code>admin</code> = all, <code>readonly</code> = the <code>.read</code> scopes) or from an explicit <code>permissions</code> list. The scopes are: <code>monitors.read</code>, <code>monitors.write</code>, <code>incidents.read</code>, <code>incidents.write</code>, <code>notifications.read</code>, <code>notifications.write</code>, <code>escalation_policies.read</code>, <code>escalation_policies.write</code>, <code>maintenance.read</code>, <code>maintenance.write</code>, and <code>metrics.read</code>. The permission required is noted per section below; read endpoints take the matching <code>.read</code> scope and writes take <code>.write</code>.</p>
+<p>Each endpoint requires its resource and action scope. List and detail endpoints use <code>resource.read</code>; creates, updates, and deletes use <code>resource.create</code>, <code>resource.update</code>, and <code>resource.delete</code>. <code>resource.write</code> grants all mutations for that resource, without read access. Actions such as <code>monitors.pause</code>, <code>incidents.acknowledge</code>, and <code>notifications.test</code> can be granted separately. See <a href="#configuration">Configuration</a> for the full scope registry and v1 migration mappings.</p>
+<p>Exceptions: monitor SLA endpoints use <code>sla.read</code>; notification delivery history uses <code>notification_history.read</code>; request logs use <code>request_logs.read</code>; on-call rotations use <code>on_call</code>; status pages use <code>status_pages</code>; escalation policies use <code>escalation_policies</code>. Monitor cloning requires <code>monitors.read</code> and <code>monitors.clone</code>. Bulk monitor operations require the corresponding action; group assignment requires <code>monitors.assign</code> and <code>groups.read</code>. <code>/metrics</code> uses <code>metrics.read</code>.</p>
 
 <h2>Health <span class="text-muted text-2xs font-normal">(no auth)</span></h2>
 
@@ -123,8 +124,8 @@
   </thead>
   <tbody>
     <tr><td><code>POST</code></td><td><code>/api/v1/status-pages/{id}/subscribe</code></td><td>public</td><td>Subscribe to incident updates</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/v1/status-pages/{id}/subscribers</code></td><td><code>monitors.read</code></td><td>Subscriber count</td></tr>
-    <tr><td><code>DELETE</code></td><td><code>/api/v1/status-pages/{id}/subscribers/{subId}</code></td><td><code>monitors.write</code></td><td>Remove a subscriber</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/status-pages/{id}/subscribers</code></td><td><code>subscribers.read</code></td><td>Subscriber count and confirmed contacts</td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/status-pages/{id}/subscribers/{subId}</code></td><td><code>subscribers.delete</code></td><td>Remove a subscriber</td></tr>
   </tbody>
 </table>
 
@@ -135,7 +136,7 @@
   "webhook_url": "https://example.com/hook" // required when type is webhook
 }</code></pre>
 
-<p>Subscribe is public so status page visitors can opt in. It needs a page with both <code>enabled</code> and <code>api_enabled</code> on (404 otherwise). Email subscriptions trigger a confirmation email when subscriptions are enabled in the server config; webhook subscriptions are confirmed immediately. The subscribers endpoint returns <code>{"count":N}</code>; keys with <code>monitors.write</code> also get the confirmed subscribers in <code>data</code>.</p>
+<p>Subscribe is public so status page visitors can opt in. It needs a page with both <code>enabled</code> and <code>api_enabled</code> on (404 otherwise). Email subscriptions trigger a confirmation email when subscriptions are enabled in the server config; webhook subscriptions are confirmed immediately. The subscribers endpoint requires <code>subscribers.read</code> and returns <code>{"count":N,"data":[...]}</code> with confirmed contacts. The legacy <code>readonly</code> role does not include this scope.</p>
 
 <h2>Status Badges</h2>
 
@@ -331,7 +332,7 @@
   </tbody>
 </table>
 
-<p>Records configuration changes (creates, updates, deletes) with the acting key, action, target, and timestamp. Requires <code>metrics.read</code>.</p>
+<p>Records configuration changes (creates, updates, deletes) with the acting key, action, target, and timestamp. Requires <code>audit.read</code>.</p>
 
 <h2>Export / Import</h2>
 
@@ -344,6 +345,8 @@
     <tr><td><code>POST</code></td><td><code>/api/v1/import</code></td><td>Import configuration from JSON</td></tr>
   </tbody>
 </table>
+
+<p>Import and export require super administrator access, including redacted exports. No collection of ordinary resource permissions grants this access.</p>
 
 <p>Export downloads all monitors, groups, tags, proxies, notification channels, maintenance windows, and status pages as a portable JSON file. Relationships are stored by name (not ID) so imports work across instances. Each monitor includes its assigned tags with per-monitor values; tags are created automatically on import if they don't exist.</p>
 
@@ -394,7 +397,7 @@
   </tbody>
 </table>
 
-<p><code>db/size</code> requires <code>metrics.read</code>. <code>db/vacuum</code> requires <code>monitors.write</code>.</p>
+<p><code>db/size</code> requires <code>database.read</code>. <code>db/vacuum</code> requires <code>database.maintain</code>.</p>
 
 <h2>Other</h2>
 

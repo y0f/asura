@@ -8,8 +8,8 @@ import (
 
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
-	if k == nil || !k.SuperAdmin {
-		writeError(w, http.StatusForbidden, "vacuum requires super admin access")
+	if !k.HasPermission("database.maintain") {
+		writeError(w, http.StatusForbidden, "vacuum requires database.maintain")
 		return
 	}
 	if err := h.store.Vacuum(r.Context()); err != nil {

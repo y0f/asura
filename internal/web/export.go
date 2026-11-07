@@ -35,8 +35,8 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
-	if k == nil || !k.SuperAdmin {
-		h.setError(w, "Vacuum requires super admin access")
+	if !k.HasPermission("database.maintain") {
+		h.setError(w, "Vacuum requires database.maintain")
 		h.redirect(w, r, "/settings")
 		return
 	}

@@ -1060,7 +1060,20 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	action := r.FormValue("action")
+	scopes := httputil.MonitorBulkPermissions(action)
+	if scopes == nil {
+		http.Error(w, "Invalid action", http.StatusBadRequest)
+		return
+	}
+	if !httputil.GetAPIKey(r.Context()).HasAllPermissions(scopes...) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	ids := parseIDList(r.Form["ids[]"])
+	if len(ids) > 500 {
+		http.Error(w, "Max 500 monitors per request", http.StatusBadRequest)
+		return
+	}
 	if len(ids) == 0 {
 		h.setError(w, "No monitors selected")
 		h.redirect(w, r, "/monitors")
@@ -1109,10 +1122,6 @@ func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		msg = strconv.Itoa(len(ids)) + " monitors updated"
-	default:
-		h.setError(w, "Invalid action")
-		h.redirect(w, r, "/monitors")
-		return
 	}
 
 	if h.pipeline != nil {

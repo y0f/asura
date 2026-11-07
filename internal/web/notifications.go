@@ -186,7 +186,7 @@ func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("web: list channels for history", "error", err)
 	}
 
-	lp := h.newLayoutParams(r, "Notification History", "notifications")
+	lp := h.newLayoutParams(r, "Notification History", "notification-history")
 	h.renderComponent(w, r, views.NotificationHistoryPage(views.NotificationHistoryParams{
 		LayoutParams: lp,
 		Result:       result,

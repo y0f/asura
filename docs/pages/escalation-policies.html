@@ -69,5 +69,6 @@
 <p>Escalation policies use dedicated permissions:</p>
 <ul>
   <li><code>escalation_policies.read</code> : view policies (included in the <code>readonly</code> role)</li>
-  <li><code>escalation_policies.write</code> : create, update, and delete policies</li>
+  <li><code>escalation_policies.create</code>, <code>escalation_policies.update</code>, <code>escalation_policies.delete</code>: individual mutations</li>
+  <li><code>escalation_policies.write</code>: all three mutations; does not grant read access</li>
 </ul>

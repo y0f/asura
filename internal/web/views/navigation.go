@@ -2,20 +2,40 @@ package views
 
 func navigationPermission(path string) string {
 	switch path {
-	case "/", "/monitors", "/groups", "/tags", "/sla", "/status-pages", "/agents", "/proxies":
+	case "/", "/monitors":
 		return "monitors.read"
 	case "/monitors/new":
-		return "monitors.write"
+		return "monitors.create"
+	case "/groups":
+		return "groups.read"
+	case "/tags":
+		return "tags.read"
+	case "/sla":
+		return "sla.read"
+	case "/status-pages":
+		return "status_pages.read"
+	case "/agents":
+		return "agents.read"
+	case "/proxies":
+		return "proxies.read"
 	case "/incidents":
 		return "incidents.read"
-	case "/notifications", "/notifications/history", "/on-call":
+	case "/notifications":
 		return "notifications.read"
+	case "/notifications/history":
+		return "notification_history.read"
+	case "/on-call":
+		return "on_call.read"
 	case "/escalation-policies":
 		return "escalation_policies.read"
 	case "/maintenance":
 		return "maintenance.read"
-	case "/logs", "/audit", "/settings":
-		return "metrics.read"
+	case "/logs":
+		return "request_logs.read"
+	case "/audit":
+		return "audit.read"
+	case "/settings":
+		return "settings.read"
 	default:
 		return ""
 	}
@@ -27,7 +47,7 @@ func (p LayoutParams) CanVisit(path string) bool {
 
 // LandingPath returns the first readable page, or empty when no page is allowed.
 func LandingPath(perms map[string]bool) string {
-	for _, path := range []string{"/", "/incidents", "/notifications", "/escalation-policies", "/maintenance", "/logs"} {
+	for _, path := range []string{"/", "/incidents", "/notifications", "/escalation-policies", "/maintenance", "/groups", "/tags", "/sla", "/status-pages", "/agents", "/proxies", "/on-call", "/notifications/history", "/logs", "/audit", "/settings"} {
 		if perms[navigationPermission(path)] {
 			return path
 		}

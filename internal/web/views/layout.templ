@@ -70,7 +70,7 @@ templ Layout(p LayoutParams) {
 				</div>
 				@ConfirmModal()
 			</div>
-			if p.Can("monitors.write") {
+			if p.Can("monitors.create") {
 				<script>
 				document.addEventListener('keydown',function(e){
 					if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;
@@ -239,7 +239,7 @@ templ Sidebar(p LayoutParams) {
 					}
 				</div>
 			}
-			@navGroup("Monitoring", p.Can("monitors.read")) {
+			@navGroup("Monitoring", p.CanVisit("/monitors") || p.CanVisit("/groups") || p.CanVisit("/tags")) {
 				@navLink(p, "/monitors", "monitors", "Monitors") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
 				}
@@ -250,12 +250,15 @@ templ Sidebar(p LayoutParams) {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
 				}
 			}
-			@navGroup("Alerting", p.Can("incidents.read") || p.Can("notifications.read") || p.Can("escalation_policies.read")) {
+			@navGroup("Alerting", p.CanVisit("/incidents") || p.CanVisit("/notifications") || p.CanVisit("/notifications/history") || p.CanVisit("/escalation-policies") || p.CanVisit("/on-call")) {
 				@navLink(p, "/incidents", "incidents", "Incidents") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 				}
 				@navLink(p, "/notifications", "notifications", "Notifications") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+				}
+				@navLink(p, "/notifications/history", "notification-history", "Notification history") {
+					<svg aria-hidden="true" focusable="false" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
 				}
 				@navLink(p, "/escalation-policies", "escalation-policies", "Escalation Policies") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"></path><path d="M7 20v-4"></path><path d="M12 20v-8"></path><path d="M17 20V8"></path><path d="M22 4v16"></path></svg>
@@ -264,7 +267,7 @@ templ Sidebar(p LayoutParams) {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
 				}
 			}
-			@navGroup("Operations", p.Can("monitors.read") || p.Can("maintenance.read")) {
+			@navGroup("Operations", p.CanVisit("/sla") || p.CanVisit("/maintenance") || p.CanVisit("/status-pages")) {
 				@navLink(p, "/sla", "sla", "SLA Report") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
 				}
@@ -275,7 +278,7 @@ templ Sidebar(p LayoutParams) {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 				}
 			}
-			@navGroup("System", p.Can("monitors.read") || p.Can("metrics.read")) {
+			@navGroup("System", p.CanVisit("/logs") || p.CanVisit("/audit") || p.CanVisit("/agents") || p.CanVisit("/proxies") || p.CanVisit("/settings")) {
 				@navLink(p, "/logs", "logs", "Request Logs") {
 					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
 				}
