@@ -35,7 +35,7 @@ func Evaluate(assertionsJSON json.RawMessage, statusCode int, body string,
 	var allDetails []AssertionDetail
 	var groupPasses []bool
 	var messages []string
-	degraded := false
+	hardFailure := false
 
 	for _, g := range cs.Groups {
 		gr := evalGroup(g, statusCode, body, headers, responseTimeMs, certExpiry, dnsRecords)
@@ -44,15 +44,15 @@ func Evaluate(assertionsJSON json.RawMessage, statusCode int, body string,
 		if !gr.Pass && gr.Message != "" {
 			messages = append(messages, gr.Message)
 		}
-		if gr.Degraded {
-			degraded = true
+		if !gr.Pass && !gr.Degraded {
+			hardFailure = true
 		}
 	}
 
 	pass := combinePasses(groupPasses, cs.Operator)
 	return AssertionResult{
 		Pass:     pass,
-		Degraded: !pass && degraded,
+		Degraded: !pass && !hardFailure,
 		Message:  strings.Join(messages, "; "),
 		Details:  allDetails,
 	}
@@ -68,15 +68,15 @@ func evalGroup(g ConditionGroup, statusCode int, body string,
 	var details []AssertionDetail
 	var condPasses []bool
 	var messages []string
-	degraded := false
+	hardFailure := false
 
 	for _, a := range g.Conditions {
 		detail := evaluateSingle(a, statusCode, body, headers, responseTimeMs, certExpiry, dnsRecords)
 		details = append(details, detail)
 		condPasses = append(condPasses, detail.Pass)
 		if !detail.Pass {
-			if a.Degraded {
-				degraded = true
+			if !a.Degraded {
+				hardFailure = true
 			}
 			if detail.Message != "" {
 				messages = append(messages, detail.Message)
@@ -87,7 +87,7 @@ func evalGroup(g ConditionGroup, statusCode int, body string,
 	pass := combinePasses(condPasses, g.Operator)
 	return AssertionResult{
 		Pass:     pass,
-		Degraded: !pass && degraded,
+		Degraded: !pass && !hardFailure,
 		Message:  strings.Join(messages, "; "),
 		Details:  details,
 	}
