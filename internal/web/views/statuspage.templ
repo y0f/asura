@@ -78,7 +78,7 @@ templ publicHead(basePath, title string) {
 func publicOverall(p PublicStatusPageParams) (label, tone string) {
 	switch p.Overall {
 	case "unknown":
-		return "Awaiting check data", "muted"
+		return "Awaiting status data", "muted"
 	case "operational":
 		return "All systems operational", "ok"
 	case "degraded":
@@ -318,7 +318,7 @@ templ StatusPageAuthPage(p StatusPageAuthParams) {
 				<form method="POST" action={ templ.SafeURL(p.BasePath + "/" + p.Slug + "/auth") } class="space-y-4">
 					<div>
 						<label class="form-label" for="sp-password">Password</label>
-						<input id="sp-password" type="password" name="password" autofocus required class="form-input"/>
+						<input id="sp-password" type="password" name="password" autocomplete="current-password" autofocus required class="form-input"/>
 					</div>
 					if p.Error != "" {
 						<p role="alert" class="text-sm text-crit">Incorrect password. Try again.</p>

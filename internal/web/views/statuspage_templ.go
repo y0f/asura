@@ -146,7 +146,7 @@ func publicHead(basePath, title string) templ.Component {
 func publicOverall(p PublicStatusPageParams) (label, tone string) {
 	switch p.Overall {
 	case "unknown":
-		return "Awaiting check data", "muted"
+		return "Awaiting status data", "muted"
 	case "operational":
 		return "All systems operational", "ok"
 	case "degraded":
@@ -994,7 +994,7 @@ func StatusPageAuthPage(p StatusPageAuthParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\" class=\"space-y-4\"><div><label class=\"form-label\" for=\"sp-password\">Password</label> <input id=\"sp-password\" type=\"password\" name=\"password\" autofocus required class=\"form-input\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\" class=\"space-y-4\"><div><label class=\"form-label\" for=\"sp-password\">Password</label> <input id=\"sp-password\" type=\"password\" name=\"password\" autocomplete=\"current-password\" autofocus required class=\"form-input\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

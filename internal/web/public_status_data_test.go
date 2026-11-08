@@ -48,7 +48,7 @@ func TestPublicStatusMissingDataAndReadErrors(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.StatusPageByID(w, httptest.NewRequest("GET", "/services", nil), sp.ID)
 	body := w.Body.String()
-	if w.Code != http.StatusOK || wrapped.snapshotCalls != 1 || !strings.Contains(body, "Awaiting check data") || strings.Contains(body, "100.00%") || strings.Contains(body, "window.bad") {
+	if w.Code != http.StatusOK || wrapped.snapshotCalls != 1 || !strings.Contains(body, "Awaiting status data") || strings.Contains(body, "100.00%") || strings.Contains(body, "window.bad") {
 		t.Fatalf("missing data/branding response: %d calls=%d body=%s", w.Code, wrapped.snapshotCalls, body)
 	}
 	if w.Header().Get("Referrer-Policy") != "no-referrer" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "img-src 'self' data: https://images.example;") {
