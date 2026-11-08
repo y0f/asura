@@ -203,3 +203,25 @@ func TestBulkMonitorAccessRejectsTheWholeSet(t *testing.T) {
 func sameOptionalID(a, b *int64) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
+
+func TestMonitorNameSearchDoesNotProbeHiddenTargetSecrets(t *testing.T) {
+	store, groups, monitors := accessFixture(t)
+	ctx := context.Background()
+	monitors[0].Target = "https://user:hidden-password@example.test/?token=hidden-query"
+	if err := store.UpdateMonitor(ctx, monitors[0]); err != nil {
+		t.Fatal(err)
+	}
+	filter := MonitorListFilter{Access: []MonitorAccess{{GroupIDs: []int64{groups[0].ID}}}}
+	for _, prefix := range []string{"https://user:hidden", "https://user:wrong", "https://user:hidden-password@example.test/?token=hidden", "https://user:hidden-password@example.test/?token=wrong"} {
+		filter.Search = prefix
+		result, err := store.ListMonitors(ctx, filter, Pagination{Page: 1, PerPage: 1})
+		if err != nil || result.Total != 0 || len(result.Data.([]*Monitor)) != 0 {
+			t.Fatalf("target probe affected rows/count: %+v %v", result, err)
+		}
+	}
+	filter.Search = "monitor-"
+	result, err := store.ListMonitors(ctx, filter, Pagination{Page: 1, PerPage: 1})
+	if err != nil || result.Total != 2 || result.Data.([]*Monitor)[0].ID != monitors[0].ID {
+		t.Fatalf("name search lost current group scope: %+v %v", result, err)
+	}
+}

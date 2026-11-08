@@ -57,7 +57,12 @@ func (req *monitorUpdateRequest) UnmarshalJSON(data []byte) error {
 
 func (h *Handler) ListMonitors(w http.ResponseWriter, r *http.Request) {
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{Access: httputil.MonitorAccess(r.Context(), "monitors.read")}, p)
+	filter, err := monitorListFilter(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.store.ListMonitors(r.Context(), filter, p)
 	if err != nil {
 		h.logger.Error("list monitors", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list monitors")

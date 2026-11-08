@@ -172,6 +172,8 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 		args = append(args, f.Type)
 	}
 	if f.Search != "" {
+		// Search only public names. Matching raw targets would let an ordinary
+		// reader probe redacted URI credentials through result counts.
 		where += " AND " + s.readDB.dialect.like("m.name", "? || '%'")
 		args = append(args, f.Search)
 	}
