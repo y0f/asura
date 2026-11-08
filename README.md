@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/y0f/asura/actions/workflows/ci.yml"><img src="https://github.com/y0f/asura/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"/></a>
   <a href="https://github.com/y0f/asura/stargazers"><img src="https://img.shields.io/github/stars/y0f/asura?style=flat&amp;color=2563eb" alt="GitHub stars"/></a>
-  <a href="https://github.com/y0f/asura/blob/main/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/y0f/asura?color=2563eb" alt="Go Version"/></a>
+  <a href="https://github.com/y0f/asura/blob/main/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/y0f/asura?label=Go%20minimum&amp;color=2563eb" alt="Go Version"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="License"/></a>
   <a href="https://github.com/y0f/asura/releases/latest"><img src="https://img.shields.io/github/v/release/y0f/asura?sort=semver&amp;color=2563eb" alt="Release"/></a>
   <a href="https://github.com/y0f/asura/pkgs/container/asura"><img src="https://img.shields.io/badge/ghcr.io-asura-2563eb?logo=docker&amp;logoColor=white" alt="Docker"/></a>
@@ -79,5 +79,7 @@ Rollback requires the previous binary and its matching database backup. A config
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development, tests and review requirements, [architecture](https://y0f.github.io/asura/architecture.html) for the internals, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Built with Go, templ, HTMX, Alpine.js and Tailwind CSS; Node is not required.
+
+Use Go 1.27.3 for development. CI tests both Go 1.27.3 and the supported minimum, Go 1.26.10.
 
 Licensed under [MIT](LICENSE). Copyright 2025-2026 [hu.ci](https://hu.ci).
