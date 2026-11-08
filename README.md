@@ -12,7 +12,7 @@ Asura runs as one Go binary with an embedded web interface and SQLite storage. V
 
 ![Asura dashboard with monitor health, response times and incidents](assets/webpanel.png)
 
-![Monitor details with response-time history and incident timeline in dark mode](assets/monitorview.png)
+![Monitor details with response times, availability history and SLA metrics in dark mode](assets/monitorview.png)
 
 ![Public status page with service availability and incident updates](assets/statuspage.png)
 
