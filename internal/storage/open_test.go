@@ -73,11 +73,37 @@ func TestOpenRejectsInvalidOptionsBeforeCreatingDatabase(t *testing.T) {
 	}
 }
 
+func TestOpenSanitizesExistingRequestHistoryBeforeReturning(t *testing.T) {
+	ctx := context.Background()
+	options := Options{Path: filepath.Join(t.TempDir(), "legacy.db"), MaxReadConns: 2}
+	legacy, err := NewSQLiteStore(options.Path, options.MaxReadConns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRequestLog(t, legacy, "/api/v1/heartbeat/legacy-private-token", "https://example.test/confirm?token=legacy-private-token")
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var path, referer string
+	if err := store.(*SQLStore).readDB.QueryRow("SELECT path, referer FROM request_logs").Scan(&path, &referer); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(path, "legacy-private-token") || strings.Contains(referer, "legacy-private-token") {
+		t.Fatal("Open exposed the store before sanitizing legacy credentials")
+	}
+}
+
 type startupTestStore struct {
 	Store
 	events      []string
 	saltErr     error
 	finalizeErr error
+	privacyErr  error
 	closeErr    error
 }
 
@@ -100,6 +126,11 @@ func (s *startupTestStore) Close() error {
 	return s.closeErr
 }
 
+func (s *startupTestStore) FinalizeRequestLogPrivacy(context.Context) error {
+	s.events = append(s.events, "privacy")
+	return s.privacyErr
+}
+
 func TestOpenInitializationOrderingAndFailureCleanup(t *testing.T) {
 	failure := errors.New("injected startup failure")
 	closeFailure := errors.New("injected close failure")
@@ -108,13 +139,14 @@ func TestOpenInitializationOrderingAndFailureCleanup(t *testing.T) {
 		store startupTestStore
 		want  []string
 	}{
-		{"success", startupTestStore{}, []string{"salt", "encryptor", "finalize"}},
+		{"success", startupTestStore{}, []string{"salt", "encryptor", "finalize", "privacy"}},
 		{"salt failure", startupTestStore{saltErr: failure}, []string{"salt", "close"}},
 		{"migration failure", startupTestStore{finalizeErr: failure, closeErr: closeFailure}, []string{"salt", "encryptor", "finalize", "close"}},
+		{"privacy failure", startupTestStore{privacyErr: failure, closeErr: closeFailure}, []string{"salt", "encryptor", "finalize", "privacy", "close"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store, err := initializeStore(context.Background(), &tc.store, "synthetic-key")
-			if tc.store.saltErr != nil || tc.store.finalizeErr != nil {
+			if tc.store.saltErr != nil || tc.store.finalizeErr != nil || tc.store.privacyErr != nil {
 				if store != nil || !errors.Is(err, failure) || tc.store.closeErr != nil && !errors.Is(err, closeFailure) {
 					t.Fatalf("failed startup returned a store or lost its errors: %v", err)
 				}

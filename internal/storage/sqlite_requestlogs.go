@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/y0f/asura/internal/logsafe"
 )
 
 func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*RequestLog) error {
@@ -33,8 +35,8 @@ func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*Request
 			monitorID = *l.MonitorID
 		}
 		_, err := stmt.ExecContext(ctx,
-			l.Method, l.Path, l.StatusCode, l.LatencyMs,
-			l.ClientIP, l.UserAgent, l.Referer,
+			l.Method, logsafe.Path(l.Path), l.StatusCode, l.LatencyMs,
+			l.ClientIP, l.UserAgent, logsafe.Referer(l.Referer),
 			monitorID, l.RouteGroup, formatTime(l.CreatedAt))
 		if err != nil {
 			return fmt.Errorf("request log batch insert: %w", err)
@@ -117,6 +119,7 @@ func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p
 			return nil, err
 		}
 		l.CreatedAt = parseTime(createdAt)
+		l.Path, l.Referer = logsafe.Path(l.Path), logsafe.Referer(l.Referer)
 		if monitorID.Valid {
 			mid := monitorID.Int64
 			l.MonitorID = &mid
@@ -186,6 +189,7 @@ func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time
 		if err := topPaths.Scan(&pc.Path, &pc.Count); err != nil {
 			return nil, err
 		}
+		pc.Path = logsafe.Path(pc.Path)
 		stats.TopPaths = append(stats.TopPaths, pc)
 	}
 	if err := topPaths.Err(); err != nil {
@@ -209,6 +213,7 @@ func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time
 		if err := topReferers.Scan(&pc.Path, &pc.Count); err != nil {
 			return nil, err
 		}
+		pc.Path = logsafe.Referer(pc.Path)
 		stats.TopReferers = append(stats.TopReferers, pc)
 	}
 	if err := topReferers.Err(); err != nil {

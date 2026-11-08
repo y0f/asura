@@ -34,6 +34,7 @@ type initializableStore interface {
 	Store
 	SetEncryptor(*Encryptor)
 	FinalizeLegacyAgentAssignments(context.Context) error
+	FinalizeRequestLogPrivacy(context.Context) error
 }
 
 // An optional build registers its opener during package initialization. Keeping
@@ -100,6 +101,9 @@ func initializeStore(ctx context.Context, store initializableStore, key string) 
 	}
 	if err = store.FinalizeLegacyAgentAssignments(ctx); err != nil {
 		return nil, fmt.Errorf("finalize legacy agent assignments: %w", err)
+	}
+	if err = store.FinalizeRequestLogPrivacy(ctx); err != nil {
+		return nil, fmt.Errorf("sanitize legacy request history: %w", err)
 	}
 	return store, nil
 }

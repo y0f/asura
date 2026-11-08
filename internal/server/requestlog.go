@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/logsafe"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -115,12 +116,12 @@ func requestLogMiddleware(writer *RequestLogWriter, basePath string, trustedNets
 
 			log := &storage.RequestLog{
 				Method:     r.Method,
-				Path:       path,
+				Path:       logsafe.Path(path),
 				StatusCode: sw.Code,
 				LatencyMs:  latency,
 				ClientIP:   ip,
 				UserAgent:  truncate(r.UserAgent(), 512),
-				Referer:    truncate(r.Referer(), 512),
+				Referer:    truncate(logsafe.Referer(r.Referer()), 512),
 				RouteGroup: classifyRoute(trimmed),
 				CreatedAt:  start.UTC(),
 			}

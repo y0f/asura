@@ -44,6 +44,13 @@ that previously assumed every history row was a measured check.
 
 ## Review access rules {#review-access-rules}
 
+Startup removes heartbeat path credentials and URL userinfo, query parameters and
+fragments from previously stored request history. Request counts are preserved;
+new request and process logs use the same credential-safe URL projection. This
+does not erase older external logs, database backups or deleted database pages.
+If those copies were shared or exposed, re-enroll affected heartbeat monitors
+and replace affected subscription links. Treat old copies as sensitive backups.
+
 V2 separates reading a resource from changing it. Grants such as `monitors.update`, `monitors.pause` and `notifications.test` authorize different operations. A resource's `.write` grant covers that resource's mutation actions; it does not imply read access or access to another resource.
 
 Reusable roles live under `auth.roles`. Keys receive roles through `role_bindings`, with an explicit global scope or selected monitor and group IDs. Monitor and group scopes restrict the monitors a binding can affect; they do not turn group selectors into permission to administer groups. The [access-control guide](access-control.html) contains the full schema, built-in roles, legacy compatibility rules, and examples.
