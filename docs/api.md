@@ -146,16 +146,18 @@ Subscribe is public so status page visitors can opt in. It needs a page with bot
 
 ## Status Badges {#status-badges}
 
-Available for any monitor assigned to an enabled status page.
+Available for monitors assigned to an enabled, unprotected status page. A password-protected or API-only page does not authorize public badges.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/badge/{id}/status` | Status badge (up/down/degraded) |
+| `GET` | `/api/v1/badge/{id}/status` | Current status, including pending or paused |
 | `GET` | `/api/v1/badge/{id}/uptime` | 30-day uptime percentage |
-| `GET` | `/api/v1/badge/{id}/response` | Median (p50) response time over 24h |
+| `GET` | `/api/v1/badge/{id}/response` | Median (p50) response time of successful checks over 24h |
 | `GET` | `/api/v1/badge/{id}/cert` | TLS certificate expiry (days remaining) |
 
-All badges accept a `?label=` query parameter to override the left-hand label text. Colors are automatic based on the metric value.
+All badges accept `?label=` to override the left-hand text and use a neutral/blue palette with explicit values. Uptime without observations reads `no checks`; response time without successful samples reads `no samples`, while a measured zero remains `0ms`. Manual and heartbeat response badges read `n/a`. A missing certificate expiry reads `n/a`; an expired timestamp reads `expired`, and a future expiry under one day reads `<1d`.
+
+Successful badges may be cached for five minutes. Invalid IDs return 400, missing or unpublished monitors return 404, and storage failures return 500, with an SVG error label and `Cache-Control: no-store`. Publication and metric data are read from the same snapshot; certificate badges do not load check bodies or headers.
 
 Embed in a README:
 

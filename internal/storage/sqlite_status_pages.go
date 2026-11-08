@@ -23,6 +23,29 @@ func (s *SQLiteStore) IsMonitorOnStatusPage(ctx context.Context, monitorID int64
 }
 
 func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*DailyUptime, error) {
+	if !from.Before(to) {
+		return []*DailyUptime{}, nil
+	}
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := authorizeMonitorRead(ctx, tx, monitorID, access...); err != nil {
+		return nil, err
+	}
+	results, err := dailyUptimeQuery(ctx, tx, monitorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// dailyUptimeQuery reads rollups and raw gaps through a caller-owned snapshot.
+func dailyUptimeQuery(ctx context.Context, reader monitorReadQuery, monitorID int64, from, to time.Time) ([]*DailyUptime, error) {
 	from, to = from.UTC(), to.UTC()
 	results := make([]*DailyUptime, 0)
 	if !from.Before(to) {
@@ -38,15 +61,7 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 	}
 	// Read rollups and uncovered raw intervals in one snapshot. Limiting the
 	// raw scans to gaps keeps long reports proportional to unsummarized data.
-	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	if err := authorizeMonitorRead(ctx, tx, monitorID, access...); err != nil {
-		return nil, err
-	}
-	rows, err := tx.QueryContext(ctx,
+	rows, err := reader.QueryContext(ctx,
 		`SELECT day, total, up_count, down_count FROM check_result_daily
 		 WHERE monitor_id=? AND day>=? AND day<? ORDER BY day`,
 		monitorID, firstDay.Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
@@ -81,7 +96,7 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 		gaps = append(gaps, [2]time.Time{cursor, to})
 	}
 	for _, gap := range gaps {
-		rows, err := tx.QueryContext(ctx,
+		rows, err := reader.QueryContext(ctx,
 			`SELECT SUBSTR(created_at,1,10) AS day, COUNT(*),
 			 COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END),0),
 			 COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END),0)
@@ -103,9 +118,6 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 		if err != nil {
 			return nil, err
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
 	}
 	for _, d := range results {
 		if d.TotalChecks > 0 {

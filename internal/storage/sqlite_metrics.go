@@ -171,26 +171,11 @@ func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, fro
 }
 
 func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (p50, p95, p99 float64, err error) {
-	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	result, err := s.GetResponseTimeSummary(ctx, monitorID, from, to, access...)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	defer release()
-	err = reader.QueryRowContext(ctx,
-		`WITH s AS (
-		   SELECT response_time,
-		          ROW_NUMBER() OVER (ORDER BY response_time) AS rn,
-		          COUNT(*) OVER ()                           AS n
-		   FROM check_results
-		   WHERE monitor_id=? AND created_at >= ? AND created_at < ? AND status='up'
-		 )
-		 SELECT
-		   COALESCE(MIN(CASE WHEN rn >= n * 0.50 THEN response_time END), 0),
-		   COALESCE(MIN(CASE WHEN rn >= n * 0.95 THEN response_time END), 0),
-		   COALESCE(MIN(CASE WHEN rn >= n * 0.99 THEN response_time END), 0)
-		 FROM s`,
-		monitorID, formatTime(from), formatTime(to)).Scan(&p50, &p95, &p99)
-	return
+	return result.P50, result.P95, result.P99, nil
 }
 
 func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context, access ...MonitorAccess) (map[int64]int64, error) {
