@@ -549,7 +549,7 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var uptime24h, uptime7d, uptime30d, p50, p95, p99 float64
-	var samples24h, samples7d, samples30d, totalChecks, upChecks, downChecks int64
+	var samples24h, samples7d, samples30d, totalChecks, upChecks, downChecks, responseSamples int64
 	if mon.HasSampledMetrics() {
 		data, err := h.store.GetMonitorMetricsSnapshot(ctx, id, now.Add(-24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
 		if h.monitorReadError(w, r, err, "Failed to load monitor metrics") {
@@ -562,6 +562,7 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 			}
 			if data.Response != nil {
 				p50, p95, p99 = data.Response.P50, data.Response.P95, data.Response.P99
+				responseSamples = data.Response.Samples
 			}
 		}
 		daily7d, err7d := h.store.GetDailyUptime(ctx, id, now.Add(-7*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
@@ -630,6 +631,16 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var heartbeat *views.HeartbeatData
+	if mon.Type == "heartbeat" {
+		data, err := h.store.GetHeartbeatByMonitorID(ctx, id, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load heartbeat state") {
+			return
+		}
+		if data != nil {
+			heartbeat = &views.HeartbeatData{LastPingAt: data.LastPingAt, GraceSecs: data.Grace}
+		}
+	}
 
 	lp := h.newLayoutParams(r, mon.Name, "monitors")
 	h.renderComponent(w, r, views.MonitorDetailPage(views.MonitorDetailParams{
@@ -651,12 +662,14 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		P99:              p99,
 		TotalChecks:      totalChecks,
 		UpChecks:         upChecks,
+		ResponseSamples:  responseSamples,
 		DownChecks:       downChecks,
 		LatestCheck:      latestCheck,
 		OpenIncident:     openIncident,
 		Tags:             monTags,
 		SLA:              slaData,
 		Heatmap:          heatmap,
+		Heartbeat:        heartbeat,
 	}))
 }
 

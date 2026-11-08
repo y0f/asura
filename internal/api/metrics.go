@@ -17,7 +17,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var sb strings.Builder
 
-	up, down, degraded, paused, err := h.store.CountMonitorsByStatus(ctx)
+	up, down, degraded, paused, pending, err := h.store.CountMonitorsByStatus(ctx)
 	if err != nil {
 		h.logger.Error("metrics: count monitors", "error", err)
 		writeError(w, http.StatusInternalServerError, "metrics error")
@@ -30,6 +30,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&sb, "asura_monitors_total{status=\"down\"} %d\n", down)
 	fmt.Fprintf(&sb, "asura_monitors_total{status=\"degraded\"} %d\n", degraded)
 	fmt.Fprintf(&sb, "asura_monitors_total{status=\"paused\"} %d\n", paused)
+	fmt.Fprintf(&sb, "asura_monitors_total{status=\"pending\"} %d\n", pending)
 
 	monitors, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 1000})
 	if err != nil {
@@ -272,7 +273,7 @@ func (h *Handler) MonitorChart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
-	up, down, degraded, paused, err := h.store.CountMonitorsByStatus(r.Context(), httputil.MonitorAccess(r.Context(), "monitors.read")...)
+	up, down, degraded, paused, pending, err := h.store.CountMonitorsByStatus(r.Context(), httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
 		h.logger.Error("overview", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get overview")
@@ -285,7 +286,8 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 			"down":     down,
 			"degraded": degraded,
 			"paused":   paused,
-			"total":    up + down + degraded + paused,
+			"pending":  pending,
+			"total":    up + down + degraded + paused + pending,
 		},
 	})
 }

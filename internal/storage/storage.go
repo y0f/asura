@@ -109,7 +109,7 @@ type Store interface {
 	GetPublicBadgeMonitor(ctx context.Context, monitorID int64) (*Monitor, error)
 	GetPublicBadgeData(ctx context.Context, monitorID int64, metric PublicBadgeMetric, now time.Time) (*PublicBadgeData, error)
 	GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (total, up, down, degraded int64, err error)
-	CountMonitorsByStatus(ctx context.Context, access ...MonitorAccess) (up, down, degraded, paused int64, err error)
+	CountMonitorsByStatus(ctx context.Context, access ...MonitorAccess) (up, down, degraded, paused, pending int64, err error)
 	GetLatestResponseTimes(ctx context.Context, access ...MonitorAccess) (map[int64]int64, error)
 
 	// Monitor notification routing

@@ -17,9 +17,9 @@ func TestMonitorSummaryAccess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	up, down, degraded, paused, err := store.CountMonitorsByStatus(ctx, access)
-	if err != nil || up != 3 || down != 0 || degraded != 0 || paused != 0 {
-		t.Fatalf("summary crossed scope: %d/%d/%d/%d, %v", up, down, degraded, paused, err)
+	up, down, degraded, paused, pending, err := store.CountMonitorsByStatus(ctx, access)
+	if err != nil || up != 3 || down != 0 || degraded != 0 || paused != 0 || pending != 0 {
+		t.Fatalf("summary crossed scope: %d/%d/%d/%d/%d, %v", up, down, degraded, paused, pending, err)
 	}
 	times, err := store.GetLatestResponseTimes(ctx, access)
 	if err != nil || len(times) != 3 {
@@ -31,9 +31,9 @@ func TestMonitorSummaryAccess(t *testing.T) {
 			t.Errorf("unexpected response-time membership for monitor %d", monitor.ID)
 		}
 	}
-	up, down, degraded, paused, err = store.CountMonitorsByStatus(ctx, MonitorAccess{})
-	if err != nil || up+down+degraded+paused != 0 {
-		t.Fatalf("empty summary scope exposed data: %d/%d/%d/%d, %v", up, down, degraded, paused, err)
+	up, down, degraded, paused, pending, err = store.CountMonitorsByStatus(ctx, MonitorAccess{})
+	if err != nil || up+down+degraded+paused+pending != 0 || pending != 0 {
+		t.Fatalf("empty summary scope exposed data: %d/%d/%d/%d/%d, %v", up, down, degraded, paused, pending, err)
 	}
 }
 

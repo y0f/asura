@@ -29,13 +29,13 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		typeFilter = ""
 	}
 
-	up, down, degraded, paused, err := h.store.CountMonitorsByStatus(ctx, httputil.MonitorAccess(ctx, "monitors.read")...)
+	up, down, degraded, paused, pending, err := h.store.CountMonitorsByStatus(ctx, httputil.MonitorAccess(ctx, "monitors.read")...)
 	if err != nil {
 		h.logger.Error("web: count monitors by status", "error", err)
 		http.Error(w, "Failed to load dashboard", http.StatusInternalServerError)
 		return
 	}
-	total := up + down + degraded + paused
+	total := up + down + degraded + paused + pending
 
 	displayMonitors, page, totalPages, err := h.loadMonitorPage(ctx, typeFilter, page, perPage)
 	if err != nil {
@@ -90,6 +90,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		Down:          int(down),
 		Degraded:      int(degraded),
 		Paused:        int(paused),
+		Pending:       int(pending),
 		OpenIncidents: len(incidentList),
 		Page:          page,
 		TotalPages:    totalPages,
