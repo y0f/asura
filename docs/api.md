@@ -9,7 +9,7 @@ permalink: "/api.html"
 
 REST resource endpoints return JSON; badges return SVG and the live event endpoint uses server-sent events. Pass your key in the `X-API-Key` header. If you set a `base_path`, all paths get prefixed (e.g. `/asura/api/v1/health`). See [Access control](access-control.html) for role bindings, object scopes and privileged operations.
 
-Pagination: `?page=1&per_page=20` applies to the paginated list endpoints only: monitors, checks, changes, incidents, notification history, request-logs, and audit. Other list endpoints return the full set as `{"data":[...]}`.
+Use `?page=1&per_page=20` for monitors, checks, changes, incidents, notification history, request logs and audit. Other resource lists are unpaginated; response envelopes vary by endpoint.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -53,13 +53,13 @@ Notification credentials are also bound to their delivery destination: server, a
 | --- | --- | --- |
 | `GET` | `/api/v1/health` | Status, uptime |
 
-## Heartbeat Ping (no auth) {#heartbeat-ping-no-auth}
+## Heartbeat Ping {#heartbeat-ping-no-auth}
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` / `POST` | `/api/v1/heartbeat/{token}` | Record a ping for a heartbeat monitor |
 
-Heartbeat (push) monitors expect periodic pings from your job or service. Hit this endpoint each time the job runs. The token is generated when the heartbeat monitor is created. Returns `{"status":"ok"}`; an unknown token returns `404`. No authentication is required so it can be called from anywhere (e.g. a cron job's curl).
+Call this endpoint when the monitored job or service runs. The heartbeat token is returned once at monitor creation and authorizes the ping; keep the URL private. No API key is needed. Success returns `{"status":"ok"}`; an unknown token returns `404`.
 
 ## Metrics (read auth) {#metrics-read-auth}
 
@@ -113,16 +113,16 @@ Omitted relationship fields on `PUT` preserve the current assignments inside the
 
 ### Bulk Operations {#bulk-operations}
 
-```
-POST /api/v1/monitors/bulk
+`POST /api/v1/monitors/bulk`:
+
+```json
 {
-  "action": "pause",   // pause | resume | delete | set_group
-  "ids": [1, 2, 3],
-  "group_id": 5        // only for set_group (null to unset)
+  "action": "pause",
+  "ids": [1, 2, 3]
 }
 ```
 
-Returns `{"status": "pause", "affected": 3}`. Max 500 monitors per request.
+Actions are `pause`, `resume`, `delete` and `set_group`. For `set_group`, include `group_id` (a positive ID, or `null` to ungroup). The example returns `{"status":"pause","affected":3}`. Maximum 500 monitors per request.
 
 ### Clone {#clone}
 
@@ -130,8 +130,9 @@ Returns `{"status": "pause", "affected": 3}`. Max 500 monitors per request.
 
 ### Set Manual Status {#set-manual-status}
 
-```
-POST /api/v1/monitors/{id}/status
+`POST /api/v1/monitors/{id}/status`:
+
+```json
 {
   "status": "down",
   "message": "Vendor reported outage"
@@ -154,7 +155,7 @@ Each status page has its own `slug` (URL path), `title`, `description`, and moni
 
 Membership changes and exposure expansion require `monitors.read` on all affected members, plus independent `incidents.read` when incident publication is enabled. Metadata, protection and membership are saved atomically. Omitted memberships and secrets are preserved. Analytics changes require `super_admin`; ordinary page mutation without `status_pages.read` returns only the identifier. See [Status pages](status-pages.html) for publication and branding rules.
 
-The public API for a specific page is available at `GET /api/v1/status-pages/{id}/public` (no API key required). Returns public fields only. It is served when the page has `enabled` or `api_enabled` on and returns 404 only when both are off. A password-protected page also needs the page password in the `X-Status-Page-Password` header (attempts are rate-limited like logins).
+`GET /api/v1/status-pages/{id}/public` returns published fields without an API key. The page must have `enabled` or `api_enabled` on; both off returns `404`. Protected pages require `X-Status-Page-Password` or a valid page-login cookie. Missing or incorrect credentials return `401`; excessive failed password attempts return `429`. Page cookies expire after seven days and are invalidated by a password change.
 
 An unsampled member has `uptime_90d: null` and `total_checks: 0`. Empty pages and pending data produce `overall_status: "unknown"`; known degraded or down states take precedence. Storage failures return an error rather than fabricated healthy or empty data.
 
@@ -162,20 +163,22 @@ An unsampled member has `uptime_90d: null` and `total_checks: 0`. Empty pages an
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/status-pages/{id}/subscribe` | public | Subscribe to incident updates |
+| `POST` | `/api/v1/status-pages/{id}/subscribe` | Page access | Subscribe to incident updates |
 | `GET` | `/api/v1/status-pages/{id}/subscribers` | `subscribers.read` | Subscriber count and confirmed contacts |
 | `DELETE` | `/api/v1/status-pages/{id}/subscribers/{subId}` | `subscribers.delete` | Remove a subscriber |
 
-```
-POST /api/v1/status-pages/{id}/subscribe
+`POST /api/v1/status-pages/{id}/subscribe`:
+
+```json
 {
-  "type": "email",                       // email | webhook
-  "email": "alerts@example.com",         // required when type is email
-  "webhook_url": "https://example.com/hook" // required when type is webhook
+  "type": "email",
+  "email": "alerts@example.com"
 }
 ```
 
-Subscribe is public so status page visitors can opt in. It needs a page with both `enabled` and `api_enabled` on (404 otherwise). Email subscriptions queue a confirmation when subscriptions and mail are available; unavailable mail or failed queue admission returns 503 so the visitor can retry. Webhook subscriptions are confirmed immediately. The subscribers endpoint requires `subscribers.read` and returns `{"count":N,"data":[...]}` with confirmed contacts. The legacy `readonly` role does not include this scope.
+Subscription requires `subscriptions.enabled` (`503` when disabled), a page with both `enabled` and `api_enabled` (`404` otherwise), and the same password or cookie as its public API when protected. No API key is needed. Email subscriptions queue confirmation; unavailable mail or failed queue admission returns `503`. For immediate webhook subscription, send `{"type":"webhook","webhook_url":"https://example.com/hook"}` instead.
+
+Subscriber listing requires `subscribers.read` and returns `{"count":N,"data":[...]}` for confirmed contacts, with webhook URLs omitted. The legacy `readonly` role excludes this permission.
 
 ## Status Badges {#status-badges}
 
@@ -211,7 +214,7 @@ Embed in a README:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | yes | Group name (max 255 chars) |
+| `name` | string | yes | Group name (max 255 UTF-8 bytes) |
 | `sort_order` | int |  | Display order (default: 0) |
 
 Assign monitors by setting `group_id` under the creation or move permissions described above. Deleting a nonempty group returns 409; move or ungroup its monitors first. The occupancy check and deletion are atomic. Group administration does not grant read access to its monitors.
@@ -228,7 +231,7 @@ Assign monitors by setting `group_id` under the creation or move permissions des
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | yes | Display name (max 255 chars) |
+| `name` | string | yes | Display name (max 255 UTF-8 bytes) |
 | `protocol` | string | yes | `http` or `socks5` |
 | `host` | string | yes | Proxy hostname or IP |
 | `port` | int | yes | Proxy port (1-65535) |
@@ -254,7 +257,10 @@ Unless `allow_private_targets` is enabled, a proxied target (and, for HTTP monit
 | `GET` | `/api/v1/incidents/{id}` | Get with timeline |
 | `POST` | `/api/v1/incidents/{id}/ack` | Acknowledge |
 | `POST` | `/api/v1/incidents/{id}/resolve` | Resolve |
+| `POST` | `/api/v1/incidents/{id}/severity` | Change severity |
 | `DELETE` | `/api/v1/incidents/{id}` | Delete |
+
+Severity changes require `incidents.severity` and a body such as `{"severity":"major"}`. Allowed values are `critical`, `major`, `minor` and `warning`. Invalid state transitions return `409`; missing or inaccessible incidents return `404`.
 
 ## Notifications {#notifications}
 
@@ -283,14 +289,14 @@ See [Notifications](notifications.html) for per-type settings and webhook signin
 | `PUT` | `/api/v1/escalation-policies/{id}` | Update |
 | `DELETE` | `/api/v1/escalation-policies/{id}` | Delete |
 
-Permissions: `escalation_policies.read`, `escalation_policies.write`. See [Escalation Policies](escalation-policies.html) for details.
+Use `escalation_policies.read`, `.create`, `.update` and `.delete`, or the `.write` mutation umbrella. Creation and changes to notification-channel steps also require `notifications.read`; an update omitting `steps` preserves them. See [Escalation Policies](escalation-policies.html).
 
 ## SLA Reports {#sla-reports}
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/api/v1/monitors/{id}/sla` | SLA status for a monitor (current month uptime, error budget) |
-| `GET` | `/api/v1/reports/sla?period=2025-01` | Monthly SLA report (all monitors with targets) |
+| `GET` | `/api/v1/reports/sla?period=2025-01` | Monthly report for accessible scheduled monitors with targets |
 | `GET` | `/api/v1/reports/sla/export?period=2025-01` | Export SLA report as JSON download |
 
 Set `sla_target` (e.g. `99.9`) on a scheduled monitor to enable SLA tracking. The response includes current month uptime, error budget in seconds, and breach status. Reports exclude manual and heartbeat monitors: their state transitions are not scheduled check samples. Existing targets on these passive types remain stored but inactive; new targets and changes to inactive targets are rejected unless cleared to `0`.
@@ -304,11 +310,14 @@ SLA JSON includes `has_data` and check counts. With no samples, observed uptime,
 | `GET` | `/api/v1/maintenance` | List |
 | `POST` | `/api/v1/maintenance` | Create |
 | `PUT` | `/api/v1/maintenance/{id}` | Update |
+| `POST` | `/api/v1/maintenance/{id}/toggle` | Flip active state |
 | `DELETE` | `/api/v1/maintenance/{id}` | Delete |
 
 `recurring` values are `""` (one-time), `"daily"`, `"weekly"`, `"monthly"`, `"manual"` and `"cron"`. Cron windows also specify `cron_expr`.
 
 Each mutation requires its action over every old and new target; an all-monitor window requires global authority. Updates additionally require `maintenance.toggle` only when `active` changes. Omitted `active` and `monitor_ids` preserve the current values. During maintenance, checks and incident state continue while incident announcements are deferred.
+
+The toggle endpoint needs only `maintenance.toggle`, takes no body and returns the committed state as `{"active":true}` or `{"active":false}`.
 
 ## Request Logs {#request-logs}
 
@@ -358,7 +367,7 @@ Imports accept up to 32 MiB of JSON and commit as one transaction. Any validatio
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | yes | Tag name (max 50 chars) |
+| `name` | string | yes | Tag name (max 50 UTF-8 bytes) |
 | `color` | string |  | Hex color (default: `#808080`) |
 
 Tags are global. Assign them with `monitor_tags`, for example `[{"tag_id":1,"value":"production"}]`, on monitor creation or update. Changing assignments requires `monitors.assign` on the monitor and `tags.read`; omission preserves current assignments. Monitor reads without `tags.read` expose necessary tag IDs without names, colors or values. Deleting a tag removes its monitor assignments. Tags and per-monitor values are included in global Prometheus metrics and configuration exports.
@@ -367,10 +376,10 @@ Tags are global. Assign them with `monitor_tags`, for example `[{"tag_id":1,"val
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/db/size` | Database file size and page stats |
-| `POST` | `/api/v1/db/vacuum` | Run SQLite VACUUM to reclaim space |
+| `GET` | `/api/v1/db/size` | Database size as `{"size_bytes":N}` |
+| `POST` | `/api/v1/db/vacuum` | Run the database backend's `VACUUM` operation |
 
-`db/size` requires `database.read`. `db/vacuum` requires `database.maintain`.
+`db/size` requires `database.read`: it reports the SQLite database file size or PostgreSQL's current database size. `db/vacuum` requires `database.maintain`; PostgreSQL's ordinary `VACUUM` reclaims space for reuse rather than shrinking database files.
 
 ## Other {#other}
 
@@ -406,7 +415,7 @@ Distributed probe agents run checks from remote locations and report results bac
 | `DELETE` | `/api/v1/agents/{id}` | Delete agent |
 | `GET` | `/api/v1/agents/status` | Agent online/offline status |
 
-`POST /api/v1/agents` returns the created agent including its `token`. The token is shown once at creation — store it now, as it cannot be retrieved later. Pass it as the `X-Agent-Token` header when running the agent.
+`POST /api/v1/agents` returns `id`, `name` and a one-time `token`. Store the token now; later reads cannot recover it. The agent uses it in the `X-Agent-Token` header.
 
 ### Agent Endpoints (X-Agent-Token auth) {#agent-endpoints-x-agent-token-auth}
 

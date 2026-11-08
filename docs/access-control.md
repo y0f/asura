@@ -7,7 +7,7 @@ permalink: "/access-control.html"
 
 # Access control {#access-control}
 
-Asura v2 uses the same authorization policy for API keys and web sessions. A named principal in `auth.api_keys` receives actions through reusable role bindings, explicit global permissions, or the separate `super_admin` flag. Roles and bindings live in `config.yaml`; there is no additional identity service or role database.
+API keys and web sessions share one authorization policy. Each principal in `auth.api_keys` receives actions through role bindings, explicit global permissions, or the separate `super_admin` flag. Roles and bindings live in `config.yaml`.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -21,7 +21,7 @@ Asura v2 uses the same authorization policy for API keys and web sessions. A nam
 
 ## Define a role and bind its scope {#define-a-role-and-bind-its-scope}
 
-```
+```yaml
 auth:
   roles:
     - name: production-editor
@@ -58,7 +58,7 @@ auth:
             all: true
 ```
 
-Generate a key and its hash with `asura --setup`. Keep the original key private and put only its hash in the configuration. Replace the example group and monitor IDs with existing IDs from your installation. Restart the server after changing authentication configuration. Existing sessions resolve their principal against the current configuration; removing the principal or rotating its key revokes its previous sessions.
+Generate a key and its hash with `asura --setup`; keep the key private and configure only its hash. Replace the example IDs with existing monitors and groups. Restart after authentication changes. Sessions resolve against the current configuration, so removing a principal or rotating its key revokes its previous sessions.
 
 A role has a unique `name`, optional `description`, and nonempty `permissions` list. Custom names start with a lowercase letter and contain at most 64 lowercase letters, digits, underscores or hyphens. Built-in and legacy role names are reserved. Unknown roles, unknown actions, duplicate definitions, invalid IDs and empty scopes fail configuration validation.
 
@@ -74,7 +74,7 @@ The viewer role excludes unrelated configuration, notification-channel settings,
 
 ## How bindings combine {#how-bindings-combine}
 
-Each binding must explicitly choose `all: true`, or a nonempty combination of `monitor_ids` and `group_ids`. Combining `all: true` with IDs is invalid. IDs and group membership inside a binding are alternatives: either match grants that binding's actions. Group bindings follow the monitor's current membership; an explicit monitor-ID binding follows that specific monitor.
+Each binding chooses `all: true`, or a nonempty combination of `monitor_ids` and `group_ids`. Mixing `all: true` with IDs is invalid. Either an ID or current group match grants the binding's actions. Group bindings follow current membership; monitor-ID bindings follow that specific monitor.
 
 Multiple bindings add grants for the same action. They never transfer an action to another binding's objects. For example, `monitors.read` on monitor 10 and `monitors.update` on monitor 20 allow reading 10 and updating 20; they do not allow updating 10 or reading 20. Operations requiring multiple actions must satisfy every action on the affected object. There is no role inheritance, implicit read grant or deny-rule precedence.
 
@@ -106,7 +106,7 @@ A new monitor has no existing ID to match. Creating it therefore requires `monit
 
 Changing a monitor's group requires update and assignment authority over both the current monitor and destination group, plus `groups.read`. An ID-only grant permits ordinary edits that keep the group unchanged, but does not authorize moving the monitor into arbitrary groups. Removing group membership requires global destination authority. Bulk operations authorize every requested ID before changing any records; a missing or inaccessible ID prevents the complete operation.
 
-Maintenance mutations require the relevant action over every old and new target. Updating active state additionally requires `maintenance.toggle`; unrelated edits do not. Omitted API `active` and `monitor_ids` fields preserve current transactional values. An all-monitor window requires global authority.
+Maintenance mutations require the relevant action over every old and new target. Changing active state through an update additionally requires `maintenance.toggle`; unrelated edits do not. The dedicated toggle endpoint needs only toggle authority. Omitted API `active` and `monitor_ids` preserve current values.
 
 Status-page publication is independent from page administration. Assigning or reordering members, or expanding public exposure, requires monitor-read authority over all affected members. Publishing incidents additionally requires incident-read authority on those members. Metadata-only edits can preserve inaccessible memberships; analytics changes require `super_admin`. See [Status pages](status-pages.html).
 
@@ -126,9 +126,9 @@ Combining the legacy `role` field with `permissions`, `role_bindings` or `super_
 
 ## Privileged configuration and credentials {#privileged-configuration-and-credentials}
 
-`super_admin` is a separate, explicit authority. Ordinary roles cannot grant it. Configuration import and full exports containing stored credentials require this authority. Keep a separate bootstrap or recovery principal for those operations. An ordinary administrator role can administer resources but cannot obtain a full secret backup.
+`super_admin` is separate from ordinary roles. Configuration import and every configuration export, including redacted exports, require it. Keep a separate bootstrap or recovery principal for those operations; the `administrator` role does not grant them.
 
-Ordinary monitor and notification-channel reads mask stored credential fields. A hidden field left blank during a supported edit retains its saved value; explicit removal or the API's `clear_secrets` option clears it. Retaining hidden credentials while changing their recipient requires replacement or explicit clearing. Creating a heartbeat or agent can return a new credential once; later read permissions do not recover it. See the [API reference](api.html) for field-level behavior.
+Monitor and notification-channel reads mask stored credentials. Supported edits retain blank hidden fields; explicit removal or `clear_secrets` clears them. Ordinary editors changing a credential's recipient must replace or clear retained secrets; super administrators may deliberately retain them. Heartbeat and agent creation return new credentials once; later reads cannot recover them. See the [API reference](api.html) for field-level behavior.
 
 ## API and web behavior {#api-and-web-behavior}
 
