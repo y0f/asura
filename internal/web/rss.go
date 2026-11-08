@@ -1,13 +1,14 @@
 package web
 
 import (
+	"database/sql"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
 )
 
 type rssChannel struct {
@@ -38,6 +39,11 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 	ctx := r.Context()
 
 	sp, err := h.store.GetStatusPage(ctx, pageID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.logger.Error("web: RSS status page", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
+		return
+	}
 	if err != nil || sp == nil || !sp.Enabled {
 		http.NotFound(w, r)
 		return
@@ -49,11 +55,18 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 
 	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
 	if err != nil {
-		monitors = []*storage.Monitor{}
+		h.logger.Error("web: RSS monitors", "error", err)
+		http.Error(w, "Failed to load status page monitors", http.StatusInternalServerError)
+		return
 	}
 
 	now := time.Now().UTC()
-	incidents := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	incidents, err := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	if err != nil {
+		h.logger.Error("web: RSS incidents", "error", err)
+		http.Error(w, "Failed to load incidents", http.StatusInternalServerError)
+		return
+	}
 
 	extURL := h.cfg.ResolvedExternalURL()
 	pageURL := fmt.Sprintf("%s/%s", extURL, sp.Slug)

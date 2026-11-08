@@ -77,6 +77,8 @@ templ publicHead(basePath, title string) {
 // failing monitor out of many is a partial outage, not a major one.
 func publicOverall(p PublicStatusPageParams) (label, tone string) {
 	switch p.Overall {
+	case "unknown":
+		return "Awaiting check data", "muted"
 	case "operational":
 		return "All systems operational", "ok"
 	case "degraded":
@@ -328,7 +330,7 @@ templ StatusPageAuthPage(p StatusPageAuthParams) {
 
 templ statusOverallBanner(p PublicStatusPageParams) {
 	{{ label, tone := publicOverall(p) }}
-	<div role="status" class={ "mb-8 rounded-card border px-5 py-4 flex items-center gap-3 bg-surface-50", "border-" + tone + "/50" }>
+	<div role="status" class="mb-8 rounded-card border border-line px-5 py-4 flex items-center gap-3 bg-surface-50">
 		<span class={ "dot w-2.5 h-2.5", "bg-" + tone }></span>
 		<span class="text-lg font-semibold text-white">{ label }</span>
 	</div>
@@ -337,9 +339,9 @@ templ statusOverallBanner(p PublicStatusPageParams) {
 templ statusMonitorRow(mwu MonitorWithUptime) {
 	{{ label, tone := publicStatus(mwu.Monitor.Status) }}
 	<div class="px-5 py-4">
-		<div class="flex items-center justify-between gap-3 mb-3">
-			<span class="text-md font-medium text-white truncate min-w-0">{ mwu.Monitor.Name }</span>
-			<div class="flex items-center gap-4 shrink-0">
+		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-3">
+			<span class="text-md font-medium text-white break-words min-w-0">{ mwu.Monitor.Name }</span>
+			<div class="flex items-center justify-between sm:justify-start gap-4 shrink-0">
 				<span class="text-sm text-muted tabular-nums">{ mwu.UptimeLabel }</span>
 				<span class={ "inline-flex items-center gap-1.5 text-sm", toneTextClass(tone) }><span class={ "dot", toneDotClass(tone) }></span>{ label }</span>
 			</div>

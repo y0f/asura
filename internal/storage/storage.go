@@ -160,13 +160,14 @@ type Store interface {
 	GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*DailyUptime, error)
 	IsMonitorOnStatusPage(ctx context.Context, monitorID int64) (bool, error)
 	CreateStatusPage(ctx context.Context, sp *StatusPage) error
+	SaveStatusPage(ctx context.Context, id int64, prepare StatusPagePrepare, access StatusPageAccess) (*StatusPage, error)
 	GetStatusPage(ctx context.Context, id int64) (*StatusPage, error)
 	GetStatusPageBySlug(ctx context.Context, slug string) (*StatusPage, error)
 	ListStatusPages(ctx context.Context) ([]*StatusPage, error)
 	UpdateStatusPage(ctx context.Context, sp *StatusPage) error
 	DeleteStatusPage(ctx context.Context, id int64) error
 	SetStatusPageMonitors(ctx context.Context, pageID int64, monitors []StatusPageMonitor) error
-	ListStatusPageMonitors(ctx context.Context, pageID int64) ([]StatusPageMonitor, error)
+	ListStatusPageMonitors(ctx context.Context, pageID int64, access ...MonitorAccess) ([]StatusPageMonitor, error)
 	ListStatusPageMonitorsWithStatus(ctx context.Context, pageID int64) ([]*Monitor, []StatusPageMonitor, error)
 
 	// Anomaly detection baselines

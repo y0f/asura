@@ -1,17 +1,17 @@
 package web
 
 import (
-	"crypto/sha256"
+	"cmp"
 	"database/sql"
-	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
 	"github.com/y0f/asura/internal/web/views"
 )
 
@@ -19,6 +19,8 @@ func (h *Handler) StatusPages(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.store.ListStatusPages(r.Context())
 	if err != nil {
 		h.logger.Error("web: list status pages", "error", err)
+		http.Error(w, "Failed to load status pages", http.StatusInternalServerError)
+		return
 	}
 
 	lp := h.newLayoutParams(r, "Status Pages", "status-pages")
@@ -57,12 +59,16 @@ func (h *Handler) StatusPageForm(w http.ResponseWriter, r *http.Request) {
 		pageMonitors, err = h.store.ListStatusPageMonitors(ctx, id)
 		if err != nil {
 			h.logger.Error("web: list status page monitors", "error", err)
+			http.Error(w, "Failed to load status page monitors", http.StatusInternalServerError)
+			return
 		}
 	}
 
-	allMonitors, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 10000})
+	allMonitors, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{Access: httputil.MonitorAccess(ctx, "monitors.read")}, storage.Pagination{Page: 1, PerPage: 10000})
 	if err != nil {
 		h.logger.Error("web: list monitors for status page form", "error", err)
+		http.Error(w, "Failed to load monitor choices", http.StatusInternalServerError)
+		return
 	}
 
 	var monitors []*storage.Monitor
@@ -73,6 +79,22 @@ func (h *Handler) StatusPageForm(w http.ResponseWriter, r *http.Request) {
 		monitors = []*storage.Monitor{}
 	}
 
+	visible := make(map[int64]bool, len(monitors))
+	key := httputil.GetAPIKey(r.Context())
+	for _, m := range monitors {
+		visible[m.ID] = sp == nil || !sp.ShowIncidents || (key != nil && key.AllowsMonitor("incidents.read", m.ID, m.GroupID))
+	}
+	canManageMonitors := true
+	for _, pm := range pageMonitors {
+		if !visible[pm.MonitorID] {
+			canManageMonitors = false
+			break
+		}
+	}
+	if !canManageMonitors {
+		monitors = nil
+		pageMonitors = nil
+	}
 	assignedSet := make(map[int64]bool, len(pageMonitors))
 	assignedData := make(map[int64]storage.StatusPageMonitor, len(pageMonitors))
 	for _, pm := range pageMonitors {
@@ -82,153 +104,98 @@ func (h *Handler) StatusPageForm(w http.ResponseWriter, r *http.Request) {
 
 	lp := h.newLayoutParams(r, "Status Page", "status-pages")
 	h.renderComponent(w, r, views.StatusPageFormPage(views.StatusPageFormParams{
-		LayoutParams: lp,
-		StatusPage:   sp,
-		Monitors:     monitors,
-		Assigned:     assignedSet,
-		AssignedData: assignedData,
+		LayoutParams:      lp,
+		StatusPage:        sp,
+		Monitors:          monitors,
+		Assigned:          assignedSet,
+		AssignedData:      assignedData,
+		CanManageMonitors: canManageMonitors,
 	}))
 }
 
-func hashPassword(password string) string {
-	h := sha256.New()
-	h.Write([]byte(password))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func (h *Handler) StatusPageCreate(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-
-	sp := &storage.StatusPage{
-		Title:            strings.TrimSpace(r.FormValue("title")),
-		Slug:             r.FormValue("slug"),
-		Description:      strings.TrimSpace(r.FormValue("description")),
-		Enabled:          r.FormValue("enabled") == "on",
-		APIEnabled:       r.FormValue("api_enabled") == "on",
-		ShowIncidents:    r.FormValue("show_incidents") == "on",
-		CustomCSS:        r.FormValue("custom_css"),
-		LogoURL:          strings.TrimSpace(r.FormValue("logo_url")),
-		FaviconURL:       strings.TrimSpace(r.FormValue("favicon_url")),
-		CustomHeaderHTML: r.FormValue("custom_header_html"),
-		AnalyticsScript:  r.FormValue("analytics_script"),
-	}
-	if v := r.FormValue("sort_order"); v != "" {
-		sp.SortOrder, _ = strconv.Atoi(v)
-	}
-	if pw := r.FormValue("password"); pw != "" {
-		sp.PasswordHash = hashPassword(pw)
-	}
-
-	if err := validate.ValidateStatusPage(sp); err != nil {
-		h.setError(w, err.Error())
-		h.redirect(w, r, "/status-pages/new")
-		return
-	}
-
-	ctx := r.Context()
-
-	existing, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
-	if err == nil && existing != nil {
-		h.setError(w, "Slug already in use")
-		h.redirect(w, r, "/status-pages/new")
-		return
-	}
-
-	if err := h.store.CreateStatusPage(ctx, sp); err != nil {
-		h.logger.Error("web: create status page", "error", err)
-		h.setError(w, "Failed to create status page")
-		h.redirect(w, r, "/status-pages/new")
-		return
-	}
-
-	monitors := parseStatusPageMonitors(r, sp.ID)
-	if len(monitors) > 0 {
-		if err := h.store.SetStatusPageMonitors(ctx, sp.ID, monitors); err != nil {
-			h.logger.Error("web: set status page monitors", "error", err)
-		}
-	}
-
-	if h.OnStatusPageChange != nil {
-		h.OnStatusPageChange()
-	}
-	h.setFlash(w, "Status page created")
-	h.redirect(w, r, "/status-pages")
+	h.saveStatusPage(w, r, 0)
 }
 
 func (h *Handler) StatusPageUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.setError(w, "Invalid ID")
-		h.redirect(w, r, "/status-pages")
+		http.Error(w, "Invalid status page ID", http.StatusBadRequest)
 		return
 	}
+	h.saveStatusPage(w, r, id)
+}
 
-	r.ParseForm()
-
-	existing, err := h.store.GetStatusPage(r.Context(), id)
+func (h *Handler) saveStatusPage(w http.ResponseWriter, r *http.Request, id int64) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form", http.StatusBadRequest)
+		return
+	}
+	input, err := parseStatusPageForm(r)
 	if err != nil {
-		h.logger.Error("web: get status page for update", "error", err)
-		h.setError(w, "Failed to load status page")
-		h.redirect(w, r, "/status-pages")
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	sp := &storage.StatusPage{
-		ID:               id,
-		Title:            strings.TrimSpace(r.FormValue("title")),
-		Slug:             r.FormValue("slug"),
-		Description:      strings.TrimSpace(r.FormValue("description")),
-		Enabled:          r.FormValue("enabled") == "on",
-		APIEnabled:       r.FormValue("api_enabled") == "on",
-		ShowIncidents:    r.FormValue("show_incidents") == "on",
-		CustomCSS:        r.FormValue("custom_css"),
-		LogoURL:          strings.TrimSpace(r.FormValue("logo_url")),
-		FaviconURL:       strings.TrimSpace(r.FormValue("favicon_url")),
-		CustomHeaderHTML: r.FormValue("custom_header_html"),
-		AnalyticsScript:  r.FormValue("analytics_script"),
-		PasswordHash:     existing.PasswordHash,
-	}
-	if v := r.FormValue("sort_order"); v != "" {
-		sp.SortOrder, _ = strconv.Atoi(v)
-	}
-	if pw := r.FormValue("password"); pw != "" {
-		sp.PasswordHash = hashPassword(pw)
-	} else if r.FormValue("clear_password") == "on" {
-		sp.PasswordHash = ""
-	}
-
-	if err := validate.ValidateStatusPage(sp); err != nil {
-		h.setError(w, err.Error())
-		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
+	key := httputil.GetAPIKey(r.Context())
+	_, err = h.store.SaveStatusPage(r.Context(), id, func(current *storage.StatusPage) (*storage.StatusPage, *[]storage.StatusPageMonitor, error) {
+		return input.Apply(current, key != nil && key.SuperAdmin)
+	}, storage.StatusPageAccess{Monitors: httputil.MonitorAccess(r.Context(), "monitors.read"), Incidents: httputil.MonitorAccess(r.Context(), "incidents.read")})
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			http.NotFound(w, r)
+		case errors.Is(err, storage.ErrStatusPageSlugConflict):
+			http.Error(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, storage.ErrStatusPageMonitorAccess), errors.Is(err, storage.ErrStatusPageIncidentAccess), errors.Is(err, httputil.ErrStatusPageAnalytics):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case errors.Is(err, storage.ErrInvalidStatusPageMonitors), errors.Is(err, httputil.ErrInvalidStatusPage):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			h.logger.Error("web: save status page", "error", err)
+			http.Error(w, "Failed to save status page", http.StatusInternalServerError)
+		}
 		return
 	}
-
-	ctx := r.Context()
-
-	slugOwner, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
-	if err == nil && slugOwner != nil && slugOwner.ID != id {
-		h.setError(w, "Slug already in use")
-		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
-		return
-	}
-
-	if err := h.store.UpdateStatusPage(ctx, sp); err != nil {
-		h.logger.Error("web: update status page", "error", err)
-		h.setError(w, "Failed to update status page")
-		h.redirect(w, r, "/status-pages/"+strconv.FormatInt(id, 10)+"/edit")
-		return
-	}
-
-	monitors := parseStatusPageMonitors(r, id)
-	if err := h.store.SetStatusPageMonitors(ctx, id, monitors); err != nil {
-		h.logger.Error("web: set status page monitors", "error", err)
-	}
-
 	if h.OnStatusPageChange != nil {
 		h.OnStatusPageChange()
 	}
-	h.setFlash(w, "Status page updated")
-	h.redirect(w, r, "/status-pages")
+	if id == 0 {
+		h.setFlash(w, "Status page created")
+	} else {
+		h.setFlash(w, "Status page updated")
+	}
+	h.redirect(w, r, h.statusPageReturnPath(r))
+}
+
+func parseStatusPageForm(r *http.Request) (httputil.StatusPageInput, error) {
+	text := func(name string) *string { value := strings.TrimSpace(r.FormValue(name)); return &value }
+	flag := func(name string) *bool { value := r.FormValue(name) == "on"; return &value }
+	input := httputil.StatusPageInput{
+		Title: text("title"), Slug: text("slug"), Description: text("description"),
+		Enabled: flag("enabled"), APIEnabled: flag("api_enabled"), ShowIncidents: flag("show_incidents"),
+		CustomCSS: text("custom_css"), LogoURL: text("logo_url"), FaviconURL: text("favicon_url"), CustomHeaderHTML: text("custom_header_html"),
+	}
+	order := 0
+	if value := r.FormValue("sort_order"); value != "" {
+		var err error
+		order, err = strconv.Atoi(value)
+		if err != nil || order < 0 {
+			return input, fmt.Errorf("sort order must be a nonnegative number")
+		}
+	}
+	input.SortOrder = &order
+	if _, present := r.Form["analytics_script"]; present {
+		input.AnalyticsScript = text("analytics_script")
+	}
+	if password := r.FormValue("password"); password != "" {
+		input.Password = &password
+	} else if r.FormValue("clear_password") == "on" {
+		empty := ""
+		input.Password = &empty
+	}
+	members, err := parseStatusPageMonitors(r)
+	input.Monitors = members
+	return input, err
 }
 
 func (h *Handler) StatusPageDelete(w http.ResponseWriter, r *http.Request) {
@@ -238,41 +205,58 @@ func (h *Handler) StatusPageDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.DeleteStatusPage(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete status page", "error", err)
+		http.Error(w, "Failed to delete status page", http.StatusInternalServerError)
+		return
 	}
 	if h.OnStatusPageChange != nil {
 		h.OnStatusPageChange()
 	}
 	h.setFlash(w, "Status page deleted")
-	h.redirect(w, r, "/status-pages")
+	h.redirect(w, r, h.statusPageReturnPath(r))
 }
 
-func parseStatusPageMonitors(r *http.Request, pageID int64) []storage.StatusPageMonitor {
-	var result []storage.StatusPageMonitor
+func parseStatusPageMonitors(r *http.Request) (*[]storage.StatusPageMonitor, error) {
+	present := r.FormValue("monitors_present") == "1"
+	result := []storage.StatusPageMonitor{}
 	for key, vals := range r.Form {
 		if !strings.HasPrefix(key, "monitor_") || !strings.HasSuffix(key, "_enabled") {
 			continue
 		}
-		if len(vals) == 0 || vals[0] != "on" {
-			continue
+		present = true
+		if len(vals) != 1 || vals[0] != "on" {
+			return nil, fmt.Errorf("invalid monitor selection")
 		}
 		idStr := strings.TrimSuffix(strings.TrimPrefix(key, "monitor_"), "_enabled")
-		monitorID, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			continue
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, fmt.Errorf("invalid monitor selection")
 		}
-		sortOrder := 0
-		if v := r.FormValue("monitor_" + idStr + "_sort"); v != "" {
-			sortOrder, _ = strconv.Atoi(v)
+		order := 0
+		if value := r.FormValue("monitor_" + idStr + "_sort"); value != "" {
+			order, err = strconv.Atoi(value)
+			if err != nil || order < 0 {
+				return nil, fmt.Errorf("monitor sort order must be a nonnegative number")
+			}
 		}
-		groupName := strings.TrimSpace(r.FormValue("monitor_" + idStr + "_group"))
-
-		result = append(result, storage.StatusPageMonitor{
-			PageID:    pageID,
-			MonitorID: monitorID,
-			SortOrder: sortOrder,
-			GroupName: groupName,
-		})
+		result = append(result, storage.StatusPageMonitor{MonitorID: id, SortOrder: order, GroupName: strings.TrimSpace(r.FormValue("monitor_" + idStr + "_group"))})
 	}
-	return result
+	if !present {
+		return nil, nil
+	}
+	slices.SortFunc(result, func(a, b storage.StatusPageMonitor) int { return cmp.Compare(a.MonitorID, b.MonitorID) })
+	return &result, nil
+}
+
+func (h *Handler) statusPageReturnPath(r *http.Request) string {
+	lp := h.newLayoutParams(r, "", "")
+	if lp.Can("status_pages.read") {
+		return "/status-pages"
+	}
+	lp.BasePath = ""
+	return lp.HomePath()
 }

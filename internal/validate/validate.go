@@ -312,6 +312,18 @@ func ValidateStatusPage(sp *storage.StatusPage) error {
 	if len(sp.FaviconURL) > 2048 {
 		return fmt.Errorf("favicon_url must be at most 2048 characters")
 	}
+	var imageErr error
+	sp.LogoURL, _, imageErr = StatusPageImageURL(sp.LogoURL)
+	if imageErr != nil {
+		return fmt.Errorf("logo_url: %w", imageErr)
+	}
+	sp.FaviconURL, _, imageErr = StatusPageImageURL(sp.FaviconURL)
+	if imageErr != nil {
+		return fmt.Errorf("favicon_url: %w", imageErr)
+	}
+	if sp.SortOrder < 0 {
+		return fmt.Errorf("sort_order must be nonnegative")
+	}
 	if len(sp.CustomHeaderHTML) > 5000 {
 		return fmt.Errorf("custom_header_html must be at most 5000 characters")
 	}
@@ -570,6 +582,13 @@ func sanitizeHTML(input string) string {
 					if val == "" {
 						continue
 					}
+				}
+				if key == "src" {
+					imageURL, _, err := StatusPageImageURL(val)
+					if err != nil {
+						continue
+					}
+					val = imageURL
 				}
 				buf.WriteByte(' ')
 				buf.WriteString(key)

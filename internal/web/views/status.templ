@@ -14,10 +14,11 @@ type StatusPageListParams struct {
 
 type StatusPageFormParams struct {
 	LayoutParams
-	StatusPage   *storage.StatusPage
-	Monitors     []*storage.Monitor
-	Assigned     map[int64]bool
-	AssignedData map[int64]storage.StatusPageMonitor
+	StatusPage        *storage.StatusPage
+	Monitors          []*storage.Monitor
+	Assigned          map[int64]bool
+	AssignedData      map[int64]storage.StatusPageMonitor
+	CanManageMonitors bool
 }
 
 templ StatusPageListPage(p StatusPageListParams) {
@@ -136,7 +137,9 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 					<div class="flex flex-wrap gap-x-6 gap-y-3">
 						@statusToggle("enabled", "Public", p.StatusPage != nil && p.StatusPage.Enabled)
 						@statusToggle("api_enabled", "Public JSON API", p.StatusPage != nil && p.StatusPage.APIEnabled)
-						@statusToggle("show_incidents", "Show incidents", p.StatusPage == nil || p.StatusPage.ShowIncidents)
+						if p.HasCapability("incidents.read") || (p.StatusPage != nil && p.StatusPage.ShowIncidents) {
+							@statusToggle("show_incidents", "Show incidents", p.StatusPage == nil || p.StatusPage.ShowIncidents)
+						}
 					</div>
 					<p class="form-hint">A public page always serves its status as JSON at /api/v1/status-pages/&#123;id&#125;/public. Public JSON API also serves that JSON while the page is not public, and lets visitors of a public page subscribe through the API. If the page has a password, the JSON also requires it, in the X-Status-Page-Password header or the cookie set by the page's login form.</p>
 					<div>
@@ -154,38 +157,43 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 						/>
 					</div>
 				</div>
-				<div x-data="{search: ''}" class="panel">
-					<div class="px-4 py-2.5 border-b border-line flex items-center justify-between gap-3">
-						<h2 class="text-md font-semibold">Monitors</h2>
-						<input type="search" x-model="search" placeholder="Filter" aria-label="Filter monitors" class="form-input h-8 w-44"/>
-					</div>
-					<div class="divide-y divide-line max-h-64 overflow-y-auto">
-						for _, m := range p.Monitors {
-							<div
-								x-data={ fmt.Sprintf("{checked:%v}", p.Assigned[m.ID]) }
-								data-name={ m.Name }
-								x-show="!search || $el.dataset.name.toLowerCase().includes(search.toLowerCase())"
-								:class="checked && 'bg-surface-200'"
-								class="px-4 py-2.5"
-							>
-								<div class="flex items-center gap-3">
-									<input type="checkbox" name={ fmt.Sprintf("monitor_%d_enabled", m.ID) } class="form-checkbox shrink-0" x-model="checked" aria-label={ "Show " + m.Name }/>
-									<div class="flex-1 min-w-0">
-										<span class="text-sm text-white">{ m.Name }</span>
-										<span class="ml-1.5 text-sm text-muted">{ TypeLabel(m.Type) }</span>
-									</div>
-									<div x-show="checked" x-cloak class="flex items-center gap-2 shrink-0">
-										<input type="number" name={ fmt.Sprintf("monitor_%d_sort", m.ID) } placeholder="0" value={ statusPageMonitorSort(p.AssignedData, m.ID) } class="form-input h-8 w-16 text-center" aria-label={ "Sort order for " + m.Name } title="Sort order"/>
-										<input type="text" name={ fmt.Sprintf("monitor_%d_group", m.ID) } placeholder="Group" value={ statusPageMonitorGroup(p.AssignedData, m.ID) } class="form-input h-8 w-32" aria-label={ "Section for " + m.Name } title="Section heading on the public page"/>
+				if p.CanManageMonitors {
+					<input type="hidden" name="monitors_present" value="1"/>
+					<div x-data="{search: ''}" class="panel">
+						<div class="px-4 py-2.5 border-b border-line flex items-center justify-between gap-3">
+							<h2 class="text-md font-semibold">Monitors</h2>
+							<input type="search" x-model="search" placeholder="Filter" aria-label="Filter monitors" class="form-input h-8 w-44"/>
+						</div>
+						<div class="divide-y divide-line max-h-64 overflow-y-auto">
+							for _, m := range p.Monitors {
+								<div
+									x-data={ fmt.Sprintf("{checked:%v}", p.Assigned[m.ID]) }
+									data-name={ m.Name }
+									x-show="!search || $el.dataset.name.toLowerCase().includes(search.toLowerCase())"
+									:class="checked && 'bg-surface-200'"
+									class="px-4 py-2.5"
+								>
+									<div class="flex flex-wrap items-center gap-3">
+										<input type="checkbox" name={ fmt.Sprintf("monitor_%d_enabled", m.ID) } class="form-checkbox shrink-0" x-model="checked" checked?={ p.Assigned[m.ID] } aria-label={ "Show " + m.Name }/>
+										<div class="flex-1 min-w-0">
+											<span class="text-sm text-white">{ m.Name }</span>
+											<span class="ml-1.5 text-sm text-muted">{ TypeLabel(m.Type) }</span>
+										</div>
+										<div x-show="checked" x-cloak class="flex items-center gap-2 shrink-0">
+											<input type="number" name={ fmt.Sprintf("monitor_%d_sort", m.ID) } placeholder="0" value={ statusPageMonitorSort(p.AssignedData, m.ID) } class="form-input h-8 w-16 text-center" aria-label={ "Sort order for " + m.Name } title="Sort order"/>
+											<input type="text" name={ fmt.Sprintf("monitor_%d_group", m.ID) } placeholder="Group" value={ statusPageMonitorGroup(p.AssignedData, m.ID) } class="form-input h-8 w-32" aria-label={ "Section for " + m.Name } title="Section heading on the public page"/>
+										</div>
 									</div>
 								</div>
-							</div>
+							}
+						</div>
+						if len(p.Monitors) == 0 {
+							<div class="px-4 py-10 text-center text-sm text-muted">No readable monitors.</div>
 						}
 					</div>
-					if len(p.Monitors) == 0 {
-						<div class="px-4 py-10 text-center text-sm text-muted">No monitors yet.</div>
-					}
-				</div>
+				} else {
+					<p class="text-sm text-muted-light">Monitor selection is preserved. Read access to every current member is required to change the selection, public URL or password protection, or to enable publication. Publishing incidents also requires incident read access for those members.</p>
+				}
 				<div x-data="{showAdvanced: false}">
 					<button type="button" @click="showAdvanced = !showAdvanced" :aria-expanded="showAdvanced" class="flex items-center gap-2 text-lg font-semibold text-white">
 						<svg focusable="false" aria-hidden="true" class="w-4 h-4 text-muted transition-transform" :class="showAdvanced && 'rotate-90'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -197,7 +205,8 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 								<label class="form-label" for="logo_url">Logo URL</label>
 								<input
 									id="logo_url"
-									type="url"
+									type="text"
+									inputmode="url"
 									name="logo_url"
 									if p.StatusPage != nil {
 										value={ p.StatusPage.LogoURL }
@@ -205,13 +214,14 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 									class="form-input"
 									placeholder="https://example.com/logo.png"
 								/>
-								<p class="form-hint">Displayed above the status banner.</p>
+								<p class="form-hint">Displayed above the status banner. Use an HTTPS URL or a path starting with /.</p>
 							</div>
 							<div>
 								<label class="form-label" for="favicon_url">Favicon URL</label>
 								<input
 									id="favicon_url"
-									type="url"
+									type="text"
+									inputmode="url"
 									name="favicon_url"
 									if p.StatusPage != nil {
 										value={ p.StatusPage.FaviconURL }
@@ -219,6 +229,7 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 									class="form-input"
 									placeholder="https://example.com/favicon.ico"
 								/>
+								<p class="form-hint">Use an HTTPS URL or a path starting with /.</p>
 							</div>
 						</div>
 						<div>
@@ -228,6 +239,7 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 									{ p.StatusPage.CustomHeaderHTML }
 								}
 							</textarea>
+							<p class="form-hint">Supported headings, text, links and images are kept. Scripts, forms and event handlers are removed.</p>
 						</div>
 						<div>
 							<label class="form-label" for="password">Password Protection</label>
@@ -247,16 +259,19 @@ templ StatusPageFormPage(p StatusPageFormParams) {
 									{ p.StatusPage.CustomCSS }
 								}
 							</textarea>
+							<p class="form-hint">Only supported presentation styles are kept. External resources and at-rules are removed.</p>
 						</div>
-						<div>
-							<label class="form-label" for="analytics_script">Analytics Script</label>
-							<textarea id="analytics_script" name="analytics_script" rows="3" class="form-input text-xs font-mono resize-y" placeholder="<!-- e.g. Plausible, Fathom, or Google Analytics snippet -->">
-								if p.StatusPage != nil {
-									{ p.StatusPage.AnalyticsScript }
-								}
-							</textarea>
-							<p class="form-hint">Injected before &lt;/body&gt; on the public status page.</p>
-						</div>
+						if p.SuperAdmin {
+							<div>
+								<label class="form-label" for="analytics_script">Analytics Script</label>
+								<textarea id="analytics_script" name="analytics_script" rows="3" class="form-input text-xs font-mono resize-y" placeholder="<!-- External HTTPS script tags -->">
+									if p.StatusPage != nil {
+										{ p.StatusPage.AnalyticsScript }
+									}
+								</textarea>
+								<p class="form-hint">Only a super administrator may change analytics scripts. External scripts are currently blocked by the content policy.</p>
+							</div>
+						}
 					</div>
 				</div>
 				<div class="flex items-center gap-2">

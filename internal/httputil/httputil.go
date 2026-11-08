@@ -247,20 +247,27 @@ func (rl *RateLimiter) Middleware(trustedNets []net.IPNet, writeError func(http.
 
 func OverallStatus(monitors []*storage.Monitor) string {
 	overall := "operational"
+	pending := len(monitors) == 0
 	for _, m := range monitors {
-		if m.Status == "down" {
+		switch m.Status {
+		case "down":
 			return "major_outage"
-		}
-		if m.Status == "degraded" {
+		case "degraded":
 			overall = "degraded"
+		case "up":
+		default:
+			pending = true
 		}
+	}
+	if overall == "operational" && pending {
+		return "unknown"
 	}
 	return overall
 }
 
-func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storage.StatusPage, monitors []*storage.Monitor, now time.Time) []*storage.Incident {
+func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storage.StatusPage, monitors []*storage.Monitor, now time.Time) ([]*storage.Incident, error) {
 	if !sp.ShowIncidents || len(monitors) == 0 {
-		return []*storage.Incident{}
+		return []*storage.Incident{}, nil
 	}
 
 	ids := make([]int64, len(monitors))
@@ -273,7 +280,7 @@ func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storag
 	const wantIncidents = 10
 	incidents, err := store.ListRecentIncidents(ctx, ids, now.AddDate(0, 0, -7), wantIncidents)
 	if err != nil {
-		return []*storage.Incident{}
+		return nil, err
 	}
 	filtered := make([]*storage.Incident, 0, len(incidents))
 	for _, inc := range incidents {
@@ -281,5 +288,5 @@ func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storag
 		safe.Cause = ""
 		filtered = append(filtered, &safe)
 	}
-	return filtered
+	return filtered, nil
 }

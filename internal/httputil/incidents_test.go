@@ -76,8 +76,8 @@ func incidentStore(tb testing.TB) (*countingStore, *storage.Monitor, *sql.DB) {
 func TestPublicIncidentsForPageSingleQuery(t *testing.T) {
 	cs, mon, _ := incidentStore(t)
 	sp := &storage.StatusPage{ShowIncidents: true}
-	got := PublicIncidentsForPage(context.Background(), cs, sp, []*storage.Monitor{mon}, time.Now())
-	if len(got) != 0 {
+	got, err := PublicIncidentsForPage(context.Background(), cs, sp, []*storage.Monitor{mon}, time.Now())
+	if err != nil || len(got) != 0 {
 		t.Fatalf("expected no incidents, got %d", len(got))
 	}
 	if n := cs.calls.Load(); n != 1 {
@@ -106,8 +106,8 @@ func TestPublicIncidentsForPageFilters(t *testing.T) {
 	ins("open", now.AddDate(0, 0, -30), nil)                         // included: still open
 
 	sp := &storage.StatusPage{ShowIncidents: true}
-	got := PublicIncidentsForPage(context.Background(), cs, sp, []*storage.Monitor{mon}, now)
-	if len(got) != 2 {
+	got, err := PublicIncidentsForPage(context.Background(), cs, sp, []*storage.Monitor{mon}, now)
+	if err != nil || len(got) != 2 {
 		t.Fatalf("expected 2 incidents, got %d", len(got))
 	}
 	if got[0].Status != "resolved" || got[1].Status != "open" {
@@ -125,10 +125,10 @@ func TestPublicIncidentsForPageFilters(t *testing.T) {
 	for i := 0; i < 15; i++ {
 		ins("open", now.Add(-time.Duration(i)*time.Minute), nil)
 	}
-	if got := PublicIncidentsForPage(context.Background(), cs, sp, []*storage.Monitor{mon}, now); len(got) != 10 {
+	if got, err := PublicIncidentsForPage(context.Background(), cs, sp, []*storage.Monitor{mon}, now); err != nil || len(got) != 10 {
 		t.Fatalf("expected at most 10 incidents, got %d", len(got))
 	}
-	if got := PublicIncidentsForPage(context.Background(), cs, &storage.StatusPage{}, []*storage.Monitor{mon}, now); len(got) != 0 {
+	if got, err := PublicIncidentsForPage(context.Background(), cs, &storage.StatusPage{}, []*storage.Monitor{mon}, now); err != nil || len(got) != 0 {
 		t.Fatal("incidents returned with ShowIncidents=false")
 	}
 }

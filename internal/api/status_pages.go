@@ -12,7 +12,6 @@ import (
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
 )
 
 func (h *Handler) ListStatusPages(w http.ResponseWriter, r *http.Request) {
@@ -42,10 +41,11 @@ func (h *Handler) GetStatusPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	monitors, err := h.store.ListStatusPageMonitors(r.Context(), id)
+	monitors, err := h.store.ListStatusPageMonitors(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
 		h.logger.Error("get status page monitors", "error", err)
-		monitors = []storage.StatusPageMonitor{}
+		writeError(w, http.StatusInternalServerError, "failed to get status page monitors")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -55,53 +55,7 @@ func (h *Handler) GetStatusPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateStatusPage(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		storage.StatusPage
-		Monitors []storage.StatusPageMonitor `json:"monitors"`
-		Password *string                     `json:"password"`
-	}
-	if err := h.readJSON(r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	sp := &input.StatusPage
-	applyStatusPagePassword(sp, input.Password)
-	if err := validate.ValidateStatusPage(sp); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	ctx := r.Context()
-
-	existing, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
-	if err == nil && existing != nil {
-		writeError(w, http.StatusConflict, "slug already in use")
-		return
-	}
-
-	if err := h.store.CreateStatusPage(ctx, sp); err != nil {
-		h.logger.Error("create status page", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to create status page")
-		return
-	}
-
-	if len(input.Monitors) > 0 {
-		for i := range input.Monitors {
-			input.Monitors[i].PageID = sp.ID
-		}
-		if err := h.store.SetStatusPageMonitors(ctx, sp.ID, input.Monitors); err != nil {
-			h.logger.Error("set status page monitors", "error", err)
-			writeError(w, http.StatusInternalServerError, "status page created but failed to set monitors")
-			return
-		}
-	}
-
-	if h.OnStatusPageChange != nil {
-		h.OnStatusPageChange()
-	}
-	h.audit(r, "create", "status_page", sp.ID, "")
-	writeJSON(w, http.StatusCreated, sp)
+	h.saveStatusPage(w, r, 0)
 }
 
 func (h *Handler) UpdateStatusPage(w http.ResponseWriter, r *http.Request) {
@@ -110,65 +64,48 @@ func (h *Handler) UpdateStatusPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.saveStatusPage(w, r, id)
+}
 
-	ctx := r.Context()
-	existing, err := h.store.GetStatusPage(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "status page not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get status page")
-		return
-	}
-
-	var input struct {
-		storage.StatusPage
-		Monitors *[]storage.StatusPageMonitor `json:"monitors"`
-		Password *string                      `json:"password"`
-	}
+func (h *Handler) saveStatusPage(w http.ResponseWriter, r *http.Request, id int64) {
+	var input httputil.StatusPageInput
 	if err := h.readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	sp := &input.StatusPage
-	sp.ID = id
-	sp.PasswordHash = existing.PasswordHash
-	applyStatusPagePassword(sp, input.Password)
-	if err := validate.ValidateStatusPage(sp); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	slugOwner, err := h.store.GetStatusPageBySlug(ctx, sp.Slug)
-	if err == nil && slugOwner != nil && slugOwner.ID != id {
-		writeError(w, http.StatusConflict, "slug already in use")
-		return
-	}
-
-	if err := h.store.UpdateStatusPage(ctx, sp); err != nil {
-		h.logger.Error("update status page", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to update status page")
-		return
-	}
-
-	if input.Monitors != nil {
-		for i := range *input.Monitors {
-			(*input.Monitors)[i].PageID = id
+	key := httputil.GetAPIKey(r.Context())
+	sp, err := h.store.SaveStatusPage(r.Context(), id, func(current *storage.StatusPage) (*storage.StatusPage, *[]storage.StatusPageMonitor, error) {
+		return input.Apply(current, key != nil && key.SuperAdmin)
+	}, storage.StatusPageAccess{Monitors: httputil.MonitorAccess(r.Context(), "monitors.read"), Incidents: httputil.MonitorAccess(r.Context(), "incidents.read")})
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			writeError(w, http.StatusNotFound, "status page not found")
+		case errors.Is(err, storage.ErrStatusPageSlugConflict):
+			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, storage.ErrStatusPageMonitorAccess), errors.Is(err, storage.ErrStatusPageIncidentAccess), errors.Is(err, httputil.ErrStatusPageAnalytics):
+			writeError(w, http.StatusForbidden, err.Error())
+		case errors.Is(err, storage.ErrInvalidStatusPageMonitors), errors.Is(err, httputil.ErrInvalidStatusPage):
+			writeError(w, http.StatusBadRequest, err.Error())
+		default:
+			h.logger.Error("save status page", "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to save status page")
 		}
-		if err := h.store.SetStatusPageMonitors(ctx, id, *input.Monitors); err != nil {
-			h.logger.Error("set status page monitors", "error", err)
-			writeError(w, http.StatusInternalServerError, "status page updated but failed to set monitors")
-			return
-		}
+		return
 	}
-
 	if h.OnStatusPageChange != nil {
 		h.OnStatusPageChange()
 	}
-	h.audit(r, "update", "status_page", id, "")
-	writeJSON(w, http.StatusOK, sp)
+	status, action := http.StatusOK, "update"
+	if id == 0 {
+		status, action = http.StatusCreated, "create"
+	}
+	h.audit(r, action, "status_page", sp.ID, "")
+	if key == nil || !key.HasPermission("status_pages.read") {
+		writeJSON(w, status, map[string]int64{"id": sp.ID})
+		return
+	}
+	writeJSON(w, status, sp)
 }
 
 func (h *Handler) DeleteStatusPage(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +127,10 @@ func (h *Handler) DeleteStatusPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.DeleteStatusPage(ctx, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "status page not found")
+			return
+		}
 		h.logger.Error("delete status page", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete status page")
 		return
@@ -247,7 +188,8 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		Name        string                 `json:"name"`
 		Type        string                 `json:"type"`
 		Status      string                 `json:"status"`
-		Uptime90d   float64                `json:"uptime_90d"`
+		Uptime90d   *float64               `json:"uptime_90d"`
+		TotalChecks int64                  `json:"total_checks"`
 		DailyUptime []*storage.DailyUptime `json:"daily_uptime"`
 	}
 
@@ -255,24 +197,33 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 	for _, m := range monitors {
 		daily, err := h.store.GetDailyUptime(ctx, m.ID, from, now)
 		if err != nil {
-			daily = []*storage.DailyUptime{}
+			h.logger.Error("public status page uptime", "monitor_id", m.ID, "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to load uptime")
+			return
 		}
-		uptime, err := h.store.GetUptimePercent(ctx, m.ID, from, now)
-		if err != nil {
-			uptime = 100
+		uptime, total := storage.SummarizeUptime(daily)
+		var measured *float64
+		if total > 0 {
+			measured = &uptime
 		}
 		result = append(result, safeMonitor{
 			ID:          m.ID,
 			Name:        m.Name,
 			Type:        m.Type,
 			Status:      m.Status,
-			Uptime90d:   uptime,
+			Uptime90d:   measured,
+			TotalChecks: total,
 			DailyUptime: daily,
 		})
 	}
 
 	overall := httputil.OverallStatus(monitors)
-	incidents := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	incidents, err := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	if err != nil {
+		h.logger.Error("public status page incidents", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load incidents")
+		return
+	}
 
 	if sp.PasswordHash == "" {
 		w.Header().Set("Cache-Control", "public, max-age=30")
@@ -323,20 +274,6 @@ const statusPagePasswordHeader = "X-Status-Page-Password"
 func hashStatusPagePassword(password string) string {
 	sum := sha256.Sum256([]byte(password))
 	return hex.EncodeToString(sum[:])
-}
-
-// applyStatusPagePassword sets (non-empty) or clears (empty) the page password
-// when the request included a "password" field; nil leaves it unchanged.
-func applyStatusPagePassword(sp *storage.StatusPage, password *string) {
-	if password == nil {
-		return
-	}
-	if *password == "" {
-		sp.PasswordHash = ""
-	} else {
-		sp.PasswordHash = hashStatusPagePassword(*password)
-	}
-	sp.PasswordEnabled = sp.PasswordHash != ""
 }
 
 // statusPageAuthValid reports whether the request carries a valid status-page

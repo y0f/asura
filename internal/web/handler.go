@@ -97,9 +97,14 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 }
 
 func (h *Handler) renderComponent(w http.ResponseWriter, r *http.Request, c templ.Component) {
+	h.renderComponentWithCSP(w, r, c, componentCSP+h.cspFrameDirective)
+}
+
+const componentCSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+
+func (h *Handler) renderComponentWithCSP(w http.ResponseWriter, r *http.Request, c templ.Component, policy string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "+h.cspFrameDirective)
+	w.Header().Set("Content-Security-Policy", policy)
 	if err := c.Render(r.Context(), w); err != nil {
 		h.logger.Error("templ render", "error", err)
 	}

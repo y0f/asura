@@ -1,10 +1,11 @@
 package web
 
 import (
-	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -44,6 +45,11 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 	ctx := r.Context()
 
 	sp, err := h.store.GetStatusPage(ctx, pageID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.logger.Error("web: get public status page", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
+		return
+	}
 	if err != nil || sp == nil || !sp.Enabled {
 		http.NotFound(w, r)
 		return
@@ -56,8 +62,8 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 	monitors, spms, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
 	if err != nil {
 		h.logger.Error("web: status page monitors", "error", err)
-		monitors = []*storage.Monitor{}
-		spms = []storage.StatusPageMonitor{}
+		http.Error(w, "Failed to load status page monitors", http.StatusInternalServerError)
+		return
 	}
 
 	now := time.Now().UTC()
@@ -70,18 +76,24 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 
 	var monitorData []views.MonitorWithUptime
 	for _, m := range monitors {
-		bars := h.buildDailyBars(ctx, m.ID, from, now)
-		uptime, err := h.store.GetUptimePercent(ctx, m.ID, from, now)
+		daily, err := h.store.GetDailyUptime(ctx, m.ID, from, now)
 		if err != nil {
-			h.logger.Error("web: status uptime percent", "monitor_id", m.ID, "error", err)
-			uptime = 100
+			h.logger.Error("web: status uptime", "monitor_id", m.ID, "error", err)
+			http.Error(w, "Failed to load uptime", http.StatusInternalServerError)
+			return
+		}
+		bars := buildDailyBars(daily, now)
+		uptime, total := storage.SummarizeUptime(daily)
+		label := "\u2014"
+		if total > 0 {
+			label = views.UptimeFmt(uptime)
 		}
 
 		monitorData = append(monitorData, views.MonitorWithUptime{
 			Monitor:     m,
 			DailyBars:   bars,
 			Uptime90d:   uptime,
-			UptimeLabel: views.UptimeFmt(uptime),
+			UptimeLabel: label,
 			GroupName:   groupNameMap[m.ID],
 		})
 	}
@@ -99,14 +111,24 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 	}
 
 	overall := httputil.OverallStatus(monitors)
-	incidents := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	incidents, err := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	if err != nil {
+		h.logger.Error("web: status incidents", "error", err)
+		http.Error(w, "Failed to load incidents", http.StatusInternalServerError)
+		return
+	}
 
 	msg := r.URL.Query().Get("msg")
 
-	h.renderComponent(w, r, views.PublicStatusPage(views.PublicStatusPageParams{
+	branding, policy := h.publicStatusBranding(sp)
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	if sp.PasswordHash != "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	h.renderComponentWithCSP(w, r, views.PublicStatusPage(views.PublicStatusPageParams{
 		Title:                sp.Title,
 		BasePath:             h.cfg.Server.BasePath,
-		Config:               sp,
+		Config:               branding,
 		Monitors:             monitorData,
 		Groups:               groups,
 		HasGroups:            len(groups) > 1 || (len(groups) == 1 && groups[0].Name != ""),
@@ -115,13 +137,18 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 		HasIncidents:         len(incidents) > 0,
 		SubscriptionsEnabled: h.cfg.Subscriptions.Enabled,
 		Message:              msg,
-	}))
+	}), policy)
 }
 
 func (h *Handler) StatusPageAuthGet(w http.ResponseWriter, r *http.Request, pageID int64) {
 	ctx := r.Context()
 	sp, err := h.store.GetStatusPage(ctx, pageID)
-	if err != nil || !sp.Enabled {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.logger.Error("web: get public status page", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
+		return
+	}
+	if err != nil || sp == nil || !sp.Enabled {
 		http.NotFound(w, r)
 		return
 	}
@@ -144,7 +171,12 @@ func (h *Handler) StatusPageAuthGet(w http.ResponseWriter, r *http.Request, page
 func (h *Handler) StatusPageAuthPost(w http.ResponseWriter, r *http.Request, pageID int64, slug string) {
 	ctx := r.Context()
 	sp, err := h.store.GetStatusPage(ctx, pageID)
-	if err != nil || !sp.Enabled || sp.PasswordHash == "" {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.logger.Error("web: get public status page", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
+		return
+	}
+	if err != nil || sp == nil || !sp.Enabled || sp.PasswordHash == "" {
 		http.Redirect(w, r, h.cfg.Server.BasePath+"/"+slug, http.StatusFound)
 		return
 	}
@@ -176,12 +208,7 @@ func (h *Handler) StatusPageAuthPost(w http.ResponseWriter, r *http.Request, pag
 	http.Redirect(w, r, h.cfg.Server.BasePath+"/"+slug, http.StatusSeeOther)
 }
 
-func (h *Handler) buildDailyBars(ctx context.Context, monitorID int64, from, now time.Time) []views.DailyBar {
-	daily, err := h.store.GetDailyUptime(ctx, monitorID, from, now)
-	if err != nil {
-		h.logger.Error("web: status daily uptime", "monitor_id", monitorID, "error", err)
-	}
-
+func buildDailyBars(daily []*storage.DailyUptime, now time.Time) []views.DailyBar {
 	dayMap := make(map[string]*storage.DailyUptime)
 	for _, d := range daily {
 		dayMap[d.Date] = d
@@ -192,7 +219,7 @@ func (h *Handler) buildDailyBars(ctx context.Context, monitorID int64, from, now
 		day := now.AddDate(0, 0, -i)
 		dateStr := day.Format("2006-01-02")
 		label := day.Format("Jan 2, 2006")
-		if d, ok := dayMap[dateStr]; ok {
+		if d, ok := dayMap[dateStr]; ok && d.TotalChecks > 0 {
 			bars = append(bars, views.DailyBar{
 				Date:      dateStr,
 				UptimePct: d.UptimePct,
