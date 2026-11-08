@@ -6,9 +6,10 @@ If you discover a security vulnerability, please report it responsibly.
 
 **Do not open a public issue.**
 
-Email: asura@red.tf
+Email: [hi@hu.ci](mailto:hi@hu.ci)
 
 Include:
+
 - Description of the vulnerability
 - Steps to reproduce
 - Potential impact

@@ -27,5 +27,3 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - README.md
-  - frontend-rework.md
-  - superpowers
