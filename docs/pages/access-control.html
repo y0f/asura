@@ -1,0 +1,106 @@
+<h1>Access control</h1>
+
+<p>Asura v2 uses the same authorization policy for API keys and web sessions. A named principal in <code>auth.api_keys</code> receives actions through reusable role bindings, explicit global permissions, or the separate <code>super_admin</code> flag. Roles and bindings live in <code>config.yaml</code>; there is no additional identity service or role database.</p>
+
+<h2>Define a role and bind its scope</h2>
+
+<pre><code>auth:
+  roles:
+    - name: production-editor
+      description: Manage monitors in the production group
+      permissions:
+        - monitors.read
+        - monitors.create
+        - monitors.update
+        - monitors.clone
+        - monitors.assign
+        - incidents.read
+        - incidents.acknowledge
+
+  api_keys:
+    - name: bootstrap-admin
+      hash: "${ASURA_ADMIN_KEY_HASH}"
+      super_admin: true
+
+    - name: production-team
+      hash: "${ASURA_PRODUCTION_KEY_HASH}"
+      role_bindings:
+        - role: production-editor
+          scope:
+            group_ids: [2]
+        - role: viewer
+          scope:
+            monitor_ids: [7]
+
+    - name: global-viewer
+      hash: "${ASURA_VIEWER_KEY_HASH}"
+      role_bindings:
+        - role: viewer
+          scope:
+            all: true</code></pre>
+
+<p>Generate a key and its hash with <code>asura --setup</code>. Keep the original key private and put only its hash in the configuration. Replace the example group and monitor IDs with existing IDs from your installation. Restart the server after changing authentication configuration. Existing sessions resolve their principal against the current configuration; removing the principal or rotating its key revokes its previous sessions.</p>
+
+<p>A role has a unique <code>name</code>, optional <code>description</code>, and nonempty <code>permissions</code> list. Custom names start with a lowercase letter and contain at most 64 lowercase letters, digits, underscores or hyphens. Built-in and legacy role names are reserved. Unknown roles, unknown actions, duplicate definitions, invalid IDs and empty scopes fail configuration validation.</p>
+
+<h2>Built-in roles</h2>
+
+<table>
+  <thead><tr><th>Role</th><th>Actions</th><th>Allowed binding scope</th></tr></thead>
+  <tbody>
+    <tr><td><code>viewer</code></td><td>Read monitors, incidents, SLA reports, request logs, notification history and maintenance windows.</td><td>All monitors, specific monitor IDs, or current members of specific groups.</td></tr>
+    <tr><td><code>operator</code></td><td>Viewer actions, monitor pause/resume/manual status, incident acknowledge/resolve/severity, and maintenance create/update/delete/toggle.</td><td>All monitors, specific monitor IDs, or current members of specific groups.</td></tr>
+    <tr><td><code>administrator</code></td><td>Every ordinary resource/action permission, including subscriber contacts and administration.</td><td><code>all: true</code> only. It does not grant <code>super_admin</code>.</td></tr>
+  </tbody>
+</table>
+
+<p>The viewer role excludes unrelated configuration, notification-channel settings, subscriber contacts, audit records and database metadata. The operator role does not grant monitor configuration changes, credential delegation, or incident deletion. Use a custom role when those actions are needed.</p>
+
+<h2>How bindings combine</h2>
+
+<p>Each binding must explicitly choose <code>all: true</code>, or a nonempty combination of <code>monitor_ids</code> and <code>group_ids</code>. Combining <code>all: true</code> with IDs is invalid. IDs and group membership inside a binding are alternatives: either match grants that binding's actions. Group bindings follow the monitor's current membership; an explicit monitor-ID binding follows that specific monitor.</p>
+
+<p>Multiple bindings add grants for the same action. They never transfer an action to another binding's objects. For example, <code>monitors.read</code> on monitor 10 and <code>monitors.update</code> on monitor 20 allow reading 10 and updating 20; they do not allow updating 10 or reading 20. Operations requiring multiple actions must satisfy every action on the affected object. There is no role inheritance, implicit read grant or deny-rule precedence.</p>
+
+<p><code>resource.write</code> is an umbrella for that resource's mutation actions only. For example, <code>monitors.write</code> includes monitor creation, editing, deletion, pause/resume, manual status, cloning and assignment. It grants neither <code>monitors.read</code> nor permissions on groups, channels, agents or other resources. Unknown actions and wildcards such as <code>*</code> or <code>monitors.*</code> are rejected.</p>
+
+<h2>Which resources can be scoped</h2>
+
+<p>Monitor and group selectors apply to <code>monitors</code>, <code>incidents</code>, <code>sla</code>, <code>request_logs</code>, <code>notification_history</code> and <code>maintenance</code>. Incidents, reports and log/history entries use the monitor they belong to. Entries without an associated monitor require a global grant. A maintenance window requires authority over every monitor it affects; an all-monitor window requires a global grant.</p>
+
+<p>Other resources require <code>all: true</code>, including group administration, tags, notification channels, escalation policies, proxies, agents, status-page administration, subscriber contacts, on-call schedules, audit records, settings, database operations and aggregate metrics. A group selector grants access to its member monitors, not to administration of that group. A role containing any global-only permission cannot be bound to monitor or group IDs; split it into separate roles and bindings.</p>
+
+<p>Related resource access is independent. A monitor permission does not grant channel secrets, proxy settings, agent credentials, subscriber contacts or unrelated nested names. Necessary relationship IDs may remain visible without the related resource's read permission. Changing a relationship requires the appropriate assignment authority and access to the selected related resource; unrelated edits preserve inaccessible relationships.</p>
+
+<h2>Creation, cloning and moving monitors</h2>
+
+<p>A new monitor has no existing ID to match. Creating it therefore requires <code>monitors.create</code> for its destination group, or a global grant. Creating an ungrouped monitor requires a global grant. Cloning requires source read and clone authority, plus clone authority for the destination group; an ID-only clone grant cannot create another object.</p>
+
+<p>Changing a monitor's group requires update and assignment authority over the current monitor and authority over the destination group. An ID-only grant permits ordinary edits that keep the group unchanged, but does not authorize moving the monitor into arbitrary groups. Removing group membership requires global destination authority. Bulk operations authorize every requested ID before changing any records; a missing or inaccessible ID prevents the complete operation.</p>
+
+<h2>Global compatibility grants and migration</h2>
+
+<p>Existing <code>api_keys[].permissions</code> entries remain explicit global grants. They can coexist with role bindings, and their global reach is unchanged. To restrict an existing principal, move the relevant permissions into a role binding and remove the corresponding direct grants.</p>
+
+<table>
+  <thead><tr><th>Legacy configuration</th><th>V2 interpretation</th></tr></thead>
+  <tbody>
+    <tr><td><code>role: admin</code></td><td>Converted to explicit <code>super_admin: true</code> during configuration validation.</td></tr>
+    <tr><td><code>role: readonly</code></td><td>Preserves the legacy global read set listed below. It is broader than the new viewer role.</td></tr>
+    <tr><td><code>permissions: [...]</code></td><td>Global action grants. A resource's write umbrella covers only that resource's mutations.</td></tr>
+  </tbody>
+</table>
+
+<p>The frozen legacy readonly set is: <code>monitors.read</code>, <code>incidents.read</code>, <code>notifications.read</code>, <code>notification_history.read</code>, <code>escalation_policies.read</code>, <code>maintenance.read</code>, <code>groups.read</code>, <code>tags.read</code>, <code>proxies.read</code>, <code>agents.read</code>, <code>status_pages.read</code>, <code>on_call.read</code>, <code>request_logs.read</code>, <code>audit.read</code>, <code>settings.read</code>, <code>database.read</code>, <code>metrics.read</code> and <code>sla.read</code>. It excludes subscriber contacts. Future resources do not silently expand this set.</p>
+
+<p>Combining the legacy <code>role</code> field with <code>permissions</code>, <code>role_bindings</code> or <code>super_admin</code> is rejected. Replace the legacy field with explicit grants instead of relying on precedence. See <a href="upgrading.html">Upgrading</a> for the broader v2 permission migration and configuration backup steps.</p>
+
+<h2>Privileged configuration and credentials</h2>
+
+<p><code>super_admin</code> is a separate, explicit authority. Ordinary roles cannot grant it. Configuration import and full exports containing stored credentials require this authority. Keep a separate bootstrap or recovery principal for those operations. An ordinary administrator role can administer resources but cannot obtain a full secret backup.</p>
+
+<p>Ordinary monitor and notification-channel reads mask stored credential fields. A hidden field left blank during a supported edit retains its saved value; explicit removal or the API's <code>clear_secrets</code> option clears it. Retaining hidden credentials while changing their recipient requires replacement or explicit clearing. Creating a heartbeat or agent can return a new credential once; later read permissions do not recover it. See the <a href="api.html">API reference</a> for field-level behavior.</p>
+
+<h2>API and web behavior</h2>
+
+<p>The web navigation shows sections for which a principal has a capability, while individual links and actions check the particular object. API collections apply scope before totals and pagination. An inaccessible object is reported as not found. These checks apply independently of whether the web UI is enabled or the application runs under a URL prefix. Live events follow the same principal and object boundaries; public status pages expose only their intentionally published content.</p>
