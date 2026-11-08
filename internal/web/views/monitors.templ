@@ -219,6 +219,9 @@ func durationPercentile(value float64, successfulChecks int64) string {
 	if successfulChecks == 0 {
 		return "—"
 	}
+	if value == 0 {
+		return "0ms"
+	}
 	return FormatFloat(value)
 }
 

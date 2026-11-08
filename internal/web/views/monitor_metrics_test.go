@@ -32,7 +32,7 @@ func TestMonitorUptimeWindowsKeepIndependentEvidence(t *testing.T) {
 	if strings.Count(text, "No check data") != 2 || !strings.Contains(text, "87.50%") || strings.Contains(text, "100.00%") {
 		t.Fatal("empty windows must not appear healthy or hide another window's real measurements")
 	}
-	if durationPercentile(0, 0) != "—" || durationPercentile(0, 1) == "—" {
+	if durationPercentile(0, 0) != "—" || durationPercentile(0, 1) != "0ms" {
 		t.Fatal("missing duration samples and a measured zero must remain distinguishable")
 	}
 }
