@@ -1,10 +1,13 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 	"time"
 )
 
@@ -269,10 +272,6 @@ func agentMayReceiveSettings(settings string, assigned bool) bool {
 	if settings == "" || settings == "{}" {
 		return true
 	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(settings), &object); err != nil || object == nil {
-		return false
-	}
 	if settingsHaveAgentSecrets([]byte(settings)) {
 		return false
 	}
@@ -322,15 +321,71 @@ var agentSecretKeys = []string{
 	"mtls_client_key", "mtls_client_cert", "mtls_ca_cert", "password",
 }
 
-// settingsHaveAgentSecrets reports whether the settings carry a non-empty
-// value for any key in agentSecretKeys.
-func settingsHaveAgentSecrets(raw []byte) bool {
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return false
+// agentSecretKey matches encoding/json's case-insensitive struct field matching.
+func agentSecretKey(key string) string {
+	for _, secret := range agentSecretKeys {
+		if strings.EqualFold(key, secret) {
+			return secret
+		}
 	}
-	for _, k := range agentSecretKeys {
-		if v, ok := m[k]; ok && v != nil && v != "" {
+	return ""
+}
+
+// readAgentSettings rejects malformed/non-object settings and ambiguous duplicate
+// authentication fields, including exact duplicates whose later null value can
+// leave an earlier struct string intact. Raw values preserve number precision.
+func readAgentSettings(raw []byte) (map[string]json.RawMessage, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return nil, false
+	}
+	object := make(map[string]json.RawMessage)
+	secrets := make(map[string]bool)
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok {
+			return nil, false
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, false
+		}
+		if _, duplicate := object[key]; duplicate {
+			return nil, false
+		}
+		if secret := agentSecretKey(key); secret != "" {
+			if secrets[secret] {
+				return nil, false
+			}
+			secrets[secret] = true
+		}
+		object[key] = value
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, false
+	}
+	return object, true
+}
+
+// settingsHaveAgentSecrets fails closed when settings cannot be proven free of
+// typed authentication material. Empty strings and null carry no credential.
+func settingsHaveAgentSecrets(raw []byte) bool {
+	object, valid := readAgentSettings(raw)
+	if !valid {
+		return true
+	}
+	for key, value := range object {
+		if agentSecretKey(key) == "" {
+			continue
+		}
+		var secret *string
+		if err := json.Unmarshal(value, &secret); err != nil || (secret != nil && *secret != "") {
 			return true
 		}
 	}
@@ -338,13 +393,18 @@ func settingsHaveAgentSecrets(raw []byte) bool {
 }
 
 func sanitizeSettingsForAgent(raw []byte) json.RawMessage {
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return raw
+	object, valid := readAgentSettings(raw)
+	if !valid {
+		return nil
 	}
-	for _, secret := range agentSecretKeys {
-		delete(m, secret)
+	for key := range object {
+		if agentSecretKey(key) != "" {
+			delete(object, key)
+		}
 	}
-	out, _ := json.Marshal(m)
+	out, err := json.Marshal(object)
+	if err != nil {
+		return nil
+	}
 	return out
 }
