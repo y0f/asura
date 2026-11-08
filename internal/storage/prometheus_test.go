@@ -35,10 +35,13 @@ func TestPrometheusSnapshotIncludesEveryMonitorAndOnlyScalarData(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 2, 3, 12, 0, 0, 0, time.UTC)
-	for _, i := range []int{0, 1, 2, 3} {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO monitor_status (monitor_id,status,last_check_at,last_response_time) VALUES (?, 'up', ?, 0)`, ids[i], formatTime(now)); err != nil {
+	for i, kind := range []string{"probe", "probe", "heartbeat", "manual"} {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO monitor_status (monitor_id,status,last_check_at,last_response_time,observation_kind) VALUES (?, 'up', ?, 0, ?)`, ids[i], formatTime(now), kind); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO monitor_status (monitor_id,status,last_check_at,last_response_time) VALUES (?, 'up', ?, 42)`, ids[5], formatTime(now)); err != nil {
+		t.Fatal(err)
 	}
 	for _, name := range []string{"region", "région"} {
 		id, err := insertID(ctx, tx, `INSERT INTO tags (name) VALUES (?)`, name)

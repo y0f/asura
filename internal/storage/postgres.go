@@ -19,8 +19,11 @@ import (
 //go:embed postgres_schema.sql
 var postgresSchema string
 
+//go:embed postgres_migration_41.sql
+var postgresMigration41 string
+
 const (
-	postgresBaselineVersion = 40
+	postgresBaselineVersion = 41
 	postgresLockNamespace   = 0x41535552 // ASUR, scoped to the connected database.
 	postgresRuntimeLock     = 1
 	postgresMigrationLock   = 2
@@ -169,8 +172,25 @@ func migratePostgres(ctx context.Context, db *sqlPool) error {
 		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(MAX(version),0) FROM schema_version").Scan(&count, &version); err != nil {
 			return err
 		}
-		if count != 1 || version != postgresBaselineVersion {
+		if count != 1 || (version != 40 && version != postgresBaselineVersion) {
 			return postgresSchemaVersionError{version: version}
+		}
+		if version == 40 {
+			// The runtime owner already holds this key on this same writer
+			// session. A maintenance CLI must not upgrade beneath another owner.
+			var canMigrate bool
+			if err := tx.QueryRowContext(ctx, "SELECT pg_try_advisory_xact_lock(?,?)", postgresLockNamespace, postgresRuntimeLock).Scan(&canMigrate); err != nil {
+				return err
+			}
+			if !canMigrate {
+				return ErrDatabaseOwned
+			}
+			if _, err := tx.ExecContext(ctx, postgresMigration41); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE schema_version SET version=?", postgresBaselineVersion); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()

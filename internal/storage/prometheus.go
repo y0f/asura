@@ -42,7 +42,7 @@ func (s *SQLStore) VisitPrometheus(ctx context.Context, from, to time.Time, visi
 			SELECT m.id, m.name, m.type,
 			 CASE WHEN m.enabled=0 THEN 'paused' ELSE COALESCE(ms.status, 'pending') END AS status,
 			 COALESCE(ms.consec_fails, 0) AS fails, COALESCE(ms.consec_successes, 0) AS successes,
-			 CASE WHEN ms.last_check_at IS NOT NULL AND m.type NOT IN ('manual', 'heartbeat')
+			 CASE WHEN ms.observation_kind='probe' AND ms.last_check_at IS NOT NULL AND m.type NOT IN ('manual', 'heartbeat')
 			 THEN ms.last_response_time ELSE NULL END AS response_time
 			FROM monitors m LEFT JOIN monitor_status ms ON ms.monitor_id=m.id
 			WHERE m.id>? ORDER BY m.id LIMIT ?)
