@@ -23,7 +23,7 @@ import (
 
 const maxBodyRead = 1 << 20 // 1MB
 
-var oauth2TokenCache sync.Map // map[int64]*oauth2CachedToken
+var oauth2TokenCache oauthTokenCache
 
 type oauth2CachedToken struct {
 	mu            sync.Mutex
@@ -255,8 +255,7 @@ func applyAuthentication(req *http.Request, settings model.HTTPSettings) {
 }
 
 func fetchOAuth2Token(ctx context.Context, monitor *model.Monitor, settings model.HTTPSettings, allowPrivate bool) (string, error) {
-	val, _ := oauth2TokenCache.LoadOrStore(monitor.ID, &oauth2CachedToken{})
-	cached := val.(*oauth2CachedToken)
+	cached := oauth2TokenCache.get(monitor.ID)
 
 	cached.mu.Lock()
 	defer cached.mu.Unlock()
@@ -320,6 +319,12 @@ func fetchOAuth2Token(ctx context.Context, monitor *model.Monitor, settings mode
 		return "", fmt.Errorf("empty access_token in response")
 	}
 
+	// Oversized tokens remain usable for this request without retaining an
+	// arbitrary payload in the process-wide cache.
+	if len(tokenResp.AccessToken) > maxCachedOAuthTokenBytes {
+		cached.token = ""
+		return tokenResp.AccessToken, nil
+	}
 	cached.token = tokenResp.AccessToken
 	cached.configuration = fingerprint
 	if tokenResp.ExpiresIn > 0 {
@@ -352,7 +357,7 @@ func applyMTLS(tlsCfg *tls.Config, settings model.HTTPSettings) error {
 
 // ClearOAuth2TokenCache removes the cached token for a monitor (used when settings change).
 func ClearOAuth2TokenCache(monitorID int64) {
-	oauth2TokenCache.Delete(monitorID)
+	oauth2TokenCache.remove(monitorID)
 }
 
 func resolveMaxRedirects(s model.HTTPSettings) int {
