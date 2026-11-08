@@ -526,8 +526,13 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	access, diagnostics := httputil.DiagnosticReadAccess(ctx, "monitors.read", mon.ID, mon.GroupID)
+	readChecks, readChanges, readLatest := h.store.ListCheckSummaries, h.store.ListContentChangeSummaries, h.store.GetLatestCheckSummary
+	if diagnostics {
+		readChecks, readChanges, readLatest = h.store.ListCheckResults, h.store.ListContentChanges, h.store.GetLatestCheckResult
+	}
+
 	now := time.Now().UTC()
-	checks, err := h.store.ListCheckResults(ctx, id, storage.Pagination{Page: checksPage, PerPage: 10}, access...)
+	checks, err := readChecks(ctx, id, storage.Pagination{Page: checksPage, PerPage: 10}, access...)
 	if err == nil {
 		checks, err = httputil.CheckResultsResponse(ctx, checks, diagnostics)
 	}
@@ -537,7 +542,7 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	if checks == nil {
 		checks = &storage.PaginatedResult{}
 	}
-	changes, err := h.store.ListContentChanges(ctx, id, storage.Pagination{Page: changesPage, PerPage: 10}, access...)
+	changes, err := readChanges(ctx, id, storage.Pagination{Page: changesPage, PerPage: 10}, access...)
 	if err == nil {
 		changes, err = httputil.ContentChangesResponse(changes, diagnostics)
 	}
@@ -574,7 +579,7 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		uptime7d, samples7d = storage.SummarizeUptime(daily7d)
 		uptime30d, samples30d = storage.SummarizeUptime(daily30d)
 	}
-	latestCheck, err := h.store.GetLatestCheckResult(ctx, id, access...)
+	latestCheck, err := readLatest(ctx, id, access...)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		h.monitorReadError(w, r, err, "Failed to load latest check")
 		return

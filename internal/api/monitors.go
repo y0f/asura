@@ -345,7 +345,11 @@ func (h *Handler) ListChecks(w http.ResponseWriter, r *http.Request) {
 	}
 	access, diagnostics := httputil.DiagnosticReadAccess(r.Context(), "monitors.read", mon.ID, mon.GroupID)
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListCheckResults(r.Context(), id, p, access...)
+	readChecks := h.store.ListCheckSummaries
+	if diagnostics {
+		readChecks = h.store.ListCheckResults
+	}
+	result, err := readChecks(r.Context(), id, p, access...)
 	if err == nil {
 		result, err = httputil.CheckResultsResponse(r.Context(), result, diagnostics)
 	}
@@ -372,7 +376,11 @@ func (h *Handler) ListChanges(w http.ResponseWriter, r *http.Request) {
 	}
 	access, diagnostics := httputil.DiagnosticReadAccess(r.Context(), "monitors.read", mon.ID, mon.GroupID)
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListContentChanges(r.Context(), id, p, access...)
+	readChanges := h.store.ListContentChangeSummaries
+	if diagnostics {
+		readChanges = h.store.ListContentChanges
+	}
+	result, err := readChanges(r.Context(), id, p, access...)
 	if err == nil {
 		result, err = httputil.ContentChangesResponse(result, diagnostics)
 	}

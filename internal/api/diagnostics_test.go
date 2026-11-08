@@ -34,7 +34,7 @@ func TestDiagnosticAPIReadsRequireExplicitPermission(t *testing.T) {
 	if err := env.store.CreateMonitor(ctx, mon); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.InsertCheckResult(ctx, &storage.CheckResult{MonitorID: mon.ID, Status: "down", Message: "private-error", Headers: "private-cookie", Body: "private-body", BodyHash: "private-hash"}); err != nil {
+	if err := env.store.InsertCheckResult(ctx, &storage.CheckResult{MonitorID: mon.ID, Status: "down", Message: "private-error", Headers: "private-cookie", Body: "private-body", BodyHash: "private-hash", CertFingerprint: "private-fingerprint", DNSRecords: "private-dns"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := env.store.InsertContentChange(ctx, &storage.ContentChange{MonitorID: mon.ID, Diff: "private-diff", OldHash: "private-old", NewHash: "private-new"}); err != nil {
@@ -50,6 +50,13 @@ func TestDiagnosticAPIReadsRequireExplicitPermission(t *testing.T) {
 			w := env.do("GET", path, "", map[string]string{"X-API-Key": key})
 			if w.Code != 200 || strings.Contains(w.Body.String(), "private-") != (key == "debugger") {
 				t.Fatalf("%s %s diagnostic boundary: %d %s", key, path, w.Code, w.Body)
+			}
+			if path == base+"/checks" && key == "debugger" {
+				for _, marker := range []string{"private-error", "private-cookie", "private-body", "private-hash", "private-fingerprint", "private-dns"} {
+					if !strings.Contains(w.Body.String(), marker) {
+						t.Fatalf("authorized diagnostic read lost %s", marker)
+					}
+				}
 			}
 		}
 	}

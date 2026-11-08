@@ -189,12 +189,12 @@ func (s *SQLiteStore) MarkIncidentAnnounced(ctx context.Context, id int64) error
 }
 
 func (s *SQLiteStore) GetOpenIncident(ctx context.Context, monitorID int64, access ...MonitorAccess) (*Incident, error) {
-	clause, args := monitorOwnerAccessSQL("i.monitor_id", access)
+	clause, args := monitorAccessSQL("m", access)
 	row := s.readDB.QueryRowContext(ctx,
-		`SELECT `+incidentColumns+`
-		 FROM incidents i WHERE i.monitor_id=? AND i.status IN ('open','acknowledged')`+clause+` ORDER BY i.started_at DESC LIMIT 1`,
+		`SELECT `+incidentColumnsWithName+`
+		 FROM incidents i JOIN monitors m ON m.id=i.monitor_id WHERE i.monitor_id=? AND i.status IN ('open','acknowledged')`+clause+` ORDER BY i.started_at DESC, i.id DESC LIMIT 1`,
 		append([]any{monitorID}, args...)...)
-	return scanIncident(row.Scan, false)
+	return scanIncident(row.Scan, true)
 }
 
 // --- Incident Events ---

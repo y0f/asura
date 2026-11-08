@@ -23,6 +23,14 @@ func (s *SQLiteStore) InsertContentChange(ctx context.Context, c *ContentChange)
 }
 
 func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error) {
+	return s.listContentChanges(ctx, monitorID, p, true, access...)
+}
+
+func (s *SQLiteStore) ListContentChangeSummaries(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error) {
+	return s.listContentChanges(ctx, monitorID, p, false, access...)
+}
+
+func (s *SQLiteStore) listContentChanges(ctx context.Context, monitorID int64, p Pagination, diagnostics bool, access ...MonitorAccess) (*PaginatedResult, error) {
 	reader, release, err := s.monitorReader(ctx, monitorID, access...)
 	if err != nil {
 		return nil, err
@@ -36,9 +44,13 @@ func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p
 	}
 
 	offset := (p.Page - 1) * p.PerPage
+	privateColumns := "old_hash, new_hash, diff"
+	if !diagnostics {
+		privateColumns = "'', '', ''"
+	}
 	rows, err := reader.QueryContext(ctx,
-		`SELECT id, monitor_id, old_hash, new_hash, diff, created_at
-		 FROM content_changes WHERE monitor_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT id, monitor_id, `+privateColumns+`, created_at
+		 FROM content_changes WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		monitorID, p.PerPage, offset)
 	if err != nil {
 		return nil, err

@@ -100,11 +100,23 @@ func (s *failingMonitorDetail) ListCheckResults(ctx context.Context, id int64, p
 	}
 	return s.Store.ListCheckResults(ctx, id, p, a...)
 }
+func (s *failingMonitorDetail) ListCheckSummaries(ctx context.Context, id int64, p storage.Pagination, a ...storage.MonitorAccess) (*storage.PaginatedResult, error) {
+	if s.stage == "checks" {
+		return nil, errors.New("check summary failure")
+	}
+	return s.Store.ListCheckSummaries(ctx, id, p, a...)
+}
 func (s *failingMonitorDetail) ListContentChanges(ctx context.Context, id int64, p storage.Pagination, a ...storage.MonitorAccess) (*storage.PaginatedResult, error) {
 	if s.stage == "changes" {
 		return nil, errors.New("changes failure")
 	}
 	return s.Store.ListContentChanges(ctx, id, p, a...)
+}
+func (s *failingMonitorDetail) ListContentChangeSummaries(ctx context.Context, id int64, p storage.Pagination, a ...storage.MonitorAccess) (*storage.PaginatedResult, error) {
+	if s.stage == "changes" {
+		return nil, errors.New("change summary failure")
+	}
+	return s.Store.ListContentChangeSummaries(ctx, id, p, a...)
 }
 func (s *failingMonitorDetail) GetMonitorMetricsSnapshot(ctx context.Context, id int64, from, to time.Time, a ...storage.MonitorAccess) (*storage.MonitorMetricsSnapshot, error) {
 	if s.stage == "metrics" {
@@ -123,6 +135,12 @@ func (s *failingMonitorDetail) GetLatestCheckResult(ctx context.Context, id int6
 		return nil, errors.New("latest failure")
 	}
 	return s.Store.GetLatestCheckResult(ctx, id, a...)
+}
+func (s *failingMonitorDetail) GetLatestCheckSummary(ctx context.Context, id int64, a ...storage.MonitorAccess) (*storage.CheckResult, error) {
+	if s.stage == "latest" {
+		return nil, errors.New("latest summary failure")
+	}
+	return s.Store.GetLatestCheckSummary(ctx, id, a...)
 }
 func (s *failingMonitorDetail) GetMonitorTags(ctx context.Context, id int64, a ...storage.MonitorAccess) ([]storage.MonitorTag, error) {
 	if s.stage == "tags" {
@@ -155,6 +173,27 @@ func TestMonitorDetailReportsReadFailures(t *testing.T) {
 			h.MonitorDetail(w, r)
 			if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "100.00%") {
 				t.Fatalf("%s failure became successful empty detail: HTTP %d", stage, w.Code)
+			}
+		})
+	}
+}
+
+func TestMonitorDetailReportsSummaryReadFailures(t *testing.T) {
+	for _, stage := range []string{"checks", "changes", "latest"} {
+		t.Run(stage, func(t *testing.T) {
+			h, store := storeHandler(t)
+			m := &storage.Monitor{Name: "monitor", Type: "http", Target: "https://example.test", Enabled: true, Interval: 60, Timeout: 10}
+			if err := store.CreateMonitor(context.Background(), m); err != nil {
+				t.Fatal(err)
+			}
+			h.store = &failingMonitorDetail{Store: store, stage: stage}
+			r := adminRequest("GET", "/monitors/"+strconvI(m.ID), nil)
+			r.SetPathValue("id", strconvI(m.ID))
+			r = r.WithContext(context.WithValue(r.Context(), httputil.CtxKeyAPIKey, &config.APIKeyConfig{Permissions: []string{"monitors.read"}}))
+			w := httptest.NewRecorder()
+			h.MonitorDetail(w, r)
+			if w.Code != http.StatusInternalServerError {
+				t.Fatalf("%s summary failure became successful empty detail: HTTP%d", stage, w.Code)
 			}
 		})
 	}

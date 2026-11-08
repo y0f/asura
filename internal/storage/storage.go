@@ -40,7 +40,9 @@ type Store interface {
 	InsertCheckResult(ctx context.Context, r *CheckResult) error
 	RecordMonitorCheck(ctx context.Context, expected *Monitor, result *CheckResult, status *MonitorStatus) error
 	ListCheckResults(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error)
+	ListCheckSummaries(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error)
 	GetLatestCheckResult(ctx context.Context, monitorID int64, access ...MonitorAccess) (*CheckResult, error)
+	GetLatestCheckSummary(ctx context.Context, monitorID int64, access ...MonitorAccess) (*CheckResult, error)
 	GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int, access ...MonitorAccess) (map[int64][]*SparklinePoint, error)
 
 	// Incidents
@@ -91,6 +93,7 @@ type Store interface {
 	// Content changes
 	InsertContentChange(ctx context.Context, c *ContentChange) error
 	ListContentChanges(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error)
+	ListContentChangeSummaries(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error)
 
 	// Heartbeats
 	CreateHeartbeat(ctx context.Context, h *Heartbeat) error
