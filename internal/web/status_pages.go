@@ -137,6 +137,10 @@ func (h *Handler) saveStatusPage(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	key := httputil.GetAPIKey(r.Context())
+	if err := input.PreparePassword(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	_, err = h.store.SaveStatusPage(r.Context(), id, func(current *storage.StatusPage) (*storage.StatusPage, *[]storage.StatusPageMonitor, error) {
 		return input.Apply(current, key != nil && key.SuperAdmin)
 	}, storage.StatusPageAccess{Monitors: httputil.MonitorAccess(r.Context(), "monitors.read"), Incidents: httputil.MonitorAccess(r.Context(), "incidents.read")})

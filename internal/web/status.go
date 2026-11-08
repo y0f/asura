@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/pageauth"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/web/views"
 )
@@ -182,11 +183,7 @@ func (h *Handler) StatusPageAuthPost(w http.ResponseWriter, r *http.Request, pag
 		return
 	}
 
-	sh := sha256.New()
-	sh.Write([]byte(r.FormValue("password")))
-	inputHash := hex.EncodeToString(sh.Sum(nil))
-
-	if subtle.ConstantTimeCompare([]byte(inputHash), []byte(sp.PasswordHash)) != 1 {
+	if !pageauth.Verify(sp.PasswordHash, r.FormValue("password")) {
 		http.Redirect(w, r, h.cfg.Server.BasePath+"/"+slug+"/auth?error=1", http.StatusSeeOther)
 		return
 	}

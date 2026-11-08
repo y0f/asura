@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/pageauth"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -74,6 +75,10 @@ func (h *Handler) saveStatusPage(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	key := httputil.GetAPIKey(r.Context())
+	if err := input.PreparePassword(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	sp, err := h.store.SaveStatusPage(r.Context(), id, func(current *storage.StatusPage) (*storage.StatusPage, *[]storage.StatusPageMonitor, error) {
 		return input.Apply(current, key != nil && key.SuperAdmin)
 	}, storage.StatusPageAccess{Monitors: httputil.MonitorAccess(r.Context(), "monitors.read"), Incidents: httputil.MonitorAccess(r.Context(), "incidents.read")})
@@ -263,19 +268,12 @@ func (h *Handler) requireStatusPageAuth(w http.ResponseWriter, r *http.Request, 
 // read a password-protected status page.
 const statusPagePasswordHeader = "X-Status-Page-Password"
 
-// hashStatusPagePassword matches the hashing used by the web status page form
-// and auth handler.
-func hashStatusPagePassword(password string) string {
-	sum := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(sum[:])
-}
-
 // statusPageAuthValid reports whether the request carries a valid status-page
 // auth cookie (as set by the web auth handler) or the page password in the
 // X-Status-Page-Password header.
 func statusPageAuthValid(r *http.Request, pageID int64, passwordHash string) bool {
 	if pw := r.Header.Get(statusPagePasswordHeader); pw != "" {
-		return subtle.ConstantTimeCompare([]byte(hashStatusPagePassword(pw)), []byte(passwordHash)) == 1
+		return pageauth.Verify(passwordHash, pw)
 	}
 	c, err := r.Cookie(fmt.Sprintf("sp_auth_%d", pageID))
 	if err != nil {

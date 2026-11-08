@@ -62,8 +62,9 @@ Expand **Branding and access** to customise the public page. Public image loadin
 
 Set a password under **Branding and access**. Visitors are redirected to `/{slug}/auth` and receive a 7-day `HttpOnly` cookie on success. Branding and page contents are not rendered before successful authentication.
 
-- The password is stored as a SHA-256 hash. never in plain text
-- Password comparison uses constant-time comparison to prevent timing attacks
+- Newly set or reset passwords use PBKDF2-HMAC-SHA256 with 600,000 iterations and a random 16-byte salt; plaintext is never stored. New passwords are limited to 1,024 UTF-8 bytes without truncation.
+- Existing lowercase SHA-256 password hashes remain valid, including legacy longer passwords. Explicitly reset a legacy password to upgrade it; login does not rewrite stored protection. Full configuration transfer preserves supported opaque hashes.
+- Password digests use constant-time comparison.
 - Auth attempts are rate-limited per client IP using the same limiter as admin login; wrong passwords sent to the JSON endpoint in the `X-Status-Page-Password` header count against it too
 - Leave the field blank when editing to keep the existing password unchanged
 - Tick **Remove password protection** to clear the password and make the page publicly accessible
@@ -114,7 +115,7 @@ No API key is required. A password-protected page requires its password in the `
 
 The `cause` field is always returned empty in the public payload — incident causes are never exposed publicly.
 
-`overall_status` is `operational`, `degraded`, `major_outage` or `unknown`. Empty pages and sets containing pending checks are unknown unless a known degraded or down state takes priority. The page displays “Awaiting check data” for unknown status.
+`overall_status` is `operational`, `degraded`, `major_outage` or `unknown`. Empty pages and sets containing pending checks are unknown unless a known degraded or down state takes priority. The page displays “Awaiting status data” for unknown status.
 
 In v2, a monitor with no samples has `uptime_90d: null` and `total_checks: 0`, rather than an assumed 100%. A measured uptime remains numeric. Query failures return HTTP 500 instead of a healthy or empty result. Public monitor queries do not load private targets, settings or credentials.
 
