@@ -120,8 +120,10 @@ func mqttHandshake(conn net.Conn, clientID string, settings model.MQTTSettings) 
 		return fmt.Errorf("MQTT CONNACK read failed: %w", err)
 	}
 
-	if connackBuf[0]>>4 != 2 {
-		return fmt.Errorf("MQTT unexpected packet type: %d", connackBuf[0]>>4)
+	// MQTT 3.1.1 CONNACK has no fixed-header flags, exactly two payload
+	// bytes, and no stored session when our CONNECT requests a clean session.
+	if connackBuf[0] != 0x20 || connackBuf[1] != 2 || connackBuf[2] != 0 {
+		return fmt.Errorf("invalid MQTT CONNACK framing or session flags")
 	}
 
 	if code := connackBuf[3]; code != 0 {
@@ -140,12 +142,16 @@ func mqttSubscribe(conn net.Conn, topic string) error {
 		return fmt.Errorf("MQTT SUBACK read failed: %w", err)
 	}
 
-	if subackBuf[0]>>4 != 9 {
-		return fmt.Errorf("MQTT unexpected packet type: %d (expected SUBACK)", subackBuf[0]>>4)
+	// This probe subscribes once, with packet ID 1 and maximum QoS 0.
+	if subackBuf[0] != 0x90 || subackBuf[1] != 3 || binary.BigEndian.Uint16(subackBuf[2:4]) != 1 {
+		return fmt.Errorf("invalid MQTT SUBACK framing or packet identifier")
 	}
 
 	if subackBuf[4] == 0x80 {
 		return fmt.Errorf("MQTT subscription rejected")
+	}
+	if subackBuf[4] != 0 {
+		return fmt.Errorf("invalid MQTT SUBACK return code for requested QoS 0")
 	}
 	return nil
 }
