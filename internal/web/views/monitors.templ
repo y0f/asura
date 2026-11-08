@@ -45,13 +45,17 @@ type MonitorDetailParams struct {
 	Tags         []storage.MonitorTag
 	SLA          *SLAData
 	Heatmap      []HeatmapDay
+	CloneAllowed bool
 }
 
 type SLAData struct {
 	Target            float64
+	TotalChecks       int64
 	UptimeMonth       float64
 	BudgetTotalSecs   int64
 	BudgetRemainSecs  int64
+	BudgetRemainPct   float64
+	BudgetAtRisk      bool
 	BudgetRemainHuman string
 	Breached          bool
 }
@@ -192,6 +196,13 @@ func (p MonitorDetailParams) showPercentiles() bool {
 		return true
 	}
 	return false
+}
+
+func (p MonitorDetailParams) canClone() bool {
+	return p.CanMonitor("monitors.read", p.Monitor.ID, p.Monitor.GroupID) &&
+		p.CanMonitor("monitors.clone", p.Monitor.ID, p.Monitor.GroupID) &&
+		p.CanMonitor("monitors.clone", 0, p.Monitor.GroupID) &&
+		(p.Access == nil || p.CloneAllowed)
 }
 
 func manualStatusBtnClass(status string) string {
@@ -502,9 +513,11 @@ func (p MonitorDetailParams) meta() string {
 
 func (p MonitorDetailParams) slaState() (label, badge string) {
 	switch {
+	case p.SLA.TotalChecks == 0:
+		return "No checks", ""
 	case p.SLA.Breached:
 		return "Breached", "badge-red"
-	case p.SLA.BudgetRemainSecs <= p.SLA.BudgetTotalSecs/10:
+	case p.SLA.BudgetAtRisk:
 		return "At risk", "badge-yellow"
 	default:
 		return "Healthy", "badge-emerald"
@@ -549,7 +562,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 							<button type="submit" class="btn-secondary">Resume</button>
 						</form>
 					}
-					if p.CanMonitor("monitors.read", p.Monitor.ID, p.Monitor.GroupID) && p.CanMonitor("monitors.clone", p.Monitor.ID, p.Monitor.GroupID) && p.CanMonitor("monitors.clone", 0, p.Monitor.GroupID) {
+					if p.canClone() {
 						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/clone", p.BasePath, p.Monitor.ID)) }>
 							<button type="submit" class="btn-secondary">Clone</button>
 						</form>
@@ -658,7 +671,11 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 						<div>
 							<div class="stat-label">This month</div>
-							<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
+							if p.SLA.TotalChecks > 0 {
+								<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
+							} else {
+								<div class="text-lg font-semibold text-muted" aria-label="No check data">—</div>
+							}
 						</div>
 						<div>
 							<div class="stat-label">Error budget used</div>

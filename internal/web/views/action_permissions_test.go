@@ -235,7 +235,7 @@ func TestCloneRequiresReadableSourceAndDestinationAuthority(t *testing.T) {
 	access := testAccess{monitors: map[string]map[int64]bool{
 		"monitors.read": {1: true}, "monitors.clone": {1: true},
 	}, groups: map[string]map[int64]bool{"monitors.clone": {}}}
-	p := MonitorDetailParams{LayoutParams: LayoutParams{Access: access}, Monitor: &storage.Monitor{ID: 1, Name: "Source", Type: "manual", GroupID: &groupID}}
+	p := MonitorDetailParams{LayoutParams: LayoutParams{Access: access}, Monitor: &storage.Monitor{ID: 1, Name: "Source", Type: "manual", GroupID: &groupID}, CloneAllowed: true}
 	if namedControl(render(t, MonitorDetailPage(p)), "Clone") {
 		t.Fatal("an ID-only clone grant cannot create another monitor")
 	}
@@ -243,6 +243,11 @@ func TestCloneRequiresReadableSourceAndDestinationAuthority(t *testing.T) {
 	if !namedControl(render(t, MonitorDetailPage(p)), "Clone") {
 		t.Fatal("readable source and authorized destination should expose Clone")
 	}
+	p.CloneAllowed = false
+	if namedControl(render(t, MonitorDetailPage(p)), "Clone") {
+		t.Fatal("clone must also require the handler's copied-relationship authorization")
+	}
+	p.CloneAllowed = true
 	delete(access.monitors["monitors.read"], 1)
 	if namedControl(render(t, MonitorDetailPage(p)), "Clone") {
 		t.Fatal("clone must not expose an unreadable source")

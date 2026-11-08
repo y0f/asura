@@ -37,9 +37,11 @@ func (p SLAReportParams) isFutureMonth() bool {
 // risk (under 10% of the error budget left) or breached.
 func slaState(entry *sla.ReportEntry) (label, tone string) {
 	switch {
+	case entry.TotalChecks == 0:
+		return "No checks", "neutral"
 	case entry.Breached:
 		return "Breached", "crit"
-	case entry.RemainSecs <= entry.BudgetSecs/10:
+	case entry.BudgetAtRisk:
 		return "At risk", "warn"
 	default:
 		return "Healthy", "ok"
@@ -102,10 +104,16 @@ templ SLAReportPage(p SLAReportParams) {
 									}
 								</td>
 								<td class="px-4 py-3 text-sm text-muted-light tabular-nums">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
-								<td class={ "px-4 py-3 text-sm font-medium tabular-nums", UptimeColor(entry.UptimePct) }>{ UptimeFmt(entry.UptimePct) }</td>
+								<td class={ "px-4 py-3 text-sm font-medium tabular-nums", UptimeColor(entry.UptimePct) }>
+									if entry.TotalChecks > 0 {
+										{ UptimeFmt(entry.UptimePct) }
+									} else {
+										<span class="text-muted" aria-label="No check data">—</span>
+									}
+								</td>
 								<td class="px-4 py-3">
 									{{ label, tone := slaState(entry) }}
-									<span class={ "inline-flex items-center gap-1.5 text-sm whitespace-nowrap", "text-" + tone }><span class={ "dot", "bg-" + tone }></span>{ label }</span>
+									<span class={ "inline-flex items-center gap-1.5 text-sm whitespace-nowrap", toneTextClass(tone) }><span class={ "dot", toneDotClass(tone) }></span>{ label }</span>
 								</td>
 								<td class="px-4 py-3">
 									<div class="text-sm text-white tabular-nums">{ sla.FormatDuration(entry.RemainSecs) }</div>
@@ -137,5 +145,11 @@ func (p SLAReportParams) breachedCount() int {
 }
 
 func (p SLAReportParams) meetingSLA() int {
-	return len(p.Entries) - p.breachedCount()
+	count := 0
+	for _, entry := range p.Entries {
+		if entry.TotalChecks > 0 && !entry.Breached {
+			count++
+		}
+	}
+	return count
 }
