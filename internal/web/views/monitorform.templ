@@ -119,13 +119,19 @@ func (p MonitorFormParams) mtlsEnabled() bool {
 	return p.HTTP.MTLSEnabled
 }
 
-func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSON, conditionsJSON string, mtlsEnabled bool) string {
+func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSON, conditionsJSON string, mtlsEnabled bool, dnsServer string) string {
 	mtlsVal := "false"
 	if mtlsEnabled {
 		mtlsVal = "true"
 	}
 	return `{
     monitorType: '` + JSEscapeString(monType) + `',
+    dnsServer: '` + JSEscapeString(dnsServer) + `',
+    proxyInvalid: false,
+    checkProxy(select) {
+        this.proxyInvalid = Boolean(select.selectedOptions[0]?.disabled);
+        select.setCustomValidity(this.proxyInvalid ? 'Choose a compatible proxy or No proxy.' : '');
+    },
     advancedSettings: false,
     advancedAssertions: false,
     httpHeaders: ` + headersJSON + `,
@@ -218,7 +224,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 		@PageHeader(p.header())
 		<div
 			x-cloak
-			x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled()) }
+			x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled(), p.DNS.Server) }
 			x-effect="if (monitorType === 'http_multi') advancedSettings = true"
 		>
 			<form
@@ -428,17 +434,26 @@ templ MonitorFormPage(p MonitorFormParams) {
 								if p.canAssign("proxies") && len(p.Proxies) > 0 {
 									<div>
 										<label class="form-label" for="proxy_id">Proxy</label>
-										<select id="proxy_id" name="proxy_id" class="form-select">
+										<select id="proxy_id" name="proxy_id" class="form-select" aria-describedby="proxy-help proxy-error" :aria-invalid="proxyInvalid" @change="checkProxy($el)" x-effect="monitorType; dnsServer; $nextTick(() => checkProxy($el))">
 											<option value="">No proxy</option>
 											for _, px := range p.Proxies {
 												<option
 													value={ fmt.Sprint(px.ID) }
+													disabled?={ p.proxyChoiceDisabled(px) }
+													:disabled={ proxyChoiceDisabledExpression(px.Protocol) }
 													if p.Monitor.ProxyID != nil && *p.Monitor.ProxyID == px.ID {
 														selected
 													}
-												>{ fmt.Sprintf("%s (%s://%s:%d)", px.Name, px.Protocol, px.Host, px.Port) }</option>
+												>
+													{ fmt.Sprintf("%s (%s://%s:%d)", px.Name, px.Protocol, px.Host, px.Port) }
+													if !px.Enabled {
+														- disabled; checks fail
+													}
+												</option>
 											}
 										</select>
+										<p id="proxy-help" class="form-hint">Choose a proxy that supports this check type. DNS through SOCKS5 requires an explicit DNS server. A disabled proxy keeps its assignment, but checks fail until it is enabled. Proxy-routed checks run on the server.</p>
+										<p id="proxy-error" x-show="proxyInvalid" x-cloak role="status" class="form-hint text-brand">This proxy cannot run the selected check. Choose a compatible proxy or No proxy.</p>
 									</div>
 								}
 								if p.canAssign("notifications") && len(p.NotificationChannels) > 0 {
@@ -778,7 +793,7 @@ templ monitorDNSSettings(p MonitorFormParams) {
 			</div>
 			<div>
 				<label class="form-label" for="settings_dns_server">DNS Server</label>
-				<input id="settings_dns_server" type="text" name="settings_dns_server" value={ p.DNS.Server } placeholder="Optional (e.g. 8.8.8.8)" class="form-input"/>
+				<input id="settings_dns_server" type="text" name="settings_dns_server" value={ p.DNS.Server } x-model="dnsServer" placeholder="Optional (e.g. 8.8.8.8)" class="form-input"/>
 			</div>
 		</div>
 	</div>
