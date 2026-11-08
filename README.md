@@ -32,6 +32,7 @@ Asura monitors websites, APIs and network services from a single Go binary, with
 | **Install** | A single binary, Docker container or Linux service. | [Docker or Node.js/npm setup.](https://github.com/louislam/uptime-kuma/blob/2.5.9/README.md) |
 | **Database** | SQLite built in; PostgreSQL available as an optional build. | [SQLite or MariaDB.](https://github.com/louislam/uptime-kuma/blob/2.5.9/server/database.js) |
 | **Runtime** | Embedded web interface and assets; no Node runtime or separate frontend server. | [Node.js server with a built Vue interface.](https://github.com/louislam/uptime-kuma/blob/2.5.9/package.json) |
+| **Team access** | Roles scoped by action, monitor and group. | [Single-admin setup; no scoped team roles.](https://github.com/louislam/uptime-kuma/blob/2.5.9/server/server.js#L650-L679) |
 | **API** | REST API and web interface share the same scoped access controls. | [Internal Socket.IO management; HTTP push, status and metrics endpoints.](https://github.com/louislam/uptime-kuma/wiki/Internal-API) |
 | **Scale** | Configurable check concurrency and distributed probes. | Server-run checks, [Globalping probes](https://github.com/louislam/uptime-kuma/blob/2.5.9/server/monitor-types/globalping.js) and push monitors. |
 
