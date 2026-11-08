@@ -39,24 +39,13 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit(r, "create", "monitor_group", g.ID, "")
-	writeJSON(w, http.StatusCreated, g)
+	writeJSON(w, http.StatusCreated, groupResponse(r, &g))
 }
 
 func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	_, err = h.store.GetMonitorGroup(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "group not found")
-			return
-		}
-		h.logger.Error("get group for update", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get group")
 		return
 	}
 
@@ -73,30 +62,23 @@ func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.UpdateMonitorGroup(r.Context(), &g); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "group not found")
+			return
+		}
 		h.logger.Error("update group", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to update group")
 		return
 	}
 
 	h.audit(r, "update", "monitor_group", g.ID, "")
-	writeJSON(w, http.StatusOK, g)
+	writeJSON(w, http.StatusOK, groupResponse(r, &g))
 }
 
 func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	_, err = h.store.GetMonitorGroup(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "group not found")
-			return
-		}
-		h.logger.Error("get group for delete", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get group")
 		return
 	}
 
@@ -116,4 +98,11 @@ func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 
 	h.audit(r, "delete", "monitor_group", id, "")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func groupResponse(r *http.Request, g *storage.MonitorGroup) any {
+	if !httputil.GetAPIKey(r.Context()).HasPermission("groups.read") {
+		return map[string]int64{"id": g.ID}
+	}
+	return g
 }

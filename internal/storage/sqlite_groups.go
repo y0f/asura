@@ -63,10 +63,14 @@ func (s *SQLiteStore) ListMonitorGroups(ctx context.Context) ([]*MonitorGroup, e
 
 func (s *SQLiteStore) UpdateMonitorGroup(ctx context.Context, g *MonitorGroup) error {
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE monitor_groups SET name=?, sort_order=?, updated_at=? WHERE id=?`,
-		g.Name, g.SortOrder, now, g.ID)
-	return err
+	var createdAt, updatedAt string
+	if err := s.writeDB.QueryRowContext(ctx,
+		`UPDATE monitor_groups SET name=?, sort_order=?, updated_at=? WHERE id=? RETURNING created_at, updated_at`,
+		g.Name, g.SortOrder, now, g.ID).Scan(&createdAt, &updatedAt); err != nil {
+		return err
+	}
+	g.CreatedAt, g.UpdatedAt = parseTime(createdAt), parseTime(updatedAt)
+	return nil
 }
 
 func (s *SQLiteStore) DeleteMonitorGroup(ctx context.Context, id int64) error {

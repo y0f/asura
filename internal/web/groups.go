@@ -3,6 +3,7 @@ package web
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -31,7 +32,7 @@ func (h *Handler) Groups(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
 
@@ -70,67 +71,81 @@ func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GroupCreate(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	g := &storage.MonitorGroup{
-		Name: r.FormValue("name"),
-	}
-	if v := r.FormValue("sort_order"); v != "" {
-		g.SortOrder, _ = strconv.Atoi(v)
+	g, err := groupForm(r, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := validate.ValidateMonitorGroup(g); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
 
 	if err := h.store.CreateMonitorGroup(r.Context(), g); err != nil {
 		h.logger.Error("web: create group", "error", err)
 		h.setError(w, "Failed to create group")
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
 
 	h.setFlash(w, "Group created")
-	h.redirect(w, r, "/groups")
+	h.redirectToReadable(w, r, "/groups")
 }
 
 func (h *Handler) GroupUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
-	r.ParseForm()
-	g := &storage.MonitorGroup{
-		ID:   id,
-		Name: r.FormValue("name"),
-	}
-	if v := r.FormValue("sort_order"); v != "" {
-		g.SortOrder, _ = strconv.Atoi(v)
+	g, err := groupForm(r, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	if err := validate.ValidateMonitorGroup(g); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
 
 	if err := h.store.UpdateMonitorGroup(r.Context(), g); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: update group", "error", err)
 		h.setError(w, "Failed to update group")
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
 
 	h.setFlash(w, "Group updated")
-	h.redirect(w, r, "/groups")
+	h.redirectToReadable(w, r, "/groups")
+}
+
+func groupForm(r *http.Request, id int64) (*storage.MonitorGroup, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, fmt.Errorf("invalid group form")
+	}
+	g := &storage.MonitorGroup{ID: id, Name: r.FormValue("name")}
+	if value := r.FormValue("sort_order"); value != "" {
+		order, err := strconv.Atoi(value)
+		if err != nil {
+			return nil, fmt.Errorf("sort order must be an integer")
+		}
+		g.SortOrder = order
+	}
+	return g, nil
 }
 
 func (h *Handler) GroupDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/groups")
+		h.redirectToReadable(w, r, "/groups")
 		return
 	}
 	if err := h.store.DeleteEmptyMonitorGroup(r.Context(), id); err != nil {
@@ -147,5 +162,5 @@ func (h *Handler) GroupDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Group deleted")
-	h.redirect(w, r, "/groups")
+	h.redirectToReadable(w, r, "/groups")
 }

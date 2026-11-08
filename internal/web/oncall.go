@@ -16,10 +16,17 @@ func (h *Handler) OnCallRotations(w http.ResponseWriter, r *http.Request) {
 	rotations, err := h.store.ListOnCallRotations(r.Context())
 	if err != nil {
 		h.logger.Error("web: list on-call rotations", "error", err)
+		http.Error(w, "Failed to load on-call rotations", http.StatusInternalServerError)
+		return
 	}
 	var channels []*storage.NotificationChannel
 	if httputil.GetAPIKey(r.Context()).HasPermission("notifications.read") {
-		channels, _ = h.store.ListNotificationChannels(r.Context())
+		channels, err = h.store.ListNotificationChannels(r.Context())
+		if err != nil {
+			h.logger.Error("web: list on-call channels", "error", err)
+			http.Error(w, "Failed to load on-call channels", http.StatusInternalServerError)
+			return
+		}
 	}
 	lp := h.newLayoutParams(r, "On-Call", "on-call")
 	h.renderComponent(w, r, views.OnCallListPage(views.OnCallListParams{
@@ -30,6 +37,10 @@ func (h *Handler) OnCallRotations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid on-call form", http.StatusBadRequest)
+		return
+	}
 	if !httputil.GetAPIKey(r.Context()).HasPermission("notifications.read") {
 		http.Error(w, "Notification read access is required to assign channels", http.StatusForbidden)
 		return
@@ -38,12 +49,12 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 	period := r.FormValue("period")
 	if name == "" {
 		h.setError(w, "Name is required")
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	if period != "daily" && period != "weekly" {
 		h.setError(w, "Period must be daily or weekly")
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	var channelIDs []int64
@@ -51,14 +62,14 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
 		if err != nil || id <= 0 {
 			h.setError(w, "Select valid notification channels")
-			h.redirect(w, r, "/on-call")
+			h.redirectToReadable(w, r, "/on-call")
 			return
 		}
 		channelIDs = append(channelIDs, id)
 	}
 	if len(channelIDs) == 0 {
 		h.setError(w, "Select at least one channel")
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	rot := &storage.OnCallRotation{
@@ -73,35 +84,39 @@ func (h *Handler) OnCallCreate(w http.ResponseWriter, r *http.Request) {
 		} else {
 			h.setError(w, "Failed to create rotation")
 		}
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	h.audit(r, "create", "on_call_rotation", rot.ID, rot.Name)
 	h.setFlash(w, "Rotation created")
-	h.redirect(w, r, "/on-call")
+	h.redirectToReadable(w, r, "/on-call")
 }
 
 func (h *Handler) OnCallDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	if err := h.store.DeleteOnCallRotation(r.Context(), id); err != nil {
 		h.logger.Error("web: delete on-call rotation", "error", err)
 		h.setError(w, "Failed to delete rotation")
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	h.audit(r, "delete", "on_call_rotation", id, "")
 	h.setFlash(w, "Rotation deleted")
-	h.redirect(w, r, "/on-call")
+	h.redirectToReadable(w, r, "/on-call")
 }
 
 func (h *Handler) OnCallOverride(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid on-call form", http.StatusBadRequest)
+		return
+	}
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/on-call")
+		h.redirectToReadable(w, r, "/on-call")
 		return
 	}
 	channelValue, expiryValue := r.FormValue("override_channel_id"), r.FormValue("override_until")
@@ -112,7 +127,7 @@ func (h *Handler) OnCallOverride(w http.ResponseWriter, r *http.Request) {
 		until, timeErr := time.Parse("2006-01-02T15:04", expiryValue)
 		if idErr != nil || chID <= 0 || timeErr != nil || !until.After(time.Now()) {
 			h.setError(w, "Select a channel and a future override expiry in UTC")
-			h.redirect(w, r, "/on-call")
+			h.redirectToReadable(w, r, "/on-call")
 			return
 		}
 		if !httputil.GetAPIKey(r.Context()).HasPermission("notifications.read") {
@@ -140,5 +155,5 @@ func (h *Handler) OnCallOverride(w http.ResponseWriter, r *http.Request) {
 			h.setFlash(w, "Override cleared")
 		}
 	}
-	h.redirect(w, r, "/on-call")
+	h.redirectToReadable(w, r, "/on-call")
 }

@@ -114,6 +114,15 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request, path string) 
 	http.Redirect(w, r, h.cfg.Server.BasePath+path, http.StatusSeeOther)
 }
 
+func (h *Handler) redirectToReadable(w http.ResponseWriter, r *http.Request, path string) {
+	lp := h.newLayoutParams(r, "", "")
+	if !lp.CanVisit(path) {
+		lp.BasePath = ""
+		path = lp.HomePath()
+	}
+	h.redirect(w, r, path)
+}
+
 func (h *Handler) setToast(w http.ResponseWriter, kind, msg string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "toast",
