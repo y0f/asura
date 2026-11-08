@@ -56,7 +56,7 @@
     </details>
     <main id="content" class="prose-docs" tabindex="-1"><h1 id="status-pages"><a class="heading-link" href="#status-pages">Status Pages</a></h1>
 
-<p>Public-facing pages that display the real-time and historical health of your monitors. Each status page has its own URL slug, optional password protection, and 90-day uptime bars per monitor.</p>
+<p>Status pages share the current and historical health of selected services. Each page has its own URL, optional password protection and 90-day uptime bars with an accessible daily-data table. Only enabled assigned monitors appear publicly.</p>
 
 <h2 id="creating-a-status-page"><a class="heading-link" href="#creating-a-status-page">Creating a Status Page</a></h2>
 
@@ -75,6 +75,9 @@
 
 <h2 id="monitor-assignment"><a class="heading-link" href="#monitor-assignment">Monitor Assignment</a></h2>
 
+<p>Page administration and data publication are separate permissions. Creating or updating a page requires <code>status_pages.create</code> or <code>status_pages.update</code>. Assigning, removing or reordering members also requires <code>monitors.read</code> for every affected monitor. Publishing incidents requires <code>incidents.read</code> independently for those same monitors.</p>
+<p>Enabling a page or its JSON API, changing its public URL, changing or removing an existing password, or enabling incident display checks the required read permissions for every current member. These checks and the metadata, password and membership changes commit in one transaction. Metadata-only edits preserve omitted membership. Turning incident display off does not require incident read access. The edit form hides selection when the editor cannot read every current member's required data.</p>
+
 <p>Select which monitors appear on the page. When a monitor is checked, two additional fields appear:</p>
 
 <table>
@@ -85,20 +88,20 @@
 
 <h2 id="branding"><a class="heading-link" href="#branding">Branding</a></h2>
 
-<p>Expand the <strong>Advanced</strong> section to customise the appearance of the public page.</p>
+<p>Expand <strong>Branding and access</strong> to customise the public page. Public image loading permits only the exact configured HTTPS origins; authenticated application pages keep their existing resource policy. Public pages send <code>Referrer-Policy: no-referrer</code>.</p>
 
 <table>
   <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><code>logo_url</code></td><td>URL of an image displayed above the status banner. Useful for showing your product or company logo.</td></tr>
-  <tr><td><code>favicon_url</code></td><td>URL of a favicon for the status page tab. Defaults to the Asura favicon.</td></tr>
-  <tr><td><code>custom_header_html</code></td><td>Raw HTML injected before the status banner. Useful for custom headings, banners, or links. Rendered with <code>templ.Raw()</code>. trust only your own content here.</td></tr>
-  <tr><td><code>custom_css</code></td><td>CSS injected into the <code>&lt;style&gt;</code> block. Overrides any default styles.</td></tr>
-  <tr><td><code>analytics_script</code></td><td>HTML snippet (e.g. a Plausible or Fathom <code>&lt;script&gt;</code> tag) injected before <code>&lt;/body&gt;</code>.</td></tr>
+  <tr><td><code>logo_url</code></td><td>Image above the status banner. Use HTTPS without embedded credentials, or a path starting with <code>/</code>. Protocol-relative URLs and wildcard hosts are rejected.</td></tr>
+  <tr><td><code>favicon_url</code></td><td>Favicon with the same URL rules. Defaults to the Asura favicon.</td></tr>
+  <tr><td><code>custom_header_html</code></td><td>Supported structural HTML, text, links and images before the banner, up to 5,000 characters. Scripts, forms, event handlers and unsupported attributes are removed, including when legacy content is rendered.</td></tr>
+  <tr><td><code>custom_css</code></td><td>Presentation CSS capped at 10,000 characters. New saves keep allowlisted properties and remove external resources, comments, escapes and at-rules. Legacy CSS also has an HTML raw-text boundary guard when rendered.</td></tr>
+  <tr><td><code>analytics_script</code></td><td>Only a super administrator may change this field. Supported external HTTPS script tags can be stored, but external script execution remains blocked by the current content policy. Inline script bodies are removed. Other editors preserve omitted or unchanged stored values.</td></tr>
 </table>
 
 <h2 id="password-protection"><a class="heading-link" href="#password-protection">Password Protection</a></h2>
 
-<p>Set a password in the <strong>Password Protection</strong> field under Advanced. Visitors are redirected to a login form at <code>/{slug}/auth</code> and receive a 7-day <code>HttpOnly</code> cookie on success.</p>
+<p>Set a password under <strong>Branding and access</strong>. Visitors are redirected to <code>/{slug}/auth</code> and receive a 7-day <code>HttpOnly</code> cookie on success. Branding and page contents are not rendered before successful authentication.</p>
 
 <ul>
   <li>The password is stored as a SHA-256 hash. never in plain text</li>
@@ -114,7 +117,7 @@
 
 <pre><code>GET /api/v1/status-pages/{id}/public</code></pre>
 
-<p>No API key required. A password-protected page also requires its password: send it in the <code>X-Status-Page-Password</code> header, or send the cookie set by the page's login form at <code>/{slug}/auth</code>; without either the endpoint returns 401. Wrong header passwords are rate-limited per client IP (429 once the limit is reached); correct ones do not count against the limit. Response is cached for 30 seconds via <code>Cache-Control: public, max-age=30</code>.</p>
+<p>No API key is required. A password-protected page requires its password in the <code>X-Status-Page-Password</code> header, or the cookie set by its login form; without either, the endpoint returns 401. Wrong header passwords are rate-limited per client IP (429 once the limit is reached). Unprotected JSON responses use <code>Cache-Control: public, max-age=30</code>; protected responses use <code>no-store</code>.</p>
 
 <pre><code>{
   "page": {
@@ -129,6 +132,7 @@
       "type": "http",
       "status": "up",
       "uptime_90d": 99.94,
+      "total_checks": 129600,
       "daily_uptime": [
         { "date": "2025-01-01", "uptime_pct": 100, "up_checks": 1440, "down_checks": 0, "total_checks": 1440 },
         ...
@@ -149,11 +153,12 @@
 
 <p>The <code>cause</code> field is always returned empty in the public payload — incident causes are never exposed publicly.</p>
 
-<p><code>overall_status</code> is one of <code>operational</code>, <code>degraded</code>, or <code>major_outage</code>, derived from the worst current monitor status on the page.</p>
+<p><code>overall_status</code> is <code>operational</code>, <code>degraded</code>, <code>major_outage</code> or <code>unknown</code>. Empty pages and sets containing pending checks are unknown unless a known degraded or down state takes priority. The page displays “Awaiting check data” for unknown status.</p>
+<p>In v2, a monitor with no samples has <code>uptime_90d: null</code> and <code>total_checks: 0</code>, rather than an assumed 100%. A measured uptime remains numeric. Query failures return HTTP 500 instead of a healthy or empty result. Public monitor queries do not load private targets, settings or credentials.</p>
 
 <h2 id="admin-rest-api"><a class="heading-link" href="#admin-rest-api">Admin REST API</a></h2>
 
-<p>All endpoints require authentication.</p>
+<p>All endpoints require authentication and the corresponding <code>status_pages.read</code>, <code>create</code>, <code>update</code> or <code>delete</code> action. Member lists include only monitors the caller can read. Successful create/update responses contain only the page ID when the caller lacks <code>status_pages.read</code>.</p>
 
 <table>
   <tr><th>Method</th><th>Path</th><th>Description</th></tr>
@@ -187,7 +192,7 @@
   ]
 }</code></pre>
 
-<p>On <code>PUT</code>, omit <code>password</code> (or send an empty string) to leave the existing password unchanged. Send <code>"clear_password": true</code> to remove password protection.</p>
+<p>On <code>PUT</code>, omitted metadata, <code>password</code> and <code>monitors</code> preserve their current values. Send <code>"password": ""</code> to remove password protection, or <code>"monitors": []</code> to clear membership with the required read permissions. <code>clear_password</code> is a web-form control, not an API field.</p>
 
 <h2 id="subscriptions"><a class="heading-link" href="#subscriptions">Subscriptions</a></h2>
 
@@ -201,8 +206,8 @@
   </thead>
   <tbody>
     <tr><td><code>POST</code></td><td><code>/api/v1/status-pages/{id}/subscribe</code></td><td>Subscribe (email or webhook)</td></tr>
-    <tr><td><code>GET</code></td><td><code>/api/v1/status-pages/{id}/subscribers</code></td><td>Subscriber count (admin, GDPR-safe)</td></tr>
-    <tr><td><code>DELETE</code></td><td><code>/api/v1/status-pages/{id}/subscribers/{subId}</code></td><td>Remove subscriber (admin)</td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/v1/status-pages/{id}/subscribers</code></td><td>Subscriber count; requires <code>subscribers.read</code></td></tr>
+    <tr><td><code>DELETE</code></td><td><code>/api/v1/status-pages/{id}/subscribers/{subId}</code></td><td>Remove subscriber; requires <code>subscribers.delete</code></td></tr>
   </tbody>
 </table>
 
