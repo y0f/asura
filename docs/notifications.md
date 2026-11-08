@@ -79,7 +79,7 @@ To verify a webhook delivery:
 }
 ```
 
-`tls_mode`: `starttls` (default; upgrades the plain connection with STARTTLS when the server offers it and otherwise sends in plaintext, as an empty value does), `starttls_required` (upgrades with STARTTLS and fails instead of sending in plaintext when the server does not offer it, which protects against an attacker stripping STARTTLS), `smtps` (TLS from the start, typically port 465), or `none` (plaintext). The same values apply to `subscriptions.smtp.tls_mode` in `config.yaml`. Mail servers on localhost or a private network are allowed; `allow_private_targets` does not apply to SMTP. Each delivery attempt, including the whole SMTP conversation, has a time limit, so a mail server that stops responding cannot block other notifications. Emails are sent as HTML with a plain-text fallback.
+`tls_mode`: `starttls` (default; upgrades the plain connection with STARTTLS when the server offers it and otherwise sends in plaintext, as an empty value does), `starttls_required` (upgrades with STARTTLS and fails instead of sending in plaintext when the server does not offer it, which protects against an attacker stripping STARTTLS), `smtps` (TLS from the start, typically port 465), or `none` (plaintext). The same values apply to `subscriptions.smtp.tls_mode` in `config.yaml`. Mail servers on localhost or a private network are allowed; `allow_private_targets` does not apply to SMTP. Each delivery attempt, including the whole SMTP conversation, has a time limit, so a mail server that stops responding cannot block other notifications. Emails are sent as HTML; no separate plain-text alternative is included.
 
 ## Telegram {#telegram}
 
@@ -230,16 +230,22 @@ An omitted or zero `priority` selects the event-derived priority (1=high for cre
 
 ## Per-Monitor Routing {#per-monitor-routing}
 
-By default every channel gets every event. To limit which channels a monitor sends to, set `notification_channel_ids`:
+Without an explicit channel assignment, monitor events are offered to every enabled channel whose event filter matches. Set `notification_channel_ids` to restrict ordinary monitor notifications to selected channels; their enabled state and event filters still apply. Explicit escalation recipients follow their policy instead.
+
+Changing this assignment requires `monitors.update` and `monitors.assign` on the monitor, plus `notifications.read`. Retrieve the current configuration with `GET /api/v1/monitors/{id}` using `monitors.read`, then prepare a complete monitor configuration with the desired `notification_channel_ids`, such as `[1, 3]`. A body containing only that relationship is not a valid monitor `PUT`; see the [complete configuration example](sla.html#setting-an-sla-target).
+
+Save the edited configuration as `monitor.json` and submit it:
 
 ```
-curl -X PUT https://example.com/asura/api/v1/monitors/1 \
+curl --fail --show-error -X PUT https://example.com/asura/api/v1/monitors/1 \
   -H "X-API-Key: $KEY" \
   -H "Content-Type: application/json" \
-  -d '{"notification_channel_ids": [1, 3]}'
+  --data-binary @monitor.json
 ```
 
-An empty array (`[]`) means the monitor sends to all channels.
+Omit unrelated relationship fields to retain their current assignments atomically. Saved private values follow the [credential-preservation rules](api.html#stored-credentials). For a heartbeat GET response, use the nested `monitor` configuration, not the outer response envelope.
+
+An explicit empty `notification_channel_ids` array (`[]`) removes the restriction and offers events to all matching enabled channels. Omitting the field preserves the current assignment.
 
 ## Notification History {#notification-history}
 

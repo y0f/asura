@@ -18,7 +18,7 @@ Run a single Go binary with an embedded web interface and SQLite storage. Combin
 - **Alerts:** Webhook, email, Telegram, Discord, Slack, ntfy, Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix and Gotify. Route events through notification channels and escalation policies.
 - **Operations:** Live updates, bulk actions, maintenance schedules, incident history, public status pages and subscriptions.
 - **Access control:** API keys, TOTP and reusable roles with action permissions. Bind monitor access globally or to selected monitors and groups; reserve configuration transfer and full-secret export for super administrators.
-- **History:** Hourly and daily summaries, uptime charts, monthly SLA reports and error budgets. Configuration export/import is separate from a database backup.
+- **History:** Hourly and daily summaries, uptime charts, monthly SLA reports and error budgets use verified active-check observations. Manual and heartbeat monitors report state without sampled uptime or SLA. Configuration export/import is separate from a database backup.
 
 The [monitor reference](https://y0f.github.io/asura/monitors.html) describes each check's settings and limits. The [API reference](https://y0f.github.io/asura/api.html) covers automation.
 
