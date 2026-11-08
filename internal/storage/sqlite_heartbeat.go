@@ -63,7 +63,9 @@ func (s *SQLiteStore) UpdateHeartbeatPing(ctx context.Context, monitorID int64, 
 	now := formatTime(time.Now())
 	var id int64
 	err = tx.QueryRowContext(ctx,
-		`UPDATE heartbeats SET last_ping_at=?, status='up' WHERE monitor_id=? AND token=? RETURNING monitor_id`,
+		`UPDATE heartbeats SET last_ping_at=?, status='up' WHERE monitor_id=? AND token=?
+		AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=heartbeats.monitor_id AND m.type='heartbeat')
+		RETURNING monitor_id`,
 		now, monitorID, sha256Hex(token)).Scan(&id)
 	if err != nil {
 		return err
@@ -86,7 +88,7 @@ func (s *SQLiteStore) ExpireHeartbeat(ctx context.Context, monitorID int64) (boo
 	now := formatTime(time.Now())
 	res, err := tx.ExecContext(ctx, `UPDATE heartbeats SET status='down'
 		WHERE monitor_id=? AND status!='down' AND last_ping_at IS NOT NULL
-		AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=heartbeats.monitor_id AND m.enabled=1
+		AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=heartbeats.monitor_id AND m.enabled=1 AND m.type='heartbeat'
 			AND datetime(heartbeats.last_ping_at, '+' || (m.interval_secs + heartbeats.grace) || ' seconds') < datetime(?))`,
 		monitorID, now)
 	if err != nil {
@@ -110,7 +112,7 @@ func (s *SQLiteStore) ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, 
 		`SELECT h.id, h.monitor_id, h.token, h.grace, h.last_ping_at, h.status
 		 FROM heartbeats h
 		 JOIN monitors m ON m.id = h.monitor_id
-		 WHERE m.enabled = 1
+		 WHERE m.enabled = 1 AND m.type = 'heartbeat'
 		   AND h.last_ping_at IS NOT NULL
 		   AND datetime(h.last_ping_at, '+' || (m.interval_secs + h.grace) || ' seconds') < datetime('now')`)
 	if err != nil {

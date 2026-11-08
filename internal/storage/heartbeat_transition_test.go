@@ -119,3 +119,53 @@ func TestHeartbeatExpirySkipsPendingAndDisabled(t *testing.T) {
 		t.Fatalf("disabled monitor expired: won=%v err=%v", won, err)
 	}
 }
+
+func TestHeartbeatTransitionsRejectChangedMonitorType(t *testing.T) {
+	for _, heartbeatStatus := range []string{"up", "down"} {
+		t.Run(heartbeatStatus, func(t *testing.T) {
+			s, ctx, mon := createTestHeartbeat(t)
+			if err := s.UpdateHeartbeatPing(ctx, mon.ID, "abc123def456"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.writeDB.ExecContext(ctx, `UPDATE heartbeats SET status=?, last_ping_at=? WHERE monitor_id=?`,
+				heartbeatStatus, formatTime(time.Now().Add(-time.Hour)), mon.ID); err != nil {
+				t.Fatal(err)
+			}
+			// Trusted storage callers and old databases can leave a heartbeat row
+			// behind even though request validation disallows changing this type.
+			mon.Type = "http"
+			if err := s.UpdateMonitor(ctx, mon); err != nil {
+				t.Fatal(err)
+			}
+			before, err := s.GetHeartbeatByMonitorID(ctx, mon.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			statusBefore, err := s.GetMonitorStatus(ctx, mon.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.UpdateHeartbeatPing(ctx, mon.ID, "abc123def456"); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("ping accepted for changed monitor type: %v", err)
+			}
+			if won, err := s.ExpireHeartbeat(ctx, mon.ID); err != nil || won {
+				t.Fatalf("changed monitor type expired: won=%v err=%v", won, err)
+			}
+			if candidates, err := s.ListExpiredHeartbeats(ctx); err != nil || len(candidates) != 0 {
+				t.Fatalf("changed monitor type offered to watcher: %v %v", candidates, err)
+			}
+			after, err := s.GetHeartbeatByMonitorID(ctx, mon.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			statusAfter, err := s.GetMonitorStatus(ctx, mon.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if after.Status != before.Status || !after.LastPingAt.Equal(*before.LastPingAt) ||
+				statusAfter.Status != statusBefore.Status || !statusAfter.LastCheckAt.Equal(*statusBefore.LastCheckAt) {
+				t.Fatalf("rejected heartbeat transition changed state: heartbeat=%+v monitor=%+v", after, statusAfter)
+			}
+		})
+	}
+}

@@ -92,7 +92,7 @@ func (w *HeartbeatWatcher) checkHeartbeat(ctx context.Context, monitorID int64) 
 
 func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heartbeat) {
 	mon, err := w.store.GetMonitor(ctx, hb.MonitorID)
-	if err != nil || !mon.Enabled {
+	if err != nil || !mon.Enabled || mon.Type != "heartbeat" {
 		return
 	}
 	// Expiry may have committed just before incident creation failed or the

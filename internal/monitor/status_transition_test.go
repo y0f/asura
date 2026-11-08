@@ -174,6 +174,22 @@ func (s *failingIncidentStore) CreateIncident(ctx context.Context, inc *storage.
 	return s.SQLiteStore.CreateIncident(ctx, inc)
 }
 
+func TestHeartbeatReminderSkipsChangedMonitorType(t *testing.T) {
+	s, p := newCountingPipeline(t)
+	mon := createTestMonitor(t, s, &storage.Monitor{Type: "http"})
+	// This candidate was collected before the type changed. A stale heartbeat
+	// record must not open an incident or send reminders for the HTTP monitor.
+	s.expired = []*storage.Heartbeat{{MonitorID: mon.ID, Status: "down"}}
+	watcher := NewHeartbeatWatcher(s, incident.NewManager(s, discardLogger()), p, time.Second, discardLogger())
+	watcher.check(context.Background())
+	if calls := s.openIncCalls.Load(); calls != 0 {
+		t.Fatalf("stale heartbeat evaluated incident state %d times", calls)
+	}
+	if events := drainEvents(p); len(events) != 0 {
+		t.Fatalf("stale heartbeat sent events: %v", events)
+	}
+}
+
 func TestHeartbeatRetriesIncidentAfterCommittedExpiry(t *testing.T) {
 	base, _ := newCountingPipeline(t)
 	s := &failingIncidentStore{countingStore: base, failures: 1}
