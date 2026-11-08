@@ -15,6 +15,7 @@ import (
 
 func TestWebSubscriptionRejectedQueueAllowsRetry(t *testing.T) {
 	h, s := storeHandler(t)
+	h.cfg.Subscriptions.Enabled = true
 	h.loginRL = httputil.NewRateLimiter(100, 100)
 	t.Cleanup(h.loginRL.Stop)
 	sp, _ := createProtectedStatusPage(t, s, false)

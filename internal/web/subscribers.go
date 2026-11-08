@@ -15,6 +15,10 @@ import (
 )
 
 func (h *Handler) StatusPageSubscribe(w http.ResponseWriter, r *http.Request, pageID int64) {
+	if !h.cfg.Subscriptions.Enabled {
+		http.Error(w, "Subscriptions are disabled", http.StatusServiceUnavailable)
+		return
+	}
 	ctx := r.Context()
 	sp, err := h.store.GetStatusPage(ctx, pageID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {

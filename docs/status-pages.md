@@ -161,7 +161,7 @@ On `PUT`, omitted metadata, `password` and `monitors` preserve their current val
 
 Visitors can subscribe to status page updates via email or webhook. Email subscribers go through double opt-in confirmation. Webhook subscribers are confirmed immediately.
 
-Subscribers are notified when incidents are created or resolved for monitors on the status page. The subscribe widget appears on the public status page when subscriptions are enabled in the server config.
+Subscribers are notified when incidents are created or resolved for monitors on the status page. The subscribe widget appears when subscriptions are enabled in the server config. Setting `subscriptions.enabled: false` rejects all new web and API registrations with HTTP 503; existing subscriptions remain stored and unsubscribe links remain available. When enabled, webhook subscriptions need no SMTP configuration; email subscriptions require a working confirmation-email transport.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |

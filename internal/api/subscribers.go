@@ -110,6 +110,10 @@ func (h *Handler) DeleteSubscriber(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.Subscriptions.Enabled {
+		writeError(w, http.StatusServiceUnavailable, "subscriptions are disabled")
+		return
+	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid status page id")

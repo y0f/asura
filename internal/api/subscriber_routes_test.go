@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -55,5 +57,42 @@ func TestSubscriberRoutesKeepTokenScopeAndDisabledUnsubscribe(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSubscriptionDisabledRejectsRegistrationAndKeepsExistingUnsubscribe(t *testing.T) {
+	env := newTestEnv(t, func(c *config.Config) { c.Subscriptions.Enabled = false; c.Monitor.AllowPrivateTargets = true }, false, nil)
+	page := env.createStatusPage(t, `{"slug":"disabled-subs","title":"Subscriptions","enabled":true,"api_enabled":true}`)
+	ctx := context.Background()
+	existing := &storage.StatusPageSubscriber{StatusPageID: page.ID, Type: "webhook", WebhookURL: "https://127.0.0.1/existing", Confirmed: true}
+	if err := env.store.CreateStatusPageSubscriber(ctx, existing); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"email", "webhook"} {
+		for _, webForm := range []bool{false, true} {
+			path := "/api/v1/status-pages/" + fmt.Sprint(page.ID) + "/subscribe"
+			body := `{"type":"` + kind + `","email":"fixture@example.test","webhook_url":"https://127.0.0.1/new"}`
+			var headers map[string]string
+			if webForm {
+				path = "/disabled-subs/subscribe"
+				body = url.Values{"type": {kind}, "email": {"fixture@example.test"}, "webhook_url": {"https://127.0.0.1/new"}}.Encode()
+				headers = map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+			}
+			w := env.do(http.MethodPost, path, body, headers)
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("disabled registration accepted: kind=%s web=%v status=%d", kind, webForm, w.Code)
+			}
+		}
+	}
+	count, err := env.store.CountSubscribersByPage(ctx, page.ID)
+	if err != nil || count != 1 {
+		t.Fatalf("disabled admission changed existing subscriptions: %d %v", count, err)
+	}
+	w := env.do(http.MethodGet, "/disabled-subs/unsubscribe?token="+existing.Token, "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("global disable blocked unsubscribe: %d", w.Code)
+	}
+	if _, err := env.store.GetSubscriberByToken(ctx, existing.Token); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("existing subscription not removed: %v", err)
 	}
 }

@@ -245,11 +245,11 @@ func TestStatusPagePasswordViaAPI(t *testing.T) {
 	}
 }
 
-// Subscription routes require both page gates. Webhooks can be registered
-// without SMTP; email registration fails visibly when confirmation is disabled.
+// Enabled subscriptions require both page gates. Webhooks need no SMTP;
+// email registration fails visibly when confirmation transport is unavailable.
 func TestSubscribeAPIGating(t *testing.T) {
 	env := newTestEnv(t, func(c *config.Config) {
-		c.Subscriptions.Enabled = false
+		c.Subscriptions.Enabled = true
 		c.Monitor.AllowPrivateTargets = true // no DNS lookup of the webhook host
 	}, false, nil)
 	ctx := context.Background()

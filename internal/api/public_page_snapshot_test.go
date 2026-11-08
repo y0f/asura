@@ -47,6 +47,7 @@ func TestPublicSubscriptionNeverUsesStalePageAuthorization(t *testing.T) {
 			}}
 			cfg := config.Defaults()
 			cfg.Monitor.AllowPrivateTargets = true
+			cfg.Subscriptions.Enabled = true
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 			body := `{"type":"webhook","webhook_url":"https://127.0.0.1/subscriber-fixture"}`
 			contentType := "application/json"

@@ -52,6 +52,7 @@ func createProtectedStatusPage(t *testing.T, store *storage.SQLiteStore, passwor
 // Regression: password-protected status pages leak via /rss and /subscribe.
 func TestPasswordStatusPageProtectsRSSAndSubscribe(t *testing.T) {
 	h, store := storeHandler(t)
+	h.cfg.Subscriptions.Enabled = true
 	h.loginRL = httputil.NewRateLimiter(10, 10)
 	sp, mon := createProtectedStatusPage(t, store, true)
 

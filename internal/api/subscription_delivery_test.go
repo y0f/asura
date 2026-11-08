@@ -15,7 +15,7 @@ import (
 )
 
 func TestSubscriptionRejectedQueueDoesNotClaimEmailSentOrBlockRetry(t *testing.T) {
-	env := newTestEnv(t, headless, false, func(s storage.Store, c *config.Config) *notifier.SubscriberNotifier {
+	env := newTestEnv(t, func(c *config.Config) { headless(c); c.Subscriptions.Enabled = true }, false, func(s storage.Store, c *config.Config) *notifier.SubscriberNotifier {
 		n := notifier.NewSubscriberNotifier(s, config.SMTPConfig{Host: "unused.example", From: "test@example.test"}, "", slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 		n.Shutdown(context.Background())
 		return n

@@ -64,6 +64,7 @@ func TestSubscriptionRespectsStatusPageAccess(t *testing.T) {
 			srv, _ := testServer(t)
 			t.Cleanup(srv.Close)
 			srv.cfg.Monitor.AllowPrivateTargets = true
+			srv.cfg.Subscriptions.Enabled = true
 			page := createTestStatusPage(t, srv, tc.password)
 			page.Enabled = !tc.disabled
 			page.APIEnabled = !tc.apiOff
@@ -101,6 +102,7 @@ func TestSubscriptionRespectsStatusPageAccess(t *testing.T) {
 
 func TestSubscriptionPasswordAttemptsSharePageLimiter(t *testing.T) {
 	srv, _ := testServer(t)
+	srv.cfg.Subscriptions.Enabled = true
 	t.Cleanup(srv.Close)
 	page := createTestStatusPage(t, srv, "page-secret")
 	for i := 0; i <= srv.cfg.Auth.Login.RateLimitBurst; i++ {
