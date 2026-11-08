@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/asura.gif" alt="Asura" height="28"/>
+</p>
+
 # Asura — uptime monitoring and status pages
 
 Asura is an open-source, self-hosted uptime monitoring platform for websites, APIs and network services. Track availability, investigate incidents, and keep your team and customers informed with alerts and public status pages.
