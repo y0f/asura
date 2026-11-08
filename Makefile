@@ -8,7 +8,7 @@ TAILWIND := ./tailwindcss
 TEMPL_VERSION = $(shell go list -m -f '{{.Version}}' github.com/a-h/templ)
 TEMPL = go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 
-.PHONY: all build css docs watch dev test lint run clean hash-key release generate agent
+.PHONY: all build css docs watch dev check test lint run clean hash-key release generate agent
 
 all: build
 
@@ -35,6 +35,14 @@ build: css
 
 test: generate
 	go test -race -count=1 ./...
+
+# Source checks use the committed assets and temporary test databases. Generate
+# assets separately after changing templates, CSS, or documentation fragments.
+check:
+	go run ./cmd/docsgen -check
+	go vet ./...
+	go test ./...
+	go build ./cmd/asura ./cmd/asura-agent
 
 lint:
 	go vet ./...
