@@ -110,10 +110,8 @@ templ cmdPaletteScript() {
 				hotkey(e) {
 					if (!this.open && document.querySelector('dialog[open]')) return;
 					const cmdK = (e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey);
-					const slash = e.key === "/" && !this.typing(e.target);
-					if (cmdK || slash) { e.preventDefault(); this.toggle(); }
+					if (cmdK) { e.preventDefault(); this.toggle(); }
 				},
-				typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); },
 				toggle() { this.open ? this.close() : this.openPalette(); },
 				openPalette() {
 					this.open = true; this.q = ""; this.filter();

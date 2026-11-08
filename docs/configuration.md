@@ -213,12 +213,10 @@ Hourly rollups are retained for 90 days and daily rollups for one calendar year.
 
 | Key | Action |
 | --- | --- |
-| `n` | New monitor, when creation is allowed |
-| `/` | Open search |
 | `Ctrl+K` / `Cmd+K` | Open search |
 | `Escape` | Close modal |
 
-Single-key shortcuts are disabled while typing in form fields. The modified search shortcut remains available.
+The search shortcut works while typing in a form. To create a monitor from the keyboard, open search, choose **New Monitor**, and press Enter. That action appears only when creation is allowed. Unmodified character keys do not trigger global navigation or search.
 
 ## Maintenance Scheduling {#maintenance-scheduling}
 
