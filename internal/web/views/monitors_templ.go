@@ -1312,8 +1312,8 @@ func MonitorListPage(p MonitorListParams) templ.Component {
 
 func (p MonitorDetailParams) meta() string {
 	parts := []string{TypeLabel(p.Monitor.Type)}
-	if p.Monitor.Target != "" {
-		parts = append(parts, p.Monitor.Target)
+	if target := monitorTargetLabel(p.Monitor); target != "" {
+		parts = append(parts, target)
 	}
 	if p.Monitor.Type != "heartbeat" && p.Monitor.Type != "manual" {
 		parts = append(parts, fmt.Sprintf("every %ds", p.Monitor.Interval))

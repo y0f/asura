@@ -72,6 +72,19 @@ func TestPassiveConfigurationOnlyRendersWhenItContainsFacts(t *testing.T) {
 	}
 }
 
+func TestPassiveMetadataOmitsPlaceholderButKeepsConfiguredLabel(t *testing.T) {
+	for _, kind := range []string{"manual", "heartbeat"} {
+		p := MonitorDetailParams{Monitor: &storage.Monitor{Type: kind, Target: kind}}
+		if got := p.meta(); got != TypeLabel(kind) {
+			t.Fatalf("placeholder repeated in metadata: %q", got)
+		}
+		p.Monitor.Target = "Scheduled batch"
+		if !strings.Contains(p.meta(), "Scheduled batch") {
+			t.Fatal("meaningful configured metadata was hidden")
+		}
+	}
+}
+
 func TestPassivePublicRowOmitsLegacyUptime(t *testing.T) {
 	for _, kind := range []string{"manual", "heartbeat"} {
 		row := MonitorWithUptime{Monitor: &storage.Monitor{Name: "Reported service", Type: kind, Status: "up"}, UptimeLabel: "99.99%", DailyBars: []DailyBar{{Date: "2026-11-08", UptimePct: 99.99, HasData: true}}}

@@ -18,7 +18,7 @@ func TestDashboardPendingIsNotHealthy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := DashboardParams{Total: tc.total, Up: tc.up, Pending: tc.pending}
 			text := textOf(render(t, DashboardPage(p)))
-			if !strings.Contains(text, fmt.Sprintf("%d awaiting checks", tc.pending)) {
+			if !strings.Contains(text, fmt.Sprintf("%d awaiting data", tc.pending)) {
 				t.Fatal("pending count is missing")
 			}
 			if strings.Contains(text, "everything is up") {

@@ -78,7 +78,7 @@ func (p DashboardParams) summary() string {
 		parts = append(parts, fmt.Sprintf("%d paused", p.Paused))
 	}
 	if p.Pending > 0 {
-		parts = append(parts, fmt.Sprintf("%d awaiting checks", p.Pending))
+		parts = append(parts, fmt.Sprintf("%d awaiting data", p.Pending))
 	}
 	if p.Total > 0 && p.Up == p.Total && p.Pending == 0 {
 		parts = append(parts, "everything is up")
@@ -130,7 +130,7 @@ templ DashboardPage(p DashboardParams) {
 							<h2 id="dash-monitors">Monitors</h2>
 							<span class="flex items-center gap-1.5 text-xs text-muted tabular-nums">
 								@StatusIcon("pending")
-								{ fmt.Sprintf("%d awaiting checks", p.Pending) }
+								{ fmt.Sprintf("%d awaiting data", p.Pending) }
 							</span>
 						</div>
 						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="section-link">View all monitors</a>
@@ -148,8 +148,8 @@ templ DashboardPage(p DashboardParams) {
 												<div class="text-sm font-medium text-white wrap-break-word">{ m.Name }</div>
 												<div class="text-xs text-muted truncate mt-0.5">
 													{ TypeLabel(m.Type) }
-													if m.Target != "" {
-														<span aria-hidden="true">· </span><span class="font-mono">{ m.Target }</span>
+													if target := monitorTargetLabel(m); target != "" {
+														<span aria-hidden="true">· </span><span class="font-mono">{ target }</span>
 													}
 												</div>
 											</div>

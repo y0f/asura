@@ -12,6 +12,15 @@ import (
 	"github.com/y0f/asura/internal/storage"
 )
 
+// Passive types use their type name as a form placeholder, not a destination.
+// Other targets have already passed the handler's read projection.
+func monitorTargetLabel(m *storage.Monitor) string {
+	if !m.HasSampledMetrics() && m.Target == m.Type {
+		return ""
+	}
+	return m.Target
+}
+
 // StatusTone maps any monitor, incident or event status onto one of the
 // semantic tones defined in tokens.css (ok, warn, crit, neutral).
 func StatusTone(status string) string {
