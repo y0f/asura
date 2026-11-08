@@ -156,58 +156,77 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 				}
 			}
 		</head>
-		<body class="bg-surface text-muted-light font-sans min-h-screen antialiased">
-			<main class="max-w-3xl mx-auto px-4 py-12 sm:px-6 sm:py-16">
-				<header class="mb-8">
-					if p.Config != nil && p.Config.LogoURL != "" {
-						<img src={ p.Config.LogoURL } alt={ p.Title } class="h-9 object-contain mb-6"/>
-					}
-					<h1 class="text-3xl font-bold">{ p.Title }</h1>
-					if p.Config != nil && p.Config.Description != "" {
-						<p class="subtitle mt-1.5">{ p.Config.Description }</p>
+		<body class="public-status bg-surface text-muted-light font-sans min-h-screen antialiased">
+			<main class="status-container">
+				<header class="status-header">
+					<div class="min-w-0">
+						if p.Config != nil && p.Config.LogoURL != "" {
+							<img src={ p.Config.LogoURL } alt={ p.Title } class="status-logo"/>
+						}
+						<h1>{ p.Title }</h1>
+						if p.Config != nil && p.Config.Description != "" {
+							<p>{ p.Config.Description }</p>
+						}
+					</div>
+					if p.SubscriptionsEnabled {
+						<a href="#subscribe-title" class="btn-secondary">Get updates</a>
 					}
 				</header>
 				if p.Config != nil && p.Config.CustomHeaderHTML != "" {
 					@templ.Raw(p.Config.CustomHeaderHTML)
 				}
 				@statusOverallBanner(p)
-				if p.HasGroups {
-					for _, g := range p.Groups {
-						if g.Name != "" {
-							<h2 class="text-lg font-semibold mt-8 mb-3">{ g.Name }</h2>
+				<section class="status-services" aria-labelledby="services-title">
+					<div class="status-section-heading">
+						<h2 id="services-title">Services</h2>
+						<p>Availability over the last 90 days</p>
+					</div>
+					if p.HasGroups {
+						for _, g := range p.Groups {
+							<section class="status-group">
+								if g.Name != "" {
+									<h3>{ g.Name }</h3>
+								}
+								<div class="status-service-list panel">
+									for _, mwu := range g.Monitors {
+										@statusMonitorRow(mwu)
+									}
+								</div>
+							</section>
 						}
-						<div class="panel divide-y divide-line mb-4">
-							for _, mwu := range g.Monitors {
+					} else if len(p.Monitors) > 0 {
+						<div class="status-service-list panel">
+							for _, mwu := range p.Monitors {
 								@statusMonitorRow(mwu)
 							}
 						</div>
+					} else {
+						<div class="status-empty">No services have been published on this page.</div>
 					}
-				} else if len(p.Monitors) > 0 {
-					<div class="panel divide-y divide-line">
-						for _, mwu := range p.Monitors {
-							@statusMonitorRow(mwu)
-						}
-					</div>
-				} else {
-					<div class="card px-6 py-10 text-center text-sm text-muted">Nothing is being monitored on this page yet.</div>
-				}
+				</section>
 				if p.Config != nil && p.Config.ShowIncidents && p.HasIncidents {
-					<section class="mt-12" aria-labelledby="incidents-title">
-						<h2 id="incidents-title" class="text-lg font-semibold mb-3">Recent incidents</h2>
-						<div class="panel divide-y divide-line">
+					<section class="status-incidents" aria-labelledby="incidents-title">
+						<div class="status-section-heading">
+							<h2 id="incidents-title">Recent incidents</h2>
+							<p>All times UTC</p>
+						</div>
+						<div class="status-incident-list panel">
 							for _, inc := range p.Incidents {
-								<div class="px-5 py-4">
-									<div class="flex items-center justify-between gap-3">
-										<span class="text-md font-medium text-white truncate">{ inc.MonitorName }</span>
-										<span class={ "inline-flex items-center gap-1.5 text-sm shrink-0", StatusColor(inc.Status) }><span class={ "dot", StatusDot(inc.Status) }></span>{ publicIncidentStatus(inc.Status) }</span>
+								<article class="status-incident">
+									<div class="status-incident-heading">
+										<h3>{ inc.MonitorName }</h3>
+										<span class="status-state" data-tone={ StatusTone(inc.Status) }>
+											@statusSymbol(StatusTone(inc.Status))
+											<span>{ publicIncidentStatus(inc.Status) }</span>
+										</span>
 									</div>
-									<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+									<div class="status-incident-meta">
 										<time datetime={ isoTime(inc.StartedAt) }>{ inc.StartedAt.UTC().Format("Jan 2, 15:04 UTC") }</time>
 										if inc.ResolvedAt != nil {
 											<span>Resolved after { IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</span>
 										}
 									</div>
-								</div>
+								</article>
 							}
 						</div>
 					</section>
@@ -218,11 +237,11 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 				if p.SubscriptionsEnabled {
 					@statusSubscribeWidget(p.BasePath, p.Config.Slug)
 				}
-				<footer class="mt-14 pt-5 border-t border-line flex items-center justify-between gap-3 text-sm text-muted">
+				<footer class="status-footer">
 					if p.Config != nil {
-						<a href={ templ.SafeURL(p.BasePath + "/" + p.Config.Slug + "/rss") } class="hover:text-white">RSS feed</a>
+						<a href={ templ.SafeURL(p.BasePath + "/" + p.Config.Slug + "/rss") }>RSS feed</a>
 					}
-					<a href="https://github.com/y0f/asura" target="_blank" rel="noopener" class="flex items-center gap-1.5 hover:text-white">Powered by <img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-3.5 w-auto"/></a>
+					<a href="https://github.com/y0f/asura" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5">Powered by <img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-3.5 w-auto"/></a>
 				</footer>
 			</main>
 			if p.Config != nil && p.Config.AnalyticsScript != "" {
@@ -233,7 +252,7 @@ templ PublicStatusPage(p PublicStatusPageParams) {
 }
 
 templ statusSubscribeWidget(basePath, slug string) {
-	<section class="mt-12" x-data="{open: false, type: 'email'}" aria-labelledby="subscribe-title">
+	<section class="status-subscribe" x-data="{open: false, type: 'email'}" aria-labelledby="subscribe-title">
 		<div class="card card-pad">
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
@@ -330,47 +349,84 @@ templ StatusPageAuthPage(p StatusPageAuthParams) {
 	</html>
 }
 
+// Shapes retain their meaning when status colours cannot be distinguished.
+templ statusSymbol(tone string) {
+	<svg aria-hidden="true" focusable="false" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+		switch tone {
+			case "ok":
+				<circle cx="10" cy="10" r="7.25"></circle><path d="m6.5 10 2.25 2.25 4.75-4.75"></path>
+			case "warn":
+				<path d="m10 2.75 7.25 13H2.75Z"></path><path d="M10 7v3.5m0 2.5h.01"></path>
+			case "crit", "major":
+				<path d="m7 2.75-4.25 4.25v6L7 17.25h6l4.25-4.25V7L13 2.75Z"></path><path d="m7.5 7.5 5 5m0-5-5 5"></path>
+			default:
+				<circle cx="10" cy="10" r="7.25"></circle><path d="M10 6v4l2.5 1.5"></path>
+		}
+	</svg>
+}
+
+func publicServiceSummary(p PublicStatusPageParams) string {
+	counts := [4]int{}
+	for _, m := range p.allMonitors() {
+		switch m.Monitor.Status {
+		case "up":
+			counts[0]++
+		case "degraded":
+			counts[1]++
+		case "down":
+			counts[2]++
+		default:
+			counts[3]++
+		}
+	}
+	var parts []string
+	for i, word := range []string{"operational", "degraded", "outage", "awaiting data"} {
+		if count := counts[i]; count > 0 {
+			if i == 2 && count > 1 {
+				word = "outages"
+			}
+			parts = append(parts, fmt.Sprintf("%d %s", count, word))
+		}
+	}
+	if len(parts) == 0 {
+		return "Service status will appear here when monitors are published."
+	}
+	return strings.Join(parts, " \u00b7 ")
+}
+
 templ statusOverallBanner(p PublicStatusPageParams) {
 	{{ label, tone := publicOverall(p) }}
-	<div role="status" class="mb-8 rounded-card border border-line px-5 py-4 flex items-center gap-3 bg-surface-50">
-		<span class={ "dot w-2.5 h-2.5", "bg-" + tone }></span>
-		<span class="text-lg font-semibold text-white">{ label }</span>
+	<div role="status" class="status-overall" data-tone={ tone }>
+		<div class="status-overall-icon">@statusSymbol(tone)</div>
+		<div>
+			<p class="status-overall-title">{ label }</p>
+			<p class="status-overall-summary">{ publicServiceSummary(p) }</p>
+		</div>
 	</div>
 }
 
 templ statusMonitorRow(mwu MonitorWithUptime) {
 	{{ label, tone := publicStatus(mwu.Monitor.Status) }}
-	<div class="px-5 py-4">
-		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-3">
-			<span class="text-md font-medium text-white break-words min-w-0">{ mwu.Monitor.Name }</span>
-			<div class="flex items-center justify-between sm:justify-start gap-4 shrink-0">
-				if mwu.Monitor.HasSampledMetrics() {
-					<span class="text-sm text-muted tabular-nums">{ mwu.UptimeLabel }</span>
-				}
-				<span class={ "inline-flex items-center gap-1.5 text-sm", toneTextClass(tone) }><span class={ "dot", toneDotClass(tone) }></span>{ label }</span>
-			</div>
+	<div class="status-service">
+		<div class="status-service-heading">
+			<span class="status-service-name">{ mwu.Monitor.Name }</span>
+			<span class="status-state" data-tone={ tone }>
+				@statusSymbol(tone)
+				<span>{ label }</span>
+			</span>
 		</div>
 		if mwu.Monitor.HasSampledMetrics() {
-			<div x-data="{tooltip: '', show: false, mx: 0, my: 0}">
-				<div class="rounded-[3px] overflow-hidden" aria-hidden="true">
+			<div class="status-history" x-data="{tooltip: '', show: false, mx: 0, my: 0}">
+				<div class="status-history-bars" aria-hidden="true">
 					@templ.Raw(UptimeBarsSVG(mwu.DailyBars))
 				</div>
 				<p class="sr-only">{ uptimeSummary(mwu) }</p>
-				<div
-					x-show="show"
-					x-cloak
-					class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-white shadow-lg pointer-events-none whitespace-nowrap"
-					:style="`top: ${my - 40}px; left: ${mx}px`"
-					x-text="tooltip"
-				></div>
+				<div x-show="show" x-cloak class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-white shadow-lg pointer-events-none whitespace-nowrap" :style="`top: ${my - 40}px; left: ${mx}px`" x-text="tooltip"></div>
+				<div class="status-history-labels"><span>90 days ago</span><span>{ mwu.UptimeLabel } uptime</span><span>Today</span></div>
+				@DailyUptimeData(mwu.Monitor.Name+": daily uptime", mwu.DailyBars)
 			</div>
-			<div class="flex items-center justify-between mt-2 text-xs text-muted">
-				<span>90 days ago</span>
-				<span>Today</span>
-			</div>
-			@DailyUptimeData(mwu.Monitor.Name+": daily uptime", mwu.DailyBars)
 		} else {
-			<p class="text-xs text-muted">Reported status; uptime is not calculated for this monitor.</p>
+			<p class="status-reported">Reported status</p>
 		}
 	</div>
 }

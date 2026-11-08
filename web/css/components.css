@@ -272,3 +272,60 @@ html:has(dialog[open]), html.nav-open { overflow: hidden; }
   -ms-overflow-style: none;
 }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Public status pages use the same type, surfaces and spacing as the app.
+   Status accents are local: the authenticated interface keeps its palette. */
+.public-status { --color-ok: #75d7a5; --color-warn: #f0c36d; --color-crit: #f2969b; --color-major: #f2969b; }
+html[data-theme="light"] .public-status { --color-ok: #18794e; --color-warn: #925600; --color-crit: #bd3038; --color-major: #bd3038; }
+.status-container { width: min(100%, 56rem); margin: 0 auto; padding: 2.5rem 1.5rem 1.5rem; }
+.status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.status-header h1 { color: var(--color-white); font-size: var(--text-3xl); line-height: 1.25; font-weight: 600; letter-spacing: -0.035em; overflow-wrap: anywhere; }
+.status-header p { margin-top: 0.375rem; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.5; }
+.status-header > a { flex-shrink: 0; }
+.status-logo { display: block; width: auto; max-width: 100%; max-height: 2.5rem; object-fit: contain; margin-bottom: 0.75rem; }
+.public-status [data-tone] { --status-accent: var(--color-muted); }
+.public-status [data-tone="ok"] { --status-accent: var(--color-ok); }
+.public-status [data-tone="warn"] { --status-accent: var(--color-warn); }
+.public-status [data-tone="crit"], .public-status [data-tone="major"] { --status-accent: var(--color-crit); }
+.status-overall { display: flex; align-items: center; gap: 0.875rem; padding: 1.125rem 1.25rem; margin-bottom: 2rem; border: 1px solid color-mix(in srgb, var(--status-accent) 25%, var(--color-line)); border-radius: var(--radius-card); background: color-mix(in srgb, var(--status-accent) 5%, var(--color-surface-50)); }
+.status-overall-icon { width: 1.75rem; height: 1.75rem; flex-shrink: 0; color: var(--status-accent); }
+.status-overall-title { color: var(--color-white); font-size: var(--text-lg); font-weight: 600; line-height: 1.4; }
+.status-overall-summary { margin-top: 0.25rem; font-size: var(--text-sm); line-height: 1.5; color: var(--color-muted); }
+.status-section-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem 1rem; margin-bottom: 0.875rem; }
+.status-section-heading h2 { font-size: var(--text-lg); font-weight: 600; color: var(--color-white); letter-spacing: -0.015em; }
+.status-section-heading p { font-size: var(--text-xs); color: var(--color-muted); }
+.status-group + .status-group { margin-top: 1.25rem; }
+.status-group > h3 { margin-bottom: 0.5rem; font-size: var(--text-sm); font-weight: 600; color: var(--color-muted-light); }
+.status-service-list, .status-incident-list { border: 1px solid var(--color-line); border-radius: var(--radius-card); background: var(--color-surface-50); }
+.status-service { padding: 0.875rem 1.125rem; }
+.status-service + .status-service, .status-incident + .status-incident { border-top: 1px solid var(--color-line); }
+.status-service-heading, .status-incident-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; }
+.status-service-name, .status-incident-heading h3 { min-width: 0; font-size: var(--text-sm); font-weight: 500; color: var(--color-white); overflow-wrap: anywhere; }
+.status-state { display: inline-flex; align-items: center; flex-shrink: 0; gap: 0.375rem; color: var(--status-accent); font-size: var(--text-xs); font-weight: 500; line-height: 1.5; }
+.status-state svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+.status-history { margin-top: 0.625rem; }
+.status-history-bars { overflow: hidden; border-radius: 2px; }
+.status-history-bars > svg { height: 1.125rem !important; }
+.status-history-labels { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.25rem; color: var(--color-muted); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
+.status-history > details { margin-top: 0.125rem; }
+.status-history > details > summary { width: fit-content; min-height: 1.5rem; padding: 0.25rem 0; font-size: var(--text-2xs); }
+.status-history > details[open] > summary { margin-bottom: 0.25rem; }
+.status-reported { margin-top: 0.375rem; color: var(--color-muted); font-size: var(--text-xs); }
+.status-incidents, .status-subscribe { margin-top: 2rem; }
+.status-incident { padding: 0.875rem 1.125rem; }
+.status-incident-meta { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.375rem; color: var(--color-muted); font-size: var(--text-xs); }
+.status-empty { padding: 1.5rem; border: 1px dashed var(--color-line-light); border-radius: var(--radius-card); font-size: var(--text-sm); color: var(--color-muted); }
+.status-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: var(--text-xs); }
+.status-footer a { display: inline-flex; align-items: center; min-height: 1.5rem; }
+.status-footer a:hover { color: var(--color-white); }
+@media (max-width: 480px) {
+  .status-container { padding: 1.5rem 1rem 1rem; }
+  .status-header { align-items: flex-start; flex-wrap: wrap; }
+  .status-service-heading, .status-incident-heading { align-items: flex-start; flex-direction: column; gap: 0.375rem; }
+  .status-overall { padding: 1rem; align-items: flex-start; }
+  .status-overall-icon { margin-top: 0.125rem; width: 1.5rem; height: 1.5rem; }
+  .status-service, .status-incident { padding: 0.875rem; }
+}
+@media (pointer: coarse) {
+  .status-footer a, .status-history > details > summary { min-height: 2.75rem; }
+}

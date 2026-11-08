@@ -44,8 +44,8 @@
   --color-muted-light: rgb(190 190 190);
   --color-muted: rgb(156 156 156);
 
-  /* Status is communicated by wording and shape. Semantic aliases keep the
-     same grayscale/blue palette in charts, tables, forms and public pages. */
+  /* Status is communicated by wording and shape. Authenticated charts, tables
+     and forms stay grayscale/blue; public status pages override these locally. */
   --color-ok: rgb(190 190 190);
   --color-warn: rgb(235 235 235);
   --color-major: rgb(108 178 255);

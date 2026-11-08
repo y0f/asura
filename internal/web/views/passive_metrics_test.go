@@ -89,7 +89,7 @@ func TestPassivePublicRowOmitsLegacyUptime(t *testing.T) {
 	for _, kind := range []string{"manual", "heartbeat"} {
 		row := MonitorWithUptime{Monitor: &storage.Monitor{Name: "Reported service", Type: kind, Status: "up"}, UptimeLabel: "99.99%", DailyBars: []DailyBar{{Date: "2026-11-08", UptimePct: 99.99, HasData: true}}}
 		text := textOf(render(t, statusMonitorRow(row)))
-		if strings.Contains(text, "99.99%") || strings.Contains(text, "90 days ago") || !strings.Contains(text, "uptime is not calculated") {
+		if strings.Contains(text, "99.99%") || strings.Contains(text, "90 days ago") || !strings.Contains(text, "Reported status") {
 			t.Fatalf("%s public row misrepresents passive samples: %s", kind, text)
 		}
 	}
