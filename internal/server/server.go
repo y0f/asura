@@ -72,7 +72,9 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 	if cfg.IsWebUIEnabled() {
 		handler = s.statusPageRouter(handler)
 	}
-	handler = bodyLimit(cfg.Server.MaxBodySize, s.p("/api/v1/agent/results"))(handler)
+	// Transfer handlers apply their own authenticated, bounded JSON/multipart
+	// limits before parsing. A normal small request cap cannot round-trip files.
+	handler = bodyLimit(cfg.Server.MaxBodySize, s.p("/api/v1/agent/results"), s.p("/api/v1/import"), s.p("/settings/import"))(handler)
 	s.rateLimiter = httputil.NewRateLimiter(cfg.Server.RateLimitPerSec, cfg.Server.RateLimitBurst)
 	handler = s.rateLimiter.Middleware(cfg.TrustedNets(), writeError)(handler)
 	handler = cors(cfg.Server.CORSOrigins)(handler)

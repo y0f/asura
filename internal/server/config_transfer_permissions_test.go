@@ -84,9 +84,6 @@ func TestConfigurationTransferRequiresSuperAdmin(t *testing.T) {
 				wantStatus := http.StatusForbidden
 				if key.SuperAdmin {
 					wantStatus = http.StatusOK
-					if tc.web && tc.method == http.MethodPost {
-						wantStatus = http.StatusSeeOther
-					}
 				}
 				if w.Code != wantStatus {
 					t.Errorf("status = %d, want %d: %s", w.Code, wantStatus, w.Body.String())

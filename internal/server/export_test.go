@@ -60,7 +60,7 @@ func post(t *testing.T, srv *Server, key, path string, body map[string]any, expe
 	}
 }
 
-func getExport(t *testing.T, srv *Server, adminKey, query string) api.ExportData {
+func getExport(t *testing.T, srv *Server, adminKey, query string) api.ConfigurationFile {
 	t.Helper()
 	url := "/api/v1/export"
 	if query != "" {
@@ -73,7 +73,7 @@ func getExport(t *testing.T, srv *Server, adminKey, query string) api.ExportData
 	if w.Code != http.StatusOK {
 		t.Fatalf("export: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var data api.ExportData
+	var data api.ConfigurationFile
 	if err := json.NewDecoder(w.Body).Decode(&data); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -111,8 +111,8 @@ func TestExportEmpty(t *testing.T) {
 	srv, adminKey := testServer(t)
 
 	data := getExport(t, srv, adminKey, "")
-	if data.Version != 1 {
-		t.Fatalf("expected version 1, got %d", data.Version)
+	if data.Version != 2 {
+		t.Fatalf("expected version 2, got %d", data.Version)
 	}
 	if len(data.Monitors) != 0 {
 		t.Fatalf("expected 0 monitors, got %d", len(data.Monitors))
@@ -133,14 +133,14 @@ func TestExportWithData(t *testing.T) {
 	if mon.Name != "API Health" {
 		t.Fatalf("expected 'API Health', got %q", mon.Name)
 	}
-	if mon.GroupName != "Backend" {
-		t.Fatalf("expected group 'Backend', got %q", mon.GroupName)
+	if mon.GroupID == nil || *mon.GroupID != data.MonitorGroups[0].ID || data.MonitorGroups[0].Name != "Backend" {
+		t.Fatal("group reference was not preserved")
 	}
-	if mon.ProxyName != "US Proxy" {
-		t.Fatalf("expected proxy 'US Proxy', got %q", mon.ProxyName)
+	if mon.ProxyID == nil || *mon.ProxyID != data.Proxies[0].ID || data.Proxies[0].Name != "US Proxy" {
+		t.Fatal("proxy reference was not preserved")
 	}
-	if len(mon.NotificationChannelNames) != 1 || mon.NotificationChannelNames[0] != "Slack Alerts" {
-		t.Fatalf("expected channel 'Slack Alerts', got %v", mon.NotificationChannelNames)
+	if len(mon.NotificationChannelIDs) != 1 || mon.NotificationChannelIDs[0] != data.NotificationChannels[0].ID || data.NotificationChannels[0].Name != "Slack Alerts" {
+		t.Fatal("channel reference was not preserved")
 	}
 
 	counts := map[string]int{
@@ -199,11 +199,11 @@ func TestImportIntoEmpty(t *testing.T) {
 	if len(data.Monitors) != 2 {
 		t.Fatalf("re-export: expected 2 monitors, got %d", len(data.Monitors))
 	}
-	if data.Monitors[0].GroupName != "Backend" {
-		t.Fatalf("re-export: expected group preserved, got %q", data.Monitors[0].GroupName)
+	if data.Monitors[0].GroupID == nil || *data.Monitors[0].GroupID != data.MonitorGroups[0].ID {
+		t.Fatal("re-export lost group reference")
 	}
-	if data.Monitors[0].ProxyName != "US Proxy" {
-		t.Fatalf("re-export: expected proxy preserved, got %q", data.Monitors[0].ProxyName)
+	if data.Monitors[0].ProxyID == nil || *data.Monitors[0].ProxyID != data.Proxies[0].ID {
+		t.Fatal("re-export lost proxy reference")
 	}
 }
 
@@ -217,8 +217,8 @@ func TestImportMergeSkipsDuplicates(t *testing.T) {
 	if stats.Monitors != 0 {
 		t.Fatalf("expected 0 monitors (all skipped), got %d", stats.Monitors)
 	}
-	if stats.Skipped != 5 {
-		t.Fatalf("expected 5 skipped (1 group + 1 proxy + 1 channel + 2 monitors), got %d", stats.Skipped)
+	if stats.Skipped != 6 {
+		t.Fatalf("expected 6 skipped (1 group + 1 proxy + 1 channel + 2 monitors + 1 page), got %d", stats.Skipped)
 	}
 }
 

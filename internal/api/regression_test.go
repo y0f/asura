@@ -845,7 +845,7 @@ func TestSubscriberListNeedsSubscriberPermission(t *testing.T) {
 	}
 }
 
-// A plain export is a full backup; redaction is opt-in.
+// A plain portable configuration export includes secrets; redaction is opt-in.
 func TestExportIncludesSecretsByDefault(t *testing.T) {
 	env := newTestEnv(t, nil, false, nil)
 	ctx := context.Background()
@@ -907,15 +907,16 @@ func TestExportImportKeepsAgentAssignment(t *testing.T) {
 		t.Errorf("imported monitor: agent_enabled=%v agents=%v, want true [%d]", mon.AgentEnabled, ids, probe.ID)
 	}
 
-	// No such agent: the monitor must not run on every agent.
+	// No such agent: reject the entire import without granting any jobs.
 	bare := newTestEnv(t, nil, false, nil)
 	bare.store.CreateAgent(ctx, &storage.Agent{Name: "unrelated", Enabled: true})
-	mon, ids, stats := importInto(bare)
-	if mon.AgentEnabled && len(ids) == 0 {
-		t.Errorf("monitor restricted to a missing agent was imported to run on every agent")
+	w = bare.do("POST", "/api/v1/import?mode=merge", exported, admin)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "explicit mapping") {
+		t.Fatalf("missing destination enrollment must fail atomically: %d %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(stats, `"errors":1`) {
-		t.Errorf("unknown agent not counted as an import error: %s", stats)
+	snapshot, err := bare.store.SnapshotConfiguration(ctx)
+	if err != nil || len(snapshot.Monitors)+len(snapshot.Groups)+len(snapshot.Channels) != 0 {
+		t.Fatalf("missing enrollment left a partial import: %v", err)
 	}
 }
 
