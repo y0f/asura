@@ -6,8 +6,9 @@ a separate probe agent. SQLite is the default storage backend.
 ## Commands
 
 ```sh
-make check                 # source tests, vet, docs freshness, server/agent build
-make generate css          # pinned templ, static docs and standalone Tailwind
+make check                 # source tests, vet, server/agent build
+make generate css          # pinned templ and standalone Tailwind
+make docs-check            # Jekyll build, links, anchors, metadata; requires Ruby
 make test                  # full race suite; requires a supported C compiler
 ```
 
@@ -19,7 +20,8 @@ the actual commands and outcomes, including failures or checks that could not ru
 ## Boundaries
 
 - Edit `.templ` and `web/css` sources, then regenerate. Do not hand-edit
-  `*_templ.go`, compiled CSS or the complete HTML generated from `docs/pages`.
+  `*_templ.go` or compiled CSS. Documentation sources are Markdown, Jekyll layouts
+  and plain CSS under `docs`; build output belongs in `.build/docs`, not Git.
 - Keep pure monitor types in `internal/model`. The probe agent and checkers must
   not import server storage or link the SQLite driver.
 - Enforce each required action against the current object or destination scope.

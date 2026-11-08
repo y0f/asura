@@ -26,7 +26,7 @@ jobs:
           curl --fail --location --silent --show-error -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
           echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
           chmod +x tailwindcss
-      - name: Check generated templates, documentation and CSS
+      - name: Check generated templates and CSS
         run: |
           make generate css
           git diff --exit-code

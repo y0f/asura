@@ -71,10 +71,9 @@ Run the source check before handing off a change:
 make check
 ```
 
-This checks documentation freshness, runs `go vet` and the Go tests, and builds both commands using committed assets. It needs no running database service or Docker. Tests use temporary SQLite databases and some open loopback listeners. On Windows without Make, run the commands directly:
+This runs `go vet` and the Go tests, and builds both commands using committed assets. It needs no running database service, Docker or Ruby. Tests use temporary SQLite databases and some open loopback listeners. On Windows without Make, run the commands directly:
 
 ```powershell
-go run ./cmd/docsgen -check
 go vet ./...
 go test ./...
 go build ./cmd/asura ./cmd/asura-agent
@@ -100,9 +99,31 @@ For a resource-limited machine, set `GOMAXPROCS=1`, use `go test -p 1`, and run 
 
 ## Generated assets and releases
 
-Before committing generated output, run `make generate css`. Run it again and verify `git diff` stays unchanged. `make docs` rebuilds the static documentation and its CSS; `go run ./cmd/docsgen -check` checks documentation freshness. CI verifies generation without writing back to the branch, and gates release binaries and container publication on tests, formatting, static checks and clean generated output.
+Before committing generated application output, run `make generate css`. Run it again and verify `git diff` stays unchanged. CI verifies generation without writing back to the branch, and gates release binaries and container publication on tests, documentation checks, formatting, static checks and clean generated output.
 
-The documentation generator also writes page descriptions, canonical URLs, social metadata and `docs/sitemap.xml`. For a fork or another public host, generate with `go run ./cmd/docsgen -base-url https://docs.example.com/asura/` and use the same URL with `-check`. Ordinary navigation and assets remain relative, so local previews also work. The sitemap contains canonical page URLs without invented update dates; public hosting and search indexing are separate from local generation.
+The public documentation uses the same Jekyll, kramdown and plain CSS approach as Gophling. Edit the Markdown pages, `_layouts/default.html`, `_data/navigation.yml` and `assets/site.css` under `docs`. Preserve existing page permalinks and heading IDs when changing content. Internal plans and audits are excluded from the published artifact.
+
+Documentation development uses Ruby 3.4.12 and Bundler 4.0.24. Dependencies and checksums are locked in `docs/Gemfile.lock`; Ruby is only needed to build or preview the documentation:
+
+```bash
+gem install bundler -v 4.0.24
+cd docs
+bundle install
+cd ..
+make docs-check
+```
+
+`make docs-check` builds production HTML into `.build/docs` and checks local links, anchors, unique titles and descriptions, canonical URLs, the sitemap and the public file catalog. Build output is ignored by Git. CI and Pages use this same locked build and artifact check. To preview, run `bundle exec jekyll serve --strict_front_matter --destination ../.build/docs` from `docs`, then open `http://127.0.0.1:4000/asura/`. On PowerShell without Make, build and check directly:
+
+```powershell
+$env:JEKYLL_ENV = 'production'
+Push-Location docs
+bundle exec jekyll build --strict_front_matter --destination ../.build/docs
+Pop-Location
+go run ./cmd/docscheck -dir .build/docs
+```
+
+For a fork or another host, set the HTTPS origin in `docs/_config.yml` as `url` and the deployment path as `baseurl` (empty for the origin root). The build derives navigation, canonical links, social metadata and the sitemap from that configuration. Local compilation does not publish the site or submit it to search engines.
 
 `make release` builds the server and agent for Linux amd64 and arm64 and writes all four checksums to `dist/checksums.txt`. It uses the committed generated assets, so run `make generate css` before preparing a local release. CI retains a coverage profile for each Go version for 14 days.
 
@@ -143,7 +164,7 @@ The contributor is responsible for understanding and reviewing the whole change,
 - Enforce permissions in request and persistence paths, including nested reads, counts, bulk operations and current ownership. Hidden controls alone are not access control.
 - Keep stored credentials out of ordinary responses, logs and examples. Preserve omitted credentials on edits and test explicit replacement or clearing.
 - Keep checker and agent dependencies independent of server storage. Preserve the dependency guard in `scripts/test-agent-deps.sh`.
-- Edit `.templ`, CSS and documentation fragments, then regenerate. Use the templ version in `go.mod` and the pinned standalone Tailwind CLI, not an unrelated global generator.
+- Edit `.templ` and CSS, then regenerate. Use the templ version in `go.mod` and the pinned standalone Tailwind CLI. Check Markdown documentation with the locked Jekyll build.
 
 ## Issues
 

@@ -83,7 +83,7 @@ supplies the accessible name. No icon font, raster asset or external icon librar
 ## Build
 
 ```bash
-make css      # build + minify web/static/tailwind.css and docs/static/docs.css
+make css      # build + minify web/static/tailwind.css
 make watch    # rebuild on save during development
 make generate # templ generate (regenerate *_templ.go after editing *.templ)
 ```

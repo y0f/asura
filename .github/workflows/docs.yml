@@ -1,0 +1,44 @@
+name: Documentation
+
+on:
+  workflow_call:
+    inputs:
+      upload-pages-artifact:
+        description: Prepare the checked site for the Pages deployment job
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  JEKYLL_ENV: production
+  BUNDLE_FROZEN: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        with:
+          ruby-version: "3.4.12"
+          bundler: "4.0.24"
+          bundler-cache: true
+          working-directory: docs
+      - name: Build the public documentation
+        working-directory: docs
+        run: bundle exec jekyll build --strict_front_matter --destination "$RUNNER_TEMP/asura-pages"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Check links, anchors, metadata and public files
+        run: go run ./cmd/docscheck -dir "$RUNNER_TEMP/asura-pages"
+      - name: Upload checked Pages artifact
+        if: inputs.upload-pages-artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/asura-pages

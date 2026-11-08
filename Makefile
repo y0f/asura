@@ -8,21 +8,21 @@ TAILWIND := ./tailwindcss
 TEMPL_VERSION = $(shell go list -m -f '{{.Version}}' github.com/a-h/templ)
 TEMPL = go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 
-.PHONY: all build css docs watch dev check test lint run clean hash-key release generate agent
+.PHONY: all build css docs docs-check watch dev check test lint run clean hash-key release generate agent
 
 all: build
 
 generate:
 	$(TEMPL) generate
-	go run ./cmd/docsgen
 
 docs:
-	go run ./cmd/docsgen
-	$(TAILWIND) -i docs/tailwind.input.css -o docs/static/docs.css --minify
+	cd docs && JEKYLL_ENV=production bundle exec jekyll build --strict_front_matter --destination ../.build/docs
+
+docs-check: docs
+	go run ./cmd/docscheck -dir .build/docs
 
 css: generate
 	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --minify
-	$(TAILWIND) -i docs/tailwind.input.css -o docs/static/docs.css --minify
 
 watch:
 	$(TAILWIND) -i web/tailwind.input.css -o web/static/tailwind.css --watch
@@ -37,9 +37,9 @@ test: generate
 	go test -race -count=1 ./...
 
 # Source checks use the committed assets and temporary test databases. Generate
-# assets separately after changing templates, CSS, or documentation fragments.
+# assets separately after changing templates or CSS. Documentation has its own
+# optional Ruby toolchain and docs-check target.
 check:
-	go run ./cmd/docsgen -check
 	go vet ./...
 	go test ./...
 	go build ./cmd/asura ./cmd/asura-agent
