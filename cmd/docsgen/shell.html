@@ -4,9 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Page.Title}} · Asura documentation</title>
+  <title>{{.Page.SearchTitle}}</title>
+  <meta name="description" content="{{.Page.Description}}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Asura">
+  <meta property="og:title" content="{{.Page.SearchTitle}}">
+  <meta property="og:description" content="{{.Page.Description}}">
+  <meta property="og:url" content="{{.Canonical}}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{.Page.SearchTitle}}">
+  <meta name="twitter:description" content="{{.Page.Description}}">
   <link rel="icon" href="static/favicon.ico">
-  <link rel="canonical" href="{{.Page.File}}">
+  <link rel="canonical" href="{{.Canonical}}">
+  <link rel="sitemap" type="application/xml" href="sitemap.xml">
   <link rel="stylesheet" href="static/docs.css">
   <script src="static/docs.js"></script>
 </head>

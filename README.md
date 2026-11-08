@@ -1,6 +1,8 @@
-# Asura v2
+# Asura — uptime monitoring and status pages
 
-Self-hosted uptime monitoring with a Go server, an embedded web interface and SQLite storage. Run checks, track incidents and error budgets, send alerts, and publish status pages without a separate database service.
+Asura is an open-source, self-hosted uptime monitoring platform for websites, APIs and network services. Track availability, investigate incidents, and keep your team and customers informed with alerts and public status pages.
+
+Run a single Go binary with an embedded web interface and SQLite storage. Combine remote probes, maintenance schedules and monthly SLA reports with role-based access to individual monitors and groups. No separate frontend server or database service is required.
 
 [Documentation](https://y0f.github.io/asura/) · [Quick start](https://y0f.github.io/asura/getting-started.html) · [Access control](https://y0f.github.io/asura/access-control.html) · [Upgrading to v2](https://y0f.github.io/asura/upgrading.html) · [Contributing](CONTRIBUTING.md)
 

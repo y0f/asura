@@ -4,10 +4,12 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"html"
 	"html/template"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,14 +19,30 @@ import (
 //go:embed shell.html
 var shell string
 
-type page struct{ Slug, Title string }
+type page struct{ Slug, Title, Description string }
+
+const defaultBaseURL = "https://y0f.github.io/asura/"
 
 var pages = []page{
-	{"home", "Overview"}, {"getting-started", "Getting started"},
-	{"configuration", "Configuration"}, {"monitors", "Monitors"},
-	{"notifications", "Notifications"}, {"escalation-policies", "Escalation policies"},
-	{"sla", "SLA reports"}, {"status-pages", "Status pages"}, {"api", "API reference"},
-	{"backup", "Backup and restore"}, {"deployment", "Deployment"}, {"architecture", "Architecture"},
+	{"home", "Overview", "Open-source uptime monitoring with alerts, incident tracking, SLA reports and public status pages. Self-host Asura as a single Go binary."},
+	{"getting-started", "Getting started", "Install Asura, create your first uptime monitor and configure alerts. Start with Docker Compose or build the Go server from source."},
+	{"configuration", "Configuration", "Configure Asura's server, SQLite storage, API keys, sessions and monitoring settings. Includes environment variables and deployment options."},
+	{"monitors", "Monitors", "Monitor websites, APIs and network services with Asura. Configure HTTP, DNS, TLS, heartbeat and other checks, assertions and remote probes."},
+	{"notifications", "Notifications", "Send Asura uptime alerts through email, webhooks and messaging services. Configure notification channels, event filters and delivery settings."},
+	{"escalation-policies", "Escalation policies", "Escalate unresolved Asura incidents with timed notification steps. Configure policy delays, repeats and monitor assignments."},
+	{"sla", "SLA reports", "Review monthly uptime and error budgets in Asura. Learn how SLA targets, check samples, reports and budget alerts are calculated."},
+	{"status-pages", "Status pages", "Publish service availability with Asura status pages. Configure monitor groups, branding, password protection and subscriber notifications."},
+	{"api", "API reference", "Automate Asura through its REST API. Reference authentication, permissions, monitor management, incidents, status pages and reporting endpoints."},
+	{"backup", "Backup and restore", "Back up and restore Asura safely. Preserve the database, configuration and encryption key, and understand configuration export limits."},
+	{"deployment", "Deployment", "Deploy Asura with Docker or systemd. Configure HTTPS, reverse proxies, trusted headers, subpaths and persistent storage."},
+	{"architecture", "Architecture", "Explore Asura's Go server, scheduler, probe agents, SQLite storage and embedded web interface. Understand its runtime and data flow."},
+}
+
+func (p page) SearchTitle() string {
+	if p.Slug == "home" {
+		return "Asura | Self-hosted uptime monitoring and status pages"
+	}
+	return p.Title + " | Asura documentation"
 }
 
 func (p page) File() string {
@@ -62,12 +80,53 @@ func content(source string) string {
 	})
 }
 
-func generate(root string, check bool) error {
+func canonicalURL(base *url.URL, p page) string {
+	if p.Slug == "home" {
+		return base.String()
+	}
+	return base.ResolveReference(&url.URL{Path: p.File()}).String()
+}
+
+func siteURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return nil, fmt.Errorf("base URL must be an absolute HTTP(S) URL without credentials, query or fragment")
+	}
+	if !strings.HasSuffix(u.Path, "/") {
+		u.Path += "/"
+	}
+	return u, nil
+}
+
+func generate(root, baseURL string, check bool) error {
+	base, err := siteURL(baseURL)
+	if err != nil {
+		return err
+	}
 	t, err := template.New("docs").Parse(strings.ReplaceAll(shell, "\r\n", "\n"))
 	if err != nil {
 		return err
 	}
 	var stale []string
+	write := func(name string, output []byte) error {
+		path := filepath.Join(root, name)
+		if check {
+			current, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(current, output) {
+				stale = append(stale, path)
+			}
+			return nil
+		}
+		return os.WriteFile(path, output, 0644)
+	}
+	type sitemapURL struct {
+		Location string `xml:"loc"`
+	}
+	sitemap := struct {
+		XMLName xml.Name     `xml:"urlset"`
+		XMLNS   string       `xml:"xmlns,attr"`
+		URLs    []sitemapURL `xml:"url"`
+	}{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
 	for _, p := range pages {
 		fragment, err := os.ReadFile(filepath.Join(root, "pages", p.Slug+".html"))
 		if err != nil {
@@ -79,22 +138,25 @@ func generate(root string, check bool) error {
 		}
 		var out bytes.Buffer
 		err = t.Execute(&out, struct {
-			Page    page
-			Pages   []page
-			Content template.HTML
-		}{p, pages, template.HTML(content(source))})
+			Page      page
+			Pages     []page
+			Canonical string
+			Content   template.HTML
+		}{p, pages, canonicalURL(base, p), template.HTML(content(source))})
 		if err != nil {
 			return err
 		}
-		path := filepath.Join(root, p.File())
-		if check {
-			current, err := os.ReadFile(path)
-			if err != nil || !bytes.Equal(current, out.Bytes()) {
-				stale = append(stale, path)
-			}
-		} else if err := os.WriteFile(path, out.Bytes(), 0644); err != nil {
+		if err := write(p.File(), out.Bytes()); err != nil {
 			return err
 		}
+		sitemap.URLs = append(sitemap.URLs, sitemapURL{canonicalURL(base, p)})
+	}
+	sitemapXML, err := xml.MarshalIndent(sitemap, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := write("sitemap.xml", append([]byte(xml.Header), append(sitemapXML, '\n')...)); err != nil {
+		return err
 	}
 	if len(stale) > 0 {
 		return fmt.Errorf("stale documentation: %s; run go run ./cmd/docsgen", strings.Join(stale, ", "))
@@ -104,8 +166,9 @@ func generate(root string, check bool) error {
 
 func main() {
 	check := flag.Bool("check", false, "check committed pages without changing files")
+	baseURL := flag.String("base-url", defaultBaseURL, "public documentation URL for canonical links and sitemap")
 	flag.Parse()
-	if err := generate("docs", *check); err != nil {
+	if err := generate("docs", *baseURL, *check); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
