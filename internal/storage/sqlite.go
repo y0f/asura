@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -39,11 +41,14 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 	// modernc.org/sqlite expects PRAGMAs via the _pragma DSN parameter; the
 	// mattn-style _journal_mode/_busy_timeout keys are silently ignored.
 	pragmas := "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)"
+	// path is a filesystem name, not a caller-supplied SQLite URI. Escape
+	// reserved characters so '#' cannot truncate it and '?' cannot add options.
+	fileURI := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), OmitHost: true}).String()
 
 	// auto_vacuum is a write operation and must be set before any table is
 	// created, so it goes only on the write connection and only takes effect on
 	// a fresh database. The read-only pool must not set it.
-	writeDB, err := sql.Open("sqlite", "file:"+path+pragmas+"&_pragma=auto_vacuum(INCREMENTAL)")
+	writeDB, err := sql.Open("sqlite", fileURI+pragmas+"&_pragma=auto_vacuum(INCREMENTAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open write db: %w", err)
 	}
@@ -51,7 +56,7 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 	writeDB.SetMaxIdleConns(1)
 
 	// Read pool: multiple connections
-	readDB, err := sql.Open("sqlite", "file:"+path+pragmas+"&mode=ro")
+	readDB, err := sql.Open("sqlite", fileURI+pragmas+"&mode=ro")
 	if err != nil {
 		writeDB.Close()
 		return nil, fmt.Errorf("open read db: %w", err)
