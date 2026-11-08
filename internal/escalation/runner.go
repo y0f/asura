@@ -112,6 +112,7 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 	// notification; it fires on the first tick after the window ends.
 	if inMaint, err := r.store.IsMonitorInMaintenance(ctx, inc.MonitorID, time.Now()); err != nil {
 		r.logger.Error("escalation: check maintenance", "error", err, "monitor_id", inc.MonitorID)
+		return
 	} else if inMaint {
 		return
 	}

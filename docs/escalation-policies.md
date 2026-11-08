@@ -23,11 +23,15 @@ Escalation policies define time-based notification chains for incidents. When an
 
 1. A monitor goes down and an incident is created
 2. If the monitor has an escalation policy, Asura starts the escalation chain
-3. Each step fires after its configured delay, sending notifications to the step's channels
+3. Due steps queue notifications to their enabled channels
 4. When the incident is acknowledged or resolved, the escalation stops
-5. If **repeat** is enabled, the chain restarts from step 1 after the last step fires
+5. If **repeat** is enabled, the chain schedules step 1 again after the last step
 
-Escalation notifications use the `incident.escalated` event type and bypass normal channel event filters : they always fire regardless of the channel's event subscription settings.
+The runner checks due steps every 30 seconds. The first delay starts when the chain is created; each later delay starts after the previous step's notification admission succeeds. A zero delay makes a step due on the next runner tick, rather than sending synchronously. Repeating chains wait at least five minutes, or the first step's configured delay if longer, before starting another cycle.
+
+Escalation notifications use `incident.escalated` and bypass channel event filters and the monitor's ordinary channel selection. Disabled channels still receive nothing. Active maintenance holds the step, and a failed maintenance lookup also leaves it pending until a later successful lookup.
+
+A notification admission failure retains the step for retry. If only some recipients were admitted, those recipients may receive the repeated step too. Queue admission is not proof of delivery; the bounded, in-memory dispatcher does not provide durable or exactly-once delivery. See [delivery behavior](notifications.html#delivery-and-shutdown).
 
 ## Creating a policy {#creating-a-policy}
 
@@ -41,7 +45,7 @@ Each policy has:
 - **Repeat** : restart from step 1 after the last step
 - **Steps** : ordered list of notification escalations
 
-Each step specifies a **delay in minutes** (0 = immediate) and one or more **notification channels** to send to.
+Each step specifies a **delay in minutes** (0 = next runner tick) and one or more **notification channels** to send to.
 
 ## Assigning to a monitor {#assigning-to-a-monitor}
 
