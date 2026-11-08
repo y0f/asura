@@ -43,7 +43,7 @@ Benchmarked with **1,000+ monitors on a $5/month VPS**.
 | Feature | Details |
 |---|---|
 | **Monitoring** | [19 monitor types](https://y0f.github.io/asura/monitors.html), multi-step HTTP checks, assertions, response-change detection and distributed probes. |
-| **Alerting** | [13 integrations](https://y0f.github.io/asura/notifications.html), per-monitor routing, escalation policies and on-call schedules. |
+| **Alerting** | [13 integrations](https://y0f.github.io/asura/notifications.html): webhooks, email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix and Gotify. Per-monitor routing, escalation policies and on-call schedules. |
 | **Team access** | [Fine-grained roles](https://y0f.github.io/asura/access-control.html), action permissions and monitor/group scopes, with separate diagnostic access, API keys and TOTP. |
 | **Custom status pages** | Your logo, favicon, header and CSS; grouped services, incident updates, RSS, email subscriptions and optional password protection. |
 | **Operations** | Live dashboards, bulk actions, incident history, maintenance windows and a REST API. |
