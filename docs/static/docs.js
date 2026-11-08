@@ -5,7 +5,7 @@
   try {
     root.dataset.theme = localStorage.getItem('docs-theme') === 'dark' ? 'dark' : 'light';
   } catch (_) { /* Use the readable light default when storage is unavailable. */ }
-  const pages = ['home', 'getting-started', 'configuration', 'monitors', 'notifications',
+  const pages = ['home', 'getting-started', 'upgrading', 'configuration', 'access-control', 'monitors', 'notifications',
     'escalation-policies', 'sla', 'status-pages', 'api', 'backup', 'deployment', 'architecture'];
   const restoreBookmark = () => {
     const legacy = location.hash.slice(1);

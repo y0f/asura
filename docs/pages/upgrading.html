@@ -1,0 +1,43 @@
+<h1>Upgrading to v2</h1>
+
+<p>Plan an upgrade around the database, configuration and credentials together. V2 retains the single-binary deployment model and adds explicit resource actions, reusable roles and scoped access. Review permissions before exposing the upgraded instance to existing clients.</p>
+
+<h2>Before replacing the binary</h2>
+
+<ol>
+  <li>Record the installed version, service command, configuration path and persistent database path.</li>
+  <li>Take a consistent <a href="backup.html">database backup</a> and save the matching configuration, environment files and <code>database.encryption_key</code> if used. Keep the previous binary or image reference.</li>
+  <li>Choose the server artifact for the operating system and architecture, verify its published checksum, and review the release notes. Use the <a href="getting-started.html">installation guide</a> for the supported commands and artifact names.</li>
+  <li>Try the new version against a backup in an isolated environment. Prevent duplicate checks, notifications and agent connections while reviewing the restored configuration.</li>
+</ol>
+
+<p>Asura applies database migrations during startup. A JSON configuration export is useful for transferring supported definitions, but does not preserve history or every resource needed for rollback.</p>
+
+<h2>Review access rules</h2>
+
+<p>V2 separates reading a resource from changing it. Grants such as <code>monitors.update</code>, <code>monitors.pause</code> and <code>notifications.test</code> authorize different operations. A resource's <code>.write</code> grant covers that resource's mutation actions; it does not imply read access or access to another resource.</p>
+
+<p>Reusable roles live under <code>auth.roles</code>. Keys receive roles through <code>role_bindings</code>, with an explicit global scope or selected monitor and group IDs. Monitor and group scopes restrict the monitors a binding can affect; they do not turn group selectors into permission to administer groups. The <a href="access-control.html">access-control guide</a> contains the full schema, built-in roles, legacy compatibility rules, and examples.</p>
+
+<p>Review every existing key against its actual job. Broad V1-era permissions used for unrelated operations may need separate V2 resource grants. Keep configuration import and secret-bearing export authority on explicit super-admin keys, and use ordinary roles for routine work. Verify both allowed operations and denied neighboring resources with representative keys.</p>
+
+<h2>Review API clients and saved forms</h2>
+
+<ul>
+  <li>Ordinary resource reads do not return stored credentials. Editing an unchanged destination can preserve supported saved secrets when those values are left blank; explicit clear controls remove them. Changing a credential destination requires deliberate replacement or clearing.</li>
+  <li>Monitor <code>PUT</code> requests represent the monitor configuration rather than a partial patch. Preserve authorized settings when updating one field. Omitted relationship fields keep their current assignments atomically; explicitly supplied empty values clear only the relationships you are authorized to change; see <a href="notifications.html#per-monitor-routing">per-monitor routing</a>.</li>
+  <li>Notification filters distinguish all events from a selected list. A selected list must contain at least one supported event. Review filters when adding new event types.</li>
+  <li>Agent jobs use explicit assignments. The upgrade converts eligible implicit assignments to explicit assignments for existing enabled agents. Newly registered agents receive no monitor jobs until assigned. Upgrade the server and agents together: v2 jobs carry a configuration revision that agent results must return.</li>
+  <li>Heartbeat URLs are credentials. Newly created or imported heartbeat monitors show their fresh token once; ordinary reads and configuration exports do not recover it.</li>
+  <li>Check reverse-proxy and <code>server.base_path</code> configuration, login redirects, static assets, live refresh and public status-page URLs after switching versions.</li>
+</ul>
+
+<h2>Switch and verify</h2>
+
+<p>Stop the old process, replace its binary or pinned container image, and restart with the intended configuration and persistent storage. Do not run two server processes against the same database during the switch.</p>
+
+<p>Check startup logs, authentication, permitted navigation, representative monitor results, incident history, channel configuration and status pages. Confirm that agent assignments and notification routing still match your intended setup. Test notification delivery deliberately with an authorized key and a controlled destination.</p>
+
+<h2>Rollback</h2>
+
+<p>If rollback is needed, stop the new process and restore the pre-upgrade database, configuration and encryption key together with the matching previous binary or image. Preserve the failed-upgrade files separately for diagnosis. Replacing only the binary does not reverse database migrations.</p>
