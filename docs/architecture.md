@@ -7,7 +7,7 @@ permalink: "/architecture.html"
 
 # Architecture {#architecture}
 
-Single binary, channel-based pipeline, SQLite storage. Everything talks through Go channels with backpressure.
+Asura's Go server combines scheduling, checks, incident processing, notifications and an embedded web interface. SQLite is the default local storage. Bounded queues connect background workers; request handlers and storage operations use explicit calls and transactions.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -38,36 +38,41 @@ A min-heap priority queue ordered by next-due time. Each tick, the scheduler pop
 
 When **adaptive intervals** are enabled, the scheduler adjusts timing per monitor:
 
-- Stable monitors (60+ consecutive successes) slow to 2x base interval
-- Flapping monitors snap to 0.5x for faster detection
-- Recovering monitors return to base interval
+- After 60 consecutive successes, intervals increase in 1.25x steps up to twice the configured interval.
+- A failure after a slowdown schedules the next check at half the base interval.
+- Continuing failures or a recent recovery use the base interval, with a five-second minimum.
+
+Only one local check per monitor can be queued or in flight. A full worker queue skips that dispatch and records the saturation; it does not block the scheduler indefinitely. Disabling or reloading a monitor does not create a second in-flight check. Manual and heartbeat monitors are handled separately from active protocol checks.
 
 ## Worker Pool {#worker-pool}
 
-Fixed-size goroutine pool (default 10, set via `monitor.workers`). Workers pull jobs off the channel, invoke the protocol checker's `Check()`, and measure response time. Assertion evaluation, status transitions, and threshold logic happen downstream in the result processor — not in the pool. Bounded channel capacity means the scheduler blocks when all workers are busy.
+A fixed-size goroutine pool (default 10, configured with `monitor.workers`) consumes queued checks, invokes the protocol checker and measures response time. Assertion evaluation, state transitions and incident thresholds happen in result processing. Remote agents run only explicitly delegated, eligible jobs and must return the job's current configuration revision.
 
 ## Result Processor {#result-processor}
 
 Receives check results from the worker pool. For each result:
 
-1. Persists the check result to SQLite
-2. Updates monitor state (status, consecutive counts, response time)
-3. Evaluates failure/success thresholds for incident transitions
-4. Computes content diffs if `track_changes` is enabled
-5. Publishes events to the dispatcher
+1. Validates the result against the current monitor configuration and evaluates assertions.
+2. Commits check history and the corresponding monitor state together. Obsolete or revoked agent jobs are rejected before those writes.
+3. Processes incident thresholds and recovery, and computes tracked content changes.
+4. Publishes authorized live-event signals and queues notifications after successful persistence.
+
+State locks serialize competing transitions for a monitor. Persistence failures are surfaced or logged rather than committing an in-memory status first. Maintenance keeps checks and incident state current while deferring incident announcements; it does not erase an outage.
 
 ## Dispatcher {#dispatcher}
 
 Routes events to notification channels. Each channel type has its own sender behind the `Sender` interface. 13 implementations: Webhook, Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, and Gotify. If a monitor has `notification_channel_ids` set, only those channels fire. Otherwise all matching channels get the event.
 
+Each notifier owns a bounded 100-job queue and 10 delivery workers. Admission and sends are cancelable, retries are bounded, and shutdown joins delivery before closing storage. The queue is not durable across process failure. See [delivery behavior](notifications.html#delivery-and-shutdown) for exact limits.
+
 ## Storage {#storage}
 
 SQLite in WAL mode with separate connection pools:
 
-- **Write pool**: Single writer protected by `writeMu` mutex. all INSERT/UPDATE/DELETE go through this
-- **Read pool**: Multiple concurrent readers via `readerPool()`. all SELECT queries
+- **Write pool**: one connection serializes writes and writer transactions.
+- **Read pool**: separate read-only connections serve queries and consistent read snapshots.
 
-Reads never block on writes. The `Store` interface covers everything from monitors to request logs.
+WAL permits concurrent readers and a writer, subject to SQLite locking and checkpoint behavior. Foreign keys, a bounded busy timeout and transactions enforce integrity. Long-range uptime queries use daily rollups plus uncovered raw intervals. The `Store` interface separates handlers and background services from SQL implementation details.
 
 ## Checker Registry {#checker-registry}
 
@@ -81,23 +86,24 @@ Each checker implements `Checker` with a `Check(ctx, monitor)` method and gets r
 | ICMP | Ping (raw socket or unprivileged) |
 | TLS | Certificate expiry checking |
 | WebSocket | WS connect with send/expect |
-| Command | Execute shell commands |
+| Command | Execute a configured process and arguments |
 | Docker | Container state via Docker socket |
 | Domain | WHOIS expiry lookups |
 | gRPC | gRPC health check protocol |
 | MQTT | MQTT 3.1.1 connect + subscribe |
 | HTTP Multi-Step | Chained HTTP requests with variable extraction |
 | SMTP | Mail server connect (optional STARTTLS) |
-| SSH | SSH server handshake |
+| SSH | Validate an SSH identification banner |
 | Redis | Redis PING |
-| PostgreSQL | PostgreSQL connection check |
+| PostgreSQL | Validate a PostgreSQL startup response |
 | UDP | UDP send/expect |
 
 ## Project Structure {#project-structure}
 
 ```
 asura/
-├── cmd/asura/         # Entry point, setup
+├── cmd/asura/         # Server entry point and setup
+├── cmd/asura-agent/   # Remote probe agent
 ├── internal/
 │   ├── analytics/     # Request log analytics and rollups
 │   ├── api/           # API handlers (JSON endpoints)
@@ -114,10 +120,9 @@ asura/
 │   ├── storage/       # SQLite store, migrations
 │   ├── totp/          # TOTP two-factor authentication
 │   ├── validate/      # Input validation
-│   └── web/           # Web UI handlers (template rendering)
+│   └── web/           # Web handlers and views/*.templ components
 ├── web/
-│   ├── templates/     # HTML templates (layout + feature dirs)
-│   └── static/        # CSS, JS, images
+│   └── static/        # Embedded CSS, JavaScript and images
 ├── deploy/            # nginx.conf, Dockerfile, docker-compose
-└── docs/              # Documentation site
+└── docs/              # Jekyll/kramdown documentation source
 ```

@@ -86,13 +86,19 @@ Monitor and group selectors apply to `monitors`, `incidents`, `sla`, `request_lo
 
 Other resources require `all: true`, including group administration, tags, notification channels, escalation policies, proxies, agents, status-page administration, subscriber contacts, on-call schedules, audit records, settings, database operations and aggregate metrics. A group selector grants access to its member monitors, not to administration of that group. A role containing any global-only permission cannot be bound to monitor or group IDs; split it into separate roles and bindings.
 
+`metrics.read` is an explicit global operational-export permission. Its output includes monitor names, types and tags and global incident/request aggregates. It excludes credentials, targets and settings and grants no ordinary monitor API reads. Do not use it as a substitute for a narrowly scoped viewer role.
+
 Related resource access is independent. A monitor permission does not grant channel secrets, proxy settings, agent credentials, subscriber contacts or unrelated nested names. Necessary relationship IDs may remain visible without the related resource's read permission. Changing a relationship requires the appropriate assignment authority and access to the selected related resource; unrelated edits preserve inaccessible relationships.
 
 ## Creation, cloning and moving monitors {#creation-cloning-and-moving-monitors}
 
-A new monitor has no existing ID to match. Creating it therefore requires `monitors.create` for its destination group, or a global grant. Creating an ungrouped monitor requires a global grant. Cloning requires source read and clone authority, plus clone authority for the destination group; an ID-only clone grant cannot create another object.
+A new monitor has no existing ID to match. Creating it therefore requires `monitors.create` for its destination group, or a global grant. Creating an ungrouped monitor requires a global grant. Initial placement does not require `groups.read`; without that permission the form uses a neutral group-ID label. Cloning requires source read and clone authority, plus clone authority for the destination group; an ID-only clone grant cannot create another object. Copied channel, tag, proxy, escalation-policy and agent assignments also require destination assignment authority and the related resource's read permission.
 
-Changing a monitor's group requires update and assignment authority over the current monitor and authority over the destination group. An ID-only grant permits ordinary edits that keep the group unchanged, but does not authorize moving the monitor into arbitrary groups. Removing group membership requires global destination authority. Bulk operations authorize every requested ID before changing any records; a missing or inaccessible ID prevents the complete operation.
+Changing a monitor's group requires update and assignment authority over both the current monitor and destination group, plus `groups.read`. An ID-only grant permits ordinary edits that keep the group unchanged, but does not authorize moving the monitor into arbitrary groups. Removing group membership requires global destination authority. Bulk operations authorize every requested ID before changing any records; a missing or inaccessible ID prevents the complete operation.
+
+Maintenance mutations require the relevant action over every old and new target. Updating active state additionally requires `maintenance.toggle`; unrelated edits do not. Omitted API `active` and `monitor_ids` fields preserve current transactional values. An all-monitor window requires global authority.
+
+Status-page publication is independent from page administration. Assigning or reordering members, or expanding public exposure, requires monitor-read authority over all affected members. Publishing incidents additionally requires incident-read authority on those members. Metadata-only edits can preserve inaccessible memberships; analytics changes require `super_admin`. See [Status pages](status-pages.html).
 
 ## Global compatibility grants and migration {#global-compatibility-grants-and-migration}
 

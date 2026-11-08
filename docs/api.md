@@ -25,7 +25,7 @@ Pagination: `?page=1&per_page=20` applies to the paginated list endpoints only: 
 
 Each endpoint requires its resource and action scope. List and detail endpoints use `resource.read`; creates, updates, and deletes use `resource.create`, `resource.update`, and `resource.delete`. `resource.write` grants all mutations for that resource, without read access. Actions such as `monitors.pause`, `incidents.acknowledge`, and `notifications.test` can be granted separately. See [Configuration](configuration.html) for the full scope registry and v1 migration mappings.
 
-Exceptions: monitor SLA endpoints use `sla.read`; notification delivery history uses `notification_history.read`; request logs use `request_logs.read`; on-call rotations use `on_call`; status pages use `status_pages`; escalation policies use `escalation_policies`. Monitor cloning requires `monitors.read` and `monitors.clone`. Bulk monitor operations require the corresponding action; group assignment requires `monitors.assign` and `groups.read`. `/metrics` uses `metrics.read`.
+Exceptions: monitor SLA endpoints use `sla.read`; notification delivery history uses `notification_history.read`; request logs use `request_logs.read`; on-call rotations use `on_call`; status pages use `status_pages`; escalation policies use `escalation_policies`. Cloning requires source read and clone authority, destination clone authority, and permission to assign any copied relationships. Bulk monitor operations require the corresponding action on every selected monitor; group moves require `monitors.update` and `monitors.assign` for the source and destination, plus `groups.read`. `/metrics` uses the global `metrics.read` permission.
 
 ### Stored credentials {#stored-credentials}
 
@@ -53,6 +53,8 @@ Heartbeat (push) monitors expect periodic pings from your job or service. Hit th
 | --- | --- | --- |
 | `GET` | `/metrics` | Prometheus exposition format |
 
+`metrics.read` grants a global operational export containing monitor names, types and tags, plus global incident and request aggregates. Treat it as sensitive operational data. It does not expose credentials, targets or settings, and does not grant ordinary monitor API reads. It cannot be restricted with monitor or group selectors.
+
 ## Monitors {#monitors}
 
 | Method | Endpoint | Description |
@@ -74,7 +76,7 @@ Heartbeat (push) monitors expect periodic pings from your job or service. Hit th
 
 See [Monitors](monitors.html) for the full field reference and protocol settings.
 
-`PUT /api/v1/monitors/{id}` replaces the monitor's `agent_ids`: leaving the field out removes the agent assignment, so the monitor runs on every agent. `GET /api/v1/monitors` does not include `agent_ids`, so read the monitor with `GET /api/v1/monitors/{id}` before you edit and send it back.
+Omitted relationship fields on `PUT` preserve the current assignments inside the update transaction. This includes `agent_ids`, `monitor_tags`, `notification_channel_ids`, `group_id`, `proxy_id` and `escalation_policy_id`. An explicit empty array clears a list assignment; null clears an optional single relationship. Changing an assignment requires `monitors.assign` and the related resource's read permission. Empty agent assignments mean no remote jobs. Initial group placement is authorized by destination `monitors.create`; later group moves also require source and destination update/assignment authority and `groups.read`.
 
 ### Bulk Operations {#bulk-operations}
 
@@ -91,7 +93,7 @@ Returns `{"status": "pause", "affected": 3}`. Max 500 monitors per request.
 
 ### Clone {#clone}
 
-`POST /api/v1/monitors/{id}/clone` creates a duplicate of the monitor with `" (copy)"` appended to the name. The clone starts paused (`enabled: false`). Notification channel assignments are copied. Returns the new monitor.
+`POST /api/v1/monitors/{id}/clone` creates a duplicate with `" (copy)"` appended to its name. The clone starts paused (`enabled: false`). Copied relationships require the same assignment authority as new assignments. The response includes only the identifier when the caller cannot read the new monitor.
 
 ### Set Manual Status {#set-manual-status}
 
@@ -103,7 +105,7 @@ POST /api/v1/monitors/{id}/status
 }
 ```
 
-Only works for monitors with `type: "manual"`. Valid statuses: `up`, `down`, `degraded`. Creates a check result and triggers incidents normally.
+Only works for monitors with `type: "manual"` and requires `monitors.status` on that monitor. Valid statuses are `up`, `down` and `degraded`. The operation records a check and changes state immediately. Down or degraded opens or updates an incident; up resolves it. Maintenance can defer incident notifications.
 
 ## Status Pages {#status-pages}
 
@@ -117,7 +119,11 @@ Only works for monitors with `type: "manual"`. Valid statuses: `up`, `down`, `de
 
 Each status page has its own `slug` (URL path), `title`, `description`, and monitor set. Monitors are assigned per-page with optional `sort_order` and `group_name` for display grouping. The page is served at `/{slug}`.
 
+Membership changes and exposure expansion require `monitors.read` on all affected members, plus independent `incidents.read` when incident publication is enabled. Metadata, protection and membership are saved atomically. Omitted memberships and secrets are preserved. Analytics changes require `super_admin`; ordinary page mutation without `status_pages.read` returns only the identifier. See [Status pages](status-pages.html) for publication and branding rules.
+
 The public API for a specific page is available at `GET /api/v1/status-pages/{id}/public` (no API key required). Returns public fields only. It is served when the page has `enabled` or `api_enabled` on and returns 404 only when both are off. A password-protected page also needs the page password in the `X-Status-Page-Password` header (attempts are rate-limited like logins).
+
+An unsampled member has `uptime_90d: null` and `total_checks: 0`. Empty pages and pending data produce `overall_status: "unknown"`; known degraded or down states take precedence. Storage failures return an error rather than fabricated healthy or empty data.
 
 ### Subscribers {#subscribers}
 
@@ -136,7 +142,7 @@ POST /api/v1/status-pages/{id}/subscribe
 }
 ```
 
-Subscribe is public so status page visitors can opt in. It needs a page with both `enabled` and `api_enabled` on (404 otherwise). Email subscriptions trigger a confirmation email when subscriptions are enabled in the server config; webhook subscriptions are confirmed immediately. The subscribers endpoint requires `subscribers.read` and returns `{"count":N,"data":[...]}` with confirmed contacts. The legacy `readonly` role does not include this scope.
+Subscribe is public so status page visitors can opt in. It needs a page with both `enabled` and `api_enabled` on (404 otherwise). Email subscriptions queue a confirmation when subscriptions and mail are available; unavailable mail or failed queue admission returns 503 so the visitor can retry. Webhook subscriptions are confirmed immediately. The subscribers endpoint requires `subscribers.read` and returns `{"count":N,"data":[...]}` with confirmed contacts. The legacy `readonly` role does not include this scope.
 
 ## Status Badges {#status-badges}
 
@@ -173,7 +179,7 @@ Embed in a README:
 | `name` | string | yes | Group name (max 255 chars) |
 | `sort_order` | int |  | Display order (default: 0) |
 
-Assign monitors to a group by setting `group_id` on the monitor. Deleting a group ungroups its monitors.
+Assign monitors by setting `group_id` under the creation or move permissions described above. Deleting a nonempty group returns 409; move or ungroup its monitors first. The occupancy check and deletion are atomic. Group administration does not grant read access to its monitors.
 
 ## Proxies {#proxies}
 
@@ -193,9 +199,11 @@ Assign monitors to a group by setting `group_id` on the monitor. Deleting a grou
 | `port` | int | yes | Proxy port (1-65535) |
 | `auth_user` | string |  | Authentication username |
 | `auth_pass` | string |  | Authentication password |
-| `enabled` | bool |  | Whether proxy is active (default: true) |
+| `enabled` | bool |  | Whether proxy is active (API creation default: false; the web creation form starts enabled) |
 
-Assign a proxy to a monitor by setting `proxy_id`. HTTP proxies work with HTTP monitors; SOCKS5 proxies work with all protocol types.
+Assign a proxy with `proxy_id`. HTTP proxies are supported by HTTP and WebSocket checks. SOCKS5 is supported by HTTP, WebSocket, TCP, TLS, domain WHOIS, gRPC and MQTT checks, plus DNS checks with an explicit `settings.server` using TCP. Other types currently do not apply proxy settings, including HTTP multi-step, SSH, SMTP, Redis, PostgreSQL, UDP and ICMP. Do not rely on an assigned proxy to route an unsupported check.
+
+Proxy reads hide `auth_pass`. An omitted or blank password on update retains the saved value; `clear_auth_pass: true` removes it, and a nonempty value replaces it. Other omitted fields are preserved. An ordinary editor changing protocol, host, port or authentication username must replace or remove a retained password. A super administrator can retain it across that destination change. Mutations without `proxies.read` return only the proxy ID.
 
 Unless `allow_private_targets` is enabled, a proxied target (and, for HTTP monitors, every redirect target) is refused when it is a private or reserved IP or when its hostname resolves to one. The check uses Asura's own DNS resolver, but the proxy is still given the hostname and resolves it on its own, in its own network (which is why proxies are used: other regions, split DNS, hostname ACLs). The check therefore protects the network Asura runs in, but cannot constrain what the proxy reaches: a name can resolve differently for the proxy, or change between the two lookups. A hostname Asura cannot resolve at all (one that only exists in the proxy's network) is passed to the proxy unchecked. To keep a proxy away from internal services, use the proxy's own access controls (ACLs).
 
@@ -257,7 +265,9 @@ Set `sla_target` (e.g. `99.9`) on a monitor to enable SLA tracking. The response
 | `PUT` | `/api/v1/maintenance/{id}` | Update |
 | `DELETE` | `/api/v1/maintenance/{id}` | Delete |
 
-`recurring` values: `""` (one-time), `"daily"`, `"weekly"`, `"monthly"`
+`recurring` values are `""` (one-time), `"daily"`, `"weekly"`, `"monthly"`, `"manual"` and `"cron"`. Cron windows also specify `cron_expr`.
+
+Each mutation requires its action over every old and new target; an all-monitor window requires global authority. Updates additionally require `maintenance.toggle` only when `active` changes. Omitted `active` and `monitor_ids` preserve the current values. During maintenance, checks and incident state continue while incident announcements are deferred.
 
 ## Request Logs {#request-logs}
 
@@ -310,7 +320,7 @@ Imports accept up to 32 MiB of JSON and commit as one transaction. Any validatio
 | `name` | string | yes | Tag name (max 50 chars) |
 | `color` | string |  | Hex color (default: `#808080`) |
 
-Tags are global. Assign tags to a monitor by including `tag_ids` (array of tag IDs) and optional `tag_values` (array of per-monitor values) when creating or updating a monitor. Filter the monitor list with `?tag={id}`. Deleting a tag removes it from all monitors. Tags and per-monitor values are included in Prometheus metrics and exports.
+Tags are global. Assign them with `monitor_tags`, for example `[{"tag_id":1,"value":"production"}]`, on monitor creation or update. Changing assignments requires `monitors.assign` on the monitor and `tags.read`; omission preserves current assignments. Monitor reads without `tags.read` expose necessary tag IDs without names, colors or values. Deleting a tag removes its monitor assignments. Tags and per-monitor values are included in global Prometheus metrics and configuration exports.
 
 ## Database {#database}
 
@@ -330,11 +340,17 @@ Tags are global. Assign tags to a monitor by including `tag_ids` (array of tag I
 
 ### Server-Sent Events {#server-sent-events}
 
-`GET /api/v1/events` opens a persistent SSE connection. The server pushes events when monitor status changes, incidents are created or resolved, and other state changes occur. Requires `monitors.read` permission.
+`GET /api/v1/events` opens an SSE stream using an API key; the web UI uses session-authenticated `GET /events`. Admission requires any scoped `monitors.read`, `incidents.read` or `sla.read` capability. Each event is then authorized separately for its monitor:
 
-Event types: `incident.created`, `incident.resolved`, `content.changed`, `cert.changed`, `sla.breach`. Each event contains a JSON payload in the `data` field.
+| Event family | Required read authority |
+| --- | --- |
+| `incident.created`, `incident.acknowledged`, `incident.resolved`, `incident.reminder`, `incident.escalated` | `incidents.read` |
+| `content.changed`, `cert.changed` | `monitors.read` |
+| `sla.breach` | `sla.read` |
 
-The web UI connects via `GET /events` (session auth). A heartbeat ping is sent every 30 seconds. Max 100 concurrent connections.
+The JSON `data` contains `monitor_id`; incident events also contain `incident_id` and optionally `status` (`open`, `acknowledged` or `resolved`). Nonincident events contain only the monitor ID. Payloads contain no names, settings, credentials or full resource objects. Unknown event types are dropped.
+
+The server rechecks the current principal and object scope before every queued event. A 30-second heartbeat also checks principal and session validity. Logout, session expiry, key removal or key rotation closes the stream. A group move or loss of scope suppresses unauthorized events. At most 100 connections are admitted concurrently.
 
 ## Agents {#agents}
 
@@ -397,6 +413,9 @@ The agent binary polls the server for jobs, runs checks locally, and posts resul
 | `GET` | `/api/v1/on-call/current` | Current on-call per rotation |
 | `POST` | `/api/v1/on-call` | Create rotation |
 | `PUT` | `/api/v1/on-call/{id}` | Update rotation |
+| `POST` | `/api/v1/on-call/{id}/override` | Set, replace or clear a temporary override |
 | `DELETE` | `/api/v1/on-call/{id}` | Delete rotation |
 
-Rotations cycle through an ordered list of notification channels on a daily or weekly basis. Temporary overrides can be set for vacations or coverage swaps with a channel ID and expiry time.
+Rotations expose a contact schedule through the API; they are not automatically connected to notification dispatch. Daily periods are 24 hours and weekly periods are seven days in UTC, measured from `period_started_at`. Current contact calculations account for missed ticks and restarts. Name and override edits preserve cadence; changes to period, members or current index start a new period. Schedule anchors and timestamps are read-only, and omitted update fields are preserved.
+
+Creation and channel assignment require `notifications.read` in addition to the relevant `on_call` mutation. Setting or replacing an override requires `on_call.override` and `notifications.read`; clearing an override requires only `on_call.override`. Channel names are omitted without channel-read authority.

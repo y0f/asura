@@ -85,7 +85,7 @@ POST /api/v1/escalation-policies
 PUT /api/v1/escalation-policies/{id}
 ```
 
-Same body format as create.
+The same fields are available as on create. Omitted fields are preserved. A name, description, enabled or repeat edit does not require access to channel assignments when `steps` is omitted.
 
 ### Delete policy {#delete-policy}
 
@@ -102,3 +102,5 @@ Escalation policies use dedicated permissions:
 - `escalation_policies.read` : view policies (included in the `readonly` role)
 - `escalation_policies.create`, `escalation_policies.update`, `escalation_policies.delete`: individual mutations
 - `escalation_policies.write`: all three mutations; does not grant read access
+
+Creating a policy or changing its steps also requires `notifications.read`, because it assigns notification channels. Explicitly unchanged steps do not need new assignment authority. A policy read without that permission uses channel IDs rather than names. Assigning a policy to a monitor requires `monitors.assign` on that monitor and `escalation_policies.read`.

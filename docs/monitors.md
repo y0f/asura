@@ -7,7 +7,7 @@ permalink: "/monitors.html"
 
 # Monitors {#monitors}
 
-Asura supports 19 monitor types. Each monitor runs on its own interval with protocol-specific settings and optional assertions.
+Asura supports 19 monitor types: 17 active protocol checks, heartbeat monitors for incoming pings, and manually controlled monitors. Each monitor has its own interval, protocol settings and optional assertions.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -26,10 +26,11 @@ Asura supports 19 monitor types. Each monitor runs on its own interval with prot
 | `name` | string | yes | Display name |
 | `description` | string |  | Optional description, rendered as markdown on the detail page (max 5000 chars) |
 | `type` | string | yes | `http` `http_multi` `tcp` `dns` `icmp` `tls` `websocket` `command` `docker` `heartbeat` `domain` `grpc` `mqtt` `smtp` `ssh` `redis` `postgresql` `udp` `manual` |
-| `target` | string | yes | URL, host:port, domain, or command |
+| `target` | string | for active checks | URL, host:port, domain, or command; not required for heartbeat or manual monitors |
 | `interval` | int |  | Seconds between checks (default: 60) |
 | `timeout` | int |  | Timeout in seconds (default: 10) |
 | `tags` | string\[\] |  | Grouping tags |
+| `monitor_tags` | object\[\] |  | Managed tag assignments, e.g. `[{"tag_id":1,"value":"production"}]`; changes require `monitors.assign` and `tags.read`, and omission on update preserves assignments |
 | `group_id` | int |  | Monitor group ID (null if ungrouped) |
 | `proxy_id` | int |  | Proxy ID for routing checks through a proxy |
 | `notification_channel_ids` | int\[\] |  | Notification channels to route to (empty = all) |
@@ -39,10 +40,12 @@ Asura supports 19 monitor types. Each monitor runs on its own interval with prot
 | `failure_threshold` | int |  | Failures before incident (default: 3) |
 | `success_threshold` | int |  | Successes before recovery (default: 1) |
 | `upside_down` | bool |  | Inverted mode. "up" becomes "down" and vice versa |
-| `agent_enabled` | bool |  | Include this monitor in agent job distribution (default: true). Disable for monitors targeting localhost or private IPs. Monitors whose settings contain credentials or mTLS material are never offered to agents and are checked only by the central server |
-| `agent_ids` | int\[\] |  | IDs of the agents that run this monitor (empty = every agent). Each ID must name an existing agent. `PUT` replaces the list, so leaving it out clears the assignment. Only `GET /api/v1/monitors/{id}` returns it; the list endpoint does not |
+| `agent_enabled` | bool |  | Enable remote checks on explicitly assigned agents (API creation default: false). Empty assignments produce no remote jobs. Typed authentication settings, mTLS material and server-only monitor types remain ineligible for delegation |
+| `agent_ids` | int\[\] |  | Existing trusted agent IDs. An omitted `PUT` field preserves current assignments; `[]` removes them. Changing delegation requires `monitors.assign` and `agents.read`. Newly enrolled agents receive no jobs until assigned |
 | `resend_interval` | int |  | Seconds between reminder notifications while an incident is open (0 = notify once only) |
 | `sla_target` | float |  | SLA uptime target percentage (e.g. 99.9). Set to 0 to disable SLA tracking |
+
+Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps typed authentication and mTLS settings local. Upgrade the server and agents together; v2 jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
 
 ## Protocol Settings {#protocol-settings}
 
@@ -114,7 +117,7 @@ Asura fetches a token from the token URL using the client credentials grant, cac
 }
 ```
 
-mTLS is independent of the auth method. it can be combined with any authentication type. The CA certificate is optional and used for custom trust stores (e.g., self-signed server certificates). Certificates are stored inline as PEM text.
+mTLS is independent of the auth method and can be combined with any authentication type. The CA certificate is optional and used for custom trust stores (e.g., self-signed server certificates). Certificates are stored inline as PEM text.
 
 ### TCP {#tcp}
 
@@ -133,6 +136,8 @@ mTLS is independent of the auth method. it can be combined with any authenticati
 ```
 {"warn_days_before": 30}
 ```
+
+Expiration uses the certificate's exact timestamp. The displayed days remaining and the warning window do not postpone expiration until the next whole day.
 
 ### WebSocket {#websocket}
 
@@ -188,7 +193,7 @@ volumes:
 {"warn_days_before": 30}
 ```
 
-Target is a domain name (e.g. `example.com`). Queries the appropriate WHOIS server for the TLD, parses the expiry date, and reports status based on remaining days.
+Target is a domain name (e.g. `example.com`). Asura queries the appropriate WHOIS server for the TLD and parses its expiry date. Expiration uses the exact available timestamp; rounded days are used for display and the warning window.
 
 ### gRPC {#grpc}
 
@@ -232,7 +237,7 @@ curl -X POST https://example.com/asura/api/v1/monitors \
   -d '{"name":"Nightly Backup","type":"heartbeat","interval":3600,"settings":{"grace":300}}'
 ```
 
-Response includes the ping token:
+The successful creation response includes the ping token once. Store it securely; later reads cannot recover it. The web creation form similarly shows a one-time ping URL.
 
 ```
 {
@@ -247,11 +252,11 @@ Ping from your script (no auth needed):
 curl -X POST https://example.com/asura/api/v1/heartbeat/a1b2c3d4e5f6...
 ```
 
-If no ping arrives within `interval + grace` seconds, the monitor goes down and an incident is created.
+After the first ping, if no further ping arrives within `interval + grace` seconds, heartbeat evaluation marks the monitor down and opens an incident. Explicit heartbeat transitions bypass consecutive-check thresholds. Heartbeat monitors have no measured network response time.
 
 ## Manual Monitoring {#manual-monitoring}
 
-Manual monitors let you control status directly for things that can't be auto-checked. manual processes, third-party dependencies, or business-hour services. No automated checks run; you set the status via the web UI or API.
+Manual monitors let you control status for manual processes, third-party dependencies or business-hour services. Asura does not probe a remote target: you set the status through the web UI or API.
 
 ```
 # Create manual monitor
@@ -277,7 +282,7 @@ curl -X POST https://example.com/asura/api/v1/monitors/1/status \
   -d '{"status":"up","message":"Vendor confirmed recovery"}'
 ```
 
-Valid statuses: `up`, `down`, `degraded`. Status changes create check results and trigger incidents normally. the same notification channels, thresholds, and incident lifecycle apply. The web UI shows Set Up / Set Degraded / Set Down buttons on the monitor detail page.
+Valid statuses are `up`, `down` and `degraded`. An authorized status change records a check and updates the state immediately; down or degraded opens or updates an incident, and up resolves it. Maintenance can defer incident notifications. The detail page offers status controls to principals with `monitors.status` authority on that monitor.
 
 ## Assertions {#assertions}
 
@@ -315,14 +320,14 @@ Conditions are organized into groups. Each group has its own `and`/`or` operator
       {
         "operator": "and",
         "conditions": [
-          {"type": "response_time", "operator": "lt", "value": "2000"},
+          {"type": "response_time", "operator": "lt", "value": "5000"},
           {"type": "json_path", "target": "status", "operator": "eq", "value": "ok"}
         ]
       },
       {
         "operator": "and",
         "conditions": [
-          {"type": "response_time", "operator": "lt", "value": "5000", "degraded": true}
+          {"type": "response_time", "operator": "lt", "value": "2000", "degraded": true}
         ]
       }
     ]
@@ -330,7 +335,7 @@ Conditions are organized into groups. Each group has its own `and`/`or` operator
 }
 ```
 
-In this example: the monitor passes if the status code is 200 *or* 201 **and** the response time is under 2 s **and** the `status` JSON field equals `ok`. A response time between 2 s and 5 s marks the monitor degraded instead of down.
+With a 200 or 201 status and a JSON `status` field of `ok`, this example is up below 2 seconds, degraded from 2 seconds to below 5 seconds, and down at 5 seconds or longer. A failed hard condition dominates failed degraded conditions, regardless of their order. A passing alternative still satisfies an `or` group.
 
 ## Additional Monitor Types {#additional-monitor-types}
 
@@ -340,7 +345,7 @@ Checks mail server availability via the EHLO handshake. If an expected banner is
 
 ### SSH {#ssh}
 
-Connects to an SSH server and reads the identification banner. The check passes if the banner starts with the `SSH-` prefix (any protocol version). An optional fingerprint check compares a SHA-256 hash of the banner string. Note: this verifies the server's identification banner, not its host key — it does not provide cryptographic host identity or MITM protection.
+Connects to an SSH server and requires a complete, syntactically valid identification line after a bounded number of pre-banner lines. A bare `SSH-` prefix is insufficient. An optional fingerprint compares the SHA-256 hash of the identification banner. This checks the banner rather than the host key and does not provide cryptographic host identity or MITM protection.
 
 ### Redis {#redis}
 
@@ -348,7 +353,7 @@ Sends PING via the RESP protocol and expects PONG. Supports optional AUTH passwo
 
 ### PostgreSQL {#postgresql}
 
-Performs a protocol v3 startup handshake to verify the server accepts connections. Configurable username and database. No driver required.
+Sends a PostgreSQL protocol v3 startup message and validates the bounded authentication or error response. This verifies that a PostgreSQL server answers, including an authentication or database-access error; it does not authenticate or run a query. Username and database are configurable, and no database driver is required for the check.
 
 ### UDP {#udp}
 
@@ -401,4 +406,4 @@ Incidents are auto-assigned a severity when created: `critical` for down monitor
 
 ## Uptime Heatmap {#uptime-heatmap}
 
-The monitor detail page shows a 365-day uptime calendar. Each cell represents one day, color-coded by uptime percentage: green (100%), yellow (>99%), orange (>95%), red (<95%). Hover for exact percentages.
+The detail page shows a 365-day uptime calendar with neutral and blue shading. Its legend distinguishes at least 99.9%, 99% to below 99.9%, and below 99%; days without samples stay separate. Hover for a daily value or open the native daily-data table for exact percentages and check counts using a keyboard or touch. No samples are shown as an em dash, not as measured 100% uptime.

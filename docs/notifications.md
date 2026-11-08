@@ -7,7 +7,7 @@ permalink: "/notifications.html"
 
 # Notifications {#notifications}
 
-13 notification channels. Each one can be scoped to specific event types and routed to specific monitors. All delivery attempts are recorded in notification history.
+Asura supports 13 notification channel types. Each channel can filter event types and receive events from selected monitors. Notification history records the final per-channel delivery outcome rather than a separate row for every retry.
 
 Events: `incident.created`, `incident.acknowledged`, `incident.resolved`, `incident.reminder`, `incident.escalated`, `content.changed`, `cert.changed`, `sla.breach`, `maintenance.started`, `maintenance.ended`. Maintenance events are sent when a maintenance window is toggled manually in the web interface.
 
@@ -176,7 +176,7 @@ Uses the Events API v2. Incident lifecycle maps to PagerDuty actions: `incident.
 }
 ```
 
-`priority` defaults to auto-select based on event type (1=high for created, 0=normal for reminders, -1=low for resolved). Set explicitly to override. `sound` and `device` are optional.
+An omitted or zero `priority` selects the event-derived priority (1=high for created, 0=normal for reminders, -1=low for resolved). A nonzero value overrides that selection. `sound` and `device` are optional.
 
 ## Google Chat {#google-chat}
 
@@ -232,10 +232,18 @@ An empty array (`[]`) means the monitor sends to all channels.
 
 ## Notification History {#notification-history}
 
-Every delivery attempt is recorded (sent or failed) with the channel, event type, monitor, and error message if any. History is pruned with the same retention window as check results.
+History records each final channel outcome as sent or failed, with its event and associated monitor. Retries do not create separate rows. Persistence failures are logged, so history is not a durable delivery ledger. History follows the configured retention policy, and access is independently controlled by `notification_history.read`; monitor and channel names require their corresponding read permissions.
 
 ```
 GET /api/v1/notifications/history?channel_id=1&status=failed&event_type=incident.created&page=1
 ```
 
 Filters: `channel_id`, `status` (`sent` / `failed`), `event_type`. The web UI has a History page linked from Notification Channels.
+
+## Delivery and shutdown {#delivery-and-shutdown}
+
+The notifier uses 10 workers and a bounded queue of 100 jobs. Queue admission waits at most 100 milliseconds per job and respects caller cancellation. Ordinary channel delivery makes up to three attempts, each with a 10-second timeout, with cancelable 2-second and 4-second delays between attempts. A channel test makes one 10-second attempt and follows the test request's cancellation.
+
+Subscriber delivery has a 30-second limit; confirmation mail has a 60-second limit. A successful email subscription response means its confirmation was queued. If mail is unavailable or the queue cannot accept it, the request returns an error so the visitor can retry.
+
+Shutdown stops producers and drains queued deliveries before closing the database, subject to the shutdown deadline. Queue saturation and exhausted retries are explicit failures. The queue is in memory: delivery is not durable or guaranteed exactly once across process failure.
