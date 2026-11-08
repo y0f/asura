@@ -23,16 +23,18 @@ import (
 var version = "dev"
 
 type job struct {
-	ID       int64           `json:"id"`
-	Name     string          `json:"name"`
-	Type     string          `json:"type"`
-	Target   string          `json:"target"`
-	Interval int             `json:"interval"`
-	Timeout  int             `json:"timeout"`
-	Settings json.RawMessage `json:"settings"`
+	ConfigRevision int64           `json:"config_revision"`
+	ID             int64           `json:"id"`
+	Name           string          `json:"name"`
+	Type           string          `json:"type"`
+	Target         string          `json:"target"`
+	Interval       int             `json:"interval"`
+	Timeout        int             `json:"timeout"`
+	Settings       json.RawMessage `json:"settings"`
 }
 
 type result struct {
+	ConfigRevision  int64  `json:"config_revision"`
 	MonitorID       int64  `json:"monitor_id"`
 	Status          string `json:"status"`
 	ResponseTime    int64  `json:"response_time"`
@@ -219,9 +221,10 @@ func runCheck(ctx context.Context, c checker.Checker, j job) *result {
 	started := time.Now().UTC()
 	res, err := c.Check(checkCtx, mon)
 	if err != nil {
-		return &result{MonitorID: j.ID, Status: "down", Message: err.Error(), CheckedAt: started}
+		return &result{MonitorID: j.ID, ConfigRevision: j.ConfigRevision, Status: "down", Message: err.Error(), CheckedAt: started}
 	}
 	out := &result{
+		ConfigRevision:  j.ConfigRevision,
 		MonitorID:       j.ID,
 		Status:          res.Status,
 		ResponseTime:    res.ResponseTime,
@@ -263,6 +266,11 @@ func fetchJobs(ctx context.Context, client *http.Client, server, token string) (
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("decode jobs: %w", err)
 	}
+	for _, j := range response.Jobs {
+		if j.ID <= 0 || j.ConfigRevision <= 0 {
+			return nil, fmt.Errorf("job has no valid configuration revision; upgrade the server and agent together to v2")
+		}
+	}
 	return response.Jobs, nil
 }
 
@@ -284,10 +292,20 @@ func postResults(ctx context.Context, client *http.Client, server, token string,
 		return err
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+	var response struct {
+		Accepted *int `json:"accepted"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&response); err != nil {
+		return fmt.Errorf("decode result acknowledgement: %w", err)
+	}
+	if response.Accepted == nil || *response.Accepted < 0 || *response.Accepted > len(results) {
+		return fmt.Errorf("server returned an invalid result acknowledgement")
+	}
+	if *response.Accepted != len(results) {
+		return fmt.Errorf("server accepted %d of %d results; obsolete jobs are discarded, fetch current jobs on the next poll", *response.Accepted, len(results))
 	}
 	return nil
 }

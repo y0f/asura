@@ -302,7 +302,33 @@ func agentMonitor(t *testing.T, env *testEnv) (*storage.Agent, *storage.Monitor)
 	return a, m
 }
 
-func postResults(env *testEnv, a *storage.Agent, body string) *httptest.ResponseRecorder {
+// postResults models a current v2 job for older behavioral fixtures. Protocol
+// tests send raw requests so missing, invalid and stale revisions stay explicit.
+func postResults(t *testing.T, env *testEnv, a *storage.Agent, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	var results []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &results); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range results {
+		if _, present := result["config_revision"]; present {
+			continue
+		}
+		var id int64
+		if err := json.Unmarshal(result["monitor_id"], &id); err != nil {
+			t.Fatal(err)
+		}
+		monitor, err := env.store.GetMonitor(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result["config_revision"] = json.RawMessage(strconv.FormatInt(monitor.ConfigRevision, 10))
+	}
+	encoded, err := json.Marshal(results)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = string(encoded)
 	return env.do("POST", "/api/v1/agent/results", body, map[string]string{"X-Agent-Token": a.Token})
 }
 
@@ -320,7 +346,7 @@ func TestAgentResultsRequireAssignment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"accepted":0`) {
 		t.Fatalf("unassigned agent post: %d %s, want accepted 0", w.Code, w.Body.String())
 	}
@@ -328,7 +354,7 @@ func TestAgentResultsRequireAssignment(t *testing.T) {
 		t.Errorf("unassigned agent %q opened incident %d on monitor %d", a.Name, inc.ID, m.ID)
 	}
 
-	w = postResults(env, other, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
+	w = postResults(t, env, other, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":1`) {
 		t.Fatalf("assigned agent post: %d %s, want accepted 1", w.Code, w.Body.String())
 	}
@@ -479,7 +505,7 @@ func TestAgentPostingResultsKeepsAgentOnline(t *testing.T) {
 	if _, err := db.Exec(`UPDATE agents SET last_heartbeat=? WHERE id=?`, time.Now().Add(-3*time.Minute).UTC().Format("2006-01-02T15:04:05Z"), a.ID); err != nil {
 		t.Fatal(err)
 	}
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":1`) {
 		t.Fatalf("post: %s", w.Body.String())
 	}
@@ -515,7 +541,7 @@ func TestStaleAgentResultDoesNotReopenIncident(t *testing.T) {
 	post := func(status string, checkedAt time.Time) {
 		t.Helper()
 		body, _ := json.Marshal([]map[string]any{{"monitor_id": m.ID, "status": status, "message": "timeout", "checked_at": checkedAt.UTC().Format(time.RFC3339Nano)}})
-		if w := postResults(env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
+		if w := postResults(t, env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
 			t.Fatalf("post: %s", w.Body.String())
 		}
 	}
@@ -566,7 +592,7 @@ func TestAgentResultStoredAfterEvaluation(t *testing.T) {
 	if err := env.store.UpdateMonitor(ctx, m); err != nil {
 		t.Fatal(err)
 	}
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"refused"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"refused"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":1`) {
 		t.Fatalf("post: %s", w.Body.String())
 	}
@@ -586,7 +612,7 @@ func TestAgentResultStalenessIsPerLocation(t *testing.T) {
 	post := func(status string, checkedAt time.Time) {
 		t.Helper()
 		body, _ := json.Marshal([]map[string]any{{"monitor_id": m.ID, "status": status, "checked_at": checkedAt.UTC().Format(time.RFC3339Nano)}})
-		if w := postResults(env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
+		if w := postResults(t, env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
 			t.Fatalf("post: %s", w.Body.String())
 		}
 	}
@@ -631,7 +657,7 @@ func TestAgentCheckedAtLongCycleAndFuture(t *testing.T) {
 			res["checked_at"] = checkedAt.UTC().Format(time.RFC3339)
 		}
 		body, _ := json.Marshal([]map[string]any{res})
-		if w := postResults(env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
+		if w := postResults(t, env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
 			t.Fatalf("post: %s", w.Body.String())
 		}
 	}
@@ -679,7 +705,7 @@ func TestAgentResultsRejectedForServerOnlyMonitor(t *testing.T) {
 			t.Fatal("precondition: monitor with credentials offered to agent")
 		}
 	}
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":0`) {
 		t.Errorf("result for server-only monitor: %d %s, want accepted 0", w.Code, w.Body.String())
 	}

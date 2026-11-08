@@ -79,13 +79,14 @@ type OnCallRotation struct {
 
 // AgentJob is a monitor sent to an agent for checking.
 type AgentJob struct {
-	ID       int64           `json:"id"`
-	Name     string          `json:"name"`
-	Type     string          `json:"type"`
-	Target   string          `json:"target"`
-	Interval int             `json:"interval"`
-	Timeout  int             `json:"timeout"`
-	Settings json.RawMessage `json:"settings,omitempty"`
+	ConfigRevision int64           `json:"config_revision"`
+	ID             int64           `json:"id"`
+	Name           string          `json:"name"`
+	Type           string          `json:"type"`
+	Target         string          `json:"target"`
+	Interval       int             `json:"interval"`
+	Timeout        int             `json:"timeout"`
+	Settings       json.RawMessage `json:"settings,omitempty"`
 }
 
 // Incident tracks a period of downtime or degradation.

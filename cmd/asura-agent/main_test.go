@@ -61,7 +61,7 @@ func newFakeAsura(t *testing.T, jobs any) (*fakeAsura, *httptest.Server) {
 			f.mu.Lock()
 			f.results = append(f.results, rs...)
 			f.mu.Unlock()
-			w.Write([]byte(`{}`))
+			json.NewEncoder(w).Encode(map[string]int{"accepted": len(rs)})
 			f.posted <- struct{}{}
 		default:
 			http.NotFound(w, r)
@@ -148,7 +148,7 @@ func TestAgentHonoursIntervalAndRunsConcurrently(t *testing.T) {
 	ctx := context.Background()
 
 	// One hourly job over 4 polls (2 minutes at the default poll interval).
-	_, srv := newFakeAsura(t, []job{{ID: 1, Name: "hourly", Type: "http", Target: target.URL, Interval: 3600, Timeout: 5}})
+	_, srv := newFakeAsura(t, []job{{ConfigRevision: 7, ID: 1, Name: "hourly", Type: "http", Target: target.URL, Interval: 3600, Timeout: 5}})
 	a := newAgent(srv.Client(), srv.URL, "tok", reg, testLogger)
 	clock := time.Now()
 	a.now = func() time.Time { return clock }
@@ -168,7 +168,7 @@ func TestAgentHonoursIntervalAndRunsConcurrently(t *testing.T) {
 	// Five jobs whose targets each take 300ms run in parallel.
 	var five []job
 	for i := 1; i <= 5; i++ {
-		five = append(five, job{ID: int64(i), Name: "slow", Type: "http", Target: target.URL, Interval: 30, Timeout: 5})
+		five = append(five, job{ConfigRevision: 7, ID: int64(i), Name: "slow", Type: "http", Target: target.URL, Interval: 30, Timeout: 5})
 	}
 	f5, srv5 := newFakeAsura(t, five)
 	t0 := time.Now()
@@ -214,7 +214,7 @@ func TestAgentAllowPrivateFlag(t *testing.T) {
 		{"-allow-private", "up"},
 	} {
 		t.Run("flag="+tc.flag, func(t *testing.T) {
-			f, srv := newFakeAsura(t, []job{{ID: 7, Name: "lan", Type: "http", Target: target.URL, Interval: 30, Timeout: 5}})
+			f, srv := newFakeAsura(t, []job{{ConfigRevision: 7, ID: 7, Name: "lan", Type: "http", Target: target.URL, Interval: 30, Timeout: 5}})
 			startAgentProcess(t, "-server "+srv.URL+" -token tok -interval 1h "+tc.flag)
 			select {
 			case <-f.posted:
@@ -284,11 +284,11 @@ func TestAgentPostsDNSRecordsAndCheckedAt(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/api/v1/agent/jobs":
-					json.NewEncoder(w).Encode(map[string]any{"jobs": []job{{ID: 3, Name: "dns", Type: "dns", Target: "example.com", Interval: 30, Timeout: 5}}})
+					json.NewEncoder(w).Encode(map[string]any{"jobs": []job{{ConfigRevision: 7, ID: 3, Name: "dns", Type: "dns", Target: "example.com", Interval: 30, Timeout: 5}}})
 				case "/api/v1/agent/results":
 					postedAt = time.Now()
 					json.NewDecoder(r.Body).Decode(&posted)
-					w.Write([]byte(`{}`))
+					json.NewEncoder(w).Encode(map[string]int{"accepted": len(posted)})
 				}
 			}))
 			defer srv.Close()
@@ -301,6 +301,9 @@ func TestAgentPostsDNSRecordsAndCheckedAt(t *testing.T) {
 				t.Fatalf("expected 1 posted result, got %d", len(posted))
 			}
 			got := posted[0]
+			if got["config_revision"] != float64(7) {
+				t.Fatalf("result lost job revision: %v", got)
+			}
 
 			var records any
 			if s, _ := got["dns_records"].(string); s != "" {
@@ -319,6 +322,32 @@ func TestAgentPostsDNSRecordsAndCheckedAt(t *testing.T) {
 			}
 			if checkedAt.Before(before) || checkedAt.After(postedAt) {
 				t.Fatalf("checked_at %v not between cycle start %v and post %v", checkedAt, before, postedAt)
+			}
+		})
+	}
+}
+
+func TestAgentRejectsJobsWithoutRevision(t *testing.T) {
+	for _, revision := range []int64{0, -1} {
+		_, srv := newFakeAsura(t, []job{{ID: 1, ConfigRevision: revision, Type: "http", Target: "https://example.test"}})
+		if _, err := fetchJobs(context.Background(), srv.Client(), srv.URL, "token"); err == nil || !strings.Contains(err.Error(), "upgrade") {
+			t.Fatalf("invalid revision %d did not require coordinated upgrade: %v", revision, err)
+		}
+	}
+}
+
+func TestAgentReportsRejectedResults(t *testing.T) {
+	for _, acknowledgement := range []string{`{"accepted":0,"rejected":1}`, `{}`, `{"accepted":2}`, `{"accepted":-1}`, `invalid`, `{"accepted":1,"rejected":0}`} {
+		t.Run(acknowledgement, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				io.Copy(io.Discard, r.Body)
+				w.Write([]byte(acknowledgement))
+			}))
+			defer srv.Close()
+			err := postResults(context.Background(), srv.Client(), srv.URL, "token", []result{{MonitorID: 1, ConfigRevision: 7, Status: "up"}})
+			wantOK := acknowledgement == `{"accepted":1,"rejected":0}`
+			if (err == nil) != wantOK {
+				t.Fatalf("acknowledgement %s: %v", acknowledgement, err)
 			}
 		})
 	}

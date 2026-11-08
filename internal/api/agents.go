@@ -137,6 +137,7 @@ func (h *Handler) AgentGetJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 type agentResultRequest struct {
+	ConfigRevision  int64  `json:"config_revision"`
 	MonitorID       int64  `json:"monitor_id"`
 	Status          string `json:"status"`
 	ResponseTime    int64  `json:"response_time"`
@@ -150,35 +151,21 @@ type agentResultRequest struct {
 	CheckedAt *time.Time `json:"checked_at,omitempty"`
 }
 
-// agentResultMonitor returns the monitor res reports on, or nil when the result
-// must be ignored: no or unknown monitor, invalid status, its type cannot run
-// on agents, or it is not one of the agent's jobs (jobs holds the monitor IDs
-// ListAgentJobs offers the agent). Using the job list keeps result acceptance
-// in step with job listing: an agent cannot write results for monitors that
-// are off, not run by agents, assigned to other agents, or left to the server
-// because they need credentials.
-func (h *Handler) agentResultMonitor(ctx context.Context, jobs map[int64]bool, res agentResultRequest) *storage.Monitor {
-	if res.MonitorID == 0 || !validCheckStatuses[res.Status] || !jobs[res.MonitorID] {
-		return nil
-	}
+// agentResultMonitor rejects obsolete jobs before evaluation. The persistence
+// transaction repeats revision, enabled, type, settings and authenticated-agent
+// assignment checks, so edits or revocations after this lookup cannot admit data.
+func (h *Handler) agentResultMonitor(ctx context.Context, res agentResultRequest) (*storage.Monitor, error) {
 	mon, err := h.store.GetMonitor(ctx, res.MonitorID)
-	if err != nil || mon == nil || !mon.Enabled || !mon.AgentEnabled || !agentEligibleTypes[mon.Type] {
-		return nil
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, storage.ErrStaleMonitorCheck
 	}
-	return mon
-}
-
-// agentJobIDs returns the IDs of the monitors agentID is offered as jobs.
-func (h *Handler) agentJobIDs(ctx context.Context, agentID int64) (map[int64]bool, error) {
-	jobs, err := h.store.ListAgentJobs(ctx, agentID)
 	if err != nil {
 		return nil, err
 	}
-	ids := make(map[int64]bool, len(jobs))
-	for _, j := range jobs {
-		ids[j.ID] = true
+	if mon == nil || mon.ConfigRevision != res.ConfigRevision || !mon.Enabled || !mon.AgentEnabled || !agentEligibleTypes[mon.Type] {
+		return nil, storage.ErrStaleMonitorCheck
 	}
-	return ids, nil
+	return mon, nil
 }
 
 // agentCheckedAt returns the reported checked_at, or the zero time (meaning
@@ -219,19 +206,21 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("update agent heartbeat", "error", err)
 	}
 
-	jobs, err := h.agentJobIDs(r.Context(), agent.ID)
-	if err != nil {
-		h.logger.Error("list agent jobs", "agent", agent.Name, "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to list jobs")
-		return
-	}
-
 	now := time.Now().UTC()
-	accepted := 0
+	accepted, stale, failed := 0, 0, 0
 
 	for _, res := range results {
-		mon := h.agentResultMonitor(r.Context(), jobs, res)
-		if mon == nil {
+		if res.MonitorID <= 0 || res.ConfigRevision <= 0 || !validCheckStatuses[res.Status] {
+			continue
+		}
+		mon, err := h.agentResultMonitor(r.Context(), res)
+		if err != nil {
+			if errors.Is(err, storage.ErrStaleMonitorCheck) {
+				stale++
+			} else {
+				failed++
+				h.logger.Error("load agent check monitor", "agent_id", agent.ID, "monitor_id", res.MonitorID, "error", err)
+			}
 			continue
 		}
 
@@ -249,15 +238,20 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// The pipeline evaluates the result (assertions, upside_down, anomaly)
-		// before storing it. A stale result is kept in the history but does
-		// not drive the monitor's current status or incidents.
+		// before storing it. An older observation of the same configuration
+		// stays in history without changing status; an obsolete job is rejected.
 		if h.pipeline != nil {
 			err = h.pipeline.ProcessAgentResult(r.Context(), mon, cr)
 		} else {
-			err = h.store.InsertCheckResult(r.Context(), cr)
+			err = h.store.RecordMonitorCheck(r.Context(), mon, cr, nil)
 		}
 		if err != nil {
-			h.logger.Error("insert agent check result", "agent", agent.Name, "monitor_id", res.MonitorID, "error", err)
+			if errors.Is(err, storage.ErrStaleMonitorCheck) {
+				stale++
+			} else {
+				failed++
+				h.logger.Error("insert agent check result", "agent", agent.Name, "monitor_id", res.MonitorID, "error", err)
+			}
 			continue
 		}
 
@@ -266,6 +260,9 @@ func (h *Handler) AgentPostResults(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"accepted": accepted,
+		"rejected": len(results) - accepted,
+		"stale":    stale,
+		"failed":   failed,
 		"agent":    agent.Name,
 		"time":     now.Format(time.RFC3339),
 	})

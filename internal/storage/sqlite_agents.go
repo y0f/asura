@@ -153,7 +153,7 @@ const agentMayCheck = `EXISTS (
 // the remote checker may receive. Empty assignments never mean all agents.
 func (s *SQLiteStore) ListAgentJobs(ctx context.Context, agentID int64) ([]*AgentJob, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, type, target, interval_secs, timeout_secs, settings
+		`SELECT id, name, type, target, interval_secs, timeout_secs, settings, config_revision
 		 FROM monitors WHERE enabled=1 AND agent_enabled=1 AND type NOT IN ('heartbeat', 'manual', 'docker', 'command')
 		 AND `+agentMayCheck+`
 		 ORDER BY id`, agentID)
@@ -166,7 +166,7 @@ func (s *SQLiteStore) ListAgentJobs(ctx context.Context, agentID int64) ([]*Agen
 	for rows.Next() {
 		var j AgentJob
 		var settings string
-		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.Type, &j.Target, &j.Interval, &j.Timeout, &settings, &j.ConfigRevision); err != nil {
 			return nil, err
 		}
 		settings, err = s.decryptSettings(settings)
