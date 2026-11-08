@@ -5,35 +5,38 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/y0f/asura/internal/httputil"
+	"golang.org/x/text/width"
 )
 
 const (
-	colorGreen  = "#4c1"
-	colorYellow = "#dfb317"
-	colorRed    = "#e05d44"
-	colorGrey   = "#9f9f9f"
+	colorOK       = "#555555"
+	colorWarning  = "#005fcc"
+	colorCritical = "#005fcc"
+	colorNeutral  = "#666666"
 )
 
 func (h *Handler) BadgeStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		writeBadgeSVG(w, "status", "error", colorGrey)
+		writeBadgeSVG(w, "status", "error", colorNeutral)
 		return
 	}
 
 	ctx := r.Context()
 	m, err := h.store.GetMonitor(ctx, id)
 	if err != nil {
-		writeBadgeSVG(w, "status", "not found", colorGrey)
+		writeBadgeSVG(w, "status", "not found", colorNeutral)
 		return
 	}
 
 	visible, err := h.store.IsMonitorOnStatusPage(ctx, m.ID)
 	if err != nil || !visible {
-		writeBadgeSVG(w, "status", "not found", colorGrey)
+		writeBadgeSVG(w, "status", "not found", colorNeutral)
 		return
 	}
 
@@ -49,20 +52,20 @@ func (h *Handler) BadgeStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) BadgeUptime(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		writeBadgeSVG(w, "uptime", "error", colorGrey)
+		writeBadgeSVG(w, "uptime", "error", colorNeutral)
 		return
 	}
 
 	ctx := r.Context()
 	m, err := h.store.GetMonitor(ctx, id)
 	if err != nil {
-		writeBadgeSVG(w, "uptime", "not found", colorGrey)
+		writeBadgeSVG(w, "uptime", "not found", colorNeutral)
 		return
 	}
 
 	visible, err := h.store.IsMonitorOnStatusPage(ctx, m.ID)
 	if err != nil || !visible {
-		writeBadgeSVG(w, "uptime", "not found", colorGrey)
+		writeBadgeSVG(w, "uptime", "not found", colorNeutral)
 		return
 	}
 
@@ -70,7 +73,7 @@ func (h *Handler) BadgeUptime(w http.ResponseWriter, r *http.Request) {
 	from := now.Add(-30 * 24 * time.Hour)
 	pct, err := h.store.GetUptimePercent(ctx, id, from, now)
 	if err != nil {
-		writeBadgeSVG(w, "uptime", "error", colorGrey)
+		writeBadgeSVG(w, "uptime", "error", colorNeutral)
 		return
 	}
 
@@ -79,12 +82,12 @@ func (h *Handler) BadgeUptime(w http.ResponseWriter, r *http.Request) {
 		label = "uptime"
 	}
 	value := fmt.Sprintf("%.2f%%", pct)
-	color := colorGreen
+	color := colorOK
 	if pct < 99 {
-		color = colorYellow
+		color = colorWarning
 	}
 	if pct < 95 {
-		color = colorRed
+		color = colorCritical
 	}
 	writeBadgeSVG(w, label, value, color)
 }
@@ -92,20 +95,20 @@ func (h *Handler) BadgeUptime(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) BadgeResponseTime(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		writeBadgeSVG(w, "response", "error", colorGrey)
+		writeBadgeSVG(w, "response", "error", colorNeutral)
 		return
 	}
 
 	ctx := r.Context()
 	m, err := h.store.GetMonitor(ctx, id)
 	if err != nil {
-		writeBadgeSVG(w, "response", "not found", colorGrey)
+		writeBadgeSVG(w, "response", "not found", colorNeutral)
 		return
 	}
 
 	visible, err := h.store.IsMonitorOnStatusPage(ctx, m.ID)
 	if err != nil || !visible {
-		writeBadgeSVG(w, "response", "not found", colorGrey)
+		writeBadgeSVG(w, "response", "not found", colorNeutral)
 		return
 	}
 
@@ -113,7 +116,7 @@ func (h *Handler) BadgeResponseTime(w http.ResponseWriter, r *http.Request) {
 	from := now.Add(-24 * time.Hour)
 	p50, _, _, err := h.store.GetResponseTimePercentiles(ctx, id, from, now)
 	if err != nil {
-		writeBadgeSVG(w, "response", "error", colorGrey)
+		writeBadgeSVG(w, "response", "error", colorNeutral)
 		return
 	}
 
@@ -122,12 +125,12 @@ func (h *Handler) BadgeResponseTime(w http.ResponseWriter, r *http.Request) {
 		label = "response time"
 	}
 	value := fmt.Sprintf("%.0fms", p50)
-	color := colorGreen
+	color := colorOK
 	if p50 > 500 {
-		color = colorYellow
+		color = colorWarning
 	}
 	if p50 > 2000 {
-		color = colorRed
+		color = colorCritical
 	}
 	writeBadgeSVG(w, label, value, color)
 }
@@ -135,26 +138,26 @@ func (h *Handler) BadgeResponseTime(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) BadgeCert(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		writeBadgeSVG(w, "cert", "error", colorGrey)
+		writeBadgeSVG(w, "cert", "error", colorNeutral)
 		return
 	}
 
 	ctx := r.Context()
 	m, err := h.store.GetMonitor(ctx, id)
 	if err != nil {
-		writeBadgeSVG(w, "cert", "not found", colorGrey)
+		writeBadgeSVG(w, "cert", "not found", colorNeutral)
 		return
 	}
 
 	visible, err := h.store.IsMonitorOnStatusPage(ctx, m.ID)
 	if err != nil || !visible {
-		writeBadgeSVG(w, "cert", "not found", colorGrey)
+		writeBadgeSVG(w, "cert", "not found", colorNeutral)
 		return
 	}
 
 	cr, err := h.store.GetLatestCheckResult(ctx, id)
 	if err != nil || cr == nil || cr.CertExpiry == nil {
-		writeBadgeSVG(w, "cert", "n/a", colorGrey)
+		writeBadgeSVG(w, "cert", "n/a", colorNeutral)
 		return
 	}
 
@@ -164,12 +167,12 @@ func (h *Handler) BadgeCert(w http.ResponseWriter, r *http.Request) {
 	}
 	days := int(time.Until(*cr.CertExpiry).Hours() / 24)
 	value := fmt.Sprintf("%dd", days)
-	color := colorGreen
+	color := colorOK
 	if days < 30 {
-		color = colorYellow
+		color = colorWarning
 	}
 	if days < 7 {
-		color = colorRed
+		color = colorCritical
 	}
 	writeBadgeSVG(w, label, value, color)
 }
@@ -177,56 +180,72 @@ func (h *Handler) BadgeCert(w http.ResponseWriter, r *http.Request) {
 func statusColor(status string) string {
 	switch status {
 	case "up":
-		return colorGreen
+		return colorOK
 	case "degraded":
-		return colorYellow
+		return colorWarning
 	case "down":
-		return colorRed
+		return colorCritical
 	default:
-		return colorGrey
+		return colorNeutral
 	}
 }
 
+// A conservative monospace estimate avoids counting encoded bytes, entities,
+// and combining marks as visible cells. Fallback font metrics can still vary.
+func badgeTextCells(text string) int {
+	cells, previous := 0, 0
+	for _, r := range text {
+		if r == '\ufe0f' { // Emoji presentation can widen an otherwise narrow symbol.
+			if previous == 1 {
+				cells++
+				previous = 2
+			}
+			continue
+		}
+		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r) {
+			continue
+		}
+		previous = 1
+		if kind := width.LookupRune(r).Kind(); kind == width.EastAsianWide || kind == width.EastAsianFullwidth {
+			previous = 2
+		}
+		cells += previous
+	}
+	return cells
+}
+
+func badgeXMLText(text string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' || (r >= 0x20 && r <= 0xd7ff) || (r >= 0xe000 && r <= 0xfffd) || (r >= 0x10000 && r <= unicode.MaxRune) {
+			return r
+		}
+		return unicode.ReplacementChar
+	}, text)
+}
+
+// Badge labels are measured before HTML escaping. The SVG has no font fetches,
+// scripting, duplicated shadow text, or shared clip-path IDs.
 func writeBadgeSVG(w http.ResponseWriter, label, value, color string) {
+	label, value = badgeXMLText(label), badgeXMLText(value)
+	labelWidth := badgeTextCells(label)*7 + 12
+	valueWidth := badgeTextCells(value)*7 + 12
+	totalWidth := labelWidth + valueWidth
 	label = html.EscapeString(label)
 	value = html.EscapeString(value)
-
-	labelWidth := len(label)*7 + 10
-	valueWidth := len(value)*7 + 10
-	totalWidth := labelWidth + valueWidth
 
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "max-age=300")
 
-	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="20">
-  <linearGradient id="b" x2="0" y2="100%%">
-    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-    <stop offset="1" stop-opacity=".1"/>
-  </linearGradient>
-  <clipPath id="a">
-    <rect width="%d" height="20" rx="3" fill="#fff"/>
-  </clipPath>
-  <g clip-path="url(#a)">
-    <rect width="%d" height="20" fill="#555"/>
-    <rect x="%d" width="%d" height="20" fill="%s"/>
-    <rect width="%d" height="20" fill="url(#b)"/>
-  </g>
-  <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
-    <text x="%d" y="15" fill="#010101" fill-opacity=".3">%s</text>
+	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="20" viewBox="0 0 %d 20" role="img" aria-label="%s: %s">
+  <title>%s: %s</title>
+  <rect width="%d" height="20" rx="3" fill="#303030"/>
+  <path d="M%d 0h%d a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H%dZ" fill="%s"/>
+  <g fill="#ffffff" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" aria-hidden="true" style="filter:grayscale(1)">
     <text x="%d" y="14">%s</text>
-    <text x="%d" y="15" fill="#010101" fill-opacity=".3">%s</text>
     <text x="%d" y="14">%s</text>
   </g>
-</svg>`,
-		totalWidth,
-		totalWidth,
-		labelWidth, labelWidth, valueWidth, color,
-		totalWidth,
-		labelWidth/2, label,
-		labelWidth/2, label,
-		labelWidth+valueWidth/2, value,
-		labelWidth+valueWidth/2, value,
-	)
-
+</svg>`, totalWidth, totalWidth, label, value, label, value,
+		totalWidth, labelWidth, valueWidth-3, labelWidth, color,
+		labelWidth/2, label, labelWidth+valueWidth/2, value)
 	io.WriteString(w, svg)
 }

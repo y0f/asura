@@ -66,7 +66,7 @@ func (h *Handler) TagUpdate(w http.ResponseWriter, r *http.Request) {
 		Color: r.FormValue("color"),
 	}
 	if t.Color == "" {
-		t.Color = "#6366f1"
+		t.Color = "#005bbf"
 	}
 
 	if err := validate.ValidateTag(t); err != nil {
