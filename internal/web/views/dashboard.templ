@@ -20,6 +20,7 @@ type DashboardParams struct {
 	Down          int
 	Degraded      int
 	Paused        int
+	Pending       int
 	OpenIncidents int
 	Page          int
 	TotalPages    int
@@ -76,7 +77,10 @@ func (p DashboardParams) summary() string {
 	if p.Paused > 0 {
 		parts = append(parts, fmt.Sprintf("%d paused", p.Paused))
 	}
-	if p.Total > 0 && p.Up == p.Total {
+	if p.Pending > 0 {
+		parts = append(parts, fmt.Sprintf("%d awaiting checks", p.Pending))
+	}
+	if p.Total > 0 && p.Up == p.Total && p.Pending == 0 {
 		parts = append(parts, "everything is up")
 	}
 	return strings.Join(parts, " · ")
@@ -121,8 +125,14 @@ templ DashboardPage(p DashboardParams) {
 			</div>
 			<div class={ "dashboard-grid", templ.KV("dashboard-grid-split", p.HasCapability("incidents.read")) }>
 				<section class="min-w-0" aria-labelledby="dash-monitors">
-					<div class="section-heading">
-						<h2 id="dash-monitors">Monitors</h2>
+					<div class="section-heading flex-wrap">
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+							<h2 id="dash-monitors">Monitors</h2>
+							<span class="flex items-center gap-1.5 text-xs text-muted tabular-nums">
+								@StatusIcon("pending")
+								{ fmt.Sprintf("%d awaiting checks", p.Pending) }
+							</span>
+						</div>
 						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="section-link">View all monitors</a>
 					</div>
 					<div id="monitor-grid" class="panel">

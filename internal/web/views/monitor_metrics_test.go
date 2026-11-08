@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/html"
+
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -19,6 +21,36 @@ func TestPassiveMonitorDetailsOmitResponseMeasurements(t *testing.T) {
 				t.Fatal("passive status events must not be represented as measured response times")
 			}
 		})
+	}
+}
+
+func TestResponsePercentilesRequireRetainedDurationSamples(t *testing.T) {
+	for _, samples := range []int64{0, 1} {
+		p := MonitorDetailParams{
+			Monitor:  &storage.Monitor{ID: 7, Type: "http"},
+			UpChecks: 40, ResponseSamples: samples,
+		}
+		doc := render(t, MonitorDetailPage(p))
+		var summary string
+		var walk func(*html.Node)
+		walk = func(n *html.Node) {
+			if classes, _ := attr(n, "class"); strings.Contains(classes, "percentile-summary") {
+				summary = textOf(n)
+			}
+			for child := n.FirstChild; child != nil; child = child.NextSibling {
+				walk(child)
+			}
+		}
+		walk(doc)
+		if summary == "" {
+			t.Fatal("percentile summary missing")
+		}
+		if samples == 0 && (strings.Contains(summary, "0ms") || strings.Count(summary, "—") != 3) {
+			t.Fatalf("retained uptime counts fabricated duration measurements: %s", summary)
+		}
+		if samples == 1 && strings.Count(summary, "0ms") != 3 {
+			t.Fatalf("measured zero duration was hidden: %s", summary)
+		}
 	}
 }
 
