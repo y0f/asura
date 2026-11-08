@@ -103,6 +103,11 @@ func MergeMonitorEdit(next, old *storage.Monitor, secretKeys []string, clear map
 	if err != nil {
 		return err
 	}
+	for _, object := range []map[string]any{prev, input} {
+		if err := checkMonitorPrivateContainers(object); err != nil {
+			return err
+		}
+	}
 	prepared := *next
 	var retainedTarget bool
 	prepared.Target, retainedTarget = mergeURL(next.Target, old.Target, MonitorTarget(old.Type, old.Target), clear["target"])
@@ -165,6 +170,39 @@ func MergeMonitorEdit(next, old *storage.Monitor, secretKeys []string, clear map
 
 func credentialDestinationError() error {
 	return fmt.Errorf("changing the credential destination requires replacing or clearing saved credentials")
+}
+
+// Validate private containers before redaction or identity matching. Invalid
+// legacy containers must never be serialized unchanged, and the public five
+// step limit also bounds the matching work before ordinary input validation.
+func checkMonitorPrivateContainers(object map[string]any) error {
+	if object["headers"] != nil {
+		if _, ok := object["headers"].(map[string]any); !ok {
+			return errAmbiguousSettings
+		}
+	}
+	if object["steps"] == nil {
+		return nil
+	}
+	steps, ok := object["steps"].([]any)
+	if !ok {
+		return errAmbiguousSettings
+	}
+	if len(steps) > 5 {
+		return fmt.Errorf("multi-step settings must contain at most 5 steps")
+	}
+	for _, entry := range steps {
+		step, ok := entry.(map[string]any)
+		if !ok {
+			return errAmbiguousSettings
+		}
+		if step["headers"] != nil {
+			if _, ok := step["headers"].(map[string]any); !ok {
+				return errAmbiguousSettings
+			}
+		}
+	}
+	return nil
 }
 
 func settingString(object map[string]any, key string) (string, error) {

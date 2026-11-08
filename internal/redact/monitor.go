@@ -34,6 +34,9 @@ func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
 	if err != nil {
 		return json.RawMessage(`{}`), stored
 	}
+	if err := checkMonitorPrivateContainers(object); err != nil {
+		return json.RawMessage(`{}`), stored
+	}
 	redactFields(object, allMonitorSecretKeys, stored)
 	redactFields(object, monitorPayloadKeys, stored)
 	if args, exists := object["args"]; exists && args != nil {

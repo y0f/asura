@@ -44,6 +44,71 @@ func TestMonitorPrivateFieldsReadAndRetainedRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMonitorPrivateMalformedContainersFailClosed(t *testing.T) {
+	for _, raw := range []string{
+		`{"headers":"private-value"}`,
+		`{"headers":["private-value"]}`,
+		`{"headers":42}`,
+		`{"steps":"private-value"}`,
+		`{"steps":{"private-key":"private-value"}}`,
+		`{"steps":["private-value"]}`,
+		`{"steps":[null]}`,
+		`{"steps":[{"url":"https://example.test/private-path","headers":"private-value"}]}`,
+		`{"steps":[{"headers":["private-value"]}]}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			old := &storage.Monitor{Type: "http_multi", Settings: json.RawMessage(raw)}
+			before, _ := json.Marshal(old)
+			clean, _ := MonitorSettings(old.Settings)
+			if string(clean) != `{}` {
+				t.Fatalf("malformed private settings were not hidden: %s", clean)
+			}
+			next := &storage.Monitor{Type: old.Type, Settings: json.RawMessage(`{}`)}
+			input, _ := json.Marshal(next)
+			if err := MergeMonitorEdit(next, old, nil, nil, false); err == nil {
+				t.Fatal("malformed saved container was accepted")
+			}
+			after, _ := json.Marshal(old)
+			merged, _ := json.Marshal(next)
+			if string(before) != string(after) || string(input) != string(merged) {
+				t.Fatal("failed read/merge mutated stored data or input")
+			}
+		})
+	}
+}
+
+func TestMonitorPrivateStepMatchingBoundedBeforeMerge(t *testing.T) {
+	for _, count := range []int{6, 1000} {
+		steps := make([]map[string]string, count)
+		for i := range steps {
+			steps[i] = map[string]string{"name": "same", "url": "https://example.test/private-path", "body": "private-body"}
+		}
+		raw, err := json.Marshal(map[string]any{"steps": steps})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, oversizedOld := range []bool{false, true} {
+			old := &storage.Monitor{Type: "http_multi", Settings: json.RawMessage(`{}`)}
+			next := &storage.Monitor{Type: old.Type, Settings: raw}
+			if oversizedOld {
+				old.Settings, next.Settings = raw, old.Settings
+			}
+			before, _ := json.Marshal(next)
+			if err := MergeMonitorEdit(next, old, nil, nil, false); err == nil || !strings.Contains(err.Error(), "at most 5") {
+				t.Fatalf("%d steps did not fail the early bound: %v", count, err)
+			}
+			after, _ := json.Marshal(next)
+			if string(before) != string(after) {
+				t.Fatal("oversized merge changed input")
+			}
+		}
+		clean, _ := MonitorSettings(raw)
+		if string(clean) != `{}` {
+			t.Fatal("oversized legacy step container was exposed")
+		}
+	}
+}
+
 func TestMonitorPrivatePayloadDestinationAndExplicitClearing(t *testing.T) {
 	for _, key := range monitorPayloadKeys {
 		t.Run(key, func(t *testing.T) {
