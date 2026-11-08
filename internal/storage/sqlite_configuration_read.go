@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -51,7 +50,7 @@ func (s *SQLiteStore) SnapshotConfiguration(ctx context.Context) (*Configuration
 					return err
 				}
 				var err error
-				p.AuthPass, err = s.decryptConfigurationSecret(secret)
+				p.AuthPass, err = s.decryptRequiredSecret(secret)
 				if err != nil {
 					return fmt.Errorf("decrypt proxy %d: %w", p.ID, err)
 				}
@@ -66,7 +65,7 @@ func (s *SQLiteStore) SnapshotConfiguration(ctx context.Context) (*Configuration
 				if err := row.Scan(&ch.ID, &ch.Name, &ch.Type, &ch.Enabled, &settings, &events); err != nil {
 					return err
 				}
-				plain, err := s.decryptConfigurationSecret(settings)
+				plain, err := s.decryptRequiredSecret(settings)
 				if err != nil {
 					return fmt.Errorf("decrypt channel %d: %w", ch.ID, err)
 				}
@@ -250,13 +249,6 @@ func (s *SQLiteStore) SnapshotConfiguration(ctx context.Context) (*Configuration
 		return nil, err
 	}
 	return c, nil
-}
-
-func (s *SQLiteStore) decryptConfigurationSecret(value string) (string, error) {
-	if s.enc == nil && strings.HasPrefix(value, encPrefix) {
-		return "", fmt.Errorf("the database encryption key is required to read encrypted configuration")
-	}
-	return s.decryptSettings(value)
 }
 
 func readConfigurationRows(ctx context.Context, tx *sql.Tx, query string, scan func(*sql.Rows) error) error {

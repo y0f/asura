@@ -15,6 +15,15 @@ import (
 
 const encPrefix = "enc:"
 
+// A stored encrypted value must never be mistaken for a plaintext credential
+// when its key is unavailable. Legacy unprefixed plaintext remains readable.
+func (s *SQLiteStore) decryptRequiredSecret(value string) (string, error) {
+	if s.enc == nil && strings.HasPrefix(value, encPrefix) {
+		return "", fmt.Errorf("the database encryption key is required to read encrypted configuration")
+	}
+	return s.decryptSettings(value)
+}
+
 const (
 	kdfIterations = 200000
 	kdfKeyLen     = 32

@@ -36,7 +36,10 @@ func (s *SQLiteStore) GetProxy(ctx context.Context, id int64) (*Proxy, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.AuthPass, _ = s.decryptSettings(authPass)
+	p.AuthPass, err = s.decryptRequiredSecret(authPass)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt proxy password: %w", err)
+	}
 	p.CreatedAt = parseTime(createdAt)
 	p.UpdatedAt = parseTime(updatedAt)
 	return &p, nil
@@ -58,7 +61,11 @@ func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &authPass, &p.Enabled, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
-		p.AuthPass, _ = s.decryptSettings(authPass)
+		var err error
+		p.AuthPass, err = s.decryptRequiredSecret(authPass)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt proxy password: %w", err)
+		}
 		p.CreatedAt = parseTime(createdAt)
 		p.UpdatedAt = parseTime(updatedAt)
 		proxies = append(proxies, &p)
