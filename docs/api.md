@@ -33,6 +33,8 @@ Monitor and notification responses hide stored authentication secrets and custom
 
 When updating the same monitor or channel type, leave a redacted secret field blank to retain its stored value. To clear a secret explicitly, include a top-level `clear_secrets` array, for example `["bearer_token", "headers.X-Token"]`. A blank header value keeps the stored value for that header name; deleting the header entry removes it. Multi-step checks retain blank header values only when the step name and URL identify one stored step, including after reordering. Ambiguous duplicate steps require replacement values or explicit clearing. Ordinary updates that change the target, proxy assignment, or OAuth token URL must replace or clear the credentials that would otherwise be retained. Super administrators can retain them across a destination change because that role already permits full credential backups. Configuration export remains a separate super administrator operation.
 
+Notification credentials are also bound to their delivery destination: server, account and recipients. An ordinary editor changing those values must replace or explicitly clear retained secrets; cosmetic settings such as priority and sound do not change the destination. Super administrators have the same deliberate retargeting exception. Omitted channel fields are preserved against the current stored row.
+
 ## Health (no auth) {#health-no-auth}
 
 | Method | Endpoint | Description |

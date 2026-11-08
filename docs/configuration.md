@@ -28,11 +28,11 @@ Everything lives in `config.yaml`. See [config.example.yaml](https://github.com/
 | `external_url` | auto | Public URL used in notification links |
 | `trusted_proxies` | `[]` | IPs/CIDRs whose `X-Real-IP`/`X-Forwarded-For` headers are trusted |
 | `rate_limit_per_sec` | `30` | Per-IP request rate limit |
-| `web_ui_enabled` | `true` | Serve the web dashboard. Set `false` to run in API-only mode. all REST endpoints remain available |
+| `web_ui_enabled` | `true` | Serve the web dashboard. Set `false` for API-only operation; REST endpoints retain their authorization requirements |
 
 ## Authentication {#authentication}
 
-API keys are hashed with SHA-256 and stored in `config.yaml`. There's no user registration and no database-stored auth.
+API-key hashes, role definitions and bindings are configured in YAML. Keys use SHA-256 hashes; the original key is not recoverable. Sessions and two-factor state use the application database. There is no public user-registration flow.
 
 ### Generating a Key {#generating-a-key}
 
@@ -50,7 +50,7 @@ Output:
   Save the API key -- it cannot be recovered.
 ```
 
-The `ak_` prefix makes keys easy to identify in logs without leaking the secret. If you already have a key and just need the hash:
+Generated keys have an `ak_` prefix. Treat the whole key as a credential. If you already have a key and need its hash:
 
 ```
 ./asura --hash-key "your-secret-key"
@@ -63,19 +63,24 @@ auth:
   api_keys:
     - name: "admin"
       hash: "2c26b46b68ffc..."
-      role: "admin"
+      super_admin: true
 ```
 
 ### Roles {#roles}
 
 | Role | Access |
 | --- | --- |
-| `admin` | Super administrator access, including configuration import and export |
-| `readonly` | All registered read scopes except subscriber contacts (`subscribers.read`) |
+| `viewer` | Monitor-associated read access, scoped through a role binding |
+| `operator` | Viewer reads plus operational monitor, incident and maintenance actions |
+| `administrator` | Every ordinary action; global binding only, without `super_admin` |
+| Legacy `role: admin` | Compatibility mapping to explicit super-administrator access |
+| Legacy `role: readonly` | A frozen global read set that excludes subscriber contacts and does not grow with new resources |
+
+Use `auth.roles` for custom reusable roles and `api_keys[].role_bindings` for explicit global, group or monitor scopes. See [Access control](access-control.html) for complete YAML examples, built-in actions and legacy compatibility. Ordinary roles cannot grant `super_admin`.
 
 ### Custom Permissions {#custom-permissions}
 
-Instead of a role, grant specific permissions per key:
+Direct permissions are global grants and can coexist with role bindings:
 
 ```
 auth:
@@ -112,7 +117,7 @@ Permissions use `resource.action`, for example `monitors.pause`. Each resource w
 | `metrics` | `read` |
 | `sla` | `read` |
 
-Cloning requires both `monitors.read` and `monitors.clone`. Editing an existing item through a form requires its read and update scopes. Bulk operations require the selected action; assigning a group also requires `monitors.assign` and `groups.read`. Configuration import and export require `super_admin: true` (or the legacy `admin` role), even when every ordinary permission is granted. Subscriber contact details require an explicit `subscribers.read` grant.
+Operations may require several independent actions. Cloning checks source read/clone, destination clone, and permission to copy relationships. Moving a monitor checks source/destination update and assignment plus `groups.read`. Editing a resource through a form requires its read and update actions. Bulk changes authorize every selected object. Configuration import and export require `super_admin: true`, even when every ordinary permission is granted. Subscriber contacts require `subscribers.read`; global metrics require the separate operational-export grant `metrics.read`.
 
 ### Upgrading permissions from v1 {#upgrading-permissions-from-v1}
 
@@ -136,7 +141,7 @@ Existing `incidents`, `maintenance`, and `escalation_policies` read/write grants
 curl -H "X-API-Key: ak_a8f3e7b2c1d9..." https://example.com/asura/api/v1/monitors
 ```
 
-**Web UI**: Enter the key on the login page. Asura creates a session cookie (24h, HttpOnly, Secure). Login is rate-limited per IP. You can have multiple keys with different roles or permission sets.
+**Web UI**: Enter the key on the login page and complete its configured two-factor challenge. Sessions default to 24 hours and use an HttpOnly cookie; `auth.session.lifetime` and `auth.session.cookie_secure` configure lifetime and the Secure flag. Keep Secure enabled for HTTPS deployments. Login is rate-limited per IP, and each request resolves the current key's permissions.
 
 ## Monitor Settings {#monitor-settings}
 
@@ -156,39 +161,39 @@ When enabled, the scheduler adjusts the effective check interval per monitor bas
 - **Recovering monitors** return to the normal base interval until stability is re-established
 - **Actively failing monitors** stay at the normal base interval
 
-The base interval on each monitor is never modified. adaptive intervals only change the scheduler's internal timing. Disable with `adaptive_intervals: false`.
+The configured base interval is unchanged; adaptive intervals change the scheduler's effective timing, with a five-second minimum. Disable them with `adaptive_intervals: false`.
 
 ## Encryption at Rest {#encryption-at-rest}
 
-Notification channel settings (tokens, passwords, webhook secrets) and proxy auth passwords can be encrypted in the database using AES-256-GCM.
+Monitor settings, notification-channel settings and proxy passwords can be encrypted in the database with AES-256-GCM. This protects those stored fields; it does not encrypt the entire database or all free-text metadata.
 
 ```
 database:
   encryption_key: "your-secret-key-here"
 ```
 
-When set, secrets are encrypted on write and decrypted on read. Existing unencrypted data is read transparently and encrypted on the next update. The key is hashed with SHA-256 to derive the AES key.
+When configured, those fields are encrypted on write and decrypted for authorized internal use. Existing plaintext remains readable and is encrypted on its next update. New encryption derives a key with PBKDF2-HMAC-SHA256 and a persisted salt; legacy SHA-256-derived ciphertext remains readable and is rewritten on update. Keep the matching encryption key with your database backup. Ordinary API and form reads still redact saved credentials.
 
 ## Data Rollup {#data-rollup}
 
 Check results are automatically aggregated into hourly and daily rollups by the retention worker. Chart queries select the appropriate tier based on the requested time range:
 
-- Less than 7 days: raw check results
-- 7 to 90 days: hourly aggregates (avg/min/max/p95 response time, up/down counts)
+- Up to 7 days: raw check results
+- Over 7 days through 90 days: hourly aggregates (response-time statistics and status counts)
 - Over 90 days: daily aggregates
 
-Hourly rollups are retained for 90 days, daily rollups for 365 days. This keeps the database size manageable for long-running instances.
+Hourly rollups are retained for 90 days and daily rollups for one calendar year. Raw-history and request-log retention are configured separately. A failed rollup pass retains its source history rather than deleting unsummarized checks.
 
 ## Keyboard Shortcuts {#keyboard-shortcuts}
 
 | Key | Action |
 | --- | --- |
-| `n` | New monitor |
-| `/` | Focus search |
+| `n` | New monitor, when creation is allowed |
+| `/` | Open search |
+| `Ctrl+K` / `Cmd+K` | Open search |
 | `Escape` | Close modal |
-| `?` | Show shortcut help |
 
-Shortcuts are disabled when typing in form fields.
+Single-key shortcuts are disabled while typing in form fields. The modified search shortcut remains available.
 
 ## Maintenance Scheduling {#maintenance-scheduling}
 
@@ -203,4 +208,4 @@ Maintenance windows support 6 scheduling modes:
 | `weekly` | Same weekday and time every week. |
 | `monthly` | Same day-of-month and time every month. |
 
-During active maintenance, alerts are suppressed for affected monitors. Manual windows can be toggled via `POST /api/v1/maintenance/{id}/toggle`.
+During active maintenance, checks and incident state continue while incident announcements are deferred. This does not suppress every possible event type. Manual windows can be toggled via `POST /api/v1/maintenance/{id}/toggle` with `maintenance.toggle` covering every affected monitor. All-monitor windows require a global grant.
