@@ -117,7 +117,10 @@ func (h *Handler) loadMonitorPage(ctx context.Context, typeFilter string, page, 
 }
 
 func (h *Handler) loadOpenIncidents(ctx context.Context) ([]*storage.Incident, error) {
-	result, err := h.store.ListIncidentsFiltered(ctx, storage.IncidentListFilter{Status: incident.StatusOpen, Access: httputil.MonitorAccess(ctx, "incidents.read"), MonitorReadAccess: httputil.MonitorAccess(ctx, "monitors.read")}, storage.Pagination{Page: 1, PerPage: 10})
+	result, err := h.store.ListIncidentsFiltered(ctx, storage.IncidentListFilter{Status: incident.StatusOpen, Access: httputil.MonitorAccess(ctx, "incidents.read"), MonitorReadAccess: httputil.MonitorAccess(ctx, "monitors.read"), DiagnosticsReadAccess: httputil.MonitorAccess(ctx, "diagnostics.read")}, storage.Pagination{Page: 1, PerPage: 10})
+	if err == nil {
+		result, err = httputil.IncidentListResponse(ctx, result)
+	}
 	if err != nil {
 		return nil, err
 	}

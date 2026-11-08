@@ -22,9 +22,13 @@ func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.store.ListIncidentsFiltered(r.Context(), storage.IncidentListFilter{
 		MonitorID: monitorID, Status: status,
-		Access:            httputil.MonitorAccess(r.Context(), "incidents.read"),
-		MonitorReadAccess: httputil.MonitorAccess(r.Context(), "monitors.read"),
+		Access:                httputil.MonitorAccess(r.Context(), "incidents.read"),
+		MonitorReadAccess:     httputil.MonitorAccess(r.Context(), "monitors.read"),
+		DiagnosticsReadAccess: httputil.MonitorAccess(r.Context(), "diagnostics.read"),
 	}, p)
+	if err == nil {
+		result, err = httputil.IncidentListResponse(r.Context(), result)
+	}
 	if err != nil {
 		h.logger.Error("list incidents", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list incidents")
@@ -60,13 +64,14 @@ func (h *Handler) GetIncident(w http.ResponseWriter, r *http.Request) {
 	if h.incidentError(w, err) {
 		return
 	}
+	access, diagnostics := httputil.DiagnosticReadAccess(r.Context(), "incidents.read", inc.MonitorID, inc.MonitorGroupID)
 	events, err := h.store.ListIncidentEvents(r.Context(), id, access...)
 	if h.incidentError(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"incident": httputil.IncidentReadResponse(r.Context(), inc),
-		"timeline": events,
+		"timeline": httputil.IncidentEventsResponse(events, diagnostics),
 	})
 }
 

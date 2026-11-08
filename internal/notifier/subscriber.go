@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/config"
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -81,7 +82,7 @@ func (n *SubscriberNotifier) NotifyForMonitor(ctx context.Context, monitorID int
 	}
 	if inc != nil {
 		inc = &storage.Incident{ID: inc.ID, MonitorID: inc.MonitorID, MonitorName: inc.MonitorName,
-			Status: inc.Status, Cause: inc.Cause, StartedAt: inc.StartedAt}
+			Status: inc.Status, Cause: redact.IncidentCause(), StartedAt: inc.StartedAt}
 	}
 	var firstErr error
 	for _, pageID := range pageIDs {

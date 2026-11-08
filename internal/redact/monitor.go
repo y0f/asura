@@ -29,6 +29,10 @@ func allSecretKeys(registry map[string][]string) []string {
 // MonitorSettings hides credentials even in stale settings left from another
 // monitor type. Custom header names are unrestricted, so every value is private.
 func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
+	return monitorSettings(raw, false)
+}
+
+func monitorSettings(raw json.RawMessage, diagnostics bool) (json.RawMessage, map[string]bool) {
 	stored := make(map[string]bool)
 	object, err := settingsObject(raw, true)
 	if err != nil {
@@ -77,6 +81,14 @@ func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
 					stored[prefix+"body"] = true
 					object["body"] = ""
 				}
+				for _, key := range []string{"extract_regex", "extract_json"} {
+					if value := object[key]; value != nil && value != "" {
+						stored[prefix+key] = true
+						if !diagnostics {
+							object[key] = ""
+						}
+					}
+				}
 			}
 		}
 	}
@@ -88,13 +100,23 @@ func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
 }
 
 func Monitor(m *storage.Monitor) *storage.Monitor {
+	return MonitorWithDiagnostics(m, false)
+}
+
+// MonitorWithDiagnostics exposes assertion definitions only with a separately
+// authorized diagnostic read. Credentials remain hidden even with that grant.
+func MonitorWithDiagnostics(m *storage.Monitor, diagnostics bool) *storage.Monitor {
 	if m == nil {
 		return nil
 	}
 	copy := *m
+	copy.Assertions = nil
+	if diagnostics {
+		copy.Assertions = append(json.RawMessage(nil), m.Assertions...)
+	}
 	copy.Target = MonitorTarget(m.Type, m.Target)
 	if len(m.Settings) > 0 {
-		copy.Settings, _ = MonitorSettings(m.Settings)
+		copy.Settings, _ = monitorSettings(m.Settings, diagnostics)
 	}
 	return &copy
 }
@@ -104,6 +126,9 @@ func MonitorStoredSecrets(m *storage.Monitor) map[string]bool {
 	_, stored := MonitorSettings(m.Settings)
 	if m.Target != "" && MonitorTarget(m.Type, m.Target) != m.Target {
 		stored["target"] = true
+	}
+	if present, err := hasAssertions(m.Assertions); present || err != nil {
+		stored["assertions"] = true
 	}
 	return stored
 }

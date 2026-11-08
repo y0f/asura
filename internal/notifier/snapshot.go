@@ -22,6 +22,7 @@ func snapshotPayload(p *Payload) *Payload {
 	copy := *p
 	copy.Incident = copyPointer(p.Incident)
 	if inc := copy.Incident; inc != nil {
+		inc.Cause = redact.IncidentCause()
 		inc.MonitorGroupID = copyPointer(inc.MonitorGroupID)
 		inc.AcknowledgedAt = copyPointer(inc.AcknowledgedAt)
 		inc.ResolvedAt = copyPointer(inc.ResolvedAt)
@@ -39,10 +40,7 @@ func snapshotPayload(p *Payload) *Payload {
 		mon.EscalationPolicyID = copyPointer(mon.EscalationPolicyID)
 		mon.LastCheckAt = copyPointer(mon.LastCheckAt)
 	}
-	copy.Change = copyPointer(p.Change)
-	if copy.Change != nil {
-		copy.Change.OldBody, copy.Change.NewBody = "", ""
-	}
+	copy.Change = redact.ContentChange(p.Change, false)
 	return &copy
 }
 

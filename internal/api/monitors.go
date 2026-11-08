@@ -339,11 +339,16 @@ func (h *Handler) ListChecks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
+	mon, ok := h.requireMonitor(w, r, id, "monitors.read")
+	if !ok {
 		return
 	}
+	access, diagnostics := httputil.DiagnosticReadAccess(r.Context(), "monitors.read", mon.ID, mon.GroupID)
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListCheckResults(r.Context(), id, p, httputil.MonitorAccess(r.Context(), "monitors.read")...)
+	result, err := h.store.ListCheckResults(r.Context(), id, p, access...)
+	if err == nil {
+		result, err = httputil.CheckResultsResponse(r.Context(), result, diagnostics)
+	}
 	if err != nil {
 		if monitorMutationError(w, err) {
 			return
@@ -361,11 +366,16 @@ func (h *Handler) ListChanges(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
+	mon, ok := h.requireMonitor(w, r, id, "monitors.read")
+	if !ok {
 		return
 	}
+	access, diagnostics := httputil.DiagnosticReadAccess(r.Context(), "monitors.read", mon.ID, mon.GroupID)
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListContentChanges(r.Context(), id, p, httputil.MonitorAccess(r.Context(), "monitors.read")...)
+	result, err := h.store.ListContentChanges(r.Context(), id, p, access...)
+	if err == nil {
+		result, err = httputil.ContentChangesResponse(result, diagnostics)
+	}
 	if err != nil {
 		if monitorMutationError(w, err) {
 			return

@@ -70,7 +70,7 @@ func TestIncidentWebScopesAndWriteOnlyRedirect(t *testing.T) {
 		t.Fatalf("incident list exposed denied object: %d %s", w.Code, w.Body.String())
 	}
 	w = do(h.IncidentDetail, "incidents.read", "GET", true)
-	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), m.Name) || strings.Contains(w.Body.String(), "/console/monitors/"+strconvI(m.ID)) || !strings.Contains(w.Body.String(), inc.Cause) {
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), m.Name) || strings.Contains(w.Body.String(), "/console/monitors/"+strconvI(m.ID)) || strings.Contains(w.Body.String(), inc.Cause) {
 		t.Fatalf("incident detail related-resource leak: %d %s", w.Code, w.Body.String())
 	}
 	w = do(h.IncidentAck, "incidents.acknowledge", "POST", true)

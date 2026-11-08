@@ -17,7 +17,7 @@ func monitorResponse(r *http.Request, monitor *storage.Monitor) any {
 }
 
 func monitorReadResponse(r *http.Request, monitor *storage.Monitor) *storage.Monitor {
-	response := redact.Monitor(monitor)
+	response := httputil.MonitorReadResponse(r.Context(), monitor)
 	if response != nil && !httputil.GetAPIKey(r.Context()).HasPermission("tags.read") {
 		response.MonitorTags = make([]storage.MonitorTag, len(monitor.MonitorTags))
 		for i, tag := range monitor.MonitorTags {

@@ -22,9 +22,13 @@ func (h *Handler) Incidents(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	result, err := h.store.ListIncidentsFiltered(r.Context(), storage.IncidentListFilter{
 		Status: status, Search: q,
-		Access:            httputil.MonitorAccess(r.Context(), "incidents.read"),
-		MonitorReadAccess: httputil.MonitorAccess(r.Context(), "monitors.read"),
+		Access:                httputil.MonitorAccess(r.Context(), "incidents.read"),
+		MonitorReadAccess:     httputil.MonitorAccess(r.Context(), "monitors.read"),
+		DiagnosticsReadAccess: httputil.MonitorAccess(r.Context(), "diagnostics.read"),
 	}, p)
+	if err == nil {
+		result, err = httputil.IncidentListResponse(r.Context(), result)
+	}
 	if err != nil {
 		h.logger.Error("web: list incidents", "error", err)
 		http.Error(w, "Failed to load incidents", http.StatusInternalServerError)
@@ -63,13 +67,14 @@ func (h *Handler) IncidentDetail(w http.ResponseWriter, r *http.Request) {
 	if h.incidentError(w, r, err) {
 		return
 	}
+	access, diagnostics := httputil.DiagnosticReadAccess(r.Context(), "incidents.read", inc.MonitorID, inc.MonitorGroupID)
 	events, err := h.store.ListIncidentEvents(r.Context(), id, access...)
 	if h.incidentError(w, r, err) {
 		return
 	}
 	h.renderComponent(w, r, views.IncidentDetailPage(views.IncidentDetailParams{
 		LayoutParams: h.newLayoutParams(r, "Incident #"+r.PathValue("id"), "incidents"),
-		Incident:     httputil.IncidentReadResponse(r.Context(), inc), Events: events,
+		Incident:     httputil.IncidentReadResponse(r.Context(), inc), Events: httputil.IncidentEventsResponse(events, diagnostics),
 	}))
 }
 

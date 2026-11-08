@@ -64,8 +64,12 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 	return fd
 }
 
-func storedMonitorFormData(mon *storage.Monitor) *views.MonitorFormParams {
-	fd := monitorToFormData(redact.Monitor(mon))
+func storedMonitorFormData(mon *storage.Monitor, diagnostics ...bool) *views.MonitorFormParams {
+	safe := redact.MonitorWithDiagnostics(mon, len(diagnostics) > 0 && diagnostics[0])
+	fd := monitorToFormData(safe)
+	if len(safe.Settings) > 0 {
+		fd.SettingsJSON = string(safe.Settings)
+	}
 	fd.SecretsStored = redact.MonitorStoredSecrets(mon)
 	if mon.Type == "http" {
 		// Preserve legacy authentication inference without exposing its value.
@@ -521,15 +525,22 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		changesPage = 1
 	}
 
+	access, diagnostics := httputil.DiagnosticReadAccess(ctx, "monitors.read", mon.ID, mon.GroupID)
 	now := time.Now().UTC()
-	checks, err := h.store.ListCheckResults(ctx, id, storage.Pagination{Page: checksPage, PerPage: 10}, httputil.MonitorAccess(ctx, "monitors.read")...)
+	checks, err := h.store.ListCheckResults(ctx, id, storage.Pagination{Page: checksPage, PerPage: 10}, access...)
+	if err == nil {
+		checks, err = httputil.CheckResultsResponse(ctx, checks, diagnostics)
+	}
 	if h.monitorReadError(w, r, err, "Failed to load monitor checks") {
 		return
 	}
 	if checks == nil {
 		checks = &storage.PaginatedResult{}
 	}
-	changes, err := h.store.ListContentChanges(ctx, id, storage.Pagination{Page: changesPage, PerPage: 10}, httputil.MonitorAccess(ctx, "monitors.read")...)
+	changes, err := h.store.ListContentChanges(ctx, id, storage.Pagination{Page: changesPage, PerPage: 10}, access...)
+	if err == nil {
+		changes, err = httputil.ContentChangesResponse(changes, diagnostics)
+	}
 	if h.monitorReadError(w, r, err, "Failed to load monitor changes") {
 		return
 	}
@@ -562,15 +573,22 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		uptime7d, samples7d = storage.SummarizeUptime(daily7d)
 		uptime30d, samples30d = storage.SummarizeUptime(daily30d)
 	}
-	latestCheck, err := h.store.GetLatestCheckResult(ctx, id, httputil.MonitorAccess(ctx, "monitors.read")...)
+	latestCheck, err := h.store.GetLatestCheckResult(ctx, id, access...)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		h.monitorReadError(w, r, err, "Failed to load latest check")
 		return
 	}
 	key := httputil.GetAPIKey(ctx)
+	latestCheck = redact.Check(latestCheck, diagnostics, key.HasPermission("agents.read"))
 	var openIncident *storage.Incident
 	if key.AllowsMonitor("incidents.read", mon.ID, mon.GroupID) {
-		openIncident, err = h.store.GetOpenIncident(ctx, id, httputil.MonitorAccess(ctx, "monitors.read", "incidents.read")...)
+		incidentAccess := append(append([]storage.MonitorAccess{}, access...), httputil.MonitorAccess(ctx, "incidents.read")...)
+		openIncident, err = h.store.GetOpenIncident(ctx, id, incidentAccess...)
+		if openIncident != nil && !diagnostics {
+			copy := *openIncident
+			copy.Cause = redact.IncidentCause()
+			openIncident = &copy
+		}
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			h.monitorReadError(w, r, err, "Failed to load open incident")
 			return
@@ -616,7 +634,7 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	lp := h.newLayoutParams(r, mon.Name, "monitors")
 	h.renderComponent(w, r, views.MonitorDetailPage(views.MonitorDetailParams{
 		LayoutParams:     lp,
-		Monitor:          redact.Monitor(mon),
+		Monitor:          httputil.MonitorReadResponse(ctx, mon),
 		CloneAllowed:     h.monitorCloneAllowed(r, mon),
 		Checks:           checks,
 		Changes:          changes,
@@ -709,7 +727,7 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 			h.monitorReadError(w, r, err, "Failed to load monitor assignments")
 			return
 		}
-		fd = storedMonitorFormData(mon)
+		fd = storedMonitorFormData(mon, httputil.GetAPIKey(r.Context()).AllowsMonitor("diagnostics.read", mon.ID, mon.GroupID))
 		fd.SelectedChannelIDs, err = h.store.GetMonitorNotificationChannelIDs(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read", "monitors.update")...)
 		if err != nil {
 			h.monitorReadError(w, r, err, "Failed to load monitor assignments")

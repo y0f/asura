@@ -5,6 +5,7 @@ var permissionResources = []struct {
 	actions []string
 }{
 	{"monitors", []string{"read", "create", "update", "delete", "pause", "resume", "status", "clone", "assign"}},
+	{"diagnostics", []string{"read"}},
 	{"incidents", []string{"read", "acknowledge", "resolve", "severity", "delete"}},
 	{"notifications", []string{"read", "create", "update", "delete", "test"}},
 	{"notification_history", []string{"read"}},

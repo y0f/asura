@@ -270,11 +270,12 @@ type MonitorListFilter struct {
 }
 
 type IncidentListFilter struct {
-	MonitorID         int64
-	Status            string
-	Search            string
-	Access            []MonitorAccess
-	MonitorReadAccess []MonitorAccess
+	MonitorID             int64
+	Status                string
+	Search                string
+	Access                []MonitorAccess
+	MonitorReadAccess     []MonitorAccess
+	DiagnosticsReadAccess []MonitorAccess
 }
 
 // AuditLogFilter holds filter parameters for listing audit log entries.

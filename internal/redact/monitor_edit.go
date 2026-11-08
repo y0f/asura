@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -110,6 +111,17 @@ func MergeMonitorEdit(next, old *storage.Monitor, secretKeys []string, clear map
 		}
 	}
 	prepared := *next
+	if clear["assertions"] {
+		prepared.Assertions = json.RawMessage(`[]`)
+	} else {
+		present, err := hasAssertions(next.Assertions)
+		if err != nil {
+			return err
+		}
+		if !present {
+			prepared.Assertions = slices.Clone(old.Assertions)
+		}
+	}
 	var retainedTarget bool
 	prepared.Target, retainedTarget = mergeURL(next.Target, old.Target, MonitorTarget(old.Type, old.Target), clear["target"])
 	proxyChanged := !sameID(prepared.ProxyID, old.ProxyID)
@@ -174,6 +186,19 @@ func MergeMonitorEdit(next, old *storage.Monitor, secretKeys []string, clear map
 
 func credentialDestinationError() error {
 	return fmt.Errorf("changing the credential destination requires replacing or clearing saved credentials")
+}
+
+func hasAssertions(raw json.RawMessage) (bool, error) {
+	conditions, err := assertion.Parse(raw)
+	if err != nil {
+		return false, err
+	}
+	for _, group := range conditions.Groups {
+		if len(group.Conditions) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Validate private containers before redaction or identity matching. Invalid
@@ -386,6 +411,11 @@ func (m *monitorPrivateMerge) steps(next, old map[string]any, omitted, changed b
 		if err := m.stringField(step, match, "body", prefix+"body", omitted, stepChanged); err != nil {
 			return err
 		}
+		for _, key := range []string{"extract_regex", "extract_json"} {
+			if err := m.stringField(step, match, key, prefix+key, omitted, false); err != nil {
+				return err
+			}
+		}
 		if err := m.headers(step, match, prefix, omitted, stepChanged); err != nil {
 			return err
 		}
@@ -394,7 +424,7 @@ func (m *monitorPrivateMerge) steps(next, old map[string]any, omitted, changed b
 }
 
 func (m *monitorPrivateMerge) retainsStepFields(next, old map[string]any, prefix string) (bool, error) {
-	for _, key := range []string{"url", "body"} {
+	for _, key := range []string{"url", "body", "extract_regex", "extract_json"} {
 		previous, err := settingString(old, key)
 		if err != nil {
 			return false, err
@@ -406,7 +436,7 @@ func (m *monitorPrivateMerge) retainsStepFields(next, old map[string]any, prefix
 		if m.clear[prefix+key] || previous == "" {
 			continue
 		}
-		if key == "body" && submitted == "" || key == "url" && previous != submitted && (submitted == "" || submitted == URLOrigin(previous)) {
+		if key != "url" && submitted == "" || key == "url" && previous != submitted && (submitted == "" || submitted == URLOrigin(previous)) {
 			return true, nil
 		}
 	}

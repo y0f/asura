@@ -67,7 +67,7 @@ func TestIncidentRequestsKeepActionsAndRelatedReadsScoped(t *testing.T) {
 		t.Fatalf("list leaked counts or related name: %d %s, %v", w.Code, w.Body.String(), err)
 	}
 	w = do(h.GetIncident, "incidents.read", "GET", incidents[0].ID, "")
-	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), monitors[0].Name) || !strings.Contains(w.Body.String(), incidents[0].Cause) {
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), monitors[0].Name) || strings.Contains(w.Body.String(), incidents[0].Cause) {
 		t.Fatalf("detail related-resource boundary: %d %s", w.Code, w.Body.String())
 	}
 	for _, tc := range []struct {

@@ -75,9 +75,12 @@ func (s *SQLiteStore) ListIncidentsFiltered(ctx context.Context, f IncidentListF
 		args = append(args, f.Status)
 	}
 	if f.Search != "" {
-		where += " AND (((1=1" + nameClause + ") AND " + s.readDB.dialect.like("COALESCE(m.name, '')", "'%' || ? || '%'") + ") OR " + s.readDB.dialect.like("i.cause", "'%' || ? || '%'") + ")"
+		diagnosticClause, diagnosticArgs := monitorAccessSQL("m", f.DiagnosticsReadAccess)
+		where += " AND (((1=1" + nameClause + ") AND " + s.readDB.dialect.like("COALESCE(m.name, '')", "'%' || ? || '%'") + ") OR ((1=1" + diagnosticClause + ") AND " + s.readDB.dialect.like("i.cause", "'%' || ? || '%'") + "))"
 		args = append(args, nameArgs...)
-		args = append(args, f.Search, f.Search)
+		args = append(args, f.Search)
+		args = append(args, diagnosticArgs...)
+		args = append(args, f.Search)
 	}
 
 	var total int64

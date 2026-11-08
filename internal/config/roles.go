@@ -52,7 +52,7 @@ func SupportsMonitorScope(permission string) bool {
 	}
 	resource, _, _ := strings.Cut(permission, ".")
 	switch resource {
-	case "monitors", "incidents", "sla", "request_logs", "notification_history", "maintenance":
+	case "monitors", "diagnostics", "incidents", "sla", "request_logs", "notification_history", "maintenance":
 		return true
 	default:
 		return false
