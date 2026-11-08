@@ -54,11 +54,15 @@ templ SettingsPage(p SettingsParams) {
 					@settingsFact("Uptime") {
 						{ p.Uptime }
 					}
-					@settingsFact("Database size") {
-						{ formatBytes(p.DBSizeBytes) }
+					if p.Can("database.read") {
+						@settingsFact("Database size") {
+							{ formatBytes(p.DBSizeBytes) }
+						}
 					}
-					@settingsFact("Monitors") {
-						{ fmt.Sprint(p.MonitorCount) }
+					if p.HasCapability("monitors.read") {
+						@settingsFact("Visible monitors") {
+							{ fmt.Sprint(p.MonitorCount) }
+						}
 					}
 					@settingsFact("Check workers") {
 						{ fmt.Sprint(p.WorkerCount) }

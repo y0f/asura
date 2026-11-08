@@ -40,7 +40,9 @@ func TestSettingsDoesNotPresentFailedReadsAsZero(t *testing.T) {
 		h := testWebHandler(t)
 		h.store = settingsFailureStore{sizeError: sizeError}
 		w := httptest.NewRecorder()
-		h.Settings(w, httptest.NewRequest(http.MethodGet, "/settings", nil))
+		r := httptest.NewRequest(http.MethodGet, "/settings", nil)
+		r = r.WithContext(context.WithValue(r.Context(), httputil.CtxKeyAPIKey, &config.APIKeyConfig{SuperAdmin: true}))
+		h.Settings(w, r)
 		if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "injected") {
 			t.Fatalf("failed settings read presented as healthy or leaked internals: %d %s", w.Code, w.Body.String())
 		}

@@ -12,17 +12,30 @@ import (
 )
 
 func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
-	dbSize, err := h.store.DBSize()
-	if err != nil {
-		h.logger.Error("web: settings database size", "error", err)
-		http.Error(w, "Failed to read database information", http.StatusInternalServerError)
+	key := httputil.GetAPIKey(r.Context())
+	if !key.HasPermission("settings.read") {
+		http.Error(w, "Settings access is required", http.StatusForbidden)
 		return
 	}
-	result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 1})
-	if err != nil {
-		h.logger.Error("web: settings monitor count", "error", err)
-		http.Error(w, "Failed to read monitor information", http.StatusInternalServerError)
-		return
+	var dbSize, monitorCount int64
+	if key.HasPermission("database.read") {
+		var err error
+		dbSize, err = h.store.DBSize()
+		if err != nil {
+			h.logger.Error("web: settings database size", "error", err)
+			http.Error(w, "Failed to read database information", http.StatusInternalServerError)
+			return
+		}
+	}
+	if key.HasCapability("monitors.read") {
+		filter := storage.MonitorListFilter{Access: httputil.MonitorAccess(r.Context(), "monitors.read")}
+		result, err := h.store.ListMonitors(r.Context(), filter, storage.Pagination{Page: 1, PerPage: 1})
+		if err != nil {
+			h.logger.Error("web: settings monitor count", "error", err)
+			http.Error(w, "Failed to read monitor information", http.StatusInternalServerError)
+			return
+		}
+		monitorCount = result.Total
 	}
 	lp := h.newLayoutParams(r, "Settings", "settings")
 	uptime := time.Since(h.startTime).Truncate(time.Second).String()
@@ -31,7 +44,7 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 		DBSizeBytes:   dbSize,
 		AppVersion:    h.version,
 		Uptime:        uptime,
-		MonitorCount:  result.Total,
+		MonitorCount:  monitorCount,
 		WorkerCount:   h.cfg.Monitor.Workers,
 		RetentionDays: h.cfg.Database.RetentionDays,
 		EncryptionOn:  h.cfg.Database.EncryptionKey != "",
