@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -20,13 +21,21 @@ func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !mon.HasSampledMetrics() {
+		writeError(w, http.StatusBadRequest, "sample-based SLA is unavailable for manual and heartbeat monitors")
+		return
+	}
 	if mon.SLATarget <= 0 {
 		writeError(w, http.StatusBadRequest, "monitor has no SLA target configured")
 		return
 	}
 
-	status, err := sla.Compute(r.Context(), h.store, mon.ID, mon.SLATarget, httputil.MonitorAccess(r.Context(), "sla.read")...)
+	status, err := sla.Compute(r.Context(), h.store, mon.ID, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
+		if errors.Is(err, sla.ErrUnavailable) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if monitorMutationError(w, err) {
 			return
 		}
@@ -35,6 +44,10 @@ func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if status.Target <= 0 {
+		writeError(w, http.StatusBadRequest, "monitor has no SLA target configured")
+		return
+	}
 	name := mon.Name
 	if !httputil.GetAPIKey(r.Context()).AllowsMonitor("monitors.read", mon.ID, mon.GroupID) {
 		name = ""

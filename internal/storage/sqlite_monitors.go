@@ -566,7 +566,7 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 	clause, args := monitorOwnerAccessSQL("monitor_id", access)
 	stmt, err := s.readDB.PrepareContext(ctx,
 		`SELECT status, response_time FROM check_results
-		 WHERE monitor_id=?`+clause+` ORDER BY created_at DESC, id DESC LIMIT ?`)
+		 WHERE monitor_id=? AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=check_results.monitor_id AND m.type NOT IN ('manual','heartbeat'))`+clause+` ORDER BY created_at DESC, id DESC LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}

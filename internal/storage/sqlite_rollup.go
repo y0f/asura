@@ -118,6 +118,13 @@ func (s *SQLiteStore) GetTimeSeriesFromHourly(ctx context.Context, monitorID int
 		return nil, err
 	}
 	defer release()
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return []*TimeSeriesPoint{}, nil
+	}
 	rows, err := reader.QueryContext(ctx,
 		`SELECT hour || ':00:00Z', avg_rt,
 		        CASE WHEN down_count > 0 THEN 'down' WHEN total > up_count + down_count THEN 'degraded' ELSE 'up' END
@@ -149,6 +156,13 @@ func (s *SQLiteStore) GetTimeSeriesFromDaily(ctx context.Context, monitorID int6
 		return nil, err
 	}
 	defer release()
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return []*TimeSeriesPoint{}, nil
+	}
 	rows, err := reader.QueryContext(ctx,
 		`SELECT day || 'T00:00:00Z', avg_rt,
 		        CASE WHEN down_count > 0 THEN 'down' WHEN total > up_count + down_count THEN 'degraded' ELSE 'up' END

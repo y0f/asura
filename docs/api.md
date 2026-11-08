@@ -78,6 +78,8 @@ Heartbeat (push) monitors expect periodic pings from your job or service. Hit th
 
 See [Monitors](monitors.html) for the full field reference and protocol settings.
 
+The metrics endpoint accepts RFC3339 `from` and `to` timestamps (`from < to`), defaulting to the last 24 hours. `sampled_metrics` is false for manual and heartbeat monitors; their `uptime_pct`, `response_time` and `checks` are `null`. Scheduled monitors return rollup-aware check counts, `uptime_pct: null` when the window has no samples, and `response_time: null` when no successful raw latency samples remain. `response_samples` distinguishes missing latency from a valid measured `0` ms. Type, permission scope, counts and values come from one database snapshot. Passive chart endpoints return an empty `points` array.
+
 The monitor list accepts `type`, `group`, `tag`, `status`, `sort` and `q` query parameters. Group and tag values must be positive IDs. Status is one of `up`, `down`, `degraded`, `paused` or `pending`; sort is `name`, `status`, `last_check` or `response_time`. `q` matches the start of a monitor name, up to 255 UTF-8 bytes; it never searches targets or settings. Filters intersect the caller's monitor scope before counts and pagination. Invalid values return HTTP 400.
 
 Omitted relationship fields on `PUT` preserve the current assignments inside the update transaction. This includes `agent_ids`, `monitor_tags`, `notification_channel_ids`, `group_id`, `proxy_id` and `escalation_policy_id`. An explicit empty array clears a list assignment; null clears an optional single relationship. Changing an assignment requires `monitors.assign` and the related resource's read permission. Empty agent assignments mean no remote jobs. Initial group placement is authorized by destination `monitors.create`; later group moves also require source and destination update/assignment authority and `groups.read`.
@@ -264,7 +266,9 @@ Permissions: `escalation_policies.read`, `escalation_policies.write`. See [Escal
 | `GET` | `/api/v1/reports/sla?period=2025-01` | Monthly SLA report (all monitors with targets) |
 | `GET` | `/api/v1/reports/sla/export?period=2025-01` | Export SLA report as JSON download |
 
-Set `sla_target` (e.g. `99.9`) on a monitor to enable SLA tracking. The response includes current month uptime, error budget in seconds, and breach status. The report endpoint returns all monitors that have an SLA target configured.
+Set `sla_target` (e.g. `99.9`) on a scheduled monitor to enable SLA tracking. The response includes current month uptime, error budget in seconds, and breach status. Reports exclude manual and heartbeat monitors: their state transitions are not scheduled check samples. Existing targets on these passive types remain stored but inactive; new targets and changes to inactive targets are rejected unless cleared to `0`.
+
+SLA JSON includes `has_data` and check counts. With no samples, observed uptime, used/remaining budget, risk and breach fields are `null`; the configured target and theoretical total allowance remain available. The rolling window has its own `total_checks_30d`, so an empty 30-day window never reports measured uptime. Current type, target, access and both uptime windows are read from one database snapshot.
 
 ## Maintenance Windows {#maintenance-windows}
 

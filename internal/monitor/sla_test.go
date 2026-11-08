@@ -19,9 +19,13 @@ type slaBudgetStore struct {
 	fail      error
 }
 
-func (s *slaBudgetStore) GetDailyUptime(context.Context, int64, time.Time, time.Time, ...storage.MonitorAccess) ([]*storage.DailyUptime, error) {
+func (s *slaBudgetStore) GetMonitorSLASnapshot(ctx context.Context, id int64, _, _, _ time.Time, _ ...storage.MonitorAccess) (*storage.MonitorSLASnapshot, error) {
 	s.reads++
-	return []*storage.DailyUptime{{TotalChecks: s.total, UpChecks: s.up, DownChecks: s.total - s.up}}, s.fail
+	m, err := s.GetMonitor(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &storage.MonitorSLASnapshot{Sampled: m.HasSampledMetrics(), Target: m.SLATarget, Period: []*storage.DailyUptime{{TotalChecks: s.total, UpChecks: s.up, DownChecks: s.total - s.up}}}, s.fail
 }
 
 func slaPipelineFixture(t *testing.T) (*slaBudgetStore, *Pipeline, *storage.Monitor) {
@@ -30,8 +34,20 @@ func slaPipelineFixture(t *testing.T) (*slaBudgetStore, *Pipeline, *storage.Moni
 	s := &slaBudgetStore{countingStore: base, total: 10000, up: 9990}
 	logger := discardLogger()
 	p := NewPipeline(s, checker.NewRegistry(), incident.NewManager(s, logger), 1, false, logger)
-	m := createTestMonitor(t, s, &storage.Monitor{Type: "manual", SLATarget: 99, Enabled: true})
+	m := createTestMonitor(t, s, &storage.Monitor{Type: "http", SLATarget: 99, Enabled: true})
 	return s, p, m
+}
+
+func TestPassiveSLATargetNeverEvaluatesTransitionCounts(t *testing.T) {
+	s, p, m := slaPipelineFixture(t)
+	s.total, s.up = 2, 1
+	for _, kind := range []string{"manual", "heartbeat"} {
+		m.Type = kind
+		p.checkSLABreachAt(context.Background(), m, time.Now())
+		if s.reads != 0 || len(drainEvents(p)) != 0 {
+			t.Fatal("passive state changes caused an SLA alert")
+		}
+	}
 }
 
 func TestSLABudgetReevaluatesAndEscalatesWithinExistingOutage(t *testing.T) {
@@ -75,6 +91,9 @@ func TestSLABudgetNoDataMaintenanceAndFailedQueue(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
 	m.SLATarget = 100
+	if err := s.UpdateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
 	s.total, s.up = 0, 0
 	p.checkSLABreachAt(ctx, m, now)
 	s.total, s.up = 1000, 1000

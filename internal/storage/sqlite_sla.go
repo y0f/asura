@@ -12,7 +12,7 @@ func (s *SQLiteStore) ListSLAMonitorIDs(ctx context.Context, afterID int64, limi
 		return nil, fmt.Errorf("SLA batch limit must be between 1 and 1000")
 	}
 	rows, err := s.readDB.QueryContext(ctx, `SELECT id FROM monitors
-		WHERE id>? AND enabled=1 AND sla_target>0 ORDER BY id LIMIT ?`, afterID, limit)
+		WHERE id>? AND enabled=1 AND sla_target>0 AND type NOT IN ('manual','heartbeat') ORDER BY id LIMIT ?`, afterID, limit)
 	if err != nil {
 		return nil, err
 	}

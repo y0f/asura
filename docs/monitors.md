@@ -43,7 +43,7 @@ Asura supports 19 monitor types: 17 active protocol checks, heartbeat monitors f
 | `agent_enabled` | bool |  | Enable remote checks on explicitly assigned agents (API creation default: false). Empty assignments produce no remote jobs. Proxy assignments, typed authentication settings, mTLS material and server-only monitor types remain ineligible for delegation |
 | `agent_ids` | int\[\] |  | Existing trusted agent IDs. An omitted `PUT` field preserves current assignments; `[]` removes them. Changing delegation requires `monitors.assign` and `agents.read`. Newly enrolled agents receive no jobs until assigned |
 | `resend_interval` | int |  | Seconds between reminder notifications while an incident is open (0 = notify once only) |
-| `sla_target` | float |  | SLA uptime target percentage (e.g. 99.9). Set to 0 to disable SLA tracking |
+| `sla_target` | float |  | Scheduled-check SLA target percentage, from 0 to 100 (e.g. 99.9). Set to 0 to disable; unavailable for manual and heartbeat types |
 
 Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps proxy-routed checks, typed authentication and mTLS settings local. Upgrade the server and agents together; v2 jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
 
@@ -406,4 +406,8 @@ Incidents are auto-assigned a severity when created: `critical` for down monitor
 
 ## Uptime Heatmap {#uptime-heatmap}
 
-The detail page shows a 365-day uptime calendar with neutral and blue shading. Its legend distinguishes at least 99.9%, 99% to below 99.9%, and below 99%; days without samples stay separate. Hover for a daily value or open the native daily-data table for exact percentages and check counts using a keyboard or touch. No samples are shown as an em dash, not as measured 100% uptime.
+Scheduled monitors show a 365-day uptime calendar with neutral and blue shading. Its legend distinguishes at least 99.9%, 99% to below 99.9%, and below 99%; days without samples stay separate. Hover for a daily value or open the native daily-data table for exact percentages and check counts using a keyboard or touch. No samples are shown as an em dash, not as measured 100% uptime.
+
+Manual and heartbeat monitors report state, not sampled uptime or latency. Their detail pages show the latest reported state and update; heartbeat details also show the last ping and grace period. State history remains available, but response charts, sampled uptime, heatmaps and SLA budgets are unavailable. Uptime and response badges show `n/a`, and public JSON uptime is `null`.
+
+Legacy SLA targets on passive monitors remain stored and inactive. An unrelated edit preserves that value; clear it explicitly to remove it. When changing a scheduled monitor to a passive type, clear any active SLA target to `0` first. Custom targets, including `100`, are preserved by the form.

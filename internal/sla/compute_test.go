@@ -11,17 +11,14 @@ import (
 
 type fixedUptimeStore struct {
 	storage.Store
-	pct float64
+	pct, target float64
 }
 
-func (f fixedUptimeStore) GetUptimePercent(context.Context, int64, time.Time, time.Time, ...storage.MonitorAccess) (float64, error) {
-	return f.pct, nil
-}
-
-func (f fixedUptimeStore) GetDailyUptime(context.Context, int64, time.Time, time.Time, ...storage.MonitorAccess) ([]*storage.DailyUptime, error) {
+func (f fixedUptimeStore) GetMonitorSLASnapshot(context.Context, int64, time.Time, time.Time, time.Time, ...storage.MonitorAccess) (*storage.MonitorSLASnapshot, error) {
 	// Preserve two decimal places in the fixture's percentage using exact counts.
 	up := int64(math.Round(f.pct * 100))
-	return []*storage.DailyUptime{{TotalChecks: 10000, UpChecks: up, DownChecks: 10000 - up}}, nil
+	days := []*storage.DailyUptime{{TotalChecks: 10000, UpChecks: up, DownChecks: 10000 - up}}
+	return &storage.MonitorSLASnapshot{Sampled: true, Target: f.target, Period: days, Rolling: days}, nil
 }
 
 func TestComputeBreachedUsesMonthlyBudget(t *testing.T) {
@@ -44,7 +41,7 @@ func TestComputeBreachedUsesMonthlyBudget(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			st, err := computeAt(context.Background(), fixedUptimeStore{pct: tt.uptime}, 1, tt.target, tt.now)
+			st, err := computeAt(context.Background(), fixedUptimeStore{pct: tt.uptime, target: tt.target}, 1, tt.now)
 			if err != nil {
 				t.Fatal(err)
 			}

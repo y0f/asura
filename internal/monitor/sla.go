@@ -24,7 +24,7 @@ func (p *Pipeline) checkSLABreach(ctx context.Context, mon *storage.Monitor) {
 }
 
 func (p *Pipeline) checkSLABreachAt(ctx context.Context, mon *storage.Monitor, now time.Time) {
-	if !mon.Enabled || mon.SLATarget <= 0 {
+	if !mon.Enabled || !mon.HasSampledMetrics() || mon.SLATarget <= 0 {
 		p.slaStates.Delete(mon.ID)
 		return
 	}
@@ -48,7 +48,7 @@ func (p *Pipeline) checkSLABreachAt(ctx context.Context, mon *storage.Monitor, n
 	if err != nil || inMaintenance {
 		return // An unreadable suppression state must not produce an alert.
 	}
-	status, err := sla.ComputeMonthly(ctx, p.store, mon.ID, mon.SLATarget, now)
+	status, err := sla.ComputeMonthly(ctx, p.store, mon.ID, now)
 	if err != nil {
 		p.logger.Warn("evaluate SLA budget", "monitor_id", mon.ID, "error", err)
 		return
@@ -71,7 +71,7 @@ func (p *Pipeline) checkSLABreachAt(ctx context.Context, mon *storage.Monitor, n
 	}
 }
 
-// Manual/heartbeat monitors may have no new check to trigger evaluation. Scan
+// A prolonged active-check outage may have no fresh result. Scan
 // in keyset batches with a two-second budget, continuing from the cursor next
 // pass. Busy monitors are skipped without delaying other monitors' transitions.
 func (p *Pipeline) reconcileSLABudgets(ctx context.Context) {

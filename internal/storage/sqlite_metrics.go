@@ -89,6 +89,13 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 	defer release()
 	fromStr := formatTime(from)
 	toStr := formatTime(to)
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return []*TimeSeriesPoint{}, nil
+	}
 
 	var count int64
 	err = reader.QueryRowContext(ctx,
@@ -165,7 +172,7 @@ func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, fro
 		up += day.UpChecks
 	}
 	if total == 0 {
-		return 100, nil
+		return 0, ErrNoMetricSamples
 	}
 	return float64(up) / float64(total) * 100, nil
 }
@@ -182,7 +189,7 @@ func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context, access ...Moni
 	clause, args := monitorAccessSQL("m", access)
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT ms.monitor_id, ms.last_response_time FROM monitor_status ms
-		 JOIN monitors m ON m.id = ms.monitor_id WHERE 1=1`+clause, args...)
+		 JOIN monitors m ON m.id = ms.monitor_id WHERE m.type NOT IN ('manual','heartbeat') AND ms.last_check_at IS NOT NULL`+clause, args...)
 	if err != nil {
 		return nil, err
 	}

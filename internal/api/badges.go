@@ -84,6 +84,10 @@ func (h *Handler) BadgeUptime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	label := badgeLabel(r, "uptime")
+	if !data.Monitor.HasSampledMetrics() {
+		writeBadgeSVG(w, label, "n/a", colorNeutral)
+		return
+	}
 	if data.TotalChecks == 0 {
 		writeBadgeSVG(w, label, "no checks", colorNeutral)
 		return

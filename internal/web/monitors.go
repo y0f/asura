@@ -537,28 +537,30 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		changes = &storage.PaginatedResult{}
 	}
 
-	daily24h, err24h := h.store.GetDailyUptime(ctx, id, now.Add(-24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
-	daily7d, err7d := h.store.GetDailyUptime(ctx, id, now.Add(-7*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
-	daily30d, err30d := h.store.GetDailyUptime(ctx, id, now.Add(-30*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
-	if err := errors.Join(err24h, err7d, err30d); err != nil {
-		h.monitorReadError(w, r, err, "Failed to load monitor uptime")
-		return
-	}
-	uptime24h, samples24h := storage.SummarizeUptime(daily24h)
-	uptime7d, samples7d := storage.SummarizeUptime(daily7d)
-	uptime30d, samples30d := storage.SummarizeUptime(daily30d)
-	var p50, p95, p99 float64
-	if mon.Type != "manual" && mon.Type != "heartbeat" {
-		var err error
-		p50, p95, p99, err = h.store.GetResponseTimePercentiles(ctx, id, now.Add(-24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
-		if err != nil {
-			h.monitorReadError(w, r, err, "Failed to load response time metrics")
+	var uptime24h, uptime7d, uptime30d, p50, p95, p99 float64
+	var samples24h, samples7d, samples30d, totalChecks, upChecks, downChecks int64
+	if mon.HasSampledMetrics() {
+		data, err := h.store.GetMonitorMetricsSnapshot(ctx, id, now.Add(-24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load monitor metrics") {
 			return
 		}
-	}
-	totalChecks, upChecks, downChecks, _, err := h.store.GetCheckCounts(ctx, id, now.Add(-24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
-	if h.monitorReadError(w, r, err, "Failed to load check totals") {
-		return
+		if data.Sampled {
+			samples24h, totalChecks, upChecks, downChecks = data.Total, data.Total, data.Up, data.Down
+			if data.UptimePercent != nil {
+				uptime24h = *data.UptimePercent
+			}
+			if data.Response != nil {
+				p50, p95, p99 = data.Response.P50, data.Response.P95, data.Response.P99
+			}
+		}
+		daily7d, err7d := h.store.GetDailyUptime(ctx, id, now.Add(-7*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		daily30d, err30d := h.store.GetDailyUptime(ctx, id, now.Add(-30*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if err := errors.Join(err7d, err30d); err != nil {
+			h.monitorReadError(w, r, err, "Failed to load monitor uptime")
+			return
+		}
+		uptime7d, samples7d = storage.SummarizeUptime(daily7d)
+		uptime30d, samples30d = storage.SummarizeUptime(daily30d)
 	}
 	latestCheck, err := h.store.GetLatestCheckResult(ctx, id, httputil.MonitorAccess(ctx, "monitors.read")...)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -583,12 +585,12 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var slaData *views.SLAData
-	if mon.SLATarget > 0 && key.AllowsMonitor("sla.read", mon.ID, mon.GroupID) {
-		s, err := sla.Compute(ctx, h.store, mon.ID, mon.SLATarget, httputil.MonitorAccess(ctx, "monitors.read", "sla.read")...)
+	if mon.HasSampledMetrics() && mon.SLATarget > 0 && key.AllowsMonitor("sla.read", mon.ID, mon.GroupID) {
+		s, err := sla.Compute(ctx, h.store, mon.ID, httputil.MonitorAccess(ctx, "monitors.read", "sla.read")...)
 		if h.monitorReadError(w, r, err, "Failed to load SLA status") {
 			return
 		}
-		if s != nil {
+		if s != nil && s.Target > 0 {
 			slaData = &views.SLAData{
 				Target:            s.Target,
 				TotalChecks:       s.TotalChecks,
@@ -603,9 +605,12 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	heatmap, err := buildHeatmap(ctx, h.store, id, now, httputil.MonitorAccess(ctx, "monitors.read")...)
-	if h.monitorReadError(w, r, err, "Failed to load uptime history") {
-		return
+	var heatmap []views.HeatmapDay
+	if mon.HasSampledMetrics() {
+		heatmap, err = buildHeatmap(ctx, h.store, id, now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load uptime history") {
+			return
+		}
 	}
 
 	lp := h.newLayoutParams(r, mon.Name, "monitors")
@@ -736,6 +741,9 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 	if inputErr == nil {
 		inputErr = validateMonitorForm(r, mon)
 	}
+	if inputErr == nil {
+		inputErr = validate.ValidateMonitorSLAChange(mon, nil)
+	}
 	var options storage.MonitorCreateOptions
 	if inputErr == nil {
 		options, inputErr = httputil.MonitorCreateOptions(mon)
@@ -838,6 +846,9 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 	key := httputil.GetAPIKey(r.Context())
 	_, err = h.store.UpdateMonitorWithRelations(r.Context(), id, func(current *storage.Monitor) (*storage.Monitor, storage.MonitorRelationChanges, error) {
 		candidate := *submitted
+		if _, present := r.Form["sla_target"]; !present {
+			candidate.SLATarget = current.SLATarget
+		}
 		changes, err := httputil.PrepareMonitorRelations(key, &candidate, current, monitorRelationFields(r))
 		if err == nil {
 			storedSecrets = keepStoredMonitorFields(&candidate, current)
@@ -849,6 +860,9 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == nil {
 			err = validateMonitorForm(r, &candidate)
+		}
+		if err == nil {
+			err = validate.ValidateMonitorSLAChange(&candidate, current)
 		}
 		inputErr = err
 		return &candidate, changes, err

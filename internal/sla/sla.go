@@ -10,6 +10,7 @@ import (
 )
 
 var ErrFuturePeriod = errors.New("SLA reports are only available for the current or a past month")
+var ErrUnavailable = errors.New("sample-based SLA is unavailable for manual and heartbeat monitors")
 
 // ParsePeriod validates the common web/API report selector.
 func ParsePeriod(value string, now time.Time) (int, time.Month, error) {
@@ -32,6 +33,7 @@ func ParsePeriod(value string, now time.Time) (int, time.Month, error) {
 type Status struct {
 	Target            float64 `json:"target"`
 	TotalChecks       int64   `json:"total_checks"`
+	TotalChecks30d    int64   `json:"total_checks_30d"`
 	UptimePctMonth    float64 `json:"uptime_pct_month"`
 	UptimePct30d      float64 `json:"uptime_pct_30d"`
 	MonthStart        string  `json:"month_start"`
@@ -65,52 +67,56 @@ type ReportEntry struct {
 }
 
 // Compute calculates the SLA status for a monitor.
-func Compute(ctx context.Context, store storage.Store, monitorID int64, target float64, access ...storage.MonitorAccess) (*Status, error) {
-	return computeAt(ctx, store, monitorID, target, time.Now().UTC(), access...)
+func Compute(ctx context.Context, store storage.Store, monitorID int64, access ...storage.MonitorAccess) (*Status, error) {
+	return computeAt(ctx, store, monitorID, time.Now().UTC(), access...)
 }
 
-func computeAt(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time, access ...storage.MonitorAccess) (*Status, error) {
-	status, err := ComputeMonthly(ctx, store, monitorID, target, now, access...)
-	if err != nil {
-		return nil, err
-	}
-	status.UptimePct30d, err = store.GetUptimePercent(ctx, monitorID, now.Add(-30*24*time.Hour), now, access...)
-	if err != nil {
-		return nil, fmt.Errorf("get 30d uptime: %w", err)
-	}
-	return status, nil
+func computeAt(ctx context.Context, store storage.Store, monitorID int64, now time.Time, access ...storage.MonitorAccess) (*Status, error) {
+	return computeSnapshot(ctx, store, monitorID, now, true, access...)
 }
 
 // ComputeMonthly reads one rollup-aware snapshot for the current month's SLA.
 // Alert evaluation does not need the additional rolling-30-day chart query.
-func ComputeMonthly(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time, access ...storage.MonitorAccess) (*Status, error) {
+func ComputeMonthly(ctx context.Context, store storage.Store, monitorID int64, now time.Time, access ...storage.MonitorAccess) (*Status, error) {
+	return computeSnapshot(ctx, store, monitorID, now, false, access...)
+}
+
+func computeSnapshot(ctx context.Context, store storage.Store, monitorID int64, now time.Time, includeRolling bool, access ...storage.MonitorAccess) (*Status, error) {
 	now = now.UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0)
-
-	days, err := store.GetDailyUptime(ctx, monitorID, monthStart, now, access...)
+	var rollingFrom time.Time
+	if includeRolling {
+		rollingFrom = now.Add(-30 * 24 * time.Hour)
+	}
+	data, err := store.GetMonitorSLASnapshot(ctx, monitorID, monthStart, now, rollingFrom, access...)
 	if err != nil {
 		return nil, fmt.Errorf("get monthly uptime: %w", err)
 	}
-
+	if !data.Sampled {
+		return nil, ErrUnavailable
+	}
 	var totalChecks, upChecks int64
-	for _, day := range days {
+	for _, day := range data.Period {
 		totalChecks += day.TotalChecks
 		upChecks += day.UpChecks
 	}
-	uptimeMonth := 100.0
+	uptimeMonth := 0.0
 	if totalChecks > 0 {
 		uptimeMonth = float64(upChecks) / float64(totalChecks) * 100
 	}
 
 	totalSecsMonth := int64(monthEnd.Sub(monthStart).Seconds())
 	elapsedSecs := int64(now.Sub(monthStart).Seconds())
-	budget := monthlyBudget(target, totalChecks, upChecks, totalSecsMonth, elapsedSecs)
+	budget := monthlyBudget(data.Target, totalChecks, upChecks, totalSecsMonth, elapsedSecs)
+	uptime30d, total30d := storage.SummarizeUptime(data.Rolling)
 
 	return &Status{
-		Target:            target,
+		Target:            data.Target,
 		TotalChecks:       totalChecks,
+		TotalChecks30d:    total30d,
 		UptimePctMonth:    uptimeMonth,
+		UptimePct30d:      uptime30d,
 		MonthStart:        monthStart.Format("2006-01-02"),
 		MonthEnd:          monthEnd.Format("2006-01-02"),
 		TotalSecsMonth:    totalSecsMonth,
@@ -156,31 +162,34 @@ func computeReportAt(ctx context.Context, store storage.Store, year int, month t
 			return nil, fmt.Errorf("unexpected monitor list type %T", monitors.Data)
 		}
 		for _, m := range monList {
-			if m.SLATarget <= 0 {
+			if !m.HasSampledMetrics() || m.SLATarget <= 0 {
 				continue
 			}
 
-			days, err := store.GetDailyUptime(ctx, m.ID, monthStart, until, access...)
+			data, err := store.GetMonitorSLASnapshot(ctx, m.ID, monthStart, until, time.Time{}, access...)
 			if err != nil {
 				return nil, fmt.Errorf("get uptime for monitor %d: %w", m.ID, err)
 			}
+			if !data.Sampled || data.Target <= 0 {
+				continue
+			}
 			var total, up, down int64
-			for _, day := range days {
+			for _, day := range data.Period {
 				total += day.TotalChecks
 				up += day.UpChecks
 				down += day.DownChecks
 			}
-			uptimePct := 100.0
+			uptimePct := 0.0
 			if total > 0 {
 				uptimePct = float64(up) / float64(total) * 100
 			}
-			budget := monthlyBudget(m.SLATarget, total, up, totalSecs, elapsedSecs)
+			budget := monthlyBudget(data.Target, total, up, totalSecs, elapsedSecs)
 
 			entries = append(entries, &ReportEntry{
 				MonitorID:       m.ID,
 				MonitorGroupID:  m.GroupID,
 				MonitorName:     m.Name,
-				Target:          m.SLATarget,
+				Target:          data.Target,
 				UptimePct:       uptimePct,
 				TotalChecks:     total,
 				UpChecks:        up,

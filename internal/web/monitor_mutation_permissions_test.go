@@ -106,11 +106,17 @@ func (s *failingMonitorDetail) ListContentChanges(ctx context.Context, id int64,
 	}
 	return s.Store.ListContentChanges(ctx, id, p, a...)
 }
-func (s *failingMonitorDetail) GetCheckCounts(ctx context.Context, id int64, from, to time.Time, a ...storage.MonitorAccess) (int64, int64, int64, int64, error) {
-	if s.stage == "counts" {
-		return 0, 0, 0, 0, errors.New("counts failure")
+func (s *failingMonitorDetail) GetMonitorMetricsSnapshot(ctx context.Context, id int64, from, to time.Time, a ...storage.MonitorAccess) (*storage.MonitorMetricsSnapshot, error) {
+	if s.stage == "metrics" {
+		return nil, errors.New("metrics failure")
 	}
-	return s.Store.GetCheckCounts(ctx, id, from, to, a...)
+	return s.Store.GetMonitorMetricsSnapshot(ctx, id, from, to, a...)
+}
+func (s *failingMonitorDetail) GetMonitorSLASnapshot(ctx context.Context, id int64, from, to, rollingFrom time.Time, a ...storage.MonitorAccess) (*storage.MonitorSLASnapshot, error) {
+	if s.stage == "sla" {
+		return nil, errors.New("SLA failure")
+	}
+	return s.Store.GetMonitorSLASnapshot(ctx, id, from, to, rollingFrom, a...)
 }
 func (s *failingMonitorDetail) GetLatestCheckResult(ctx context.Context, id int64, a ...storage.MonitorAccess) (*storage.CheckResult, error) {
 	if s.stage == "latest" {
@@ -126,13 +132,13 @@ func (s *failingMonitorDetail) GetMonitorTags(ctx context.Context, id int64, a .
 }
 func (s *failingMonitorDetail) GetDailyUptime(ctx context.Context, id int64, from, to time.Time, a ...storage.MonitorAccess) ([]*storage.DailyUptime, error) {
 	s.dailyCalls++
-	if s.stage == "daily" || ((s.stage == "heatmap" || s.stage == "sla") && s.dailyCalls == 4) {
+	if s.stage == "daily" || (s.stage == "heatmap" && s.dailyCalls == 3) {
 		return nil, errors.New("uptime failure")
 	}
 	return s.Store.GetDailyUptime(ctx, id, from, to, a...)
 }
 func TestMonitorDetailReportsReadFailures(t *testing.T) {
-	for _, stage := range []string{"checks", "changes", "counts", "latest", "tags", "daily", "heatmap", "sla"} {
+	for _, stage := range []string{"checks", "changes", "metrics", "latest", "tags", "daily", "heatmap", "sla"} {
 		t.Run(stage, func(t *testing.T) {
 			h, store := storeHandler(t)
 			m := &storage.Monitor{Name: "monitor", Type: "http", Target: "https://example.test", Enabled: true, Interval: 60, Timeout: 10}
@@ -148,7 +154,7 @@ func TestMonitorDetailReportsReadFailures(t *testing.T) {
 			w := httptest.NewRecorder()
 			h.MonitorDetail(w, r)
 			if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "100.00%") {
-				t.Fatalf("%s failure became successful empty detail: %d %s", stage, w.Code, w.Body.String())
+				t.Fatalf("%s failure became successful empty detail: HTTP %d", stage, w.Code)
 			}
 		})
 	}

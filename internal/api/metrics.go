@@ -84,7 +84,7 @@ func (h *Handler) writeMonitorMetrics(sb *strings.Builder, ctx context.Context, 
 		sb.WriteString("\n# HELP asura_monitor_response_time_ms Last response time in milliseconds.\n")
 		sb.WriteString("# TYPE asura_monitor_response_time_ms gauge\n")
 		for _, m := range monList {
-			if rt, ok := rtMap[m.ID]; ok {
+			if rt, ok := rtMap[m.ID]; ok && m.HasSampledMetrics() {
 				fmt.Fprintf(sb, "asura_monitor_response_time_ms{id=\"%d\",name=\"%s\"} %d\n",
 					m.ID, escapeProm(m.Name), rt)
 			}
@@ -179,62 +179,55 @@ func (h *Handler) MonitorMetrics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
-		return
-	}
-
 	now := time.Now().UTC()
 	from := now.Add(-24 * time.Hour)
 
 	if f := r.URL.Query().Get("from"); f != "" {
-		if t, err := time.Parse(time.RFC3339, f); err == nil {
-			from = t
+		from, err = time.Parse(time.RFC3339, f)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "from must be an RFC3339 timestamp")
+			return
 		}
 	}
 	to := now
 	if t := r.URL.Query().Get("to"); t != "" {
-		if parsed, err := time.Parse(time.RFC3339, t); err == nil {
-			to = parsed
+		to, err = time.Parse(time.RFC3339, t)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "to must be an RFC3339 timestamp")
+			return
 		}
 	}
-
-	uptime, err := h.store.GetUptimePercent(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
+	if !from.Before(to) {
+		writeError(w, http.StatusBadRequest, "from must precede to")
+		return
+	}
+	data, err := h.store.GetMonitorMetricsSnapshot(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
 		if monitorMutationError(w, err) {
 			return
 		}
-		h.logger.Error("get uptime", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get uptime")
+		h.logger.Error("get monitor metrics", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get monitor metrics")
 		return
 	}
-
-	p50, p95, p99, err := h.store.GetResponseTimePercentiles(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
-	if err != nil {
-		if monitorMutationError(w, err) {
-			return
+	var responseTime, checks any
+	var responseSamples int64
+	if data.Sampled {
+		checks = map[string]int64{"total": data.Total, "up": data.Up, "down": data.Down, "degraded": data.Degraded}
+		responseSamples = data.Response.Samples
+		if responseSamples > 0 {
+			responseTime = map[string]float64{"p50": data.Response.P50, "p95": data.Response.P95, "p99": data.Response.P99}
 		}
-		h.logger.Error("get percentiles", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get percentiles")
-		return
 	}
-
-	total, up, down, degraded, err := h.store.GetCheckCounts(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
-	if err != nil {
-		if monitorMutationError(w, err) {
-			return
-		}
-		h.logger.Error("get check counts", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get check counts")
-		return
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
-		"monitor_id":    id,
-		"from":          from.Format(time.RFC3339),
-		"to":            to.Format(time.RFC3339),
-		"uptime_pct":    uptime,
-		"response_time": map[string]float64{"p50": p50, "p95": p95, "p99": p99},
-		"checks":        map[string]int64{"total": total, "up": up, "down": down, "degraded": degraded},
+		"monitor_id":       id,
+		"from":             from.Format(time.RFC3339),
+		"to":               to.Format(time.RFC3339),
+		"sampled_metrics":  data.Sampled,
+		"uptime_pct":       data.UptimePercent,
+		"response_time":    responseTime,
+		"response_samples": responseSamples,
+		"checks":           checks,
 	})
 }
 

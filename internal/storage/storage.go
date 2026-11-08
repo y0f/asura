@@ -102,6 +102,8 @@ type Store interface {
 	// Analytics
 	GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int, access ...MonitorAccess) ([]*TimeSeriesPoint, error)
 	GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (float64, error)
+	GetMonitorSLASnapshot(ctx context.Context, monitorID int64, from, to, rollingFrom time.Time, access ...MonitorAccess) (*MonitorSLASnapshot, error)
+	GetMonitorMetricsSnapshot(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (*MonitorMetricsSnapshot, error)
 	GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (p50, p95, p99 float64, err error)
 	GetResponseTimeSummary(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (*ResponseTimeSummary, error)
 	GetPublicBadgeMonitor(ctx context.Context, monitorID int64) (*Monitor, error)

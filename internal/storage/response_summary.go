@@ -23,7 +23,14 @@ func (s *SQLiteStore) GetResponseTimeSummary(ctx context.Context, monitorID int6
 
 func responseTimeSummaryQuery(ctx context.Context, reader monitorReadQuery, monitorID int64, from, to time.Time) (*ResponseTimeSummary, error) {
 	result := &ResponseTimeSummary{}
-	err := reader.QueryRowContext(ctx,
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return result, nil
+	}
+	err = reader.QueryRowContext(ctx,
 		`WITH s AS (
 		   SELECT response_time,
 		          ROW_NUMBER() OVER (ORDER BY response_time) AS rn,

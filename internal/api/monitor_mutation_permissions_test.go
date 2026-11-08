@@ -232,6 +232,18 @@ func (s heldMonitorReadStore) GetMonitor(ctx context.Context, id int64, access .
 	return monitor, err
 }
 
+func (s heldMonitorReadStore) GetMonitorMetricsSnapshot(ctx context.Context, id int64, from, to time.Time, access ...storage.MonitorAccess) (*storage.MonitorMetricsSnapshot, error) {
+	// Metrics performs its own coherent authorization/data read, so hold before
+	// that read rather than manufacture a separate configuration lookup.
+	close(s.read)
+	select {
+	case <-s.resume:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return s.Store.GetMonitorMetricsSnapshot(ctx, id, from, to, access...)
+}
+
 func TestMonitorNestedReadsRejectGroupRevocationAfterLookup(t *testing.T) {
 	for _, endpoint := range []string{"monitor", "checks", "changes", "metrics", "chart"} {
 		t.Run(endpoint, func(t *testing.T) {
@@ -270,7 +282,7 @@ func TestMonitorNestedReadsRejectGroupRevocationAfterLookup(t *testing.T) {
 			select {
 			case <-held.read:
 			case <-requestCtx.Done():
-				t.Fatal("handler never reached authorized lookup")
+				t.Fatal("handler never reached the held read")
 			}
 			monitor.GroupID = nil
 			if err := env.store.UpdateMonitor(ctx, monitor); err != nil {

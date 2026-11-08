@@ -165,6 +165,10 @@ func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := validate.ValidateMonitorSLAChange(&m, nil); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	options, err := httputil.MonitorCreateOptions(&m)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -228,6 +232,9 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == nil {
 			err = validate.ValidateMonitor(&candidate)
+		}
+		if err == nil {
+			err = validate.ValidateMonitorSLAChange(&candidate, current)
 		}
 		inputErr = err
 		return &candidate, changes, err

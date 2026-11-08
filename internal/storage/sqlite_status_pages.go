@@ -51,6 +51,13 @@ func dailyUptimeQuery(ctx context.Context, reader monitorReadQuery, monitorID in
 	if !from.Before(to) {
 		return results, nil
 	}
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return results, nil
+	}
 	rollupEnd := to
 	if today := time.Now().UTC().Truncate(24 * time.Hour); rollupEnd.After(today) {
 		rollupEnd = today
