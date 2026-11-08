@@ -231,12 +231,8 @@ func (s *SQLiteStore) IncrementalVacuum(ctx context.Context) error {
 func (s *SQLiteStore) EnsureKDFSalt(ctx context.Context) ([]byte, error) {
 	var stored string
 	err := s.writeDB.QueryRowContext(ctx, "SELECT value FROM meta WHERE key='kdf_salt'").Scan(&stored)
-	if err == nil && stored != "" {
-		salt, decErr := hex.DecodeString(stored)
-		if decErr != nil {
-			return nil, fmt.Errorf("decode kdf salt: %w", decErr)
-		}
-		return salt, nil
+	if err == nil {
+		return decodeKDFSalt(stored)
 	}
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("read kdf salt: %w", err)
@@ -247,8 +243,21 @@ func (s *SQLiteStore) EnsureKDFSalt(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("generate kdf salt: %w", err)
 	}
 	if _, err := s.writeDB.ExecContext(ctx,
-		"INSERT OR REPLACE INTO meta (key, value) VALUES ('kdf_salt', ?)", hex.EncodeToString(salt)); err != nil {
+		"INSERT INTO meta (key, value) VALUES ('kdf_salt', ?) ON CONFLICT(key) DO NOTHING", hex.EncodeToString(salt)); err != nil {
 		return nil, fmt.Errorf("persist kdf salt: %w", err)
+	}
+	// A concurrent opener may have inserted first. Always return the persisted
+	// winner; replacing it would make either process encrypt with a lost key.
+	if err := s.writeDB.QueryRowContext(ctx, "SELECT value FROM meta WHERE key='kdf_salt'").Scan(&stored); err != nil {
+		return nil, fmt.Errorf("read persisted kdf salt: %w", err)
+	}
+	return decodeKDFSalt(stored)
+}
+
+func decodeKDFSalt(stored string) ([]byte, error) {
+	salt, err := hex.DecodeString(stored)
+	if err != nil || len(salt) != 16 {
+		return nil, fmt.Errorf("persisted encryption salt must be exactly 16 bytes of hexadecimal")
 	}
 	return salt, nil
 }
