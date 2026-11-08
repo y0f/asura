@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/y0f/asura/internal/config"
+	"github.com/y0f/asura/v2/internal/config"
 )
 
 func TestGroupMutationsReturnOnlyIDWithoutReadAndRejectMissing(t *testing.T) {

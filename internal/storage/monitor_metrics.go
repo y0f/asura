@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/y0f/asura/internal/model"
+	"github.com/y0f/asura/v2/internal/model"
 )
 
 var ErrNoMetricSamples = errors.New("no scheduled check samples available")

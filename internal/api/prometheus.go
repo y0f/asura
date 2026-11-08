@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 const prometheusMaxBytes = 16 << 20

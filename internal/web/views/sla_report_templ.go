@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/y0f/asura/internal/sla"
+	"github.com/y0f/asura/v2/internal/sla"
 )
 
 type SLAReportParams struct {

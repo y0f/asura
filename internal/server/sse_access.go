@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/v2/internal/httputil"
 )
 
 var errStreamIdentity = errors.New("stream identity is no longer valid")

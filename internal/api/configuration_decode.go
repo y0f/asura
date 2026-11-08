@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // DecodeConfiguration is shared by JSON and file-upload routes. Neither parser

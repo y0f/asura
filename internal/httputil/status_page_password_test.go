@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/pageauth"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/pageauth"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func TestStatusPagePreparedPasswordIsPrivateAndMatchesCurrentInput(t *testing.T) {

@@ -3,9 +3,9 @@ package api
 import (
 	"net/http"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/redact"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // Mutation responses do not turn a write-only grant into a read grant.

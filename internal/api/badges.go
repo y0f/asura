@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
 	"golang.org/x/text/width"
 )
 

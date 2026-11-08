@@ -14,8 +14,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 type NotificationHistoryParams struct {

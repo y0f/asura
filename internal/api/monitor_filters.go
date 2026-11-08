@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 func monitorListFilter(r *http.Request) (storage.MonitorListFilter, error) {

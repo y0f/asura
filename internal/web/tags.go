@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) Tags(w http.ResponseWriter, r *http.Request) {

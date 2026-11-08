@@ -3,7 +3,7 @@ package httputil
 import (
 	"context"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // NotificationHistoryResponse keeps delivery status separate from permission to

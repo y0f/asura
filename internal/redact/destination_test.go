@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func TestMonitorCredentialDestination(t *testing.T) {

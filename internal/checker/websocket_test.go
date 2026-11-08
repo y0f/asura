@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/y0f/asura/internal/model"
+	"github.com/y0f/asura/v2/internal/model"
 )
 
 func TestWebSocketProbeDoesNotWaitForPeerClose(t *testing.T) {

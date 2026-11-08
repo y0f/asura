@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/y0f/asura/internal/notifier"
+	"github.com/y0f/asura/v2/internal/notifier"
 )
 
 func TestAssembleNotificationSettingsWebhook(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/y0f/asura/internal/sla"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type slaAlertState struct {

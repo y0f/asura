@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 // publicStatusBranding sanitizes even legacy stored HTML without rewriting

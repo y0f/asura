@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // A degraded->down transition on an open incident must upgrade severity

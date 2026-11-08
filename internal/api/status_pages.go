@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/pageauth"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/pageauth"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func (h *Handler) ListStatusPages(w http.ResponseWriter, r *http.Request) {

@@ -3,7 +3,7 @@ package httputil
 import (
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func TestOverallStatusNeverTreatsMissingChecksAsHealthy(t *testing.T) {

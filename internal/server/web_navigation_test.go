@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/y0f/asura/internal/config"
+	"github.com/y0f/asura/v2/internal/config"
 )
 
 func TestWebNavigationPermissions(t *testing.T) {

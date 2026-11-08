@@ -3,8 +3,8 @@ package notifier
 import (
 	"slices"
 
-	"github.com/y0f/asura/internal/redact"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func copyPointer[T any](p *T) *T {

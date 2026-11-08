@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/redact"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {

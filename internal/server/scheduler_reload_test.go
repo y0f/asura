@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/model"
-	"github.com/y0f/asura/internal/monitor"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/monitor"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type reloadCommit struct {

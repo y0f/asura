@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/api"
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/api"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func incidentPermissionKey(t *testing.T, action string, groupID int64) *config.APIKeyConfig {

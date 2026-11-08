@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // A saved authenticated source can produce credentials at runtime. Checking

@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/monitor"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/monitor"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type Handler struct {

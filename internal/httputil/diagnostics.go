@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/y0f/asura/internal/redact"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // DiagnosticReadAccess must be passed to the actual data query after an

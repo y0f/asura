@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func testStore(t *testing.T) *storage.SQLiteStore {

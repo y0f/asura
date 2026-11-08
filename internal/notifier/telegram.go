@@ -9,7 +9,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type TelegramSettings struct {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/pageauth"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/pageauth"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 // MaxConfigurationBytes bounds both JSON and multipart imports. The normal

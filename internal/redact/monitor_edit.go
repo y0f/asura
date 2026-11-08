@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/y0f/asura/internal/assertion"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/assertion"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // Payloads can carry arbitrary credentials; their contents cannot be safely

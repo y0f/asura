@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/y0f/asura/internal/model"
+	"github.com/y0f/asura/v2/internal/model"
 )
 
 // Monitor and protocol settings are shared with probes without database code.

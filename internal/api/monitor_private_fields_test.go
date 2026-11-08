@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func TestMonitorPrivateFieldsCreateReadUpdateAndClone(t *testing.T) {

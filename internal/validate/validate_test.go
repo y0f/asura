@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func generateTestCertPEM(t *testing.T) (certPEM, keyPEM string) {

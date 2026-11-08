@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 var ErrMonitorRelationForbidden = errors.New("monitor relationship change is not permitted")

@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	webfs "github.com/y0f/asura/web"
+	webfs "github.com/y0f/asura/v2/web"
 )
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {

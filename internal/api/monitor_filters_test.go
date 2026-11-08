@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func TestMonitorListFiltersIntersectScopeBeforeCountsAndPagination(t *testing.T) {

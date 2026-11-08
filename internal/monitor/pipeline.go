@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/y0f/asura/internal/anomaly"
-	"github.com/y0f/asura/internal/assertion"
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/diff"
-	"github.com/y0f/asura/internal/escalation"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/anomaly"
+	"github.com/y0f/asura/v2/internal/assertion"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/diff"
+	"github.com/y0f/asura/v2/internal/escalation"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // Pipeline orchestrates the full monitoring flow:

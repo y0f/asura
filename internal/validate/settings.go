@@ -11,10 +11,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/y0f/asura/internal/assertion"
-	"github.com/y0f/asura/internal/jsonutil"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/assertion"
+	"github.com/y0f/asura/v2/internal/jsonutil"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type heartbeatSettings struct {

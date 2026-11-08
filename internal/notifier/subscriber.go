@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/redact"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type SubscriberNotifier struct {
@@ -326,7 +326,7 @@ func (n *SubscriberNotifier) sendSubscriberWebhook(ctx context.Context, sub *sto
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Asura/1.0")
+	req.Header.Set("User-Agent", "Asura/2.0")
 
 	resp, err := newHTTPClient(n.allowPrivate).Do(req)
 	if err != nil {

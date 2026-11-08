@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/y0f/asura/internal/safenet"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 type SubscriptionInput struct {

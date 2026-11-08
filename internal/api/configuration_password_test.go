@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func TestConfigurationPasswordHashesRoundTripWithoutRehashing(t *testing.T) {

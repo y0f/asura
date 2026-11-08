@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/y0f/asura/internal/api"
+	"github.com/y0f/asura/v2/internal/api"
 )
 
 func seedTestData(t *testing.T, srv *Server, adminKey string) {

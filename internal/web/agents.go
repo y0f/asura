@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 // agentReveal holds a newly created agent's token between the create POST and

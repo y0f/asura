@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/pageauth"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/pageauth"
 )
 
 func TestStatusPageCookieAuthorityAcrossPublicRoutes(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // HeartbeatWatcher periodically checks for expired heartbeats and triggers incidents.

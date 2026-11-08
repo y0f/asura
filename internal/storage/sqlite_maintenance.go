@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/y0f/asura/internal/cron"
+	"github.com/y0f/asura/v2/internal/cron"
 )
 
 func (s *SQLiteStore) CreateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 var ErrFuturePeriod = errors.New("SLA reports are only available for the current or a past month")

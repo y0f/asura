@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/model"
+	"github.com/y0f/asura/v2/internal/model"
 )
 
 func TestMQTTRejectsInvalidAcknowledgements(t *testing.T) {

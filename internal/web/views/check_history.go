@@ -1,6 +1,6 @@
 package views
 
-import "github.com/y0f/asura/internal/storage"
+import "github.com/y0f/asura/v2/internal/storage"
 
 type checkHistoryColumns struct {
 	Response, Code, Certificate bool

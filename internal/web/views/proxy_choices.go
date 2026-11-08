@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/y0f/asura/internal/model"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 // Proxy options follow the same transport registry as writes and checks. DNS

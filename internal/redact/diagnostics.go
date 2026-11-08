@@ -1,6 +1,6 @@
 package redact
 
-import "github.com/y0f/asura/internal/storage"
+import "github.com/y0f/asura/v2/internal/storage"
 
 // Check exposes measured scalars without response data, arbitrary checker
 // errors or content fingerprints. Agent labels have independent authority.

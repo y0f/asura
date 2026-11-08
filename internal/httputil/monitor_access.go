@@ -3,7 +3,7 @@ package httputil
 import (
 	"context"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // MonitorAccess translates one validated action at a time into a storage-owned

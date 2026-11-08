@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/y0f/asura/internal/logsafe"
+	"github.com/y0f/asura/v2/internal/logsafe"
 )
 
 func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*RequestLog) error {

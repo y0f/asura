@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/v2/internal/httputil"
 )
 
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {

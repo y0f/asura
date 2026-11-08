@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/y0f/asura/internal/checker"
+	"github.com/y0f/asura/v2/internal/checker"
 )
 
 func TestAgentControlRedirectsDoNotForwardTokens(t *testing.T) {

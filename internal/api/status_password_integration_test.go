@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/pageauth"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/pageauth"
 )
 
 func TestStatusPagePasswordLegacyLoginAndSaltedResetAcrossAPIAndWeb(t *testing.T) {

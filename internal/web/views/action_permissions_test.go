@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/y0f/asura/internal/sla"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v2/internal/storage"
 	"golang.org/x/net/html"
 )
 

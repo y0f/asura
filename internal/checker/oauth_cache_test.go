@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/y0f/asura/internal/model"
+	"github.com/y0f/asura/v2/internal/model"
 )
 
 func TestOAuthCacheChurnKeepsBoundAndActiveEntries(t *testing.T) {

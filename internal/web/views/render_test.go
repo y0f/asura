@@ -10,9 +10,9 @@ import (
 	"github.com/a-h/templ"
 	"golang.org/x/net/html"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/sla"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // These tests render every page with small fixtures and check structural

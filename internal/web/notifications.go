@@ -9,12 +9,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {

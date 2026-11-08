@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // The monitor form's agent_ids[] field sets, replaces and clears the agent

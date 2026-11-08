@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/y0f/asura/internal/model"
-	"github.com/y0f/asura/internal/safenet"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/api"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/api"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {

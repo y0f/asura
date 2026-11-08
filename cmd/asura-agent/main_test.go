@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 var testLogger = slog.New(slog.NewTextHandler(io.Discard, nil))

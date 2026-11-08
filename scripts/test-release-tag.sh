@@ -13,7 +13,6 @@ accept() {
 }
 
 accept v2.0.0 2.0.0 2.0 false
-accept v0.0.0 0.0.0 0.0 false
 accept v2.3.10 2.3.10 2.3 false
 accept v2.0.0-rc.1 2.0.0-rc.1 2.0 true
 accept v2.0.0-0 2.0.0-0 2.0 true
@@ -24,7 +23,7 @@ accept v2.0.0-beta.1+build.001 2.0.0-beta.1_build.001 2.0 true
 metadata=$(printf '%0122d' 0)
 accept "v2.0.0+$metadata" "2.0.0_$metadata" 2.0 false
 
-for tag in '' vnext 2.0.0 v2 v2.0 v02.0.0 v2.00.0 v2.0.00 v2.0.0-01 v2.0.0-a.01 \
+for tag in '' vnext 2.0.0 v0.0.0 v1.9.9 v3.0.0 v20.0.0 v2 v2.0 v02.0.0 v2.00.0 v2.0.00 v2.0.0-01 v2.0.0-a.01 \
     v2.0.0- v2.0.0-a..b v2.0.0-a. v2.0.0+ v2.0.0+b..c v2.0.0+b. \
     v2.0.0-a_b v2.0.0++b 'v2.0.0$(false)' $'v2.0.0\n' "v2.0.0+$(printf '%0123d' 0)"; do
     if bash "$script" "$tag" >/dev/null 2>&1; then

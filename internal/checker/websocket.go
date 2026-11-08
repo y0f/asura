@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/y0f/asura/internal/model"
-	"github.com/y0f/asura/internal/safenet"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 type WebSocketChecker struct {

@@ -11,7 +11,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // WebhookSettings holds webhook-specific configuration.
@@ -46,7 +46,7 @@ func (s *WebhookSender) Send(ctx context.Context, channel *storage.NotificationC
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Asura/1.0")
+	req.Header.Set("User-Agent", "Asura/2.0")
 
 	// HMAC-SHA256 signature
 	if settings.Secret != "" {

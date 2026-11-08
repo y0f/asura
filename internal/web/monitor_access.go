@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) requireMonitor(w http.ResponseWriter, r *http.Request, id int64, actions ...string) (*storage.Monitor, bool) {

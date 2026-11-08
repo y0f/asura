@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/v2/internal/httputil"
 )
 
 // Auth authenticates the key and requires every coarse capability. Handlers
