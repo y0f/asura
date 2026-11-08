@@ -514,7 +514,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<p x-show=\"monitorType === 'http_multi'\" class=\"form-hint\">Multi-step HTTP checks are configured as JSON: a <code class=\"font-mono\">steps</code> array of requests run in order.</p></div><fieldset x-show=\"!advancedSettings\" :disabled=\"advancedSettings\" class=\"min-w-0 space-y-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<p x-show=\"monitorType === 'http_multi'\" class=\"form-hint\">Multi-step HTTP checks use a <code class=\"font-mono\">steps</code> array of requests run in order. Retaining private inputs keeps the ordered request flow fixed. To change destinations, extraction or references, replace or clear those inputs, or use super administrator access. Unchanged independent requests can be reordered only without extraction or interpolation.</p></div><fieldset x-show=\"!advancedSettings\" :disabled=\"advancedSettings\" class=\"min-w-0 space-y-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2101,20 +2101,60 @@ func monitorAssertions(p MonitorFormParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "<div class=\"card card-pad\"><div class=\"flex items-center justify-between mb-4\"><h2 class=\"text-lg font-semibold\">Conditions</h2><button type=\"button\" x-show=\"conditions.groups.length > 0 || advancedAssertions\" @click=\"advancedAssertions = !advancedAssertions\" class=\"btn-secondary btn-sm\"><span x-text=\"advancedAssertions ? 'Use form' : 'Edit as JSON'\">Edit as JSON</span></button></div><input type=\"hidden\" name=\"assertions_mode\" :value=\"advancedAssertions ? 'json' : 'form'\"><div x-show=\"advancedAssertions\" x-cloak><label class=\"sr-only\" for=\"assertions_json\">Conditions (JSON)</label> <textarea id=\"assertions_json\" name=\"assertions_json\" rows=\"8\" placeholder=\"{}\" class=\"form-input font-mono text-xs resize-y\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "<div class=\"card card-pad\"><div class=\"flex flex-wrap items-center justify-between gap-3 mb-4\"><h2 class=\"text-lg font-semibold\">Conditions</h2><button type=\"button\" x-show=\"monitorType !== 'manual' && monitorType !== 'heartbeat'\" @click=\"advancedAssertions = !advancedAssertions\" class=\"btn-secondary btn-sm\"><span x-text=\"advancedAssertions ? 'Use form' : 'Edit as JSON'\">Edit as JSON</span></button></div><p x-show=\"monitorType === 'manual' || monitorType === 'heartbeat'\" x-cloak class=\"form-hint\">Conditions apply only to active checks. Saved rules remain stored and inactive for this monitor type.</p><fieldset x-show=\"monitorType !== 'manual' && monitorType !== 'heartbeat'\" :disabled=\"monitorType === 'manual' || monitorType === 'heartbeat'\" class=\"min-w-0\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if p.SecretsStored["assertions"] {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "<div class=\"mb-4 space-y-2\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "<p class=\"form-hint\">Saved conditions are shown below. Leaving the editor empty keeps the saved rules; new conditions replace them.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "<p class=\"form-hint\">Saved conditions stay hidden without diagnostic access. Leave the editor empty to keep them; new conditions replace the saved rules.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "<label for=\"remove_saved_assertions\" class=\"flex items-start gap-2 text-sm text-muted-light\"><input id=\"remove_saved_assertions\" type=\"checkbox\" name=\"clear_secrets\" value=\"assertions\" class=\"form-checkbox mt-0.5\" aria-describedby=\"remove-assertions-help\"> Remove saved conditions</label><p id=\"remove-assertions-help\" class=\"form-hint\">Removal also discards any replacement conditions entered below.</p></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, "<input type=\"hidden\" name=\"assertions_mode\" :value=\"advancedAssertions ? 'json' : 'form'\"><fieldset x-show=\"advancedAssertions\" :disabled=\"!advancedAssertions\" x-cloak class=\"min-w-0\"><label class=\"sr-only\" for=\"assertions_json\">Conditions (JSON)</label> <textarea id=\"assertions_json\" name=\"assertions_json\" rows=\"8\" placeholder=\"{}\" class=\"form-input font-mono text-xs resize-y\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(p.AssertionsRaw)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 931, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 947, Col: 147}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "</textarea></div><div x-show=\"!advancedAssertions\"><input type=\"hidden\" name=\"group_count\" :value=\"conditions.groups.length\"> <input type=\"hidden\" name=\"condition_set_operator\" :value=\"conditions.operator\"><div x-show=\"conditions.groups.length === 0\" class=\"flex flex-wrap items-center justify-between gap-3\"><p class=\"text-sm text-muted\">No conditions. The check passes when the target responds successfully.</p><button type=\"button\" @click=\"addGroup()\" class=\"btn-secondary btn-sm\">Add condition group</button></div><div class=\"space-y-1\"><template x-for=\"(g, gi) in conditions.groups\" :key=\"gi\"><div><!-- AND/OR connector between groups --><div x-show=\"gi > 0\" class=\"flex items-center gap-2 my-2\"><div class=\"flex-1 border-t border-line\"></div><select x-model=\"conditions.operator\" aria-label=\"Combine groups with\" class=\"form-select-sm h-7 w-24\"><option value=\"and\">AND</option> <option value=\"or\">OR</option></select><div class=\"flex-1 border-t border-line\"></div></div><!-- Per-group hidden structural inputs --><input type=\"hidden\" :name=\"'group_' + gi + '_operator'\" :value=\"g.operator\"> <input type=\"hidden\" :name=\"'group_' + gi + '_count'\" :value=\"g.conditions.length\"><div class=\"panel overflow-hidden\"><div class=\"flex items-center justify-between px-3 py-2 border-b border-line\"><div class=\"flex items-center gap-2\"><span class=\"text-sm text-muted\">Match</span> <select x-model=\"g.operator\" aria-label=\"Group match mode\" class=\"form-select-sm h-7 w-24\"><option value=\"and\">ALL</option> <option value=\"or\">ANY</option></select> <span class=\"text-sm text-muted\">of these conditions</span></div><button type=\"button\" @click=\"conditions.groups.splice(gi, 1)\" class=\"row-action hover:text-crit\" title=\"Remove group\" aria-label=\"Remove group\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div><div class=\"p-3 space-y-2\"><template x-for=\"(c, ci) in g.conditions\" :key=\"ci\"><div class=\"flex items-start gap-2\"><div class=\"flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2\"><select :name=\"'group_' + gi + '_type_' + ci\" x-model=\"c.type\" aria-label=\"Condition\" class=\"form-select h-8\"><option value=\"status_code\">Status Code</option> <option value=\"body_contains\">Body Contains</option> <option value=\"body_regex\">Body Regex</option> <option value=\"json_path\">JSON Path</option> <option value=\"header\">Header</option> <option value=\"response_time\">Response Time (ms)</option> <option value=\"cert_expiry\">Cert Expiry (days)</option> <option value=\"dns_record\">DNS Record</option></select> <select :name=\"'group_' + gi + '_operator_' + ci\" x-model=\"c.operator\" aria-label=\"Operator\" class=\"form-select h-8\"><template x-for=\"op in operatorsFor(c.type)\" :key=\"op[0]\"><option :value=\"op[0]\" x-text=\"op[1]\"></option></template></select><div x-show=\"needsTarget(c.type)\"><input type=\"text\" :name=\"'group_' + gi + '_target_' + ci\" x-model=\"c.target\" placeholder=\"Header name or JSON path\" aria-label=\"Header name or JSON path\" class=\"form-input h-8\"></div><div x-show=\"needsValue(c.operator)\" :class=\"needsTarget(c.type) ? '' : 'col-span-2'\"><input type=\"text\" :name=\"'group_' + gi + '_value_' + ci\" x-model=\"c.value\" placeholder=\"Expected value\" aria-label=\"Expected value\" class=\"form-input h-8\"></div></div><div class=\"flex items-center gap-2 pt-1.5 shrink-0\"><label class=\"flex items-center gap-1 cursor-pointer\" title=\"Mark the monitor degraded instead of down when this fails\"><input type=\"checkbox\" :name=\"'group_' + gi + '_degraded_' + ci\" value=\"on\" :checked=\"c.degraded\" @change=\"c.degraded = $event.target.checked\" class=\"form-checkbox\"> <span class=\"text-sm text-muted\">Degrade only</span></label> <button type=\"button\" @click=\"g.conditions.splice(ci, 1)\" class=\"row-action hover:text-crit\" title=\"Remove condition\" aria-label=\"Remove condition\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div></div></template><button type=\"button\" @click=\"g.conditions.push(newCond())\" class=\"btn-secondary btn-sm\">Add condition</button></div></div></div></template></div><button type=\"button\" x-show=\"conditions.groups.length > 0\" @click=\"addGroup()\" class=\"btn-secondary btn-sm mt-3\">Add condition group</button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "</textarea></fieldset><fieldset x-show=\"!advancedAssertions\" :disabled=\"advancedAssertions\" class=\"min-w-0\"><input type=\"hidden\" name=\"group_count\" :value=\"conditions.groups.length\"> <input type=\"hidden\" name=\"condition_set_operator\" :value=\"conditions.operator\"><div x-show=\"conditions.groups.length === 0\" class=\"flex flex-wrap items-center justify-between gap-3\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if p.SecretsStored["assertions"] {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "<p class=\"text-sm text-muted\">Keep the saved conditions or add replacement rules.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "<p class=\"text-sm text-muted\">No conditions. The check passes when the target responds successfully.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "<button type=\"button\" @click=\"addGroup()\" class=\"btn-secondary btn-sm\">Add condition group</button></div><div class=\"space-y-1\"><template x-for=\"(g, gi) in conditions.groups\" :key=\"gi\"><div><!-- AND/OR connector between groups --><div x-show=\"gi > 0\" class=\"flex items-center gap-2 my-2\"><div class=\"flex-1 border-t border-line\"></div><select x-model=\"conditions.operator\" aria-label=\"Combine groups with\" class=\"form-select-sm h-7 w-24\"><option value=\"and\">AND</option> <option value=\"or\">OR</option></select><div class=\"flex-1 border-t border-line\"></div></div><!-- Per-group hidden structural inputs --><input type=\"hidden\" :name=\"'group_' + gi + '_operator'\" :value=\"g.operator\"> <input type=\"hidden\" :name=\"'group_' + gi + '_count'\" :value=\"g.conditions.length\"><div class=\"panel overflow-hidden\"><div class=\"flex items-center justify-between px-3 py-2 border-b border-line\"><div class=\"flex items-center gap-2\"><span class=\"text-sm text-muted\">Match</span> <select x-model=\"g.operator\" aria-label=\"Group match mode\" class=\"form-select-sm h-7 w-24\"><option value=\"and\">ALL</option> <option value=\"or\">ANY</option></select> <span class=\"text-sm text-muted\">of these conditions</span></div><button type=\"button\" @click=\"conditions.groups.splice(gi, 1)\" class=\"row-action hover:text-crit\" title=\"Remove group\" aria-label=\"Remove group\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div><div class=\"p-3 space-y-2\"><template x-for=\"(c, ci) in g.conditions\" :key=\"ci\"><div class=\"flex items-start gap-2\"><div class=\"flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2\"><select :name=\"'group_' + gi + '_type_' + ci\" x-model=\"c.type\" aria-label=\"Condition\" class=\"form-select h-8\"><option value=\"status_code\">Status Code</option> <option value=\"body_contains\">Body Contains</option> <option value=\"body_regex\">Body Regex</option> <option value=\"json_path\">JSON Path</option> <option value=\"header\">Header</option> <option value=\"response_time\">Response Time (ms)</option> <option value=\"cert_expiry\">Cert Expiry (days)</option> <option value=\"dns_record\">DNS Record</option></select> <select :name=\"'group_' + gi + '_operator_' + ci\" x-model=\"c.operator\" aria-label=\"Operator\" class=\"form-select h-8\"><template x-for=\"op in operatorsFor(c.type)\" :key=\"op[0]\"><option :value=\"op[0]\" x-text=\"op[1]\"></option></template></select><div x-show=\"needsTarget(c.type)\"><input type=\"text\" :name=\"'group_' + gi + '_target_' + ci\" x-model=\"c.target\" placeholder=\"Header name or JSON path\" aria-label=\"Header name or JSON path\" class=\"form-input h-8\"></div><div x-show=\"needsValue(c.operator)\" :class=\"needsTarget(c.type) ? '' : 'col-span-2'\"><input type=\"text\" :name=\"'group_' + gi + '_value_' + ci\" x-model=\"c.value\" placeholder=\"Expected value\" aria-label=\"Expected value\" class=\"form-input h-8\"></div></div><div class=\"flex items-center gap-2 pt-1.5 shrink-0\"><label class=\"flex items-center gap-1 cursor-pointer\" title=\"Mark the monitor degraded instead of down when this fails\"><input type=\"checkbox\" :name=\"'group_' + gi + '_degraded_' + ci\" value=\"on\" :checked=\"c.degraded\" @change=\"c.degraded = $event.target.checked\" class=\"form-checkbox\"> <span class=\"text-sm text-muted\">Degrade only</span></label> <button type=\"button\" @click=\"g.conditions.splice(ci, 1)\" class=\"row-action hover:text-crit\" title=\"Remove condition\" aria-label=\"Remove condition\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-3.5 h-3.5\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div></div></template><button type=\"button\" @click=\"g.conditions.push(newCond())\" class=\"btn-secondary btn-sm\">Add condition</button></div></div></div></template></div><button type=\"button\" x-show=\"conditions.groups.length > 0\" @click=\"addGroup()\" class=\"btn-secondary btn-sm mt-3\">Add condition group</button></fieldset></fieldset></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2139,30 +2179,30 @@ func monitorSMTPSettings(p MonitorFormParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "<fieldset x-show=\"monitorType === 'smtp'\" :disabled=\"monitorType !== 'smtp'\" x-cloak class=\"min-w-0 space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_smtp_port\">Port</label> <input id=\"settings_smtp_port\" type=\"number\" name=\"settings_smtp_port\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 206, "<fieldset x-show=\"monitorType === 'smtp'\" :disabled=\"monitorType !== 'smtp'\" x-cloak class=\"min-w-0 space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"settings_smtp_port\">Port</label> <input id=\"settings_smtp_port\" type=\"number\" name=\"settings_smtp_port\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.SMTP.Port != 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, " value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, " value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var70 string
 			templ_7745c5c3_Var70, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprint(p.SMTP.Port)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 1027, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 1048, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 208, "\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, " placeholder=\"25\" min=\"1\" max=\"65535\" class=\"form-input tabular-nums\"><p class=\"form-hint\">25 (plain), 465 (SMTPS), 587 (submission)</p></div><div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 209, " placeholder=\"25\" min=\"1\" max=\"65535\" class=\"form-input tabular-nums\"><p class=\"form-hint\">25 (plain), 465 (SMTPS), 587 (submission)</p></div><div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2170,7 +2210,7 @@ func monitorSMTPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2178,7 +2218,7 @@ func monitorSMTPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "</fieldset>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 211, "</fieldset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2203,20 +2243,20 @@ func monitorSSHSettings(p MonitorFormParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "<fieldset x-show=\"monitorType === 'ssh'\" :disabled=\"monitorType !== 'ssh'\" x-cloak class=\"min-w-0 space-y-4\"><div><label class=\"form-label\" for=\"settings_ssh_fingerprint\">Expected Banner Fingerprint (SHA-256)</label> <input id=\"settings_ssh_fingerprint\" type=\"text\" name=\"settings_ssh_fingerprint\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 212, "<fieldset x-show=\"monitorType === 'ssh'\" :disabled=\"monitorType !== 'ssh'\" x-cloak class=\"min-w-0 space-y-4\"><div><label class=\"form-label\" for=\"settings_ssh_fingerprint\">Expected Banner Fingerprint (SHA-256)</label> <input id=\"settings_ssh_fingerprint\" type=\"text\" name=\"settings_ssh_fingerprint\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.SSH.ExpectedFingerprint).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 1048, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/monitorform.templ`, Line: 1069, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "\" placeholder=\"Optional SHA-256 hex fingerprint\" class=\"form-input font-mono\"><p class=\"form-hint\">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p></div></fieldset>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 213, "\" placeholder=\"Optional SHA-256 hex fingerprint\" class=\"form-input font-mono\"><p class=\"form-hint\">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p></div></fieldset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2241,7 +2281,7 @@ func monitorRedisSettings(p MonitorFormParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 206, "<fieldset x-show=\"monitorType === 'redis'\" :disabled=\"monitorType !== 'redis'\" x-cloak class=\"min-w-0 space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "<fieldset x-show=\"monitorType === 'redis'\" :disabled=\"monitorType !== 'redis'\" x-cloak class=\"min-w-0 space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2249,7 +2289,7 @@ func monitorRedisSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, "</fieldset>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 215, "</fieldset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2274,7 +2314,7 @@ func monitorPostgreSQLSettings(p MonitorFormParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 208, "<fieldset x-show=\"monitorType === 'postgresql'\" :disabled=\"monitorType !== 'postgresql'\" x-cloak class=\"min-w-0 space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 216, "<fieldset x-show=\"monitorType === 'postgresql'\" :disabled=\"monitorType !== 'postgresql'\" x-cloak class=\"min-w-0 space-y-4\"><div class=\"grid grid-cols-1 sm:grid-cols-2 gap-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2286,7 +2326,7 @@ func monitorPostgreSQLSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 209, "</div><p class=\"form-hint\">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p></fieldset>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 217, "</div><p class=\"form-hint\">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p></fieldset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2311,7 +2351,7 @@ func monitorUDPSettings(p MonitorFormParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "<fieldset x-show=\"monitorType === 'udp'\" :disabled=\"monitorType !== 'udp'\" x-cloak class=\"min-w-0 space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 218, "<fieldset x-show=\"monitorType === 'udp'\" :disabled=\"monitorType !== 'udp'\" x-cloak class=\"min-w-0 space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2323,7 +2363,7 @@ func monitorUDPSettings(p MonitorFormParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 211, "</fieldset>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 219, "</fieldset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -313,7 +313,7 @@ templ IncidentRow(p LayoutParams, inc *storage.Incident) {
 			<span class="text-sm font-medium text-white truncate">{ p.MonitorLabel(inc.MonitorName, inc.MonitorID, inc.MonitorGroupID) }</span>
 			@StatusPill(inc.Status)
 		</div>
-		<div class="text-xs text-muted truncate">{ inc.Cause }</div>
+		<div class="text-xs text-muted truncate">{ p.incidentCause(inc) }</div>
 		<div class="text-xs text-muted mt-0.5">@RelTime(inc.StartedAt)</div>
 	</a>
 }

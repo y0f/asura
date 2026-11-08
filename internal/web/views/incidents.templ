@@ -107,7 +107,7 @@ templ IncidentListPage(p IncidentListParams) {
 									</td>
 									<td class="px-4 py-3">@StatusPill(inc.Status)</td>
 									<td class="px-4 py-3 hidden md:table-cell">@SeverityPill(inc.Severity)</td>
-									<td class="px-4 py-3 text-sm text-muted max-w-0 w-full truncate hidden md:table-cell" title={ inc.Cause }>{ inc.Cause }</td>
+									<td class="px-4 py-3 text-sm text-muted max-w-0 w-full truncate hidden md:table-cell" title={ p.incidentCause(inc) }>{ p.incidentCause(inc) }</td>
 									<td class="px-4 py-3 text-sm text-muted-light tabular-nums whitespace-nowrap hidden sm:table-cell">{ IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</td>
 									<td class="px-4 py-3 text-sm text-muted whitespace-nowrap">@RelTime(inc.StartedAt)</td>
 									<td class="px-4 py-3 text-right">
@@ -167,8 +167,17 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 		}
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 			<section class="card card-pad" aria-labelledby="inc-cause">
-				<h2 id="inc-cause" class="text-md font-semibold mb-2">Cause</h2>
-				<p class="text-sm text-white break-words">{ p.Incident.Cause }</p>
+				<h2 id="inc-cause" class="text-md font-semibold mb-2">
+					if p.canReadDiagnostics("incidents.read", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+						Cause
+					} else {
+						Summary
+					}
+				</h2>
+				<p class="text-sm text-white break-words">{ p.incidentCause(p.Incident) }</p>
+				if !p.canReadDiagnostics("incidents.read", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+					<p class="form-hint mt-2">The raw cause and timeline messages require diagnostic access.</p>
+				}
 				<dl class="mt-4 text-sm">
 					<div class="flex justify-between gap-4 py-2 border-t border-line"><dt class="text-muted">Incident</dt><dd class="text-white tabular-nums">{ fmt.Sprintf("#%d", p.Incident.ID) }</dd></div>
 					<div class="flex justify-between gap-4 py-2 border-t border-line"><dt class="text-muted">Started</dt><dd class="text-white">@RelTime(p.Incident.StartedAt)</dd></div>
@@ -200,7 +209,7 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 									<span class="w-px flex-1 bg-line mt-1"></span>
 								</div>
 								<div class="pb-4 min-w-0">
-									<div class="text-sm text-white break-words">{ ev.Message }</div>
+									<div class="text-sm text-white break-words">{ p.eventMessage(ev) }</div>
 									<div class="text-xs text-muted mt-0.5">@RelTime(ev.CreatedAt)</div>
 								</div>
 							</li>

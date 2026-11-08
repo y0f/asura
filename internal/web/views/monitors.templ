@@ -652,7 +652,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				<div class="mb-6 px-4 py-3 border border-crit/40 rounded-card bg-surface-50 text-sm flex flex-wrap items-center gap-x-3 gap-y-1" role="status">
 					<span class="dot bg-crit"></span>
 					<span class="font-medium text-white">Open incident</span>
-					<span class="text-muted-light min-w-0 break-words">{ p.OpenIncident.Cause }</span>
+					<span class="text-muted-light min-w-0 break-words">{ p.incidentCause(p.OpenIncident) }</span>
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="ml-auto text-white underline underline-offset-2">View incident</a>
 				</div>
 			}
@@ -808,7 +808,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="text-sm text-muted font-mono">{ p.LatestCheck.CertExpiry.Format("2006-01-02") }</div>
 				</div>
 			}
-			if p.LatestCheck != nil && p.Monitor.Type == "dns" {
+			if p.LatestCheck != nil && p.Monitor.Type == "dns" && p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
 				if records := ParseDNS(p.LatestCheck.DNSRecords); len(records) > 0 {
 					<div class="card card-pad mb-6">
 						<h2 class="text-md font-semibold mb-2">DNS records</h2>
@@ -834,6 +834,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 							<span class="text-xs text-muted tabular-nums">{ fmt.Sprint(p.Checks.Total) } total</span>
 						}
 					</div>
+					if !p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+						<p class="px-4 py-3 text-xs text-muted border-b border-line">Detailed check output requires diagnostic access. Status and timing remain visible.</p>
+					}
 					if cks := p.checks(); len(cks) > 0 {
 						<div class="overflow-x-auto">
 							<table class="w-full min-w-[560px]">
@@ -849,7 +852,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 										if p.Monitor.Type == "tls" {
 											<th class="th">Cert</th>
 										}
-										<th class="th">Message</th>
+										if p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+											<th class="th">Message</th>
+										}
 										<th class="th">Time</th>
 									</tr>
 								</thead>
@@ -874,13 +879,15 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 													<td class="px-4 py-2 text-sm text-muted">—</td>
 												}
 											}
-											<td class="px-4 py-2 text-sm text-muted truncate max-w-[260px]" title={ ck.Message }>
-												if ck.Message != "" {
-													{ ck.Message }
-												} else {
-													—
-												}
-											</td>
+											if p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+												<td class="px-4 py-2 text-sm text-muted truncate max-w-[260px]" title={ ck.Message }>
+													if ck.Message != "" {
+														{ ck.Message }
+													} else {
+														—
+													}
+												</td>
+											}
 											<td class="px-4 py-2 text-sm text-muted whitespace-nowrap">@RelTime(ck.CreatedAt)</td>
 										</tr>
 									}
@@ -970,7 +977,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						for _, ch := range chs {
 							<li class="px-4 py-2.5 flex items-center gap-3 min-w-0">
 								<span class="text-sm text-muted whitespace-nowrap shrink-0 w-20">@RelTime(ch.CreatedAt)</span>
-								if ch.Diff != "" {
+								if !p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+									<span class="text-sm text-muted">Change recorded; details require diagnostic access.</span>
+								} else if ch.Diff != "" {
 									<code class="text-xs text-muted-light font-mono truncate" title={ ch.Diff }>{ ch.Diff }</code>
 								} else {
 									<span class="text-sm text-muted">—</span>
