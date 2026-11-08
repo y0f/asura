@@ -224,15 +224,7 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		changes, err := httputil.PrepareMonitorRelations(key, &candidate, current, req.fields)
 		if err == nil && candidate.Type == current.Type {
 			clear := secretClearSet(req.ClearSecrets)
-			if key == nil || !key.SuperAdmin {
-				err = redact.CheckMonitorDestination(&candidate, current, redact.MonitorSecretKeys[candidate.Type], clear)
-			}
-			if err == nil {
-				candidate.Settings, err = redact.MergeSecrets(candidate.Settings, current.Settings, redact.MonitorSecretKeys[candidate.Type], clear)
-				if err == nil {
-					candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, current.Settings, clear)
-				}
-			}
+			err = redact.MergeMonitorEdit(&candidate, current, redact.MonitorSecretKeys[candidate.Type], clear, key != nil && key.SuperAdmin)
 		}
 		if err == nil {
 			err = validate.ValidateMonitor(&candidate)

@@ -18,7 +18,7 @@ func monitorListFilter(r *http.Request) (storage.MonitorListFilter, error) {
 		return f, fmt.Errorf("invalid monitor type filter")
 	}
 	if len(f.Search) > 255 {
-		return f, fmt.Errorf("q must be a monitor name prefix of at most 255 characters")
+		return f, fmt.Errorf("q must be a monitor name prefix of at most 255 UTF-8 bytes")
 	}
 	switch f.Status {
 	case "", "up", "down", "degraded", "paused", "pending":

@@ -8,6 +8,7 @@ import (
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/incident"
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 	"github.com/y0f/asura/internal/web/views"
@@ -112,7 +113,7 @@ func (h *Handler) loadMonitorPage(ctx context.Context, typeFilter string, page, 
 	if totalPages < 1 {
 		totalPages = 1
 	}
-	return ml, result.Page, totalPages, nil
+	return redact.MonitorSummaries(ml), result.Page, totalPages, nil
 }
 
 func (h *Handler) loadOpenIncidents(ctx context.Context) ([]*storage.Incident, error) {

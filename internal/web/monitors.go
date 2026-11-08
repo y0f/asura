@@ -27,6 +27,8 @@ type headerPair struct {
 	Value string `json:"value"`
 }
 
+// monitorToFormData builds a retry form from caller-submitted values. Stored
+// monitors must go through storedMonitorFormData before reaching this function.
 func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 	fd := &views.MonitorFormParams{Monitor: mon}
 	if mon == nil {
@@ -55,11 +57,22 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 
 	unmarshalMonitorSettings(fd, mon)
 	applyHTTPDefaults(fd)
-	fd.Monitor = redact.Monitor(mon)
 
 	fd.HeadersJSON = headersToJSON(fd.HTTP.Headers)
 	fd.WsHeadersJSON = headersToJSON(fd.WS.Headers)
 	fd.AssertionsJSON = assertionsToJSON(mon.Assertions)
+	return fd
+}
+
+func storedMonitorFormData(mon *storage.Monitor) *views.MonitorFormParams {
+	fd := monitorToFormData(redact.Monitor(mon))
+	fd.SecretsStored = redact.MonitorStoredSecrets(mon)
+	if mon.Type == "http" {
+		// Preserve legacy authentication inference without exposing its value.
+		var original storage.HTTPSettings
+		_ = json.Unmarshal(mon.Settings, &original)
+		fd.HTTP.AuthMethod = inferHTTPAuthMethod(original)
+	}
 	return fd
 }
 
@@ -439,6 +452,11 @@ func (h *Handler) Monitors(w http.ResponseWriter, r *http.Request) {
 	result, err := h.store.ListMonitors(r.Context(), f, p)
 	if err != nil {
 		h.logger.Error("web: list monitors", "error", err)
+		http.Error(w, "Failed to load monitors", http.StatusInternalServerError)
+		return
+	}
+	if monitors, ok := result.Data.([]*storage.Monitor); ok {
+		result.Data = redact.MonitorSummaries(monitors)
 	}
 
 	var tagMap map[int64][]storage.MonitorTag
@@ -686,9 +704,7 @@ func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 			h.monitorReadError(w, r, err, "Failed to load monitor assignments")
 			return
 		}
-		fd = monitorToFormData(mon)
-		fd.SecretsStored = views.StoredSecrets(mon.Settings, views.MonitorSecretKeys[mon.Type])
-		blankMonitorSecrets(fd)
+		fd = storedMonitorFormData(mon)
 		fd.SelectedChannelIDs, err = h.store.GetMonitorNotificationChannelIDs(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read", "monitors.update")...)
 		if err != nil {
 			h.monitorReadError(w, r, err, "Failed to load monitor assignments")
@@ -778,20 +794,13 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 // created_at) is kept instead of letting parseMonitorForm's default flip a
 // paused monitor back on; enable/disable goes through Pause/Resume. It returns
 // the stored secrets and settings when the type is unchanged.
-func keepStoredMonitorFields(mon, existing *storage.Monitor) (storedSecrets map[string]bool, existingSettings json.RawMessage, sameType bool) {
+func keepStoredMonitorFields(mon, existing *storage.Monitor) map[string]bool {
 	mon.Enabled = existing.Enabled
 	mon.CreatedAt = existing.CreatedAt
-	sameType = existing.Type == mon.Type
-	if sameType {
-		storedSecrets = views.StoredSecrets(existing.Settings, views.MonitorSecretKeys[mon.Type])
-		existingSettings = existing.Settings
+	if existing.Type == mon.Type {
+		return redact.MonitorStoredSecrets(existing)
 	}
-	// Multi-step settings have no form editor; never let a form-mode save
-	// replace stored steps with nothing.
-	if mon.Type == "http_multi" && len(mon.Settings) == 0 && existing.Type == "http_multi" {
-		mon.Settings = existing.Settings
-	}
-	return storedSecrets, existingSettings, sameType
+	return nil
 }
 
 // renderMonitorEditError shows the edit form again with msg. mon carries the
@@ -831,21 +840,11 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 		candidate := *submitted
 		changes, err := httputil.PrepareMonitorRelations(key, &candidate, current, monitorRelationFields(r))
 		if err == nil {
-			var existingSettings json.RawMessage
-			var sameType bool
-			storedSecrets, existingSettings, sameType = keepStoredMonitorFields(&candidate, current)
-			if sameType {
+			storedSecrets = keepStoredMonitorFields(&candidate, current)
+			if candidate.Type == current.Type {
 				clear := views.ClearSet(r.Form["clear_secrets"])
-				keys := activeMonitorSecretKeys(candidate.Type, candidate.Settings, existingSettings)
-				if key == nil || !key.SuperAdmin {
-					err = redact.CheckMonitorDestination(&candidate, current, keys, clear)
-				}
-				if err == nil {
-					candidate.Settings, err = views.MergeSecrets(candidate.Settings, existingSettings, keys, clear)
-					if err == nil {
-						candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, existingSettings, clear)
-					}
-				}
+				keys := activeMonitorSecretKeys(candidate.Type, candidate.Settings, current.Settings)
+				err = redact.MergeMonitorEdit(&candidate, current, keys, clear, key != nil && key.SuperAdmin)
 			}
 		}
 		if err == nil {
@@ -1287,30 +1286,6 @@ func httpAuthSecretKey(method string) string {
 	default:
 		return ""
 	}
-}
-
-// blankMonitorSecrets clears stored secret values from form data so they are
-// never written into the edit page. MonitorSecretKeys lists the same fields.
-func blankMonitorSecrets(fd *views.MonitorFormParams) {
-	fd.HTTP.BasicAuthPass = ""
-	fd.HTTP.BearerToken = ""
-	fd.HTTP.OAuth2ClientSecret = ""
-	fd.HTTP.MTLSClientKey = ""
-	fd.MQTT.Password = ""
-	fd.Redis.Password = ""
-	for name := range fd.HTTP.Headers {
-		fd.HTTP.Headers[name] = ""
-	}
-	for name := range fd.WS.Headers {
-		fd.WS.Headers[name] = ""
-	}
-	for _, step := range fd.MultiStep.Steps {
-		for name := range step.Headers {
-			step.Headers[name] = ""
-		}
-	}
-	fd.HeadersJSON = headersToJSON(fd.HTTP.Headers)
-	fd.WsHeadersJSON = headersToJSON(fd.WS.Headers)
 }
 
 // validateMonitorForm rejects invalid JSON typed in the advanced editors before

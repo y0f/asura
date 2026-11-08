@@ -67,7 +67,7 @@ func TestMonitorHeaderRoundTrip(t *testing.T) {
 		{"clear case insensitive", `{"headers":{"X-Token":""}}`, `{"headers":{"X-Token":""}}`, map[string]bool{"headers.x-token": true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := MergeMonitorHeaders(json.RawMessage(tc.next), old, tc.clear)
+			got, err := mergeMonitorSettingsForTest(json.RawMessage(tc.next), old, tc.clear)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +86,7 @@ func TestMonitorHeaderRoundTrip(t *testing.T) {
 func TestMultistepSecretReorder(t *testing.T) {
 	old := json.RawMessage(`{"steps":[{"name":"first","url":"https://first.example","headers":{"X-Token":"first-secret"}},{"name":"second","url":"https://second.example","headers":{"X-Token":"second-secret"}}]}`)
 	next := json.RawMessage(`{"steps":[{"name":"second","url":"https://second.example","headers":{"X-Token":""}},{"name":"first","url":"https://first.example","headers":{"X-Token":""}}]}`)
-	merged, err := MergeMonitorHeaders(next, old, nil)
+	merged, err := mergeMonitorSettingsForTest(next, old, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestMultistepSecretReorder(t *testing.T) {
 		t.Fatalf("reordering attached the wrong credentials: %s", merged)
 	}
 	next = json.RawMessage(`{"steps":[{"name":"first","url":"https://changed.example","headers":{"X-Token":""}}]}`)
-	merged, err = MergeMonitorHeaders(next, old, nil)
+	merged, err = mergeMonitorSettingsForTest(next, old, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,16 +110,26 @@ func TestMultistepSecretReorder(t *testing.T) {
 func TestMultistepAmbiguousIdentityRequiresReplacement(t *testing.T) {
 	old := json.RawMessage(`{"steps":[{"name":"same","url":"https://example.com","headers":{"X-Token":"first-secret"}},{"name":"same","url":"https://example.com","headers":{"X-Token":"second-secret"}}]}`)
 	next := json.RawMessage(`{"steps":[{"name":"same","url":"https://example.com","headers":{"X-Token":""}}]}`)
-	if _, err := MergeMonitorHeaders(next, old, nil); err == nil {
+	if _, err := mergeMonitorSettingsForTest(next, old, nil); err == nil {
 		t.Fatal("ambiguous saved step reused a credential")
 	}
-	cleared, err := MergeMonitorHeaders(next, old, map[string]bool{"steps.0.headers.x-token": true})
+	cleared, err := mergeMonitorSettingsForTest(next, old, map[string]bool{"steps.0.headers.x-token": true})
 	if err != nil || strings.Contains(string(cleared), "secret") {
 		t.Fatalf("explicit clear = %s, %v", cleared, err)
 	}
 	next = json.RawMessage(`{"steps":[{"name":"same","url":"https://example.com","headers":{"X-Token":"new-value"}}]}`)
-	replaced, err := MergeMonitorHeaders(next, old, nil)
+	replaced, err := mergeMonitorSettingsForTest(next, old, nil)
 	if err != nil || !strings.Contains(string(replaced), "new-value") {
 		t.Fatalf("replacement = %s, %v", replaced, err)
 	}
+}
+
+// Exercise the same complete current-row merge used by API and form edits.
+func mergeMonitorSettingsForTest(updated, old json.RawMessage, clear map[string]bool) (json.RawMessage, error) {
+	next := &storage.Monitor{Type: "http", Target: "https://example.test", Settings: updated}
+	previous := &storage.Monitor{Type: "http", Target: next.Target, Settings: old}
+	if err := MergeMonitorEdit(next, previous, MonitorSecretKeys["http"], clear, false); err != nil {
+		return nil, err
+	}
+	return next.Settings, nil
 }

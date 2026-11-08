@@ -2,9 +2,7 @@ package redact
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/y0f/asura/internal/storage"
 )
@@ -37,6 +35,24 @@ func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
 		return json.RawMessage(`{}`), stored
 	}
 	redactFields(object, allMonitorSecretKeys, stored)
+	redactFields(object, monitorPayloadKeys, stored)
+	if args, exists := object["args"]; exists && args != nil {
+		if values, ok := args.([]any); !ok || len(values) != 0 {
+			stored["args"] = true
+		}
+		object["args"] = []any{}
+	}
+	redactURL := func(object map[string]any, key, path string) {
+		if value, exists := object[key]; exists {
+			url, _ := value.(string)
+			safe := URLOrigin(url)
+			if safe != url || value != nil && url == "" && value != "" {
+				stored[path] = true
+			}
+			object[key] = safe
+		}
+	}
+	redactURL(object, "oauth2_token_url", "oauth2_token_url")
 	redactHeaders := func(object map[string]any, prefix string) {
 		if headers, ok := object["headers"].(map[string]any); ok {
 			for name, value := range headers {
@@ -51,7 +67,13 @@ func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
 	if steps, ok := object["steps"].([]any); ok {
 		for i, step := range steps {
 			if object, ok := step.(map[string]any); ok {
-				redactHeaders(object, "steps."+strconv.Itoa(i)+".")
+				prefix := "steps." + strconv.Itoa(i) + "."
+				redactHeaders(object, prefix)
+				redactURL(object, "url", prefix+"url")
+				if body, exists := object["body"]; exists && body != nil && body != "" {
+					stored[prefix+"body"] = true
+					object["body"] = ""
+				}
 			}
 		}
 	}
@@ -67,10 +89,36 @@ func Monitor(m *storage.Monitor) *storage.Monitor {
 		return nil
 	}
 	copy := *m
+	copy.Target = MonitorTarget(m.Type, m.Target)
 	if len(m.Settings) > 0 {
 		copy.Settings, _ = MonitorSettings(m.Settings)
 	}
 	return &copy
+}
+
+// MonitorStoredSecrets exposes presence only, for safe retained-value hints.
+func MonitorStoredSecrets(m *storage.Monitor) map[string]bool {
+	_, stored := MonitorSettings(m.Settings)
+	if m.Target != "" && MonitorTarget(m.Type, m.Target) != m.Target {
+		stored["target"] = true
+	}
+	return stored
+}
+
+// MonitorSummaries avoids decoding settings that collection views do not use.
+// It also prevents a future list template from accidentally rendering them.
+func MonitorSummaries(monitors []*storage.Monitor) []*storage.Monitor {
+	result := make([]*storage.Monitor, len(monitors))
+	for i, monitor := range monitors {
+		if monitor == nil {
+			continue
+		}
+		copy := *monitor
+		copy.Target = MonitorTarget(monitor.Type, monitor.Target)
+		copy.Settings, copy.Assertions = nil, nil
+		result[i] = &copy
+	}
+	return result
 }
 
 func Notification(ch *storage.NotificationChannel) *storage.NotificationChannel {
@@ -80,112 +128,4 @@ func Notification(ch *storage.NotificationChannel) *storage.NotificationChannel 
 	copy := *ch
 	copy.Settings, _ = RedactSettings(ch.Settings, allNotificationSecretKeys)
 	return &copy
-}
-
-type stepIdentity struct{ name, url string }
-
-func stepKey(step map[string]any) stepIdentity {
-	name, _ := step["name"].(string)
-	url, _ := step["url"].(string)
-	return stepIdentity{name, url}
-}
-
-// MergeMonitorHeaders preserves blank, still-present header values. Removing a
-// header entry removes its stored value; clear paths explicitly retain an empty
-// value. Multi-step checks match an unambiguous name and URL across reordering.
-func MergeMonitorHeaders(updated, old json.RawMessage, clear map[string]bool) (json.RawMessage, error) {
-	next, err := settingsObject(updated, false)
-	if err != nil {
-		return nil, err
-	}
-	prev, err := settingsObject(old, true)
-	if err != nil {
-		return nil, err
-	}
-	clearHeaders := make(map[string]bool, len(clear))
-	for path, remove := range clear {
-		clearHeaders[strings.ToLower(path)] = remove
-	}
-	changed := false
-	merge := func(next, prev map[string]any, prefix string) {
-		nextHeaders, _ := next["headers"].(map[string]any)
-		prevHeaders, _ := prev["headers"].(map[string]any)
-		type headerValue struct {
-			value     any
-			ambiguous bool
-		}
-		folded := make(map[string]headerValue, len(prevHeaders))
-		for name, value := range prevHeaders {
-			key := strings.ToLower(name)
-			_, exists := folded[key]
-			folded[key] = headerValue{value, exists}
-		}
-		for name, value := range nextHeaders {
-			if clearHeaders[strings.ToLower(prefix+"headers."+name)] {
-				nextHeaders[name] = ""
-				changed = true
-				continue
-			}
-			if value != "" {
-				continue
-			}
-			if previous, exists := prevHeaders[name]; exists {
-				nextHeaders[name] = previous
-				changed = true
-				continue
-			}
-			if previous, exists := folded[strings.ToLower(name)]; exists && !previous.ambiguous {
-				nextHeaders[name] = previous.value
-				changed = true
-			}
-		}
-	}
-	merge(next, prev, "")
-	type stepMatch struct {
-		step  map[string]any
-		count int
-	}
-
-	prevSteps, _ := prev["steps"].([]any)
-	matches := make(map[stepIdentity]stepMatch, len(prevSteps))
-	for _, previous := range prevSteps {
-		if step, ok := previous.(map[string]any); ok {
-			key := stepKey(step)
-			match := matches[key]
-			match.step, match.count = step, match.count+1
-			matches[key] = match
-		}
-	}
-	nextSteps, _ := next["steps"].([]any)
-	for i, step := range nextSteps {
-		nextStep, ok := step.(map[string]any)
-		if !ok {
-			continue
-		}
-		match := matches[stepKey(nextStep)]
-		prefix := "steps." + strconv.Itoa(i) + "."
-		if match.count > 1 {
-			if headers, ok := nextStep["headers"].(map[string]any); ok {
-				for name, value := range headers {
-					if value == "" && !clearHeaders[strings.ToLower(prefix+"headers."+name)] {
-						return updated, fmt.Errorf("step %d has an ambiguous saved identity; provide replacement header values or clear them explicitly", i+1)
-					}
-				}
-			}
-		}
-		if match.count == 1 {
-			merge(nextStep, match.step, prefix)
-		}
-		if match.count > 1 {
-			merge(nextStep, nil, prefix)
-		}
-	}
-	if !changed {
-		return updated, nil
-	}
-	merged, err := json.Marshal(next)
-	if err != nil {
-		return updated, err
-	}
-	return merged, nil
 }

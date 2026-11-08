@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/redact"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 	"github.com/y0f/asura/internal/web/views"
@@ -55,6 +56,9 @@ func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("web: list group monitors", "error", err)
 		http.Error(w, "Failed to load group monitors", http.StatusInternalServerError)
 		return
+	}
+	if monitors, ok := result.Data.([]*storage.Monitor); ok {
+		result.Data = redact.MonitorSummaries(monitors)
 	}
 
 	lp := h.newLayoutParams(r, group.Name, "groups")

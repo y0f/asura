@@ -28,7 +28,7 @@ func TestMonitorCredentialDestination(t *testing.T) {
 				id := int64(2)
 				next.ProxyID = &id
 			}
-			if err := CheckMonitorDestination(next, old, MonitorSecretKeys[old.Type], tc.clear); (err != nil) != tc.blocked {
+			if err := MergeMonitorEdit(next, old, MonitorSecretKeys[old.Type], tc.clear, false); (err != nil) != tc.blocked {
 				t.Fatalf("destination check = %v, blocked=%t", err, tc.blocked)
 			}
 		})
@@ -36,7 +36,7 @@ func TestMonitorCredentialDestination(t *testing.T) {
 	old.Settings = json.RawMessage(`{"oauth2_token_url":"https://old.example/token","oauth2_client_secret":"stored-secret"}`)
 	next := *old
 	next.Settings = json.RawMessage(`{"oauth2_token_url":"https://new.example/token","oauth2_client_secret":""}`)
-	if err := CheckMonitorDestination(&next, old, MonitorSecretKeys[old.Type], nil); err == nil {
+	if err := MergeMonitorEdit(&next, old, MonitorSecretKeys[old.Type], nil, false); err == nil {
 		t.Fatal("OAuth credential was retained for changed issuer")
 	}
 	old.Type = "http_multi"
@@ -45,10 +45,10 @@ func TestMonitorCredentialDestination(t *testing.T) {
 	id := int64(2)
 	next.ProxyID = &id
 	next.Settings = json.RawMessage(`{"steps":[{"name":"step","url":"https://same.example","headers":{"X-Token":""}}]}`)
-	if err := CheckMonitorDestination(&next, old, nil, nil); err == nil {
+	if err := MergeMonitorEdit(&next, old, nil, nil, false); err == nil {
 		t.Fatal("multi-step credential was retained through a new proxy")
 	}
-	if err := CheckMonitorDestination(&next, old, nil, map[string]bool{"steps.0.headers.x-token": true}); err != nil {
+	if err := MergeMonitorEdit(&next, old, nil, map[string]bool{"steps.0.headers.x-token": true}, false); err != nil {
 		t.Fatalf("explicit multi-step clear blocked: %v", err)
 	}
 }

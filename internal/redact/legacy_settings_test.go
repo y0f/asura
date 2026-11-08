@@ -39,7 +39,7 @@ func TestLegacyCredentialDestinationsFailClosed(t *testing.T) {
 	} {
 		old := &storage.Monitor{Type: "http", Target: "https://old.example", Settings: json.RawMessage(raw)}
 		next := &storage.Monitor{Type: old.Type, Target: "https://new.example"}
-		if err := CheckMonitorDestination(next, old, MonitorSecretKeys["http"], nil); err == nil {
+		if err := MergeMonitorEdit(next, old, MonitorSecretKeys["http"], nil, false); err == nil {
 			t.Errorf("changed destination accepted hidden legacy credential: %s", raw)
 		} else if strings.Contains(err.Error(), "private-") {
 			t.Fatal("credential appeared in error")
@@ -79,11 +79,7 @@ func TestSecretMergeRejectsAmbiguityBeforeNormalization(t *testing.T) {
 
 func TestLegacySecretsPreserveUnambiguousValues(t *testing.T) {
 	old := json.RawMessage(`{"BEARER_TOKEN":"private-stored","HEADERS":{"X-Token":"private-header"}}`)
-	merged, err := MergeSecrets(json.RawMessage(`{"bearer_token":"","headers":{"x-token":""},"expected_size":9007199254740993}`), old, MonitorSecretKeys["http"], nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	merged, err = MergeMonitorHeaders(merged, old, nil)
+	merged, err := mergeMonitorSettingsForTest(json.RawMessage(`{"bearer_token":"","headers":{"x-token":""},"expected_size":9007199254740993}`), old, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
