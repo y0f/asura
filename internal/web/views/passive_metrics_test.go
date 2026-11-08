@@ -99,3 +99,20 @@ func TestSLAFormPreservesArbitraryValidTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestInactiveSLAClearIsExplicitAndLimitedToSavedTargets(t *testing.T) {
+	for _, tc := range []struct {
+		kind   string
+		id     int64
+		target float64
+		want   bool
+	}{
+		{"manual", 1, 99.123, true}, {"heartbeat", 2, 100, true},
+		{"manual", 1, 0, false}, {"heartbeat", 0, 0, false}, {"http", 3, 99.9, false},
+	} {
+		p := MonitorFormParams{Monitor: &storage.Monitor{ID: tc.id, Type: tc.kind, SLATarget: tc.target}}
+		if got := namedControl(render(t, MonitorFormPage(p)), "Clear inactive target"); got != tc.want {
+			t.Errorf("%s id%d target%v clear control=%v; want%v", tc.kind, tc.id, tc.target, got, tc.want)
+		}
+	}
+}

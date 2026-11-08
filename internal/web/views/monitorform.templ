@@ -559,6 +559,9 @@ templ MonitorFormPage(p MonitorFormParams) {
 									<datalist id="sla-target-presets"><option value="0"></option><option value="99"></option><option value="99.5"></option><option value="99.9"></option><option value="99.95"></option><option value="99.99"></option><option value="100"></option></datalist>
 									<p id="sla-target-help" class="form-hint">A value from 0 to 100, including custom decimals. Use 0 to disable SLA tracking.</p>
 									<p id="sla-target-inactive" x-show="monitorType === 'manual' || monitorType === 'heartbeat'" x-cloak class="form-hint">SLA tracking is unavailable for manual and heartbeat monitors. An unchanged saved target remains inactive. When changing an active monitor to either type, first set its SLA target to 0.</p>
+									if p.Monitor.ID != 0 && !p.Monitor.HasSampledMetrics() && p.Monitor.SLATarget > 0 {
+										<button type="button" x-show="(monitorType === 'manual' || monitorType === 'heartbeat') && Number(slaTarget) > 0" @click="slaTarget = '0'" class="btn-secondary btn-sm mt-2">Clear inactive target</button>
+									}
 								</div>
 								<div>
 									<label class="form-label" for="anomaly_sensitivity">Anomaly Detection</label>
