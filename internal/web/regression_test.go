@@ -151,7 +151,9 @@ func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(
 // Regression: confirmation email is sent with the (soon cancelled) request context.
 func TestSubscribeConfirmationEmailOutlivesRequest(t *testing.T) {
 	h, store := storeHandler(t)
+	h.cfg.Subscriptions.Enabled = true
 	h.loginRL = httputil.NewRateLimiter(100, 100)
+	t.Cleanup(h.loginRL.Stop)
 	var logs syncBuf
 	h.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelError}))
 	sp, _ := createProtectedStatusPage(t, store, false)

@@ -88,6 +88,10 @@ func TestScopedWebCollectionsKeepMetadataChoicesAndDashboardSeparate(t *testing.
 		t.Fatalf("dashboard mixed resource scopes: %d %s", w.Code, w.Body)
 	}
 	w = do(h.Dashboard, "monitors.read", "incidents.read")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "incident-cause-") || !strings.Contains(w.Body.String(), "Monitor check failed") {
+		t.Fatalf("ordinary incident read exposed diagnostics: %d", w.Code)
+	}
+	w = do(h.Dashboard, "monitors.read", "incidents.read", "diagnostics.read")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "incident-cause-0") || strings.Contains(w.Body.String(), "incident-cause-1") {
 		t.Fatalf("dashboard incident scope failed: %d %s", w.Code, w.Body)
 	}

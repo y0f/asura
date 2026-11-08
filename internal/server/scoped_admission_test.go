@@ -144,6 +144,13 @@ func TestScopedSessionUsesCurrentBindingsAndLanding(t *testing.T) {
 			if w := do("/"); w.Code != 303 || w.Header().Get("Location") != base+"/incidents" {
 				t.Fatalf("current role landing: %d %v", w.Code, w.Header())
 			}
+			if w := do("/incidents"); w.Code != 200 || strings.Contains(w.Body.String(), "incident-private-cause-") {
+				t.Fatalf("ordinary incident read exposed diagnostics: %d", w.Code)
+			}
+			srv.cfg.Auth.Roles[0].Permissions = []string{"incidents.read", "diagnostics.read"}
+			if err := srv.cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
 			if w := do("/incidents"); w.Code != 200 || !strings.Contains(w.Body.String(), "incident-private-cause-1") || strings.Contains(w.Body.String(), "incident-private-cause-0") {
 				t.Fatalf("new session scope not applied: %d %.300s", w.Code, w.Body.String())
 			}
