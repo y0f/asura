@@ -147,8 +147,9 @@ func (s *SQLiteStore) DeleteAgent(ctx context.Context, id int64) ([]int64, error
 	return disabled, nil
 }
 
-// agentMayCheck requires a current, enabled, explicitly assigned agent.
-const agentMayCheck = `EXISTS (
+// agentMayCheck requires a current, enabled, explicitly assigned agent. Proxy
+// configuration is server-local: remote jobs cannot execute its routing policy.
+const agentMayCheck = `monitors.proxy_id IS NULL AND EXISTS (
 	SELECT 1 FROM monitor_agents ma JOIN agents a ON a.id=ma.agent_id
 	WHERE ma.monitor_id=monitors.id AND ma.agent_id=? AND a.enabled=1)`
 
