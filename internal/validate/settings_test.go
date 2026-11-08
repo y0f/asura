@@ -119,3 +119,28 @@ func TestNotificationSettingsUseProviderSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestNumericHeaderAndJSONAssertionThresholdsAreFinite(t *testing.T) {
+	for _, kind := range []string{"header", "json_path"} {
+		for _, value := range []string{"", "unavailable", "NaN", "Inf", "-Inf", "1e999"} {
+			raw, err := json.Marshal(map[string]any{"groups": []any{map[string]any{"conditions": []any{map[string]string{
+				"type": kind, "operator": "lte", "target": "load", "value": value,
+			}}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateAssertions(raw); err == nil {
+				t.Errorf("%s accepted nonnumeric threshold %q", kind, value)
+			}
+		}
+	}
+	for _, raw := range []string{
+		`{"groups":[{"conditions":[{"type":"header","operator":"lte","target":"Load","value":"0.25"}]}]}`,
+		`{"groups":[{"conditions":[{"type":"json_path","operator":"gt","target":"load","value":"1e2"}]}]}`,
+		`{"groups":[{"conditions":[{"type":"header","operator":"eq","target":"Status","value":"unavailable"}]}]}`,
+	} {
+		if err := validateAssertions(json.RawMessage(raw)); err != nil {
+			t.Errorf("valid assertion rejected: %v", err)
+		}
+	}
+}

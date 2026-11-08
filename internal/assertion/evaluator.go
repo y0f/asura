@@ -3,33 +3,18 @@ package assertion
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
+	"math"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
-
-var _regexCache sync.Map
-
-func compileRegex(pattern string) (*regexp.Regexp, error) {
-	if cached, ok := _regexCache.Load(pattern); ok {
-		return cached.(*regexp.Regexp), nil
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, err
-	}
-	_regexCache.Store(pattern, re)
-	return re, nil
-}
 
 func Evaluate(assertionsJSON json.RawMessage, statusCode int, body string,
 	headers map[string]string, responseTimeMs int64, certExpiry *int64, dnsRecords []string) AssertionResult {
 
-	var cs ConditionSet
-	if err := json.Unmarshal(assertionsJSON, &cs); err != nil || len(cs.Groups) == 0 {
-		return AssertionResult{Pass: true}
+	cs, err := Parse(assertionsJSON)
+	if err != nil {
+		return AssertionResult{Message: err.Error()}
 	}
 
 	var allDetails []AssertionDetail
@@ -61,6 +46,9 @@ func Evaluate(assertionsJSON json.RawMessage, statusCode int, body string,
 func evalGroup(g ConditionGroup, statusCode int, body string,
 	headers map[string]string, responseTimeMs int64, certExpiry *int64, dnsRecords []string) AssertionResult {
 
+	if !validLogic(g.Operator) {
+		return AssertionResult{Message: "invalid assertion group operator"}
+	}
 	if len(g.Conditions) == 0 {
 		return AssertionResult{Pass: true}
 	}
@@ -91,6 +79,10 @@ func evalGroup(g ConditionGroup, statusCode int, body string,
 		Message:  strings.Join(messages, "; "),
 		Details:  details,
 	}
+}
+
+func validLogic(operator string) bool {
+	return operator == "" || operator == "and" || operator == "or"
 }
 
 func combinePasses(passes []bool, operator string) bool {
@@ -143,9 +135,9 @@ func evaluateSingle(a Assertion, statusCode int, body string,
 }
 
 func evalStatusCode(a Assertion, statusCode int) AssertionDetail {
-	expected, _ := strconv.Atoi(a.Value)
+	expected, err := strconv.Atoi(a.Value)
 	actual := strconv.Itoa(statusCode)
-	pass := compareInt(statusCode, expected, a.Operator)
+	pass := err == nil && compareInt(statusCode, expected, a.Operator)
 	msg := ""
 	if !pass {
 		msg = fmt.Sprintf("status_code: expected %s %s, got %d", a.Operator, a.Value, statusCode)
@@ -258,9 +250,9 @@ func evalHeader(a Assertion, headers map[string]string) AssertionDetail {
 }
 
 func evalResponseTime(a Assertion, responseTimeMs int64) AssertionDetail {
-	expected, _ := strconv.ParseInt(a.Value, 10, 64)
+	expected, err := strconv.ParseInt(a.Value, 10, 64)
 	actual := strconv.FormatInt(responseTimeMs, 10)
-	pass := compareInt64(responseTimeMs, expected, a.Operator)
+	pass := err == nil && compareInt64(responseTimeMs, expected, a.Operator)
 	msg := ""
 	if !pass {
 		msg = fmt.Sprintf("response_time: expected %s %sms, got %dms", a.Operator, a.Value, responseTimeMs)
@@ -277,11 +269,11 @@ func evalCertExpiry(a Assertion, certExpiry *int64) AssertionDetail {
 	}
 
 	// Value is in days
-	expectedDays, _ := strconv.ParseInt(a.Value, 10, 64)
+	expectedDays, err := strconv.ParseInt(a.Value, 10, 64)
 	daysUntilExpiry := (*certExpiry - _nowFunc().Unix()) / 86400
 	actual := strconv.FormatInt(daysUntilExpiry, 10)
 
-	pass := compareInt64(daysUntilExpiry, expectedDays, a.Operator)
+	pass := err == nil && compareInt64(daysUntilExpiry, expectedDays, a.Operator)
 	msg := ""
 	if !pass {
 		msg = fmt.Sprintf("cert_expiry: expected %s %s days, got %d days", a.Operator, a.Value, daysUntilExpiry)
@@ -431,7 +423,7 @@ func compareInt(actual, expected int, op string) bool {
 	case "lte":
 		return actual <= expected
 	default:
-		return actual == expected
+		return false
 	}
 }
 
@@ -450,7 +442,7 @@ func compareInt64(actual, expected int64, op string) bool {
 	case "lte":
 		return actual <= expected
 	default:
-		return actual == expected
+		return false
 	}
 }
 
@@ -464,24 +456,24 @@ func compareString(actual, expected, op string) bool {
 		return strings.Contains(actual, expected)
 	case "not_contains":
 		return !strings.Contains(actual, expected)
-	case "gt":
-		a, _ := strconv.ParseFloat(actual, 64)
-		e, _ := strconv.ParseFloat(expected, 64)
-		return a > e
-	case "lt":
-		a, _ := strconv.ParseFloat(actual, 64)
-		e, _ := strconv.ParseFloat(expected, 64)
-		return a < e
-	case "gte":
-		a, _ := strconv.ParseFloat(actual, 64)
-		e, _ := strconv.ParseFloat(expected, 64)
-		return a >= e
-	case "lte":
-		a, _ := strconv.ParseFloat(actual, 64)
-		e, _ := strconv.ParseFloat(expected, 64)
-		return a <= e
+	case "gt", "lt", "gte", "lte":
+		a, aErr := strconv.ParseFloat(actual, 64)
+		e, eErr := strconv.ParseFloat(expected, 64)
+		if aErr != nil || eErr != nil || math.IsNaN(a) || math.IsNaN(e) || math.IsInf(a, 0) || math.IsInf(e, 0) {
+			return false
+		}
+		switch op {
+		case "gt":
+			return a > e
+		case "lt":
+			return a < e
+		case "gte":
+			return a >= e
+		default:
+			return a <= e
+		}
 	default:
-		return actual == expected
+		return false
 	}
 }
 

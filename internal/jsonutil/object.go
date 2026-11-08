@@ -1,15 +1,35 @@
-package validate
+// Package jsonutil decodes configuration objects without ambiguous JSON fields.
+package jsonutil
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 )
 
 var settingsFields sync.Map // reflect.Type -> immutable JSON member types
+
+// DecodeObject rejects duplicate or noncanonical typed fields before decoding.
+// Map keys retain their spelling. The limit applies to the complete input.
+func DecodeObject(raw []byte, target any, maxBytes int) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(raw) > maxBytes || len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return fmt.Errorf("expected a JSON object of at most %d bytes", maxBytes)
+	}
+	if err := checkSettingsKeys(trimmed, target); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return errors.New("JSON object contains an unknown field or invalid field type")
+	}
+	return nil
+}
 
 func settingFields(t reflect.Type) map[string]reflect.Type {
 	if cached, ok := settingsFields.Load(t); ok {
