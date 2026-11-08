@@ -7,6 +7,9 @@ import (
 
 // Store defines the complete storage interface.
 type Store interface {
+	// Global metrics: one bounded, scalar read snapshot (requires metrics.read).
+	VisitPrometheus(ctx context.Context, from, to time.Time, visit func(PrometheusRow) error) (*PrometheusSummary, error)
+
 	// Portable configuration (history and auth/runtime YAML are separate backups).
 	SnapshotConfiguration(ctx context.Context) (*ConfigurationSnapshot, error)
 	ApplyConfiguration(ctx context.Context, data *ConfigurationSnapshot, options ConfigurationImportOptions) (*ConfigurationImportResult, error)

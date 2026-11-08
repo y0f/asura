@@ -69,6 +69,12 @@ Heartbeat (push) monitors expect periodic pings from your job or service. Hit th
 
 `metrics.read` grants a global operational export containing monitor names, types and tags, plus global incident and request aggregates. Treat it as sensitive operational data. It does not expose credentials, targets or settings, and does not grant ordinary monitor API reads. It cannot be restricted with monitor or group selectors.
 
+Each scrape reads all monitors, tags, incident counts and the last 24 hours of request aggregates from one database snapshot. A database failure returns HTTP 500; exceeding the 10-second deadline or 16 MiB encoded-output limit returns HTTP 503. Failed scrapes do not return a partial successful exposition. Scheduler and notification drop counters are live process counters sampled after the database snapshot.
+
+Status totals include `pending`; `asura_monitor_up` is 1 only for an `up` status, and 0 for every other status. Response-time series are omitted for manual and heartbeat monitors and for monitors without a recorded check; an observed zero-millisecond duration remains 0.
+
+Tag labels start with `tag_`. ASCII letters and digits retain their case; every other UTF-8 byte, including underscore, becomes `_XX` using uppercase hexadecimal. For example, `team name`, `team_name` and `é` become `tag_team_20name`, `tag_team_5Fname` and `tag__C3_A9`. Distinct names therefore remain distinct valid label names. Empty tag values retain the value `true`. Update queries that relied on v1 lowercasing or space/underscore normalization.
+
 ## Monitors {#monitors}
 
 | Method | Endpoint | Description |
