@@ -820,8 +820,8 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 				}
 			}
-			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-				<section class="lg:col-span-2 panel min-w-0" aria-labelledby="checks-title">
+			<div class={ "grid grid-cols-1 gap-6 mb-6", templ.KV("lg:grid-cols-3", p.hasConfiguration()) }>
+				<section class={ "panel min-w-0", templ.KV("lg:col-span-2", p.hasConfiguration()) } aria-labelledby="checks-title">
 					<div class="px-4 py-3 border-b border-line flex items-center justify-between">
 						<h2 id="checks-title" class="text-md font-semibold">
 							if p.Monitor.HasSampledMetrics() {
@@ -918,61 +918,63 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						</div>
 					}
 				</section>
-				<section class="card card-pad min-w-0" aria-labelledby="config-title">
-					<h2 id="config-title" class="text-md font-semibold mb-2">Configuration</h2>
-					<dl class="text-sm">
-						if p.Monitor.Type != "heartbeat" && p.Monitor.Type != "manual" {
-							@configRow("Interval") {
-								{ fmt.Sprint(p.Monitor.Interval) }s
+				if p.hasConfiguration() {
+					<section class="card card-pad min-w-0" aria-labelledby="config-title">
+						<h2 id="config-title" class="text-md font-semibold mb-2">Configuration</h2>
+						<dl class="text-sm">
+							if p.Monitor.Type != "heartbeat" && p.Monitor.Type != "manual" {
+								@configRow("Interval") {
+									{ fmt.Sprint(p.Monitor.Interval) }s
+								}
+								@configRow("Timeout") {
+									{ fmt.Sprint(p.Monitor.Timeout) }s
+								}
 							}
-							@configRow("Timeout") {
-								{ fmt.Sprint(p.Monitor.Timeout) }s
+							if p.Monitor.HasSampledMetrics() {
+								@configRow("Failures before alert") {
+									{ fmt.Sprint(p.Monitor.FailureThreshold) }
+								}
+								@configRow("Successes to recover") {
+									{ fmt.Sprint(p.Monitor.SuccessThreshold) }
+								}
 							}
+							if p.Monitor.HasSampledMetrics() && p.Monitor.TrackChanges {
+								@configRow("Track changes") {
+									Yes
+								}
+							}
+							if p.Monitor.HasSampledMetrics() && p.Monitor.UpsideDown {
+								@configRow("Upside-down mode") {
+									Yes
+								}
+							}
+							if p.Monitor.ResendInterval > 0 {
+								@configRow("Resend every") {
+									{ fmt.Sprint(p.Monitor.ResendInterval) }s
+								}
+							}
+						</dl>
+						if len(p.Tags) > 0 {
+							<div class="flex items-center gap-1.5 flex-wrap mt-3">
+								for _, tag := range p.Tags {
+									<span class="badge">
+										<span class={ "dot w-1.5 h-1.5", TagTone(tag.Color) }></span>
+										{ tag.Name }
+										if tag.Value != "" {
+											<span class="text-muted">{ tag.Value }</span>
+										}
+									</span>
+								}
+							</div>
 						}
-						if p.Monitor.HasSampledMetrics() {
-							@configRow("Failures before alert") {
-								{ fmt.Sprint(p.Monitor.FailureThreshold) }
-							}
-							@configRow("Successes to recover") {
-								{ fmt.Sprint(p.Monitor.SuccessThreshold) }
-							}
+						if p.Monitor.Description != "" {
+							<div class="mt-4 pt-3 border-t border-line">
+								<div class="stat-label">Notes</div>
+								<div class="leading-relaxed">@templ.Raw(RenderMarkdown(p.Monitor.Description))</div>
+							</div>
 						}
-						if p.Monitor.TrackChanges {
-							@configRow("Track changes") {
-								Yes
-							}
-						}
-						if p.Monitor.UpsideDown {
-							@configRow("Upside-down mode") {
-								Yes
-							}
-						}
-						if p.Monitor.ResendInterval > 0 {
-							@configRow("Resend every") {
-								{ fmt.Sprint(p.Monitor.ResendInterval) }s
-							}
-						}
-					</dl>
-					if len(p.Tags) > 0 {
-						<div class="flex items-center gap-1.5 flex-wrap mt-3">
-							for _, tag := range p.Tags {
-								<span class="badge">
-									<span class={ "dot w-1.5 h-1.5", TagTone(tag.Color) }></span>
-									{ tag.Name }
-									if tag.Value != "" {
-										<span class="text-muted">{ tag.Value }</span>
-									}
-								</span>
-							}
-						</div>
-					}
-					if p.Monitor.Description != "" {
-						<div class="mt-4 pt-3 border-t border-line">
-							<div class="stat-label">Notes</div>
-							<div class="leading-relaxed">@templ.Raw(RenderMarkdown(p.Monitor.Description))</div>
-						</div>
-					}
-				</section>
+					</section>
+				}
 			</div>
 			if chs := p.changes(); len(chs) > 0 {
 				<section class="panel" aria-labelledby="changes-title">

@@ -12,6 +12,10 @@ type HeartbeatData struct {
 	GraceSecs  int
 }
 
+func (p MonitorDetailParams) hasConfiguration() bool {
+	return p.Monitor.HasSampledMetrics() || p.Monitor.ResendInterval > 0 || len(p.Tags) > 0 || p.Monitor.Description != ""
+}
+
 func (p MonitorFormParams) slaTargetValue() string {
 	return strconv.FormatFloat(p.Monitor.SLATarget, 'f', -1, 64)
 }

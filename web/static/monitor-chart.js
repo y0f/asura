@@ -65,6 +65,7 @@ function monitorChart() {
             const ts = this.points.map(p => p.ts);
             const rt = this.points.map(p => p.rt);
             const statuses = this.points.map(p => p.s);
+            const singleTime = ts.every(value => value === ts[0]);
             const tipDate = tip ? tip.querySelector('.tip-date') : null;
             const tipVal = tip ? tip.querySelector('.tip-value') : null;
             const tipSt = tip ? tip.querySelector('.tip-status') : null;
@@ -79,25 +80,29 @@ function monitorChart() {
                 cursor: { show: true, drag: { x: false, y: false } },
                 select: { show: false }, legend: { show: false },
                 padding: [12, 8, 0, 0],
+                // Epoch timestamps must not receive percentage padding when
+                // there is only one observed time. Keep the point visible.
+                scales: singleTime ? { x: { range: () => [ts[0] - 30, ts[0] + 30] } } : {},
                 axes: [
                     { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font, gap: 6 },
                     { size: 64, stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font, gap: 6, values: (u, vals) => vals.map(v => v + 'ms') }
                 ],
                 series: [
                     {},
-                    { label: 'Response time', stroke: lineColor, width: 1.5, fill: withAlpha(lineColor, 0.1), points: { show: false } }
+                    { label: 'Response time', stroke: lineColor, width: 1.5, fill: withAlpha(lineColor, 0.1), points: { show: singleTime, size: 6 } }
                 ],
                 hooks: {
                     draw: [(u) => {
                         const ctx = u.ctx;
-                        const { left, top, width, height } = u.bbox;
+                        const { top, height } = u.bbox;
                         for (let i = 0; i < statuses.length; i++) {
                             if (statuses[i] !== 'down') continue;
                             const x = Math.round(u.valToPos(ts[i], 'x', true));
                             ctx.save();
                             ctx.globalAlpha = 0.18;
                             ctx.fillStyle = critColor;
-                            const bw = Math.max(2, width / statuses.length);
+                            // Mark an observation, not an invented outage span.
+                            const bw = 2 * uPlot.pxRatio;
                             ctx.fillRect(x - bw / 2, top, bw, height);
                             ctx.restore();
                         }

@@ -51,6 +51,8 @@
   .page-title { font-size: var(--text-2xl); }
   .page-actions:has(> .btn-primary:only-child) { flex: 0 0 100%; }
   .page-actions > .btn-primary:only-child { margin-left: 0; }
+  #monitor-detail .page-actions { flex: 0 0 100%; }
+  #monitor-detail .page-actions > div { flex: 1 0 100%; }
   .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .summary-strip > .stat-card { padding: 1rem; }
   .summary-strip > .stat-card:nth-child(3) { border-left: 0; }

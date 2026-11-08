@@ -54,6 +54,24 @@ func TestPassiveDetailRejectsLegacySampledPresentation(t *testing.T) {
 	}
 }
 
+func TestPassiveConfigurationOnlyRendersWhenItContainsFacts(t *testing.T) {
+	for _, kind := range []string{"manual", "heartbeat"} {
+		p := MonitorDetailParams{Monitor: &storage.Monitor{ID: 1, Type: kind, TrackChanges: true, UpsideDown: true}}
+		if text := textOf(render(t, MonitorDetailPage(p))); strings.Contains(text, "Configuration") {
+			t.Fatalf("%s rendered empty configuration for inactive probe flags", kind)
+		}
+		p.Monitor.Description = "Operator instructions"
+		text := textOf(render(t, MonitorDetailPage(p)))
+		if !strings.Contains(text, "Configuration") || !strings.Contains(text, "Operator instructions") || strings.Contains(text, "Track changes") || strings.Contains(text, "Upside-down mode") {
+			t.Fatalf("%s configuration lost notes or advertised inactive probe flags", kind)
+		}
+		p.Monitor.Description, p.Monitor.ResendInterval = "", 300
+		if text := textOf(render(t, MonitorDetailPage(p))); !strings.Contains(text, "Resend every") || !strings.Contains(text, "300s") {
+			t.Fatalf("%s configuration lost incident reminder interval", kind)
+		}
+	}
+}
+
 func TestPassivePublicRowOmitsLegacyUptime(t *testing.T) {
 	for _, kind := range []string{"manual", "heartbeat"} {
 		row := MonitorWithUptime{Monitor: &storage.Monitor{Name: "Reported service", Type: kind, Status: "up"}, UptimeLabel: "99.99%", DailyBars: []DailyBar{{Date: "2026-11-08", UptimePct: 99.99, HasData: true}}}
