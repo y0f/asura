@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 var ErrInvalidConfiguration = errors.New("invalid configuration")
@@ -300,6 +301,12 @@ func (ic *configurationImport) prepareSecrets(s *SQLiteStore) error {
 		ic.channelSettings[ch.ID] = value
 	}
 	for _, p := range ic.data.Proxies {
+		// The prefix belongs to the storage envelope, not the portable value.
+		// Encryption can safely wrap a literal password starting with it, but
+		// an unencrypted destination could not distinguish it on a later read.
+		if s.enc == nil && strings.HasPrefix(p.AuthPass, encPrefix) {
+			return invalidConfiguration("proxy %d password uses the reserved encrypted-storage prefix; enable destination encryption before importing it", p.ID)
+		}
 		value, err := s.encryptSettings(p.AuthPass)
 		if err != nil {
 			return fmt.Errorf("encrypt imported proxy: %w", err)

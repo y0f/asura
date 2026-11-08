@@ -50,8 +50,8 @@ func validateImportedConfiguration(c *storage.ConfigurationSnapshot) error {
 		if err := validate.ValidateProxy(proxy); err != nil {
 			return fmt.Errorf("proxy %d: %w", proxy.ID, err)
 		}
-		if len(proxy.AuthUser) > 4096 || len(proxy.AuthPass) > 16384 || strings.HasPrefix(proxy.AuthPass, "enc:") {
-			return fmt.Errorf("proxy %d credentials must be plaintext and within size limits", proxy.ID)
+		if len(proxy.AuthUser) > 4096 || len(proxy.AuthPass) > 16384 {
+			return fmt.Errorf("proxy %d credentials exceed size limits", proxy.ID)
 		}
 	}
 	for _, ch := range c.Channels {

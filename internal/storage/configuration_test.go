@@ -383,6 +383,50 @@ func TestConfigurationEncryptsDestinationSecretsAndFailsWrongKeyExport(t *testin
 	}
 }
 
+func TestConfigurationProxyPasswordPrefixUsesDestinationEncryption(t *testing.T) {
+	ctx := context.Background()
+	const password = "enc:literal-password"
+	input := configurationFixture()
+	input.Proxies[0].AuthPass = password
+	for _, encrypted := range []bool{false, true} {
+		t.Run(fmt.Sprint(encrypted), func(t *testing.T) {
+			s := testStore(t)
+			if _, err := s.ApplyConfiguration(ctx, configurationFixture(), configurationOptions("replace")); err != nil {
+				t.Fatal(err)
+			}
+			if encrypted {
+				gcm, err := newGCM([]byte("0123456789abcdef0123456789abcdef"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				s.enc = &Encryptor{gcm: gcm, legacyGCM: gcm}
+			}
+			result, err := s.ApplyConfiguration(ctx, input, configurationOptions("replace"))
+			if !encrypted {
+				if !errors.Is(err, ErrInvalidConfiguration) || result != nil || strings.Contains(err.Error(), password) {
+					t.Fatalf("ambiguous stored credential accepted or exposed: %v", err)
+				}
+				got, err := s.SnapshotConfiguration(ctx)
+				if err != nil || got.Proxies[0].AuthPass != "proxy-secret" {
+					t.Fatalf("rejected replacement changed configuration: %v", err)
+				}
+				return
+			}
+			if err != nil || result.Proxies != 1 {
+				t.Fatalf("literal password rejected despite encryption: %v", err)
+			}
+			got, err := s.SnapshotConfiguration(ctx)
+			if err != nil || got.Proxies[0].AuthPass != password {
+				t.Fatalf("literal password did not round-trip: %v", err)
+			}
+			proxy, err := s.GetProxy(ctx, got.Proxies[0].ID)
+			if err != nil || proxy.AuthPass != password {
+				t.Fatalf("imported literal credential is not usable: %v", err)
+			}
+		})
+	}
+}
+
 func TestConfigurationSnapshotPreservesInertLegacyDelegationFlags(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

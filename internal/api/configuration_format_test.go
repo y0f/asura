@@ -156,8 +156,8 @@ func TestConfigurationTypedValidationRejectsInvalidFields(t *testing.T) {
 		{"unsafe markup", func(c *storage.ConfigurationSnapshot) {
 			c.StatusPages = []*storage.StatusPage{{ID: 3, Slug: "public", Title: "Health", CustomHeaderHTML: "<script>alert(1)</script>"}}
 		}},
-		{"encrypted proxy secret", func(c *storage.ConfigurationSnapshot) {
-			c.Proxies = []*storage.Proxy{{ID: 4, Name: "proxy", Protocol: "http", Host: "proxy.test", Port: 8080, AuthPass: "enc:unavailable"}}
+		{"oversized proxy secret", func(c *storage.ConfigurationSnapshot) {
+			c.Proxies = []*storage.Proxy{{ID: 4, Name: "proxy", Protocol: "http", Host: "proxy.test", Port: 8080, AuthPass: strings.Repeat("x", 16385)}}
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -180,6 +180,13 @@ func TestConfigurationMultiStepVariableURLsRemainPortable(t *testing.T) {
 	m.Settings = json.RawMessage(`{"steps":[{"url":"{{unknown}}/result"}]}`)
 	if err := validate.ValidateMonitor(m); err == nil {
 		t.Fatal("undefined extracted variable accepted")
+	}
+}
+
+func TestConfigurationProxyPasswordPrefixIsNotAnEnvelopeInTheFile(t *testing.T) {
+	c := &storage.ConfigurationSnapshot{Proxies: []*storage.Proxy{{ID: 1, Name: "proxy", Protocol: "http", Host: "proxy.test", Port: 8080, AuthPass: "enc:literal-password"}}}
+	if err := validateImportedConfiguration(c); err != nil {
+		t.Fatalf("typed validation must leave storage-envelope handling to the destination: %v", err)
 	}
 }
 
