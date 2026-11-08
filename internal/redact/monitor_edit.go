@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -137,7 +138,7 @@ func MergeMonitorEdit(next, old *storage.Monitor, secretKeys []string, clear map
 		return credentialDestinationError()
 	}
 	changed := prepared.Target != old.Target || proxyChanged || resolvedOAuth != oldOAuth
-	merge := monitorPrivateMerge{clear: clear, canRetarget: canRetarget}
+	merge := monitorPrivateMerge{clear: clear, canRetarget: canRetarget, retainedPrivate: retainedTarget || retainedOAuth}
 	for _, key := range append(slices.Clone(secretKeys), monitorPayloadKeys...) {
 		if err := merge.stringField(input, prev, key, key, omitted, changed); err != nil {
 			return err
@@ -159,6 +160,9 @@ func MergeMonitorEdit(next, old *storage.Monitor, secretKeys []string, clear map
 	}
 	if err := merge.steps(input, prev, omitted, changed); err != nil {
 		return err
+	}
+	if next.Type == "http_multi" && merge.retainedPrivate && !canRetarget && !samePrivateStepFlow(input["steps"], prev["steps"]) {
+		return fmt.Errorf("changing a multi-step request chain requires replacing or clearing saved private fields")
 	}
 	prepared.Settings, err = json.Marshal(input)
 	if err != nil {
@@ -218,11 +222,12 @@ func settingString(object map[string]any, key string) (string, error) {
 }
 
 type monitorPrivateMerge struct {
-	clear       map[string]bool
-	canRetarget bool
+	clear           map[string]bool
+	canRetarget     bool
+	retainedPrivate bool
 }
 
-func (m monitorPrivateMerge) stringField(next, old map[string]any, key, path string, omitted, changed bool) error {
+func (m *monitorPrivateMerge) stringField(next, old map[string]any, key, path string, omitted, changed bool) error {
 	previous, err := settingString(old, key)
 	if err != nil {
 		return err
@@ -237,12 +242,13 @@ func (m monitorPrivateMerge) stringField(next, old map[string]any, key, path str
 		if changed && !m.canRetarget {
 			return credentialDestinationError()
 		}
+		m.retainedPrivate = true
 		next[key] = previous
 	}
 	return nil
 }
 
-func (m monitorPrivateMerge) args(next, old map[string]any, omitted, changed bool) error {
+func (m *monitorPrivateMerge) args(next, old map[string]any, omitted, changed bool) error {
 	arrays := make([][]any, 2)
 	for i, object := range []map[string]any{old, next} {
 		if object["args"] == nil {
@@ -265,12 +271,13 @@ func (m monitorPrivateMerge) args(next, old map[string]any, omitted, changed boo
 		if changed && !m.canRetarget {
 			return credentialDestinationError()
 		}
+		m.retainedPrivate = true
 		next["args"] = arrays[0]
 	}
 	return nil
 }
 
-func (m monitorPrivateMerge) headers(next, old map[string]any, prefix string, omitted, changed bool) error {
+func (m *monitorPrivateMerge) headers(next, old map[string]any, prefix string, omitted, changed bool) error {
 	previous, _ := old["headers"].(map[string]any)
 	submitted, _ := next["headers"].(map[string]any)
 	if old["headers"] != nil && previous == nil || next["headers"] != nil && submitted == nil {
@@ -296,13 +303,14 @@ func (m monitorPrivateMerge) headers(next, old map[string]any, prefix string, om
 			if changed && !m.canRetarget {
 				return credentialDestinationError()
 			}
+			m.retainedPrivate = true
 			submitted[name] = prior
 		}
 	}
 	return nil
 }
 
-func (m monitorPrivateMerge) steps(next, old map[string]any, omitted, changed bool) error {
+func (m *monitorPrivateMerge) steps(next, old map[string]any, omitted, changed bool) error {
 	previous, _ := old["steps"].([]any)
 	submitted, _ := next["steps"].([]any)
 	if old["steps"] != nil && previous == nil || next["steps"] != nil && submitted == nil {
@@ -372,6 +380,7 @@ func (m monitorPrivateMerge) steps(next, old map[string]any, omitted, changed bo
 		if retained && changed && !m.canRetarget {
 			return credentialDestinationError()
 		}
+		m.retainedPrivate = m.retainedPrivate || retained
 		step["url"] = resolved
 		stepChanged := changed || resolved != oldURL
 		if err := m.stringField(step, match, "body", prefix+"body", omitted, stepChanged); err != nil {
@@ -384,7 +393,7 @@ func (m monitorPrivateMerge) steps(next, old map[string]any, omitted, changed bo
 	return nil
 }
 
-func (m monitorPrivateMerge) retainsStepFields(next, old map[string]any, prefix string) (bool, error) {
+func (m *monitorPrivateMerge) retainsStepFields(next, old map[string]any, prefix string) (bool, error) {
 	for _, key := range []string{"url", "body"} {
 		previous, err := settingString(old, key)
 		if err != nil {
@@ -427,6 +436,96 @@ func (m monitorPrivateMerge) retainsStepFields(next, old map[string]any, prefix 
 		}
 	}
 	return false, nil
+}
+
+// A later step can transmit an earlier response, including credentials that
+// were absent from the saved request itself. Retaining any private input keeps
+// the complete chain fixed. Independent, unchanged requests may be reordered;
+// extraction or interpolation makes order part of the authorization boundary.
+func samePrivateStepFlow(next, old any) bool {
+	previous, previousOK := old.([]any)
+	submitted, submittedOK := next.([]any)
+	if !previousOK || !submittedOK || len(previous) != len(submitted) {
+		return reflect.DeepEqual(next, old)
+	}
+	previous = canonicalPrivateSteps(previous)
+	submitted = canonicalPrivateSteps(submitted)
+	ordered := true
+	for i := range submitted {
+		if !reflect.DeepEqual(submitted[i], previous[i]) {
+			ordered = false
+			break
+		}
+	}
+	if ordered {
+		return true
+	}
+	used := make([]bool, len(previous))
+	for _, entry := range submitted {
+		step, ok := entry.(map[string]any)
+		if !ok || stepHasDataFlow(step) {
+			return false
+		}
+		found := false
+		for i, candidate := range previous {
+			if !used[i] && reflect.DeepEqual(entry, candidate) {
+				used[i], found = true, true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func canonicalPrivateSteps(steps []any) []any {
+	// HTTP header spelling is case-insensitive. Normalize each bounded step
+	// once; preserve every other field because it can change execution.
+	result := make([]any, len(steps))
+	for i, entry := range steps {
+		step, ok := entry.(map[string]any)
+		if !ok {
+			result[i] = entry
+			continue
+		}
+		copy := make(map[string]any, len(step))
+		for key, value := range step {
+			copy[key] = value
+		}
+		if headers, ok := step["headers"].(map[string]any); ok {
+			normalized := make(map[string]any, len(headers))
+			for name, value := range headers {
+				normalized[strings.ToLower(name)] = value
+			}
+			copy["headers"] = normalized
+		}
+		result[i] = copy
+	}
+	return result
+}
+
+func stepHasDataFlow(step map[string]any) bool {
+	for _, key := range []string{"extract_var", "extract_regex", "extract_json"} {
+		if value := step[key]; value != nil && value != "" {
+			return true
+		}
+	}
+	for _, key := range []string{"url", "body"} {
+		if value, _ := step[key].(string); strings.Contains(value, "{{") {
+			return true
+		}
+	}
+	if headers, ok := step["headers"].(map[string]any); ok {
+		for name, value := range headers {
+			text, _ := value.(string)
+			if strings.Contains(name, "{{") || strings.Contains(text, "{{") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func sameID(a, b *int64) bool {
