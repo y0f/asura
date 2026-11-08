@@ -109,8 +109,6 @@ type MonitorConfig struct {
 	DefaultInterval        time.Duration `yaml:"default_interval"`
 	FailureThreshold       int           `yaml:"failure_threshold"`
 	SuccessThreshold       int           `yaml:"success_threshold"`
-	MaxConcurrentDNS       int           `yaml:"max_concurrent_dns"`
-	CommandTimeout         time.Duration `yaml:"command_timeout"`
 	CommandAllowlist       []string      `yaml:"command_allowlist"`
 	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"`
 	AllowPrivateTargets    bool          `yaml:"allow_private_targets"`
@@ -157,7 +155,6 @@ func Defaults() *Config {
 			DefaultInterval:        60 * time.Second,
 			FailureThreshold:       3,
 			SuccessThreshold:       1,
-			CommandTimeout:         30 * time.Second,
 			HeartbeatCheckInterval: 30 * time.Second,
 			AdaptiveIntervals:      true,
 		},
