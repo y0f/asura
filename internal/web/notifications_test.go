@@ -28,6 +28,26 @@ func TestAssembleNotificationSettingsWebhook(t *testing.T) {
 	}
 }
 
+func TestAssembleGotifyPriority(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  int
+	}{{"", 5}, {"0", 0}, {"7", 7}} {
+		t.Run(tc.value, func(t *testing.T) {
+			raw := assembleNotificationSettings(buildFormRequest(url.Values{"notif_gotify_priority": {tc.value}}), "gotify")
+			var settings struct {
+				Priority *int `json:"priority"`
+			}
+			if err := json.Unmarshal(raw, &settings); err != nil {
+				t.Fatal(err)
+			}
+			if settings.Priority == nil || *settings.Priority != tc.want {
+				t.Fatalf("priority not preserved in %s", raw)
+			}
+		})
+	}
+}
+
 func TestAssembleNotificationSettingsTelegram(t *testing.T) {
 	form := url.Values{
 		"notif_telegram_bot_token": {"123:ABC"},

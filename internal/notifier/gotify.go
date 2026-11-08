@@ -15,7 +15,7 @@ import (
 type GotifySettings struct {
 	ServerURL string `json:"server_url"`
 	AppToken  string `json:"app_token"`
-	Priority  int    `json:"priority,omitempty"`
+	Priority  int    `json:"priority"`
 }
 
 type GotifySender struct {
@@ -25,7 +25,8 @@ type GotifySender struct {
 func (s *GotifySender) Type() string { return "gotify" }
 
 func (s *GotifySender) Send(ctx context.Context, channel *storage.NotificationChannel, payload *Payload) error {
-	var settings GotifySettings
+	// Keep Asura's default for omitted settings; zero is a valid explicit priority.
+	settings := GotifySettings{Priority: 5}
 	if err := json.Unmarshal(channel.Settings, &settings); err != nil {
 		return fmt.Errorf("invalid gotify settings: %w", err)
 	}
@@ -34,11 +35,6 @@ func (s *GotifySender) Send(ctx context.Context, channel *storage.NotificationCh
 	}
 	if settings.AppToken == "" {
 		return fmt.Errorf("gotify app_token is required")
-	}
-
-	priority := settings.Priority
-	if priority == 0 {
-		priority = 5
 	}
 
 	text := FormatMessage(payload)
@@ -50,7 +46,7 @@ func (s *GotifySender) Send(ctx context.Context, channel *storage.NotificationCh
 	body, _ := json.Marshal(map[string]any{
 		"title":    title,
 		"message":  text,
-		"priority": priority,
+		"priority": settings.Priority,
 	})
 
 	serverURL := strings.TrimRight(settings.ServerURL, "/")

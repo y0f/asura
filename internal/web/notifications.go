@@ -444,6 +444,7 @@ func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
 		s := notifier.GotifySettings{
 			ServerURL: r.FormValue("notif_gotify_server_url"),
 			AppToken:  r.FormValue("notif_gotify_app_token"),
+			Priority:  5,
 		}
 		if p := r.FormValue("notif_gotify_priority"); p != "" {
 			s.Priority, _ = strconv.Atoi(p)
