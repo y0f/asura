@@ -258,7 +258,7 @@ func TestNotificationInvalidJSONDoesNotWipeSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := strconvI(ch.ID)
-	for _, raw := range []string{`{"bot_token":"","chat_id":"-100"`, ``, `null`} {
+	for _, raw := range []string{`{"bot_token":"","chat_id":"-100"`, ``, `null`, `{"bot_token":"","bot_token":null,"chat_id":"changed"}`, `{"bot_token":42,"chat_id":"changed"}`} {
 		form := url.Values{"name": {"TG"}, "type": {"telegram"}, "enabled": {"on"}, "notif_settings_mode": {"json"},
 			"settings_json": {raw}, "event_incident_created": {"on"}}
 		w := httptest.NewRecorder()

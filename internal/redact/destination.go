@@ -1,7 +1,6 @@
 package redact
 
 import (
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -15,9 +14,14 @@ func CheckMonitorDestination(next, old *storage.Monitor, keys []string, clear ma
 	if next.Type != old.Type {
 		return nil
 	}
-	var previous, submitted map[string]any
-	_ = json.Unmarshal(old.Settings, &previous)
-	_ = json.Unmarshal(next.Settings, &submitted)
+	previous, err := settingsObject(old.Settings, true)
+	if err != nil {
+		return err
+	}
+	submitted, err := settingsObject(next.Settings, false)
+	if err != nil {
+		return err
+	}
 	changed := next.Target != old.Target || !sameID(next.ProxyID, old.ProxyID)
 	if len(next.Settings) > 0 {
 		oldURL, _ := previous["oauth2_token_url"].(string)

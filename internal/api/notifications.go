@@ -87,10 +87,11 @@ func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
 	ch := storage.NotificationChannel(req.channelFields)
 	ch.ID = id
 	if ch.Type == existing.Type {
-		if len(ch.Settings) == 0 {
-			ch.Settings = existing.Settings
+		ch.Settings, err = redact.MergeSecrets(ch.Settings, existing.Settings, redact.NotificationSecretKeys[ch.Type], secretClearSet(req.ClearSecrets))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
 		}
-		ch.Settings = redact.MergeSecrets(ch.Settings, existing.Settings, redact.NotificationSecretKeys[ch.Type], secretClearSet(req.ClearSecrets))
 	}
 
 	if err := validate.ValidateNotificationChannel(&ch); err != nil {

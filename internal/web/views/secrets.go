@@ -51,7 +51,7 @@ func RedactSettings(raw json.RawMessage, keys []string) (json.RawMessage, map[st
 	return redact.RedactSettings(raw, keys)
 }
 
-func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]bool) json.RawMessage {
+func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]bool) (json.RawMessage, error) {
 	return redact.MergeSecrets(updated, old, keys, clear)
 }
 

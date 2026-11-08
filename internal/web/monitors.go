@@ -839,8 +839,10 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 					err = redact.CheckMonitorDestination(&candidate, current, keys, clear)
 				}
 				if err == nil {
-					candidate.Settings = views.MergeSecrets(candidate.Settings, existingSettings, keys, clear)
-					candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, existingSettings, clear)
+					candidate.Settings, err = views.MergeSecrets(candidate.Settings, existingSettings, keys, clear)
+					if err == nil {
+						candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, existingSettings, clear)
+					}
 				}
 			}
 		}

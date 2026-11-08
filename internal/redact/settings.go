@@ -32,8 +32,8 @@ func RedactSettings(raw json.RawMessage, keys []string) (json.RawMessage, map[st
 	if len(raw) == 0 {
 		return json.RawMessage(`{}`), set
 	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+	m, err := settingsObject(raw, true)
+	if err != nil {
 		return json.RawMessage(`{}`), set
 	}
 	redactFields(m, keys, set)
@@ -56,26 +56,30 @@ func redactFields(object map[string]any, keys []string, stored map[string]bool) 
 // MergeSecrets copies each secret key from old into updated when updated
 // leaves it empty, so a blank secret field means "keep the stored value".
 // Keys listed in clear are left empty, which is how a stored secret is removed.
-func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]bool) json.RawMessage {
-	if len(old) == 0 || len(keys) == 0 {
-		return updated
+// Omitted settings preserve the entire stored object and normalize unambiguous
+// legacy field spelling. Explicit submissions retain strict field validation.
+func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]bool) (json.RawMessage, error) {
+	inherited := len(updated) == 0
+	if inherited {
+		updated = old
 	}
-	var prev map[string]any
-	if err := json.Unmarshal(old, &prev); err != nil {
-		return updated
+	next, err := settingsObject(updated, inherited)
+	if err != nil {
+		return nil, err
 	}
-	next := map[string]any{}
-	if len(updated) > 0 {
-		if err := json.Unmarshal(updated, &next); err != nil {
-			return updated
-		}
+	prev, err := settingsObject(old, true)
+	if err != nil {
+		return nil, err
 	}
-	// JSON null decodes to a nil map: nothing to merge into.
-	if next == nil {
-		return updated
-	}
-	changed := false
+	changed := inherited
 	for _, k := range keys {
+		for _, object := range []map[string]any{prev, next} {
+			if value := object[k]; value != nil {
+				if _, ok := value.(string); !ok {
+					return nil, errAmbiguousSettings
+				}
+			}
+		}
 		if clear[k] {
 			next[k] = ""
 			changed = true
@@ -89,11 +93,11 @@ func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]
 		}
 	}
 	if !changed {
-		return updated
+		return updated, nil
 	}
 	out, err := json.Marshal(next)
 	if err != nil {
-		return updated
+		return nil, err
 	}
-	return out
+	return out, nil
 }

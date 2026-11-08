@@ -1,7 +1,9 @@
 package web
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -83,8 +85,22 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	// Secret fields are sent to the browser blank: a blank field keeps the
 	// stored value (only while the type is unchanged) and "Remove saved value"
 	// clears it.
-	if existing, err := h.store.GetNotificationChannel(r.Context(), id); err == nil && existing != nil && existing.Type == ch.Type {
-		ch.Settings = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type], views.ClearSet(r.Form["clear_secrets"]))
+	existing, err := h.store.GetNotificationChannel(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "Failed to read notification channel", http.StatusInternalServerError)
+		}
+		return
+	}
+	if existing.Type == ch.Type {
+		ch.Settings, err = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type], views.ClearSet(r.Form["clear_secrets"]))
+		if err != nil {
+			h.setError(w, err.Error())
+			h.redirect(w, r, "/notifications")
+			return
+		}
 	}
 
 	if err := validateChannelForm(ch); err != nil {

@@ -32,8 +32,8 @@ func allSecretKeys(registry map[string][]string) []string {
 // monitor type. Custom header names are unrestricted, so every value is private.
 func MonitorSettings(raw json.RawMessage) (json.RawMessage, map[string]bool) {
 	stored := make(map[string]bool)
-	var object map[string]any
-	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
+	object, err := settingsObject(raw, true)
+	if err != nil {
 		return json.RawMessage(`{}`), stored
 	}
 	redactFields(object, allMonitorSecretKeys, stored)
@@ -94,9 +94,13 @@ func stepKey(step map[string]any) stepIdentity {
 // header entry removes its stored value; clear paths explicitly retain an empty
 // value. Multi-step checks match an unambiguous name and URL across reordering.
 func MergeMonitorHeaders(updated, old json.RawMessage, clear map[string]bool) (json.RawMessage, error) {
-	var next, prev map[string]any
-	if json.Unmarshal(updated, &next) != nil || next == nil || json.Unmarshal(old, &prev) != nil || prev == nil {
-		return updated, nil
+	next, err := settingsObject(updated, false)
+	if err != nil {
+		return nil, err
+	}
+	prev, err := settingsObject(old, true)
+	if err != nil {
+		return nil, err
 	}
 	clearHeaders := make(map[string]bool, len(clear))
 	for path, remove := range clear {

@@ -223,11 +223,10 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 				err = redact.CheckMonitorDestination(&candidate, current, redact.MonitorSecretKeys[candidate.Type], clear)
 			}
 			if err == nil {
-				if len(candidate.Settings) == 0 {
-					candidate.Settings = current.Settings
+				candidate.Settings, err = redact.MergeSecrets(candidate.Settings, current.Settings, redact.MonitorSecretKeys[candidate.Type], clear)
+				if err == nil {
+					candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, current.Settings, clear)
 				}
-				candidate.Settings = redact.MergeSecrets(candidate.Settings, current.Settings, redact.MonitorSecretKeys[candidate.Type], clear)
-				candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, current.Settings, clear)
 			}
 		}
 		if err == nil {

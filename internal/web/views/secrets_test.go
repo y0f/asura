@@ -41,7 +41,10 @@ func TestRedactSettings(t *testing.T) {
 func TestMergeSecretsKeepsStoredWhenBlank(t *testing.T) {
 	old := json.RawMessage(`{"bearer_token":"s3cret","method":"GET"}`)
 	upd := json.RawMessage(`{"bearer_token":"","method":"POST"}`)
-	got := MergeSecrets(upd, old, MonitorSecretKeys["http"], nil)
+	got, err := MergeSecrets(upd, old, MonitorSecretKeys["http"], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var m map[string]string
 	if err := json.Unmarshal(got, &m); err != nil {
 		t.Fatal(err)
@@ -54,7 +57,10 @@ func TestMergeSecretsKeepsStoredWhenBlank(t *testing.T) {
 func TestMergeSecretsReplacesWhenProvided(t *testing.T) {
 	old := json.RawMessage(`{"password":"old"}`)
 	upd := json.RawMessage(`{"password":"new"}`)
-	got := MergeSecrets(upd, old, MonitorSecretKeys["redis"], nil)
+	got, err := MergeSecrets(upd, old, MonitorSecretKeys["redis"], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(got) != string(upd) {
 		t.Fatalf("got %s", got)
 	}
@@ -63,7 +69,10 @@ func TestMergeSecretsReplacesWhenProvided(t *testing.T) {
 func TestMergeSecretsClearRemovesStored(t *testing.T) {
 	old := json.RawMessage(`{"password":"old"}`)
 	upd := json.RawMessage(`{"password":""}`)
-	got := MergeSecrets(upd, old, MonitorSecretKeys["redis"], map[string]bool{"password": true})
+	got, err := MergeSecrets(upd, old, MonitorSecretKeys["redis"], map[string]bool{"password": true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(string(got), "old") {
 		t.Fatalf("cleared secret was restored: %s", got)
 	}
@@ -72,9 +81,9 @@ func TestMergeSecretsClearRemovesStored(t *testing.T) {
 func TestMergeSecretsHandlesNonObjectInput(t *testing.T) {
 	old := json.RawMessage(`{"bearer_token":"s3cret"}`)
 	for _, upd := range []string{"null", "[]", "42", `"x"`} {
-		got := MergeSecrets(json.RawMessage(upd), old, MonitorSecretKeys["http"], nil)
-		if string(got) != upd {
-			t.Errorf("MergeSecrets(%s) = %s, want input unchanged", upd, got)
+		got, err := MergeSecrets(json.RawMessage(upd), old, MonitorSecretKeys["http"], nil)
+		if err == nil || got != nil {
+			t.Errorf("MergeSecrets(%s) = %s, %v; want a rejected edit", upd, got, err)
 		}
 	}
 }
