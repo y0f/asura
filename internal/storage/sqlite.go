@@ -339,7 +339,9 @@ func (s *SQLiteStore) scanMonitor(row scanner) (*Monitor, error) {
 	}
 	m.CreatedAt = parseTime(createdAt)
 	m.UpdatedAt = parseTime(updatedAt)
-	json.Unmarshal([]byte(tagsStr), &m.Tags)
+	if err := json.Unmarshal([]byte(tagsStr), &m.Tags); err != nil {
+		return nil, fmt.Errorf("decode monitor tags: %w", err)
+	}
 	settingsStr, err = s.decryptSettings(settingsStr)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt settings: %w", err)

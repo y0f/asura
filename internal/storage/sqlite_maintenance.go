@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/y0f/asura/internal/cron"
@@ -49,7 +50,9 @@ func scanMaintenanceWindow(scan func(dest ...any) error) (*MaintenanceWindow, er
 	mw.EndTime = parseTime(endTime)
 	mw.CreatedAt = parseTime(createdAt)
 	mw.UpdatedAt = parseTime(updatedAt)
-	json.Unmarshal([]byte(monitorIDsStr), &mw.MonitorIDs)
+	if err := json.Unmarshal([]byte(monitorIDsStr), &mw.MonitorIDs); err != nil {
+		return nil, fmt.Errorf("decode maintenance monitor IDs: %w", err)
+	}
 	return &mw, nil
 }
 

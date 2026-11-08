@@ -7,6 +7,10 @@ import (
 
 // Store defines the complete storage interface.
 type Store interface {
+	// Portable configuration (history and auth/runtime YAML are separate backups).
+	SnapshotConfiguration(ctx context.Context) (*ConfigurationSnapshot, error)
+	ApplyConfiguration(ctx context.Context, data *ConfigurationSnapshot, options ConfigurationImportOptions) (*ConfigurationImportResult, error)
+
 	// Monitors
 	CreateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error
 	CreateMonitorWithRelations(ctx context.Context, m *Monitor, options MonitorCreateOptions, access ...MonitorAccess) error
