@@ -251,7 +251,7 @@ func (s *SQLiteStore) SnapshotConfiguration(ctx context.Context) (*Configuration
 	return c, nil
 }
 
-func readConfigurationRows(ctx context.Context, tx *sql.Tx, query string, scan func(*sql.Rows) error) error {
+func readConfigurationRows(ctx context.Context, tx *sqlTransaction, query string, scan func(*sql.Rows) error) error {
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return err

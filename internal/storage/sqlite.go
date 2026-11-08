@@ -19,14 +19,17 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// SQLiteStore implements Store using SQLite with WAL mode.
-type SQLiteStore struct {
-	readDB   *sql.DB
-	writeDB  *sql.DB
+// SQLStore shares transactional queries across the supported SQL dialects.
+type SQLStore struct {
+	readDB   *sqlPool
+	writeDB  *sqlPool
 	dbPath   string
 	enc      *Encryptor
 	rollupMu sync.Mutex
 }
+
+// SQLiteStore preserves the existing constructor and concrete-type API.
+type SQLiteStore = SQLStore
 
 func (s *SQLiteStore) SetEncryptor(enc *Encryptor) {
 	s.enc = enc
@@ -77,7 +80,7 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("hash legacy tokens: %w", err)
 	}
 
-	return &SQLiteStore{readDB: readDB, writeDB: writeDB, dbPath: path}, nil
+	return &SQLiteStore{readDB: &sqlPool{DB: readDB}, writeDB: &sqlPool{DB: writeDB}, dbPath: path}, nil
 }
 
 // hashLegacyTokens is a one-time data migration that rewrites any agent or

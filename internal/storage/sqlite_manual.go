@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 )
@@ -45,7 +44,7 @@ func (s *SQLiteStore) RecordManualStatus(ctx context.Context, monitorID int64, s
 
 // Explicit manual/heartbeat transitions bypass consecutive-check thresholds,
 // while preserving unrelated runtime fields such as anomaly baselines.
-func setExplicitMonitorStatus(ctx context.Context, tx *sql.Tx, monitorID int64, status, now string) error {
+func setExplicitMonitorStatus(ctx context.Context, tx *sqlTransaction, monitorID int64, status, now string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO monitor_status
 		(monitor_id, status, last_check_at, consec_fails, consec_successes, config_revision)
 		SELECT id, ?, ?, CASE WHEN ?!='up' THEN failure_threshold ELSE 0 END,

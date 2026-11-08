@@ -28,7 +28,7 @@ func monitorRelationError(err error) error {
 // The legacy group_id column has no FK. Call under the writer transaction so
 // deletion cannot race admission; DeleteMonitorGroup clears memberships under
 // that same writer lock before deleting its group.
-func checkMonitorGroup(ctx context.Context, tx *sql.Tx, groupID *int64) error {
+func checkMonitorGroup(ctx context.Context, tx *sqlTransaction, groupID *int64) error {
 	if groupID == nil {
 		return nil
 	}
@@ -188,7 +188,7 @@ func copyMonitorSnapshot(m *Monitor) *Monitor {
 	return &copy
 }
 
-func loadMonitorRelations(ctx context.Context, tx *sql.Tx, m *Monitor) error {
+func loadMonitorRelations(ctx context.Context, tx *sqlTransaction, m *Monitor) error {
 	readIDs := func(query string) ([]int64, error) {
 		rows, err := tx.QueryContext(ctx, query, m.ID)
 		if err != nil {
@@ -229,7 +229,7 @@ func loadMonitorRelations(ctx context.Context, tx *sql.Tx, m *Monitor) error {
 	return rows.Err()
 }
 
-func replaceMonitorRelations(ctx context.Context, tx *sql.Tx, m *Monitor, changes MonitorRelationChanges) error {
+func replaceMonitorRelations(ctx context.Context, tx *sqlTransaction, m *Monitor, changes MonitorRelationChanges) error {
 	for _, relation := range []struct {
 		table string
 		apply bool

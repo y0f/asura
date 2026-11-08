@@ -217,7 +217,7 @@ func validateRotation(r *OnCallRotation) error {
 	return nil
 }
 
-func checkRotationChannels(ctx context.Context, tx *sql.Tx, r *OnCallRotation) error {
+func checkRotationChannels(ctx context.Context, tx *sqlTransaction, r *OnCallRotation) error {
 	ids := slices.Clone(r.ChannelIDs)
 	if r.OverrideChannelID != nil && !slices.Contains(ids, *r.OverrideChannelID) {
 		ids = append(ids, *r.OverrideChannelID)

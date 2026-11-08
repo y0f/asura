@@ -427,7 +427,9 @@ func TestHashLegacyTokensAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustExec := func(db *sql.DB, q string, args ...any) {
+	mustExec := func(db interface {
+		Exec(string, ...any) (sql.Result, error)
+	}, q string, args ...any) {
 		t.Helper()
 		if _, err := db.Exec(q, args...); err != nil {
 			t.Fatal(err)

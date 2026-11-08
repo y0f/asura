@@ -37,7 +37,7 @@ func TestMigrationsRejectFutureSchema(t *testing.T) {
 	if _, err := s.writeDB.Exec("UPDATE schema_version SET version=?", schemaVersion+1); err != nil {
 		t.Fatal(err)
 	}
-	if err := runMigrations(s.writeDB); err == nil || !strings.Contains(err.Error(), "newer") {
+	if err := runMigrations(s.writeDB.DB); err == nil || !strings.Contains(err.Error(), "newer") {
 		t.Fatalf("expected actionable error for a newer schema: %v", err)
 	}
 	var version int

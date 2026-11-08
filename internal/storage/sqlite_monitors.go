@@ -51,7 +51,7 @@ func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, options *Mo
 
 // insertMonitor is shared by creation and cloning; its caller owns the writer
 // transaction and must not expose output values before committing it.
-func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sql.Tx, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) (*Monitor, *Heartbeat, error) {
+func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sqlTransaction, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) (*Monitor, *Heartbeat, error) {
 	if options != nil {
 		if err := validateMonitorCreateOptions(m, *options); err != nil {
 			return nil, nil, err
@@ -77,7 +77,7 @@ func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sql.Tx, m *Monitor,
 // insertPreparedMonitor writes a private, validated snapshot using ciphertext
 // prepared before any configuration replacement. The caller owns the transaction
 // and must expose neither the monitor nor fresh heartbeat token before commit.
-func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sql.Tx, m *Monitor, settings string, options *MonitorCreateOptions) (*Monitor, *Heartbeat, error) {
+func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sqlTransaction, m *Monitor, settings string, options *MonitorCreateOptions) (*Monitor, *Heartbeat, error) {
 	if options != nil {
 		if err := validateMonitorCreateOptions(m, *options); err != nil {
 			return nil, nil, err
@@ -268,7 +268,7 @@ func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor, access ...M
 	return nil
 }
 
-func (s *SQLiteStore) updateMonitor(ctx context.Context, writer *sql.Tx, m *Monitor, access ...MonitorAccess) error {
+func (s *SQLiteStore) updateMonitor(ctx context.Context, writer *sqlTransaction, m *Monitor, access ...MonitorAccess) error {
 	tags, _ := json.Marshal(m.Tags)
 	now := formatTime(time.Now())
 	var groupID any

@@ -27,7 +27,7 @@ type configurationCatalog struct {
 
 type configurationImport struct {
 	ctx                                              context.Context
-	tx                                               *sql.Tx
+	tx                                               *sqlTransaction
 	data                                             *ConfigurationSnapshot
 	result                                           ConfigurationImportResult
 	catalogs                                         map[string]*configurationCatalog

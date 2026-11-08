@@ -20,7 +20,7 @@ func maintenanceAccessSQL(access []MonitorAccess) (string, []any) {
 	   WHERE target.type!='integer' OR access_monitor.id IS NULL OR COALESCE((1=1` + clause + "), 0)=0)", args
 }
 
-func checkMaintenanceTargets(ctx context.Context, tx *sql.Tx, ids []int64, access []MonitorAccess) error {
+func checkMaintenanceTargets(ctx context.Context, tx *sqlTransaction, ids []int64, access []MonitorAccess) error {
 	if len(ids) == 0 {
 		for _, filter := range access {
 			if !filter.All {

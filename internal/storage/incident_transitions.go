@@ -31,16 +31,16 @@ func incidentSeverityRank(severity string) int {
 	}
 }
 
-func incidentByIDTx(ctx context.Context, tx *sql.Tx, id int64, access ...MonitorAccess) (*Incident, error) {
+func incidentByIDTx(ctx context.Context, tx *sqlTransaction, id int64, access ...MonitorAccess) (*Incident, error) {
 	clause, args := monitorAccessSQL("m", access)
 	return scanIncident(tx.QueryRowContext(ctx, `SELECT `+incidentColumnsWithName+` FROM incidents i LEFT JOIN monitors m ON m.id=i.monitor_id WHERE i.id=?`+clause, append([]any{id}, args...)...).Scan, true)
 }
 
-func openIncidentTx(ctx context.Context, tx *sql.Tx, monitorID int64) (*Incident, error) {
+func openIncidentTx(ctx context.Context, tx *sqlTransaction, monitorID int64) (*Incident, error) {
 	return scanIncident(tx.QueryRowContext(ctx, `SELECT `+incidentColumnsWithName+` FROM incidents i JOIN monitors m ON m.id=i.monitor_id WHERE i.monitor_id=? AND i.status IN ('open','acknowledged') ORDER BY i.started_at DESC,i.id DESC LIMIT 1`, monitorID).Scan, true)
 }
 
-func incidentEventTx(ctx context.Context, tx *sql.Tx, id int64, kind, message, now string) error {
+func incidentEventTx(ctx context.Context, tx *sqlTransaction, id int64, kind, message, now string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO incident_events (incident_id,type,message,created_at) VALUES (?,?,?,?)`, id, kind, message, now)
 	return err
 }
@@ -73,7 +73,7 @@ func (s *SQLiteStore) TransitionIncident(ctx context.Context, id int64, change I
 	return inc, nil
 }
 
-func transitionIncidentTx(ctx context.Context, tx *sql.Tx, inc *Incident, change IncidentTransition, recovery bool) error {
+func transitionIncidentTx(ctx context.Context, tx *sqlTransaction, inc *Incident, change IncidentTransition, recovery bool) error {
 	now := formatTime(time.Now())
 	var kind, message string
 	switch change.Action {
