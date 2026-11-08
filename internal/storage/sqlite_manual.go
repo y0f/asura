@@ -29,11 +29,11 @@ func (s *SQLiteStore) RecordManualStatus(ctx context.Context, monitorID int64, s
 	}
 	now := formatTime(time.Now())
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO check_results (monitor_id, status, message, created_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO check_results (monitor_id, status, message, created_at, observation_kind) VALUES (?, ?, ?, ?, 'manual')`,
 		monitorID, status, message, now); err != nil {
 		return nil, err
 	}
-	if err := setExplicitMonitorStatus(ctx, tx, monitorID, status, now); err != nil {
+	if err := setExplicitMonitorStatus(ctx, tx, monitorID, status, now, ObservationManual); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -44,14 +44,14 @@ func (s *SQLiteStore) RecordManualStatus(ctx context.Context, monitorID int64, s
 
 // Explicit manual/heartbeat transitions bypass consecutive-check thresholds,
 // while preserving unrelated runtime fields such as anomaly baselines.
-func setExplicitMonitorStatus(ctx context.Context, tx *sqlTransaction, monitorID int64, status, now string) error {
+func setExplicitMonitorStatus(ctx context.Context, tx *sqlTransaction, monitorID int64, status, now, kind string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO monitor_status
-		(monitor_id, status, last_check_at, consec_fails, consec_successes, config_revision)
+		(monitor_id, status, last_check_at, consec_fails, consec_successes, config_revision, observation_kind)
 		SELECT id, ?, ?, CASE WHEN ?!='up' THEN failure_threshold ELSE 0 END,
-			CASE WHEN ?='up' THEN success_threshold ELSE 0 END, config_revision FROM monitors WHERE id=?
+			CASE WHEN ?='up' THEN success_threshold ELSE 0 END, config_revision, ? FROM monitors WHERE id=?
 		ON CONFLICT(monitor_id) DO UPDATE SET status=excluded.status, last_check_at=excluded.last_check_at,
 			consec_fails=excluded.consec_fails, consec_successes=excluded.consec_successes,
-			config_revision=excluded.config_revision`,
-		status, now, status, status, monitorID)
+			config_revision=excluded.config_revision, observation_kind=excluded.observation_kind`,
+		status, now, status, status, kind, monitorID)
 	return err
 }

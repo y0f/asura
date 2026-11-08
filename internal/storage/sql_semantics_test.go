@@ -17,7 +17,7 @@ func testSQLAggregateSemantics(t *testing.T, store *SQLStore) {
 	from := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 	for i, response := range []int64{2147483648, 2147483649} {
 		at := from.Add(time.Duration(i) * time.Second)
-		if _, err := store.writeDB.ExecContext(ctx, `INSERT INTO check_results (monitor_id,status,response_time,created_at) VALUES (?,'up',?,?)`, m.ID, response, formatTime(at)); err != nil {
+		if _, err := store.writeDB.ExecContext(ctx, `INSERT INTO check_results (monitor_id,status,response_time,created_at,observation_kind) VALUES (?,'up',?,?,'probe')`, m.ID, response, formatTime(at)); err != nil {
 			t.Fatal(err)
 		}
 	}

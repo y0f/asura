@@ -84,9 +84,12 @@ func publicBadgeDataQuery(ctx context.Context, reader monitorReadQuery, monitorI
 			result.Response = *summary
 		}
 	case PublicBadgeCert:
+		if !m.HasSampledMetrics() {
+			return result, nil
+		}
 		var expiry sql.NullString
 		err := reader.QueryRowContext(ctx, `SELECT cert_expiry FROM check_results
-			WHERE monitor_id=? ORDER BY created_at DESC,id DESC LIMIT 1`, monitorID).Scan(&expiry)
+			WHERE monitor_id=? AND observation_kind='probe' ORDER BY created_at DESC,id DESC LIMIT 1`, monitorID).Scan(&expiry)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}

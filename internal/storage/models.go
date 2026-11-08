@@ -33,8 +33,18 @@ type SparklinePoint struct {
 	ResponseTime int64
 }
 
-// CheckResult stores the outcome of a single check execution.
+// Observation provenance is assigned by the server when it persists evidence.
+// Legacy rows remain unknown because a monitor's current type cannot prove it.
+const (
+	ObservationUnknown   = "unknown"
+	ObservationProbe     = "probe"
+	ObservationManual    = "manual"
+	ObservationHeartbeat = "heartbeat"
+)
+
+// CheckResult stores a probe outcome or recorded state transition.
 type CheckResult struct {
+	ObservationKind string     `json:"observation_kind"`
 	ID              int64      `json:"id"`
 	MonitorID       int64      `json:"monitor_id"`
 	Status          string     `json:"status"`        // up, down, degraded
@@ -158,6 +168,7 @@ type ContentChange struct {
 
 // MonitorStatus holds the runtime state of a monitor.
 type MonitorStatus struct {
+	ObservationKind     string     `json:"observation_kind"`
 	MonitorID           int64      `json:"monitor_id"`
 	ConfigRevision      int64      `json:"-"`
 	Status              string     `json:"status"` // up, down, degraded, pending

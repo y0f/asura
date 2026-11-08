@@ -9,7 +9,7 @@ import (
 
 func insertRollupCheck(t *testing.T, s *SQLiteStore, id int64, at time.Time, status string, rt int64) {
 	t.Helper()
-	if _, err := s.writeDB.Exec(`INSERT INTO check_results (monitor_id, status, response_time, created_at) VALUES (?, ?, ?, ?)`, id, status, rt, formatTime(at)); err != nil {
+	if _, err := s.writeDB.Exec(`INSERT INTO check_results (monitor_id, status, response_time, created_at, observation_kind) VALUES (?, ?, ?, ?, 'probe')`, id, status, rt, formatTime(at)); err != nil {
 		t.Fatal(err)
 	}
 }

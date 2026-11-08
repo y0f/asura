@@ -20,9 +20,13 @@ func TestHeartbeatPingUpdatesVisibleStatusAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hb.Status != "up" || status.Status != "up" || hb.LastPingAt == nil || status.LastCheckAt == nil ||
+	if hb.Status != "up" || status.Status != "up" || status.ObservationKind != ObservationHeartbeat || hb.LastPingAt == nil || status.LastCheckAt == nil ||
 		!hb.LastPingAt.Equal(*status.LastCheckAt) || status.ConsecSuccesses != mon.SuccessThreshold {
 		t.Fatalf("first ping left inconsistent state: heartbeat=%+v monitor=%+v", hb, status)
+	}
+	checks, err := s.ListCheckResults(ctx, mon.ID, Pagination{Page: 1, PerPage: 10})
+	if err != nil || checks.Total != 0 {
+		t.Fatalf("heartbeat ping fabricated probe history: %+v %v", checks, err)
 	}
 	for _, token := range []string{"unknown", hb.Token} {
 		if err := s.UpdateHeartbeatPing(ctx, mon.ID, token); !errors.Is(err, sql.ErrNoRows) {
@@ -65,7 +69,7 @@ func TestHeartbeatExpiryRechecksDeadline(t *testing.T) {
 		t.Fatalf("missed real expiry: won=%v err=%v", won, err)
 	}
 	status, err := s.GetMonitorStatus(ctx, mon.ID)
-	if err != nil || status.Status != "down" || status.ConsecFails != mon.FailureThreshold {
+	if err != nil || status.Status != "down" || status.ObservationKind != ObservationHeartbeat || status.ConsecFails != mon.FailureThreshold {
 		t.Fatalf("expiry did not update visible state: %+v %v", status, err)
 	}
 	if won, err := s.ExpireHeartbeat(ctx, mon.ID); err != nil || won {

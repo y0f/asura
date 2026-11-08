@@ -63,6 +63,9 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 	if downgrade != nil {
 		downgrade(s)
 	}
+	if v < 41 {
+		downgradeObservationKinds(t, s)
+	}
 	// Fixtures may use current storage helpers to prepare their legacy data.
 	// Drop the new columns after that preparation, before running upgrades.
 	if v < 40 {

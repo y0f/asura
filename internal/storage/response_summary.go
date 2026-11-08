@@ -36,7 +36,7 @@ func responseTimeSummaryQuery(ctx context.Context, reader monitorReadQuery, moni
 		          ROW_NUMBER() OVER (ORDER BY response_time) AS rn,
 		          COUNT(*) OVER () AS n
 		   FROM check_results
-		   WHERE monitor_id=? AND created_at >= ? AND created_at < ? AND status='up'
+		   WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ? AND status='up'
 		 )
 		 SELECT COUNT(*),
 		   COALESCE(MIN(CASE WHEN rn >= n * 0.50 THEN response_time END), 0),

@@ -48,7 +48,7 @@ func seedChecks(tb testing.TB, s *SQLiteStore, monitorID int64, times []time.Tim
 	if err != nil {
 		tb.Fatal(err)
 	}
-	stmt, err := tx.Prepare(`INSERT INTO check_results (monitor_id, status, response_time, created_at) VALUES (?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO check_results (monitor_id, status, response_time, created_at, observation_kind) VALUES (?, ?, ?, ?, 'probe')`)
 	if err != nil {
 		tb.Fatal(err)
 	}

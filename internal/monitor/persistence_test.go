@@ -42,7 +42,7 @@ func TestFailedCheckCommitDoesNotAdvanceState(t *testing.T) {
 			m := createTestMonitor(t, s, &storage.Monitor{FailureThreshold: 2, AgentEnabled: true})
 			agentID := assignTestAgents(t, s, m, 1)[0]
 			ctx := context.Background()
-			if err := s.UpsertMonitorStatus(ctx, &storage.MonitorStatus{MonitorID: m.ID, ConfigRevision: m.ConfigRevision, Status: "pending", LastCertFingerprint: "previous"}); err != nil {
+			if err := s.UpsertMonitorStatus(ctx, &storage.MonitorStatus{MonitorID: m.ID, ConfigRevision: m.ConfigRevision, Status: "pending", LastCertFingerprint: "previous", ObservationKind: storage.ObservationProbe}); err != nil {
 				t.Fatal(err)
 			}
 			now := time.Now()

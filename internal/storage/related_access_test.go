@@ -13,7 +13,7 @@ func TestMonitorSummaryAccess(t *testing.T) {
 	access := MonitorAccess{MonitorIDs: []int64{monitors[4].ID}, GroupIDs: []int64{groups[0].ID}}
 	now := time.Now().UTC()
 	for _, monitor := range monitors {
-		if err := store.UpsertMonitorStatus(ctx, &MonitorStatus{MonitorID: monitor.ID, Status: "up", LastCheckAt: &now, ResponseTime: monitor.ID}); err != nil {
+		if err := store.UpsertMonitorStatus(ctx, &MonitorStatus{MonitorID: monitor.ID, Status: "up", LastCheckAt: &now, ResponseTime: monitor.ID, ObservationKind: ObservationProbe}); err != nil {
 			t.Fatal(err)
 		}
 	}

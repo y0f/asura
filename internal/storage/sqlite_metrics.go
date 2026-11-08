@@ -111,7 +111,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 
 	var count int64
 	err = reader.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
+		`SELECT COUNT(*) FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?`,
 		monitorID, fromStr, toStr).Scan(&count)
 	if err != nil {
 		return nil, fmt.Errorf("count time series: %w", err)
@@ -122,7 +122,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 		rows, err = reader.QueryContext(ctx,
 			`SELECT created_at, response_time, status
 			 FROM check_results
-			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
+			 WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?
 			 ORDER BY created_at ASC, id ASC`,
 			monitorID, fromStr, toStr)
 	} else {
@@ -139,7 +139,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 			            ELSE 'up'
 			        END as status
 			 FROM check_results
-			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
+			 WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?
 			 GROUP BY (`+s.readDB.dialect.epochSeconds("created_at")+` / ?)
 			 ORDER BY created_at ASC`,
 			monitorID, fromStr, toStr, bucketSecs)
@@ -201,7 +201,7 @@ func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context, access ...Moni
 	clause, args := monitorAccessSQL("m", access)
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT ms.monitor_id, ms.last_response_time FROM monitor_status ms
-		 JOIN monitors m ON m.id = ms.monitor_id WHERE m.type NOT IN ('manual','heartbeat') AND ms.last_check_at IS NOT NULL`+clause, args...)
+		 JOIN monitors m ON m.id = ms.monitor_id WHERE m.type NOT IN ('manual','heartbeat') AND ms.last_check_at IS NOT NULL AND ms.observation_kind='probe'`+clause, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from,
 		        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
 		        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0),
 		        COALESCE(SUM(CASE WHEN status='degraded' THEN 1 ELSE 0 END), 0)
-		 FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
+		 FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?`,
 		monitorID, formatTime(from), formatTime(to)).Scan(&total, &up, &down, &degraded)
 	return
 }

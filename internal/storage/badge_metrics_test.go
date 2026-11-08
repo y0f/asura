@@ -134,7 +134,7 @@ func TestPublicBadgeDataUsesPublicationSnapshot(t *testing.T) {
 			}
 			now := time.Now().UTC().Truncate(time.Second)
 			expiry := now.Add(24 * time.Hour)
-			if _, err := s.writeDB.Exec(`INSERT INTO check_results(monitor_id,status,response_time,cert_expiry,created_at) VALUES (?,'up',0,?,?)`, m.ID, formatTime(expiry), formatTime(now.Add(-2*time.Minute))); err != nil {
+			if _, err := s.writeDB.Exec(`INSERT INTO check_results(monitor_id,status,response_time,cert_expiry,created_at,observation_kind) VALUES (?,'up',0,?,?,'probe')`, m.ID, formatTime(expiry), formatTime(now.Add(-2*time.Minute))); err != nil {
 				t.Fatal(err)
 			}
 			tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -150,7 +150,7 @@ func TestPublicBadgeDataUsesPublicationSnapshot(t *testing.T) {
 				if metric == PublicBadgeUptime {
 					status = "down"
 				}
-				if _, err := s.writeDB.Exec(`INSERT INTO check_results(monitor_id,status,response_time,cert_expiry,created_at) VALUES (?,?,999,?,?)`, m.ID, status, formatTime(expiry.Add(10*24*time.Hour)), formatTime(now.Add(-time.Minute))); err != nil {
+				if _, err := s.writeDB.Exec(`INSERT INTO check_results(monitor_id,status,response_time,cert_expiry,created_at,observation_kind) VALUES (?,?,999,?,?,'probe')`, m.ID, status, formatTime(expiry.Add(10*24*time.Hour)), formatTime(now.Add(-time.Minute))); err != nil {
 					t.Fatal(err)
 				}
 			}}

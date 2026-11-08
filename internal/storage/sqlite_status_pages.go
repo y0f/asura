@@ -70,7 +70,7 @@ func dailyUptimeQuery(ctx context.Context, reader monitorReadQuery, monitorID in
 	// raw scans to gaps keeps long reports proportional to unsummarized data.
 	rows, err := reader.QueryContext(ctx,
 		`SELECT day, total, up_count, down_count FROM check_result_daily
-		 WHERE monitor_id=? AND day>=? AND day<? ORDER BY day`,
+		 WHERE monitor_id=? AND observation_kind='probe' AND day>=? AND day<? ORDER BY day`,
 		monitorID, firstDay.Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("get daily uptime rollup: %w", err)
@@ -107,7 +107,7 @@ func dailyUptimeQuery(ctx context.Context, reader monitorReadQuery, monitorID in
 			`SELECT SUBSTR(created_at,1,10) AS day, COUNT(*),
 			 COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END),0),
 			 COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END),0)
-			 FROM check_results WHERE monitor_id=? AND created_at>=? AND created_at<?
+			 FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND created_at>=? AND created_at<?
 			 GROUP BY SUBSTR(created_at,1,10)`, monitorID, formatTime(gap[0]), formatTime(gap[1]))
 		if err != nil {
 			return nil, fmt.Errorf("get daily uptime gap: %w", err)

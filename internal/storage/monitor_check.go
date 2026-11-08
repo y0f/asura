@@ -15,7 +15,7 @@ var ErrStaleMonitorCheck = errors.New("monitor check configuration is no longer 
 // after rechecking the job revision and current delegation under the writer
 // transaction. A nil status records an out-of-order observation without applying
 // its state. Caller-owned result/status fields change only after a successful
-// commit. Internal import and retention fixtures use InsertCheckResult instead.
+// commit. Trusted probe fixtures use InsertCheckResult instead.
 func (s *SQLiteStore) RecordMonitorCheck(ctx context.Context, expected *Monitor, result *CheckResult, status *MonitorStatus) error {
 	if expected == nil || result == nil || expected.ConfigRevision <= 0 || expected.ID <= 0 ||
 		result.MonitorID != expected.ID || (status != nil && status.MonitorID != expected.ID) {
@@ -60,6 +60,7 @@ func (s *SQLiteStore) RecordMonitorCheck(ctx context.Context, expected *Monitor,
 	if status != nil {
 		savedStatus = *status
 		savedStatus.ConfigRevision = expected.ConfigRevision
+		savedStatus.ObservationKind = ObservationProbe
 		if err := upsertMonitorStatus(ctx, tx, &savedStatus); err != nil {
 			return err
 		}

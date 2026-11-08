@@ -130,7 +130,7 @@ func TestMonitorMetricsSnapshotCountsRetainedRollups(t *testing.T) {
 	ctx := context.Background()
 	m := newTestMonitor(t, s, "retained history")
 	from := time.Now().UTC().Truncate(24 * time.Hour).Add(-72 * time.Hour)
-	if _, err := s.writeDB.ExecContext(ctx, "INSERT INTO check_result_daily (monitor_id,day,total,up_count,down_count) VALUES (?,?,?,?,?)", m.ID, from.Format("2006-01-02"), 10, 7, 2); err != nil {
+	if _, err := s.writeDB.ExecContext(ctx, "INSERT INTO check_result_daily (monitor_id,day,total,up_count,down_count,observation_kind) VALUES (?,?,?,?,?,'probe')", m.ID, from.Format("2006-01-02"), 10, 7, 2); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.GetMonitorMetricsSnapshot(ctx, m.ID, from, from.Add(24*time.Hour))
@@ -151,7 +151,7 @@ func TestLatestResponseTimesDistinguishesPendingFromMeasuredZero(t *testing.T) {
 		t.Fatalf("pending monitor has latency: %v %v", got, err)
 	}
 	now := time.Now().UTC()
-	if err := s.UpsertMonitorStatus(ctx, &MonitorStatus{MonitorID: m.ID, Status: "up", LastCheckAt: &now, ResponseTime: 0}); err != nil {
+	if err := s.UpsertMonitorStatus(ctx, &MonitorStatus{MonitorID: m.ID, Status: "up", LastCheckAt: &now, ResponseTime: 0, ObservationKind: ObservationProbe}); err != nil {
 		t.Fatal(err)
 	}
 	got, err = s.GetLatestResponseTimes(ctx)

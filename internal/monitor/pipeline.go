@@ -284,6 +284,12 @@ func (p *Pipeline) loadMonitorStatus(ctx context.Context, mon *storage.Monitor) 
 		return nil, errors.New("monitor status returned no row without an error")
 	}
 	copy := *status
+	if copy.ObservationKind != storage.ObservationProbe {
+		// Legacy and passive state cannot seed comparisons against a new probe.
+		// Keep these changes staged until the result transaction succeeds.
+		copy.LastBodyHash, copy.LastCertFingerprint = "", ""
+		copy.BaselineAvg, copy.BaselineStddev, copy.BaselineUpdatedAt = 0, 0, nil
+	}
 	if copy.ConfigRevision > 0 && copy.ConfigRevision != mon.ConfigRevision {
 		copy.ConsecFails, copy.ConsecSuccesses = 0, 0
 	}

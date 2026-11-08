@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 40
+const schemaVersion = 41
 
 // Database triggers also invalidate queued checks after trusted setters,
 // assignment cascades and proxy edits. Advancing a revision itself cannot
@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS monitor_notifications (
 CREATE INDEX IF NOT EXISTS idx_monitor_notif_channel ON monitor_notifications(channel_id);
 
 CREATE TABLE IF NOT EXISTS monitor_status (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	monitor_id             INTEGER PRIMARY KEY REFERENCES monitors(id) ON DELETE CASCADE,
 	config_revision        INTEGER NOT NULL DEFAULT 0,
 	status                 TEXT    NOT NULL DEFAULT 'pending',
@@ -134,6 +135,7 @@ CREATE TABLE IF NOT EXISTS monitor_status (
 );
 
 CREATE TABLE IF NOT EXISTS check_results (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	id               INTEGER PRIMARY KEY AUTOINCREMENT,
 	monitor_id       INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	status           TEXT    NOT NULL,
@@ -332,6 +334,7 @@ CREATE INDEX IF NOT EXISTS idx_sp_subscribers_page ON status_page_subscribers(st
 CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(token);
 
 CREATE TABLE IF NOT EXISTS check_result_hourly (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	hour       TEXT    NOT NULL,
 	sum_rt     INTEGER,
@@ -342,10 +345,11 @@ CREATE TABLE IF NOT EXISTS check_result_hourly (
 	up_count   INTEGER NOT NULL DEFAULT 0,
 	down_count INTEGER NOT NULL DEFAULT 0,
 	total      INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (monitor_id, hour)
+	PRIMARY KEY (monitor_id, hour, observation_kind)
 );
 
 CREATE TABLE IF NOT EXISTS check_result_daily (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	day        TEXT    NOT NULL,
 	sum_rt     INTEGER,
@@ -356,7 +360,7 @@ CREATE TABLE IF NOT EXISTS check_result_daily (
 	up_count   INTEGER NOT NULL DEFAULT 0,
 	down_count INTEGER NOT NULL DEFAULT 0,
 	total      INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (monitor_id, day)
+	PRIMARY KEY (monitor_id, day, observation_kind)
 );
 
 CREATE TABLE IF NOT EXISTS agents (
@@ -724,5 +728,45 @@ SELECT 'agent', id FROM agents WHERE enabled=1;`,
 		sql: `ALTER TABLE monitors ADD COLUMN config_revision INTEGER NOT NULL DEFAULT 1 CHECK (config_revision > 0);
 ALTER TABLE monitor_status ADD COLUMN config_revision INTEGER NOT NULL DEFAULT 0;
 UPDATE monitor_status SET config_revision=(SELECT config_revision FROM monitors WHERE monitors.id=monitor_status.monitor_id);` + monitorRevisionTriggers,
+	},
+	{
+		version: 41,
+		sql: `ALTER TABLE check_results ADD COLUMN observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat'));
+ALTER TABLE monitor_status ADD COLUMN observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat'));
+UPDATE monitor_status SET baseline_avg=0, baseline_stddev=0, baseline_updated_at=NULL;
+CREATE TABLE check_result_hourly_v41 (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	hour       TEXT    NOT NULL,
+	sum_rt     INTEGER,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, hour, observation_kind)
+);
+INSERT INTO check_result_hourly_v41 (monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total) SELECT monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total FROM check_result_hourly;
+DROP TABLE check_result_hourly;
+ALTER TABLE check_result_hourly_v41 RENAME TO check_result_hourly;
+CREATE TABLE check_result_daily_v41 (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	day        TEXT    NOT NULL,
+	sum_rt     INTEGER,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, day, observation_kind)
+);
+INSERT INTO check_result_daily_v41 (monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total) SELECT monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total FROM check_result_daily;
+DROP TABLE check_result_daily;
+ALTER TABLE check_result_daily_v41 RENAME TO check_result_daily;`,
 	},
 }

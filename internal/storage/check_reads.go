@@ -13,14 +13,14 @@ func checkReadColumns(diagnostics bool) string {
 	if !diagnostics {
 		private = "'', '', '', '', '', ''"
 	}
-	return "c.id, c.monitor_id, c.status, c.response_time, c.status_code, " + private + ", c.cert_expiry, c.agent_id, COALESCE(a.name,''), c.created_at"
+	return "c.id, c.monitor_id, c.observation_kind, c.status, c.response_time, c.status_code, " + private + ", c.cert_expiry, c.agent_id, COALESCE(a.name,''), c.created_at"
 }
 
 func scanCheckResult(scan func(...any) error) (*CheckResult, error) {
 	var result CheckResult
 	var expiry sql.NullString
 	var created string
-	if err := scan(&result.ID, &result.MonitorID, &result.Status, &result.ResponseTime, &result.StatusCode,
+	if err := scan(&result.ID, &result.MonitorID, &result.ObservationKind, &result.Status, &result.ResponseTime, &result.StatusCode,
 		&result.Message, &result.Headers, &result.Body, &result.BodyHash, &result.CertFingerprint, &result.DNSRecords,
 		&expiry, &result.AgentID, &result.AgentName, &created); err != nil {
 		return nil, err

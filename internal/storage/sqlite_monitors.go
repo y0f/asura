@@ -203,7 +203,7 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 	case "last_check":
 		orderBy = "ms.last_check_at DESC NULLS LAST, " + nameOrder
 	case "response_time":
-		orderBy = "ms.last_response_time DESC NULLS LAST, " + nameOrder
+		orderBy = "CASE WHEN m.type NOT IN ('manual','heartbeat') AND ms.observation_kind='probe' AND ms.last_check_at IS NOT NULL THEN ms.last_response_time END DESC NULLS LAST, " + nameOrder
 	}
 
 	var total int64
@@ -399,10 +399,10 @@ func (s *SQLiteStore) GetMonitorStatus(ctx context.Context, monitorID int64) (*M
 	var lastCheck, baselineUpdated sql.NullString
 	err := s.readDB.QueryRowContext(ctx,
 		`SELECT monitor_id, status, last_check_at, consec_fails, consec_successes, last_body_hash, last_cert_fingerprint,
-		        last_response_time, baseline_avg, baseline_stddev, baseline_updated_at, config_revision
+		        last_response_time, baseline_avg, baseline_stddev, baseline_updated_at, config_revision, observation_kind
 		 FROM monitor_status WHERE monitor_id=?`, monitorID).
 		Scan(&ms.MonitorID, &ms.Status, &lastCheck, &ms.ConsecFails, &ms.ConsecSuccesses, &ms.LastBodyHash, &ms.LastCertFingerprint,
-			&ms.ResponseTime, &ms.BaselineAvg, &ms.BaselineStddev, &baselineUpdated, &ms.ConfigRevision)
+			&ms.ResponseTime, &ms.BaselineAvg, &ms.BaselineStddev, &baselineUpdated, &ms.ConfigRevision, &ms.ObservationKind)
 	if err != nil {
 		return nil, err
 	}
@@ -416,20 +416,27 @@ func (s *SQLiteStore) UpsertMonitorStatus(ctx context.Context, st *MonitorStatus
 }
 
 func upsertMonitorStatus(ctx context.Context, writer monitorWriteExecutor, st *MonitorStatus) error {
+	kind := st.ObservationKind
+	if kind == "" {
+		kind = ObservationUnknown
+	}
 	var lastCheck string
 	if st.LastCheckAt != nil {
 		lastCheck = formatTime(*st.LastCheckAt)
 	}
 	_, err := writer.ExecContext(ctx,
-		`INSERT INTO monitor_status (monitor_id, status, last_check_at, consec_fails, consec_successes, last_body_hash, last_cert_fingerprint, last_response_time, config_revision)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO monitor_status (monitor_id, status, last_check_at, consec_fails, consec_successes, last_body_hash, last_cert_fingerprint, last_response_time, config_revision, observation_kind)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(monitor_id) DO UPDATE SET
 		   status=excluded.status, last_check_at=excluded.last_check_at,
 		   consec_fails=excluded.consec_fails, consec_successes=excluded.consec_successes,
 		   last_body_hash=excluded.last_body_hash,
 		   last_cert_fingerprint=excluded.last_cert_fingerprint,
-		   last_response_time=excluded.last_response_time, config_revision=excluded.config_revision`,
-		st.MonitorID, st.Status, nullStr(lastCheck), st.ConsecFails, st.ConsecSuccesses, st.LastBodyHash, st.LastCertFingerprint, st.ResponseTime, st.ConfigRevision)
+		   baseline_avg=CASE WHEN monitor_status.observation_kind!='probe' AND excluded.observation_kind='probe' THEN 0 ELSE monitor_status.baseline_avg END,
+		   baseline_stddev=CASE WHEN monitor_status.observation_kind!='probe' AND excluded.observation_kind='probe' THEN 0 ELSE monitor_status.baseline_stddev END,
+		   baseline_updated_at=CASE WHEN monitor_status.observation_kind!='probe' AND excluded.observation_kind='probe' THEN NULL ELSE monitor_status.baseline_updated_at END,
+		   last_response_time=excluded.last_response_time, config_revision=excluded.config_revision, observation_kind=excluded.observation_kind`,
+		st.MonitorID, st.Status, nullStr(lastCheck), st.ConsecFails, st.ConsecSuccesses, st.LastBodyHash, st.LastCertFingerprint, st.ResponseTime, st.ConfigRevision, kind)
 	return err
 }
 
@@ -448,8 +455,8 @@ func (s *SQLiteStore) GetResponseTimeStats(ctx context.Context, monitorID int64,
 				SQRT(SUM((response_time - sub.a) * (response_time - sub.a)) / (COUNT(*) - 1))
 			ELSE 0 END, 0), COUNT(*)
 		 FROM check_results,
-		      (SELECT AVG(response_time) AS a FROM check_results WHERE monitor_id=? AND status='up' AND created_at>=?) sub
-		 WHERE monitor_id=? AND status='up' AND created_at>=?`,
+		      (SELECT AVG(response_time) AS a FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND status='up' AND created_at>=?) sub
+		 WHERE monitor_id=? AND observation_kind='probe' AND status='up' AND created_at>=?`,
 		monitorID, formatTime(from), monitorID, formatTime(from)).
 		Scan(&avg, &stddev, &count)
 	return
@@ -457,6 +464,9 @@ func (s *SQLiteStore) GetResponseTimeStats(ctx context.Context, monitorID int64,
 
 // --- Check Results ---
 
+// InsertCheckResult is a trusted probe-fixture insertion path. Runtime checks
+// use RecordMonitorCheck; manual transitions have a separate insertion method.
+// Incoming observation kinds are never trusted.
 func (s *SQLiteStore) InsertCheckResult(ctx context.Context, r *CheckResult) error {
 	return insertCheckResult(ctx, s.writeDB, r)
 }
@@ -468,8 +478,8 @@ func insertCheckResult(ctx context.Context, writer monitorWriteExecutor, r *Chec
 	}
 	now := formatTime(time.Now())
 	id, err := insertID(ctx, writer,
-		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, agent_id, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, agent_id, created_at, observation_kind)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'probe')`,
 		r.MonitorID, r.Status, r.ResponseTime, r.StatusCode, r.Message, r.Headers,
 		r.Body, r.BodyHash, nullStr(certExpiry), r.CertFingerprint, r.DNSRecords, r.AgentID, now)
 	if err != nil {
@@ -477,6 +487,7 @@ func insertCheckResult(ctx context.Context, writer monitorWriteExecutor, r *Chec
 	}
 	r.ID = id
 	r.CreatedAt = parseTime(now)
+	r.ObservationKind = ObservationProbe
 	return nil
 }
 
@@ -491,7 +502,7 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 	clause, args := monitorOwnerAccessSQL("monitor_id", access)
 	stmt, err := s.readDB.PrepareContext(ctx,
 		`SELECT status, response_time FROM check_results
-		 WHERE monitor_id=? AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=check_results.monitor_id AND m.type NOT IN ('manual','heartbeat'))`+clause+` ORDER BY created_at DESC, id DESC LIMIT ?`)
+		 WHERE monitor_id=? AND observation_kind='probe' AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=check_results.monitor_id AND m.type NOT IN ('manual','heartbeat'))`+clause+` ORDER BY created_at DESC, id DESC LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}

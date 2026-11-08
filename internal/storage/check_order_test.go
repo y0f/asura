@@ -14,7 +14,7 @@ func TestCheckResultsWithSameTimestamp(t *testing.T) {
 	var ids []int64
 	for _, rt := range []int64{100, 200} {
 		res, err := s.writeDB.ExecContext(ctx,
-			`INSERT INTO check_results (monitor_id, status, response_time, created_at) VALUES (?, 'up', ?, ?)`,
+			`INSERT INTO check_results (monitor_id, status, response_time, created_at, observation_kind) VALUES (?, 'up', ?, ?, 'probe')`,
 			m.ID, rt, formatTime(at))
 		if err != nil {
 			t.Fatal(err)

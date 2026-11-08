@@ -71,7 +71,7 @@ func (s *SQLiteStore) UpdateHeartbeatPing(ctx context.Context, monitorID int64, 
 	if err != nil {
 		return err
 	}
-	if err := setExplicitMonitorStatus(ctx, tx, id, "up", now); err != nil {
+	if err := setExplicitMonitorStatus(ctx, tx, id, "up", now, ObservationHeartbeat); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -99,7 +99,7 @@ func (s *SQLiteStore) ExpireHeartbeat(ctx context.Context, monitorID int64) (boo
 	if err != nil || n == 0 {
 		return false, err
 	}
-	if err := setExplicitMonitorStatus(ctx, tx, monitorID, "down", now); err != nil {
+	if err := setExplicitMonitorStatus(ctx, tx, monitorID, "down", now, ObservationHeartbeat); err != nil {
 		return false, err
 	}
 	if err := tx.Commit(); err != nil {
