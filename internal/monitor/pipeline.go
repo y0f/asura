@@ -132,6 +132,7 @@ func (p *Pipeline) processResults(ctx context.Context) {
 
 func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	mon := wr.Monitor
+	defer p.scheduler.complete(mon.ID)
 
 	if wr.Err != nil {
 		p.logger.Error("check error", "monitor_id", mon.ID, "error", wr.Err)

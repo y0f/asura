@@ -54,6 +54,7 @@ type Scheduler struct {
 	mu                sync.RWMutex
 	monitors          map[int64]*storage.Monitor
 	entries           map[int64]*schedulerEntry
+	inFlight          map[int64]struct{} // queued, running, or awaiting result processing
 	heap              schedulerHeap
 	effectiveInterval map[int64]int64 // nanoseconds
 	reload            chan struct{}
@@ -67,6 +68,7 @@ func NewScheduler(store storage.Store, jobs chan<- Job, logger *slog.Logger) *Sc
 		logger:            logger,
 		monitors:          make(map[int64]*storage.Monitor),
 		entries:           make(map[int64]*schedulerEntry),
+		inFlight:          make(map[int64]struct{}),
 		effectiveInterval: make(map[int64]int64),
 		reload:            make(chan struct{}, 1),
 	}
@@ -186,9 +188,12 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		iv := s.interval(entry.monitorID, mon.Interval)
 
-		entry.lastRun = nowNano
-
 		if mon.Type == "heartbeat" || mon.Type == "manual" {
+			entry.nextRun = nowNano + iv
+			heap.Push(&s.heap, entry)
+			continue
+		}
+		if _, busy := s.inFlight[mon.ID]; busy {
 			entry.nextRun = nowNano + iv
 			heap.Push(&s.heap, entry)
 			continue
@@ -196,6 +201,8 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		select {
 		case s.jobs <- Job{Monitor: mon}:
+			s.inFlight[mon.ID] = struct{}{}
+			entry.lastRun = nowNano
 			entry.nextRun = nowNano + iv
 		default:
 			s.droppedJobs.Add(1)
@@ -205,6 +212,14 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		heap.Push(&s.heap, entry)
 	}
+}
+
+// complete releases the local slot only after the result has been processed.
+// Reloads retain the slot, including disable/re-enable while a check is running.
+func (s *Scheduler) complete(monitorID int64) {
+	s.mu.Lock()
+	delete(s.inFlight, monitorID)
+	s.mu.Unlock()
 }
 
 // GetMultiplier returns the current effective interval multiplier for a monitor.
