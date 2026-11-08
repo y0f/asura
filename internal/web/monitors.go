@@ -521,9 +521,12 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			slaData = &views.SLAData{
 				Target:            s.Target,
+				TotalChecks:       s.TotalChecks,
 				UptimeMonth:       s.UptimePctMonth,
 				BudgetTotalSecs:   s.BudgetTotalSecs,
 				BudgetRemainSecs:  s.BudgetRemainSecs,
+				BudgetRemainPct:   s.BudgetRemainPct,
+				BudgetAtRisk:      s.BudgetAtRisk,
 				BudgetRemainHuman: s.BudgetRemainHuman,
 				Breached:          s.Breached,
 			}
