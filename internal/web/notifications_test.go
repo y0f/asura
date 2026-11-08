@@ -14,7 +14,10 @@ func TestAssembleNotificationSettingsWebhook(t *testing.T) {
 		"notif_webhook_secret": {"s3cret"},
 	}
 	r := buildFormRequest(form)
-	raw := assembleNotificationSettings(r, "webhook")
+	raw, err := assembleNotificationSettings(r, "webhook")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var s notifier.WebhookSettings
 	if err := json.Unmarshal(raw, &s); err != nil {
@@ -34,7 +37,10 @@ func TestAssembleGotifyPriority(t *testing.T) {
 		want  int
 	}{{"", 5}, {"0", 0}, {"7", 7}} {
 		t.Run(tc.value, func(t *testing.T) {
-			raw := assembleNotificationSettings(buildFormRequest(url.Values{"notif_gotify_priority": {tc.value}}), "gotify")
+			raw, err := assembleNotificationSettings(buildFormRequest(url.Values{"notif_gotify_priority": {tc.value}}), "gotify")
+			if err != nil {
+				t.Fatal(err)
+			}
 			var settings struct {
 				Priority *int `json:"priority"`
 			}
@@ -54,7 +60,10 @@ func TestAssembleNotificationSettingsTelegram(t *testing.T) {
 		"notif_telegram_chat_id":   {"-100123"},
 	}
 	r := buildFormRequest(form)
-	raw := assembleNotificationSettings(r, "telegram")
+	raw, err := assembleNotificationSettings(r, "telegram")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var s notifier.TelegramSettings
 	if err := json.Unmarshal(raw, &s); err != nil {
@@ -70,7 +79,10 @@ func TestAssembleNotificationSettingsDiscord(t *testing.T) {
 		"notif_discord_webhook_url": {"https://discord.com/api/webhooks/123"},
 	}
 	r := buildFormRequest(form)
-	raw := assembleNotificationSettings(r, "discord")
+	raw, err := assembleNotificationSettings(r, "discord")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var s notifier.DiscordSettings
 	if err := json.Unmarshal(raw, &s); err != nil {
@@ -87,7 +99,10 @@ func TestAssembleNotificationSettingsSlack(t *testing.T) {
 		"notif_slack_channel":     {"#alerts"},
 	}
 	r := buildFormRequest(form)
-	raw := assembleNotificationSettings(r, "slack")
+	raw, err := assembleNotificationSettings(r, "slack")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var s notifier.SlackSettings
 	if err := json.Unmarshal(raw, &s); err != nil {
@@ -111,7 +126,10 @@ func TestAssembleNotificationSettingsEmail(t *testing.T) {
 		"notif_email_to":       {"a@b.com, c@d.com"},
 	}
 	r := buildFormRequest(form)
-	raw := assembleNotificationSettings(r, "email")
+	raw, err := assembleNotificationSettings(r, "email")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var s notifier.EmailSettings
 	if err := json.Unmarshal(raw, &s); err != nil {
@@ -136,7 +154,10 @@ func TestAssembleNotificationSettingsEmail(t *testing.T) {
 
 func TestAssembleNotificationSettingsUnknown(t *testing.T) {
 	r := buildFormRequest(url.Values{})
-	raw := assembleNotificationSettings(r, "unknown")
+	raw, err := assembleNotificationSettings(r, "unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(raw) != "{}" {
 		t.Errorf("expected empty object for unknown type, got %s", raw)
 	}
@@ -211,7 +232,10 @@ func TestParseNotificationFormFormMode(t *testing.T) {
 
 	h := testWebHandler(t)
 	r := buildFormRequest(form)
-	ch := h.parseNotificationForm(r)
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if ch.Name != "My Webhook" {
 		t.Errorf("Name = %q", ch.Name)
@@ -247,7 +271,10 @@ func TestParseNotificationFormJSONMode(t *testing.T) {
 
 	h := testWebHandler(t)
 	r := buildFormRequest(form)
-	ch := h.parseNotificationForm(r)
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var s notifier.WebhookSettings
 	if err := json.Unmarshal(ch.Settings, &s); err != nil {
@@ -268,7 +295,10 @@ func TestParseNotificationFormJSONModeInvalid(t *testing.T) {
 
 	h := testWebHandler(t)
 	r := buildFormRequest(form)
-	ch := h.parseNotificationForm(r)
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if ch.Settings != nil {
 		t.Errorf("invalid JSON should be nil, got %s", ch.Settings)

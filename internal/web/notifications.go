@@ -37,7 +37,12 @@ func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid notification form", http.StatusBadRequest)
 		return
 	}
-	ch := h.parseNotificationForm(r)
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		h.setError(w, err.Error())
+		h.notificationRedirect(w, r)
+		return
+	}
 	if err := notificationEventSelectionError(r, ch.Events); err != nil {
 		h.setError(w, err.Error())
 		h.notificationRedirect(w, r)
@@ -77,7 +82,12 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid notification form", http.StatusBadRequest)
 		return
 	}
-	ch := h.parseNotificationForm(r)
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		h.setError(w, err.Error())
+		h.notificationRedirect(w, r)
+		return
+	}
 	ch.ID = id
 	if err := notificationEventSelectionError(r, ch.Events); err != nil {
 		h.setError(w, err.Error())
@@ -256,8 +266,10 @@ func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-func (h *Handler) parseNotificationForm(r *http.Request) *storage.NotificationChannel {
-	r.ParseForm()
+func (h *Handler) parseNotificationForm(r *http.Request) (*storage.NotificationChannel, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, fmt.Errorf("invalid notification form")
+	}
 
 	ch := &storage.NotificationChannel{
 		Name:    r.FormValue("name"),
@@ -270,12 +282,16 @@ func (h *Handler) parseNotificationForm(r *http.Request) *storage.NotificationCh
 			ch.Settings = json.RawMessage(raw)
 		}
 	} else {
-		ch.Settings = assembleNotificationSettings(r, ch.Type)
+		var err error
+		ch.Settings, err = assembleNotificationSettings(r, ch.Type)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ch.Events = parseNotificationEvents(r)
 
-	return ch
+	return ch, nil
 }
 
 func parseNotificationEvents(r *http.Request) []string {
@@ -336,7 +352,43 @@ func notificationEventSelectionError(r *http.Request, events []string) error {
 	return nil
 }
 
-func assembleNotificationSettings(r *http.Request, chType string) json.RawMessage {
+func assembleNotificationSettings(r *http.Request, chType string) (json.RawMessage, error) {
+	number, err := notificationFormNumber(r, chType)
+	if err != nil {
+		return nil, err
+	}
+	return assembleNotificationValues(r, chType, number), nil
+}
+
+// Parse only the active provider's numeric field. Blank fields keep their
+// existing defaults; malformed or overflowing values must never become zero.
+func notificationFormNumber(r *http.Request, chType string) (int, error) {
+	var field, label string
+	fallback := 0
+	switch chType {
+	case "email":
+		field, label = "notif_email_port", "Email port"
+	case "ntfy":
+		field, label = "notif_ntfy_priority", "ntfy priority"
+	case "pushover":
+		field, label = "notif_pushover_priority", "Pushover priority"
+	case "gotify":
+		field, label, fallback = "notif_gotify_priority", "Gotify priority", 5
+	default:
+		return 0, nil
+	}
+	raw := strings.TrimSpace(r.FormValue(field))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a whole number", label)
+	}
+	return value, nil
+}
+
+func assembleNotificationValues(r *http.Request, chType string, number int) json.RawMessage {
 	switch chType {
 	case "webhook":
 		s := notifier.WebhookSettings{
@@ -366,20 +418,19 @@ func assembleNotificationSettings(r *http.Request, chType string) json.RawMessag
 		b, _ := json.Marshal(s)
 		return b
 	case "email":
-		return assembleEmailSettings(r)
+		return assembleEmailSettings(r, number)
 	case "ntfy":
-		return assembleNtfySettings(r)
+		return assembleNtfySettings(r, number)
 	case "teams", "pagerduty", "opsgenie", "pushover":
-		return assembleExtendedSettings(r, chType)
+		return assembleExtendedSettings(r, chType, number)
 	case "googlechat", "matrix", "gotify":
-		return assembleExtraSettings(r, chType)
+		return assembleExtraSettings(r, chType, number)
 	default:
 		return json.RawMessage("{}")
 	}
 }
 
-func assembleEmailSettings(r *http.Request) json.RawMessage {
-	port, _ := strconv.Atoi(r.FormValue("notif_email_port"))
+func assembleEmailSettings(r *http.Request, port int) json.RawMessage {
 	s := notifier.EmailSettings{
 		Host:     r.FormValue("notif_email_host"),
 		Port:     port,
@@ -413,21 +464,19 @@ func assembleEmailSettings(r *http.Request) json.RawMessage {
 	return b
 }
 
-func assembleNtfySettings(r *http.Request) json.RawMessage {
+func assembleNtfySettings(r *http.Request, priority int) json.RawMessage {
 	s := notifier.NtfySettings{
 		ServerURL: r.FormValue("notif_ntfy_server_url"),
 		Topic:     r.FormValue("notif_ntfy_topic"),
 		Tags:      r.FormValue("notif_ntfy_tags"),
 		ClickURL:  r.FormValue("notif_ntfy_click_url"),
-	}
-	if v := r.FormValue("notif_ntfy_priority"); v != "" {
-		s.Priority, _ = strconv.Atoi(v)
+		Priority:  priority,
 	}
 	b, _ := json.Marshal(s)
 	return b
 }
 
-func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
+func assembleExtraSettings(r *http.Request, chType string, priority int) json.RawMessage {
 	var v any
 	switch chType {
 	case "googlechat":
@@ -444,10 +493,7 @@ func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
 		s := notifier.GotifySettings{
 			ServerURL: r.FormValue("notif_gotify_server_url"),
 			AppToken:  r.FormValue("notif_gotify_app_token"),
-			Priority:  5,
-		}
-		if p := r.FormValue("notif_gotify_priority"); p != "" {
-			s.Priority, _ = strconv.Atoi(p)
+			Priority:  priority,
 		}
 		v = s
 	}
@@ -455,7 +501,7 @@ func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
 	return b
 }
 
-func assembleExtendedSettings(r *http.Request, chType string) json.RawMessage {
+func assembleExtendedSettings(r *http.Request, chType string, priority int) json.RawMessage {
 	var v any
 	switch chType {
 	case "teams":
@@ -477,9 +523,7 @@ func assembleExtendedSettings(r *http.Request, chType string) json.RawMessage {
 			AppToken: r.FormValue("notif_pushover_app_token"),
 			Sound:    r.FormValue("notif_pushover_sound"),
 			Device:   r.FormValue("notif_pushover_device"),
-		}
-		if p := r.FormValue("notif_pushover_priority"); p != "" {
-			s.Priority, _ = strconv.Atoi(p)
+			Priority: priority,
 		}
 		v = s
 	}
