@@ -1,0 +1,80 @@
+/* A small reading-focused layout, following Gophling's Jekyll documentation. */
+:root {
+  color-scheme: light;
+  --ink: #171717;
+  --muted: #626262;
+  --link: #005bbf;
+  --border: #dedede;
+  font: 17px/1.7 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: #fafafa;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1.5rem; }
+body { margin: 0; }
+a { color: var(--link); text-underline-offset: .2em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; }
+header { border-bottom: 1px solid var(--border); background: #fff; }
+header > nav, main, footer { max-width: 980px; margin: auto; padding: 1.5rem 2rem; }
+header > nav { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
+.brand { display: inline-flex; align-items: center; text-decoration: none; }
+.brand img { width: auto; height: 36px; max-width: 170px; object-fit: contain; }
+.links { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; font-size: .9rem; }
+.links a { display: inline-flex; align-items: center; min-height: 28px; }
+main { min-height: 65vh; padding-top: 2rem; padding-bottom: 4rem; }
+article { padding-top: 2rem; }
+h1, h2, h3, h4 { line-height: 1.25; letter-spacing: -.025em; overflow-wrap: anywhere; }
+h1 { font-size: clamp(2rem, 5vw, 2.8rem); margin: 0 0 1.25rem; }
+h2 { margin-top: 2.5rem; font-size: 1.45rem; }
+h3 { margin-top: 2rem; font-size: 1.15rem; }
+h4 { margin-top: 1.75rem; font-size: 1rem; }
+p, ul, ol { max-width: 78ch; }
+p, li { overflow-wrap: anywhere; }
+li + li { margin-top: .35rem; }
+code { font: .88em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+:not(pre) > code { background: #eeeeee; border-radius: 4px; padding: .12em .3em; overflow-wrap: anywhere; }
+pre { max-width: 100%; overflow-x: auto; padding: 1.2rem 1.4rem; border: 1px solid var(--border); border-radius: 8px; background: #f1f1f1; }
+pre code { white-space: pre; }
+.highlight pre { margin: 0; }
+.highlight { margin: 1.25rem 0; }
+/* Syntax emphasis stays neutral: meaning does not depend on a color legend. */
+.highlight .c, .highlight .c1, .highlight .cm { color: #626262; }
+.highlight .k, .highlight .kd, .highlight .kn, .highlight .nt { font-weight: 650; }
+blockquote { margin-left: 0; padding: .1rem 1.2rem; border-left: 3px solid var(--link); color: var(--muted); }
+table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.5rem 0; font-size: .92rem; }
+th, td { padding: .8rem 1rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+th { background: #f1f1f1; font-weight: 650; }
+img { max-width: 100%; height: auto; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+.page-navigation { border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+.page-navigation summary { cursor: pointer; width: fit-content; min-height: 28px; font-size: .9rem; color: var(--muted); }
+.page-navigation nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem 1.5rem; padding: 1rem 0 .25rem; }
+.page-navigation nav a { min-height: 28px; font-size: .9rem; }
+.page-navigation a[aria-current="page"] { color: var(--ink); font-weight: 650; text-decoration-thickness: 2px; }
+.contents { margin: 1.5rem 0; }
+.contents summary { cursor: pointer; width: fit-content; color: var(--muted); min-height: 28px; font-size: .9rem; }
+.contents ul { font-size: .9rem; }
+footer { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
+.skip { position: absolute; left: 1rem; top: -5rem; z-index: 1; background: #fff; padding: .5rem 1rem; }
+.skip:focus { top: 1rem; }
+@media (max-width: 600px) {
+  header > nav, main, footer { padding-left: 1.15rem; padding-right: 1.15rem; }
+  header > nav { align-items: flex-start; flex-direction: column; gap: .75rem; }
+  .links { gap: .25rem 1.2rem; }
+  article { padding-top: 1.5rem; }
+  th, td { padding: .6rem; }
+  .page-navigation nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1rem; }
+  footer { flex-direction: column; }
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .links a, .page-navigation nav a { min-height: 44px; display: inline-flex; align-items: center; }
+  .page-navigation summary, .contents summary { min-height: 44px; padding: .4rem 0; }
+}
+@media print {
+  header, footer, .skip, .page-navigation { display: none; }
+  :root { background: #fff; font-size: 11pt; }
+  main, article { max-width: none; padding: 0; }
+  pre, table { overflow: visible; }
+  pre { white-space: pre-wrap; }
+}

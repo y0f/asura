@@ -1,0 +1,31 @@
+title: Asura
+description: Self-hosted uptime monitoring for websites, APIs and network services, with alerts, incident tracking and public status pages in a single Go binary.
+url: https://y0f.github.io
+baseurl: /asura
+repository: y0f/asura
+lang: en
+logo: /assets/asura.gif
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  toc_levels: 2..3
+timezone: UTC
+strict_front_matter: true
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-titles-from-headings
+  - jekyll-seo-tag
+  - jekyll-sitemap
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      image: /assets/asura.gif
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - frontend-rework.md
+  - superpowers
