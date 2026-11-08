@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -44,7 +45,7 @@ type result struct {
 	BodyHash        string `json:"body_hash"`
 	CertFingerprint string `json:"cert_fingerprint"`
 	DNSRecords      string `json:"dns_records,omitempty"`
-	// CheckedAt is when the check started. Results are posted once per cycle,
+	// CheckedAt is when the check started. Results are posted in bounded batches,
 	// so the server uses it to ignore results older than its latest check.
 	CheckedAt time.Time `json:"checked_at"`
 }
@@ -65,6 +66,10 @@ func main() {
 
 	if *serverURL == "" || *token == "" {
 		fmt.Fprintln(os.Stderr, "Usage: asura-agent --server URL --token TOKEN")
+		os.Exit(1)
+	}
+	if *interval <= 0 || *concurrency <= 0 {
+		fmt.Fprintln(os.Stderr, "interval and concurrency must be positive")
 		os.Exit(1)
 	}
 
@@ -106,8 +111,13 @@ type agent struct {
 	logger      *slog.Logger
 	concurrency int
 
-	lastRun map[int64]time.Time // monitor ID -> start of its last check
+	lastRun map[int64]checkRun // monitor ID -> last acknowledged check
 	now     func() time.Time
+}
+
+type checkRun struct {
+	started  time.Time
+	revision int64
 }
 
 func newAgent(client *http.Client, server, token string, registry *checker.Registry, logger *slog.Logger) *agent {
@@ -124,7 +134,7 @@ func newAgent(client *http.Client, server, token string, registry *checker.Regis
 		registry:    registry,
 		logger:      logger,
 		concurrency: 10,
-		lastRun:     make(map[int64]time.Time),
+		lastRun:     make(map[int64]checkRun),
 		now:         time.Now,
 	}
 }
@@ -133,10 +143,15 @@ func newAgent(client *http.Client, server, token string, registry *checker.Regis
 // interval is not skipped every other cycle.
 const dueSlack = 2 * time.Second
 
+const (
+	maxJobsBytes        = 32 << 20
+	maxResultBatchBytes = 8 << 20 // Below the server's 10 MiB request limit.
+)
+
 // due reports whether j should be checked now, given its interval.
 func (a *agent) due(j job, now time.Time) bool {
 	last, ok := a.lastRun[j.ID]
-	return !ok || j.Interval <= 0 || now.Sub(last)+dueSlack >= time.Duration(j.Interval)*time.Second
+	return !ok || last.revision != j.ConfigRevision || j.Interval <= 0 || now.Sub(last.started)+dueSlack >= time.Duration(j.Interval)*time.Second
 }
 
 func (a *agent) runCycle(ctx context.Context) {
@@ -155,6 +170,9 @@ func (a *agent) runCycle(ctx context.Context) {
 		seen[j.ID] = true
 		if a.due(j, now) {
 			due = append(due, j)
+			// Only successfully acknowledged fresh observations restore a due
+			// job's schedule. Failures and cancellation retry on the next poll.
+			delete(a.lastRun, j.ID)
 		}
 	}
 	for id := range a.lastRun {
@@ -168,52 +186,62 @@ func (a *agent) runCycle(ctx context.Context) {
 
 	a.logger.Info("running checks", "count", len(due))
 
-	results := make([]*result, len(due))
-	sem := make(chan struct{}, max(a.concurrency, 1))
+	cycleCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	workers := min(max(a.concurrency, 1), len(due))
+	results := make(chan *result, workers)
+	// Bound active checks, waiting goroutines and completed results. Slow result
+	// submissions apply backpressure instead of retaining the whole cycle.
+	var next atomic.Int64
 	var wg sync.WaitGroup
-	for i, j := range due {
-		c, err := a.registry.Get(j.Type)
-		if err != nil {
-			a.logger.Warn("unsupported monitor type", "type", j.Type, "monitor", j.Name)
-			continue
-		}
-		a.lastRun[j.ID] = now
-
+	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
+			for cycleCtx.Err() == nil {
+				i := int(next.Add(1)) - 1
+				if i >= len(due) {
+					return
+				}
+				j := due[i]
+				c, err := a.registry.Get(j.Type)
+				if err != nil {
+					a.logger.Warn("unsupported monitor type", "type", j.Type, "monitor", j.ID)
+					continue
+				}
+				r := runCheck(cycleCtx, c, j, a.now().UTC())
+				select {
+				case results <- r:
+				case <-cycleCtx.Done():
+					return
+				}
 			}
-			defer func() { <-sem }()
-			results[i] = runCheck(ctx, c, j)
 		}()
 	}
-	wg.Wait()
-
+	go func() { wg.Wait(); close(results) }()
+	batch := newResultBatches(cycleCtx, a.client, a.server, a.token, func(receipt resultReceipt) {
+		a.lastRun[receipt.monitorID] = receipt.checkRun
+	})
+	var postErr error
+	for r := range results {
+		if cycleCtx.Err() == nil {
+			if postErr = batch.add(*r, 0); postErr != nil {
+				// Stop unfinished checks and join all senders before returning.
+				cancel()
+			}
+		}
+	}
 	if ctx.Err() != nil {
-		// Shutting down: checks were cut short, so their results are not real.
-		return
+		return // Never submit checks cut short by shutdown.
 	}
-
-	var out []result
-	for _, r := range results {
-		if r != nil {
-			out = append(out, *r)
-		}
-	}
-	if len(out) > 0 {
-		if err := postResults(ctx, a.client, a.server, a.token, out); err != nil {
-			a.logger.Error("post results failed", "error", err)
-		} else {
-			a.logger.Info("results posted", "count", len(out))
-		}
+	if err := batch.finish(postErr); err != nil {
+		a.logger.Error("post results failed", "error", err)
+	} else if batch.posted > 0 {
+		a.logger.Info("results posted", "count", batch.posted)
 	}
 }
 
-func runCheck(ctx context.Context, c checker.Checker, j job) *result {
+func runCheck(ctx context.Context, c checker.Checker, j job, started time.Time) *result {
 	mon := &model.Monitor{
 		ID:       j.ID,
 		Name:     j.Name,
@@ -225,7 +253,6 @@ func runCheck(ctx context.Context, c checker.Checker, j job) *result {
 
 	checkCtx, cancel := context.WithTimeout(ctx, time.Duration(j.Timeout)*time.Second+5*time.Second)
 	defer cancel()
-	started := time.Now().UTC()
 	res, err := c.Check(checkCtx, mon)
 	if err != nil {
 		return &result{MonitorID: j.ID, ConfigRevision: j.ConfigRevision, Status: "down", Message: err.Error(), CheckedAt: started}
@@ -268,26 +295,133 @@ func fetchJobs(ctx context.Context, client *http.Client, server, token string) (
 		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
 	}
 
-	var response struct {
+	return decodeJobs(resp.Body, maxJobsBytes)
+}
+
+func decodeJobs(body io.Reader, limit int64) ([]job, error) {
+	bounded := &io.LimitedReader{R: body, N: limit + 1}
+	decoder := json.NewDecoder(bounded)
+	var response *struct {
 		Jobs []job `json:"jobs"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	err := decoder.Decode(&response)
+	if bounded.N == 0 {
+		return nil, fmt.Errorf("jobs response exceeds %d bytes", limit)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("decode jobs: %w", err)
 	}
+	if response == nil {
+		return nil, errors.New("jobs response must contain one JSON object")
+	}
+	// Consume through EOF so a second JSON value or excessive trailing data
+	// cannot bypass the size limit or hide a truncated job list.
+	var extra struct{}
+	err = decoder.Decode(&extra)
+	if bounded.N == 0 {
+		return nil, fmt.Errorf("jobs response exceeds %d bytes", limit)
+	}
+	if err != io.EOF {
+		return nil, errors.New("jobs response must contain one JSON object")
+	}
+	seen := make(map[int64]struct{}, len(response.Jobs))
 	for _, j := range response.Jobs {
 		if j.ID <= 0 || j.ConfigRevision <= 0 {
 			return nil, fmt.Errorf("job has no valid configuration revision; upgrade the server and agent together to v2")
 		}
+		if _, exists := seen[j.ID]; exists {
+			return nil, fmt.Errorf("duplicate job for monitor %d", j.ID)
+		}
+		seen[j.ID] = struct{}{}
 	}
 	return response.Jobs, nil
 }
 
-func postResults(ctx context.Context, client *http.Client, server, token string, results []result) error {
-	body, err := json.Marshal(results)
-	if err != nil {
+type resultReceipt struct {
+	index     int
+	monitorID int64
+	checkRun
+}
+
+// A batch is acknowledged only when every result is accepted. An oversized
+// result is reported and skipped without starving the other monitors. Failures
+// leave that batch and subsequent results unacknowledged for fresh checks.
+type resultBatches struct {
+	ctx           context.Context
+	client        *http.Client
+	server, token string
+	body          []byte
+	pending       []resultReceipt
+	acknowledge   func(resultReceipt)
+	posted        int
+	skipped       int
+}
+
+func newResultBatches(ctx context.Context, client *http.Client, server, token string, acknowledge func(resultReceipt)) *resultBatches {
+	batch := &resultBatches{ctx: ctx, client: client, server: server, token: token,
+		body: make([]byte, 1, 64<<10), acknowledge: acknowledge}
+	batch.body[0] = '['
+	return batch
+}
+
+func (b *resultBatches) flush() error {
+	if len(b.pending) == 0 {
+		return nil
+	}
+	if err := postResultBatch(b.ctx, b.client, b.server, b.token, append(b.body, ']'), len(b.pending)); err != nil {
 		return err
 	}
+	for _, receipt := range b.pending {
+		b.acknowledge(receipt)
+	}
+	b.posted += len(b.pending)
+	b.body = b.body[:1]
+	b.pending = b.pending[:0]
+	return nil
+}
 
+func (b *resultBatches) add(r result, index int) error {
+	// JSON may expand each byte by up to six characters. Reject raw values
+	// already beyond the budget before allocating their encoded form.
+	if len(r.Message)+len(r.DNSRecords)+len(r.BodyHash)+len(r.CertFingerprint)+len(r.Status) > maxResultBatchBytes {
+		b.skipped++
+		return nil
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil || len(encoded)+2 > maxResultBatchBytes {
+		b.skipped++
+		return nil
+	}
+	separator := 0
+	if len(b.pending) > 0 {
+		separator = 1
+	}
+	if len(b.body)+separator+len(encoded)+1 > maxResultBatchBytes {
+		if err := b.flush(); err != nil {
+			return err
+		}
+		separator = 0
+	}
+	if separator != 0 {
+		b.body = append(b.body, ',')
+	}
+	b.body = append(b.body, encoded...)
+	b.pending = append(b.pending, resultReceipt{index: index, monitorID: r.MonitorID,
+		checkRun: checkRun{started: r.CheckedAt, revision: r.ConfigRevision}})
+	return nil
+}
+
+func (b *resultBatches) finish(postErr error) error {
+	if postErr == nil {
+		postErr = b.flush()
+	}
+	if b.skipped > 0 {
+		postErr = errors.Join(postErr, fmt.Errorf("%d results could not be encoded within the %d-byte batch limit", b.skipped, maxResultBatchBytes))
+	}
+	return postErr
+}
+
+func postResultBatch(ctx context.Context, client *http.Client, server, token string, body []byte, count int) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server+"/api/v1/agent/results", bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -309,11 +443,11 @@ func postResults(ctx context.Context, client *http.Client, server, token string,
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&response); err != nil {
 		return fmt.Errorf("decode result acknowledgement: %w", err)
 	}
-	if response.Accepted == nil || *response.Accepted < 0 || *response.Accepted > len(results) {
+	if response.Accepted == nil || *response.Accepted < 0 || *response.Accepted > count {
 		return fmt.Errorf("server returned an invalid result acknowledgement")
 	}
-	if *response.Accepted != len(results) {
-		return fmt.Errorf("server accepted %d of %d results; obsolete jobs are discarded, fetch current jobs on the next poll", *response.Accepted, len(results))
+	if *response.Accepted != count {
+		return fmt.Errorf("server accepted %d of %d results; obsolete jobs are discarded, fetch current jobs on the next poll", *response.Accepted, count)
 	}
 	return nil
 }

@@ -439,8 +439,8 @@ asura-agent --server https://your-server.com --token <agent-token> --interval 30
 | --- | --- | --- |
 | `-server` |  | Asura server URL (required) |
 | `-token` |  | Agent token (required) |
-| `-interval` | `30s` | How often to poll the server for jobs |
-| `-concurrency` | `10` | Maximum number of checks run at the same time |
+| `-interval` | `30s` | Positive duration between polls for jobs |
+| `-concurrency` | `10` | Positive maximum number of checks run at the same time |
 | `-allow-private` | `false` | Allow checks against private, loopback and other reserved addresses, for agents inside a LAN |
 | `-version` |  | Print the version and exit |
 
@@ -451,6 +451,15 @@ The agent binary polls the server for jobs, runs checks locally, and posts resul
 Set `--server` to the final server URL, including any configured base path. The agent
 rejects redirects for job polling and result submission so its token stays at that
 endpoint. HTTP failures report the status code without logging the response body.
+
+Job responses are limited to 32 MiB; an oversized response fails explicitly without
+running a partial list. Check workers and queued results are bounded by
+`--concurrency`. Results stream in JSON batches of at most 8 MiB, below the server's
+10 MiB request limit; slow submissions pause further checks. A result that
+cannot fit is reported and skipped so other monitors can still report. Fully
+acknowledged batches keep their schedules; failed or unacknowledged results trigger
+fresh checks on the next poll. A changed configuration revision also runs on the
+next poll, even when the previous monitor interval has not elapsed.
 
 ## On-Call Rotations {#on-call-rotations}
 
