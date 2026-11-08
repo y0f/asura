@@ -151,7 +151,9 @@ func redirectPolicy(maxRedirects int) func(*http.Request, []*http.Request) error
 		}
 	}
 	return func(_ *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
+		// via includes the initial request. Its length is the number of
+		// redirects including the candidate hop, which may reach the limit.
+		if len(via) > maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
 		}
 		return nil

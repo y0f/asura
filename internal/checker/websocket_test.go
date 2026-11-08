@@ -77,17 +77,22 @@ func TestWebSocketRejectedUpgradeReleasesIdleConnection(t *testing.T) {
 }
 
 func TestWebSocketRedirectsAreBoundedAndStillSupportShortChains(t *testing.T) {
-	for _, loop := range []bool{false, true} {
-		t.Run(map[bool]string{false: "short chain", true: "loop"}[loop], func(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		hops         int64
+		wantStatus   string
+		wantRequests int64
+	}{
+		{name: "short chain", hops: 1, wantStatus: "up", wantRequests: 2},
+		{name: "exact limit", hops: 10, wantStatus: "up", wantRequests: 11},
+		{name: "exceeds limit", hops: 11, wantStatus: "down", wantRequests: 11},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			var hits atomic.Int64
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				hit := hits.Add(1)
-				if loop && hit <= 12 || !loop && hit == 1 {
+				if hit <= tc.hops {
 					http.Redirect(w, r, "/next", http.StatusFound)
-					return
-				}
-				if loop {
-					http.Error(w, "stop the unfixed loop fixture", http.StatusBadRequest)
 					return
 				}
 				conn, err := websocket.Accept(w, r, nil)
@@ -99,12 +104,11 @@ func TestWebSocketRedirectsAreBoundedAndStillSupportShortChains(t *testing.T) {
 			}))
 			defer srv.Close()
 			result, err := (&WebSocketChecker{AllowPrivate: true}).Check(context.Background(), &model.Monitor{Target: srv.URL, Timeout: 3})
-			if loop {
-				if err != nil || result.Status != "down" || hits.Load() != 10 || !strings.Contains(result.Message, "stopped after 10 redirects") {
-					t.Errorf("redirect ceiling missing: hits=%d result=%+v err=%v", hits.Load(), result, err)
-				}
-			} else if err != nil || result.Status != "up" || hits.Load() != 2 {
-				t.Errorf("ordinary redirect handshake failed: hits=%d result=%+v err=%v", hits.Load(), result, err)
+			if err != nil || result == nil || result.Status != tc.wantStatus || hits.Load() != tc.wantRequests {
+				t.Fatalf("hits=%d result=%+v err=%v; want %d requests and %s", hits.Load(), result, err, tc.wantRequests, tc.wantStatus)
+			}
+			if tc.wantStatus == "down" && !strings.Contains(result.Message, "stopped after 10 redirects") {
+				t.Errorf("missing redirect ceiling diagnostic: %+v", result)
 			}
 		})
 	}
