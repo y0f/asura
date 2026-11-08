@@ -78,6 +78,7 @@ type Store interface {
 	GetMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) (*MaintenanceWindow, error)
 	ListMaintenanceWindows(ctx context.Context, access ...MonitorAccess) ([]*MaintenanceWindow, error)
 	UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error
+	UpdateMaintenanceWindowWithActions(ctx context.Context, id int64, prepare MaintenanceUpdate, access MaintenanceUpdateAccess) (*MaintenanceWindow, error)
 	DeleteMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) error
 	ToggleMaintenanceWindow(ctx context.Context, id int64, active bool, access ...MonitorAccess) error
 	IsMonitorInMaintenance(ctx context.Context, monitorID int64, at time.Time) (bool, error)

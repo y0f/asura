@@ -91,26 +91,14 @@ func (s *SQLiteStore) ListMaintenanceWindows(ctx context.Context, access ...Moni
 	return windows, nil
 }
 
+// UpdateMaintenanceWindow is the trusted/internal replacement API. Request
+// handlers use UpdateMaintenanceWindowWithActions to distinguish action grants.
 func (s *SQLiteStore) UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error {
-	monitorIDs, _ := json.Marshal(mw.MonitorIDs)
-	now := formatTime(time.Now())
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	if len(access) == 0 {
+		access = []MonitorAccess{{All: true}}
 	}
-	defer tx.Rollback()
-	if err := checkMaintenanceTargets(ctx, tx, mw.MonitorIDs, access); err != nil {
-		return err
-	}
-	clause, accessArgs := maintenanceAccessSQL(access)
-	args := []any{mw.Name, string(monitorIDs), formatTime(mw.StartTime), formatTime(mw.EndTime), mw.Recurring, mw.CronExpr, boolToInt(mw.Active), now, mw.ID}
-	result, err := tx.ExecContext(ctx,
-		`UPDATE maintenance_windows SET name=?, monitor_ids=?, start_time=?, end_time=?, recurring=?, cron_expr=?, active=?, updated_at=? WHERE id=?`+clause,
-		append(args, accessArgs...)...)
-	if err := scopedMutationResult(result, err, access); err != nil {
-		return err
-	}
-	return tx.Commit()
+	_, err := s.UpdateMaintenanceWindowWithActions(ctx, mw.ID, func(*MaintenanceWindow) (*MaintenanceWindow, error) { return mw, nil }, MaintenanceUpdateAccess{Update: access, Toggle: access})
+	return err
 }
 
 func (s *SQLiteStore) DeleteMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) error {
