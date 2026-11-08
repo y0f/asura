@@ -371,6 +371,8 @@ Sends a packet and optionally validates response content. Useful for DNS-over-UD
 
 Executes a sequence of up to 5 HTTP requests. Variables extracted from one step (via regex or JSON dot-path) can be interpolated into subsequent steps using `{% raw %}{{var}}{% endraw %}` syntax. The check fails if any step returns an unexpected status or errors. Response time is the sum of all steps.
 
+Interpolation runs once: extracted text is treated as data, even when it contains placeholder syntax. Unknown or unclosed placeholders remain literal. Each resolved request is limited to an 8 KiB URL, a 1 MiB body, and 64 KiB of combined header names and values. If expansion exceeds a limit, the check fails before sending that request. Settings remain limited to 1 MiB, and extraction reads at most 1 MiB of each response body.
+
 {% raw %}```
 {
   "steps": [
