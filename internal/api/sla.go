@@ -15,9 +15,8 @@ func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mon, err := h.store.GetMonitor(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "monitor not found")
+	mon, ok := h.requireMonitor(w, r, id, "sla.read")
+	if !ok {
 		return
 	}
 
@@ -26,16 +25,23 @@ func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := sla.Compute(r.Context(), h.store, mon.ID, mon.SLATarget)
+	status, err := sla.Compute(r.Context(), h.store, mon.ID, mon.SLATarget, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("compute sla", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to compute SLA")
 		return
 	}
 
+	name := mon.Name
+	if !httputil.GetAPIKey(r.Context()).AllowsMonitor("monitors.read", mon.ID, mon.GroupID) {
+		name = ""
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"monitor_id":   mon.ID,
-		"monitor_name": mon.Name,
+		"monitor_name": name,
 		"sla":          status,
 	})
 }
@@ -47,13 +53,14 @@ func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
+	entries, err := sla.ComputeReport(r.Context(), h.store, year, month, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
 		h.logger.Error("compute sla report", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to compute SLA report")
 		return
 	}
 
+	httputil.RedactSLAMonitorNames(r.Context(), entries)
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
 	}
@@ -80,13 +87,14 @@ func (h *Handler) SLAReportExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
+	entries, err := sla.ComputeReport(r.Context(), h.store, year, month, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
 		h.logger.Error("export sla report", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to compute SLA report")
 		return
 	}
 
+	httputil.RedactSLAMonitorNames(r.Context(), entries)
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
 	}

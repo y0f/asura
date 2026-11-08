@@ -48,6 +48,7 @@ type Status struct {
 
 // ReportEntry holds SLA data for one monitor in a monthly report.
 type ReportEntry struct {
+	MonitorGroupID  *int64  `json:"-"`
 	MonitorID       int64   `json:"monitor_id"`
 	MonitorName     string  `json:"monitor_name"`
 	Target          float64 `json:"target"`
@@ -124,11 +125,11 @@ func ComputeMonthly(ctx context.Context, store storage.Store, monitorID int64, t
 }
 
 // ComputeReport generates an SLA report for all monitors with SLA targets for a given month.
-func ComputeReport(ctx context.Context, store storage.Store, year int, month time.Month) ([]*ReportEntry, error) {
-	return computeReportAt(ctx, store, year, month, time.Now().UTC())
+func ComputeReport(ctx context.Context, store storage.Store, year int, month time.Month, access ...storage.MonitorAccess) ([]*ReportEntry, error) {
+	return computeReportAt(ctx, store, year, month, time.Now().UTC(), access...)
 }
 
-func computeReportAt(ctx context.Context, store storage.Store, year int, month time.Month, now time.Time) ([]*ReportEntry, error) {
+func computeReportAt(ctx context.Context, store storage.Store, year int, month time.Month, now time.Time, access ...storage.MonitorAccess) ([]*ReportEntry, error) {
 	if year < 1 || year > 9999 || month < time.January || month > time.December {
 		return nil, fmt.Errorf("invalid SLA report month")
 	}
@@ -146,7 +147,7 @@ func computeReportAt(ctx context.Context, store storage.Store, year int, month t
 
 	var entries []*ReportEntry
 	for page := 1; ; page++ {
-		monitors, err := store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: page, PerPage: 500})
+		monitors, err := store.ListMonitors(ctx, storage.MonitorListFilter{Access: access}, storage.Pagination{Page: page, PerPage: 500})
 		if err != nil {
 			return nil, fmt.Errorf("list monitors: %w", err)
 		}
@@ -159,7 +160,7 @@ func computeReportAt(ctx context.Context, store storage.Store, year int, month t
 				continue
 			}
 
-			days, err := store.GetDailyUptime(ctx, m.ID, monthStart, until)
+			days, err := store.GetDailyUptime(ctx, m.ID, monthStart, until, access...)
 			if err != nil {
 				return nil, fmt.Errorf("get uptime for monitor %d: %w", m.ID, err)
 			}
@@ -177,6 +178,7 @@ func computeReportAt(ctx context.Context, store storage.Store, year int, month t
 
 			entries = append(entries, &ReportEntry{
 				MonitorID:       m.ID,
+				MonitorGroupID:  m.GroupID,
 				MonitorName:     m.Name,
 				Target:          m.SLATarget,
 				UptimePct:       uptimePct,

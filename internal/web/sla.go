@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/web/views"
 )
@@ -16,23 +17,29 @@ func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
+	entries, err := sla.ComputeReport(r.Context(), h.store, year, month, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
 		h.logger.Error("web: compute sla report", "error", err)
 		http.Error(w, "failed to compute SLA report", http.StatusInternalServerError)
 		return
 	}
+	httputil.RedactSLAMonitorNames(r.Context(), entries)
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
 	}
 
 	period := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 
+	readable := make(map[int64]bool, len(entries))
+	for _, entry := range entries {
+		readable[entry.MonitorID] = httputil.GetAPIKey(r.Context()).AllowsMonitor("monitors.read", entry.MonitorID, entry.MonitorGroupID)
+	}
 	lp := h.newLayoutParams(r, "SLA Report", "sla")
 	h.renderComponent(w, r, views.SLAReportPage(views.SLAReportParams{
-		LayoutParams: lp,
-		Entries:      entries,
-		Period:       period,
+		LayoutParams:     lp,
+		ReadableMonitors: readable,
+		Entries:          entries,
+		Period:           period,
 	}))
 }
 
@@ -43,12 +50,13 @@ func (h *Handler) SLAExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
+	entries, err := sla.ComputeReport(r.Context(), h.store, year, month, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
 		h.logger.Error("web: export sla report", "error", err)
 		http.Error(w, "failed to compute SLA report", http.StatusInternalServerError)
 		return
 	}
+	httputil.RedactSLAMonitorNames(r.Context(), entries)
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
 	}
