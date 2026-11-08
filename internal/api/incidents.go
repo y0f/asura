@@ -5,9 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
-	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/incident"
 	"github.com/y0f/asura/internal/notifier"
@@ -22,8 +20,11 @@ func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
 	if !validate.ValidIncidentStatuses[status] {
 		status = ""
 	}
-
-	result, err := h.store.ListIncidents(r.Context(), monitorID, status, "", p)
+	result, err := h.store.ListIncidentsFiltered(r.Context(), storage.IncidentListFilter{
+		MonitorID: monitorID, Status: status,
+		Access:            httputil.MonitorAccess(r.Context(), "incidents.read"),
+		MonitorReadAccess: httputil.MonitorAccess(r.Context(), "monitors.read"),
+	}, p)
 	if err != nil {
 		h.logger.Error("list incidents", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list incidents")
@@ -32,187 +33,52 @@ func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handler) incidentError(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		writeError(w, http.StatusNotFound, "incident not found")
+	case errors.Is(err, storage.ErrIncidentConflict):
+		writeError(w, http.StatusConflict, storage.ErrIncidentConflict.Error())
+	default:
+		h.logger.Error("incident request", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to process incident")
+	}
+	return true
+}
+
 func (h *Handler) GetIncident(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	inc, err := h.store.GetIncident(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "incident not found")
-			return
-		}
-		h.logger.Error("get incident", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get incident")
+	access := httputil.MonitorAccess(r.Context(), "incidents.read")
+	inc, err := h.store.GetIncident(r.Context(), id, access...)
+	if h.incidentError(w, err) {
 		return
 	}
-
-	events, err := h.store.ListIncidentEvents(r.Context(), id)
-	if err != nil {
-		h.logger.Error("list incident events", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to list incident events")
+	events, err := h.store.ListIncidentEvents(r.Context(), id, access...)
+	if h.incidentError(w, err) {
 		return
 	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
-		"incident": inc,
+		"incident": httputil.IncidentReadResponse(r.Context(), inc),
 		"timeline": events,
 	})
 }
 
 func (h *Handler) AckIncident(w http.ResponseWriter, r *http.Request) {
-	id, err := httputil.ParseID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	inc, err := h.store.GetIncident(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "incident not found")
-			return
-		}
-		h.logger.Error("get incident for ack", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get incident")
-		return
-	}
-
-	if inc.Status != incident.StatusOpen {
-		writeError(w, http.StatusConflict, "incident is not open")
-		return
-	}
-
-	now := time.Now().UTC()
-	inc.Status = incident.StatusAcknowledged
-	inc.AcknowledgedAt = &now
-	inc.AcknowledgedBy = httputil.GetAPIKeyName(r.Context())
-
-	if err := h.store.UpdateIncident(r.Context(), inc); err != nil {
-		h.logger.Error("ack incident", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to acknowledge incident")
-		return
-	}
-
-	if err := h.store.InsertIncidentEvent(r.Context(), newIncidentEvent(inc.ID, incident.EventAcknowledged, "Acknowledged by "+inc.AcknowledgedBy)); err != nil {
-		h.logger.Error("insert ack event", "error", err)
-	}
-
-	escalation.CancelEscalation(r.Context(), h.store, inc.ID)
-	h.audit(r, "acknowledge", "incident", id, "")
-
-	if h.notifier != nil {
-		if err := h.notifier.NotifyWithPayload(r.Context(), &notifier.Payload{
-			EventType: "incident.acknowledged",
-			Incident:  inc,
-		}); err != nil {
-			h.logger.Error("queue incident notification", "error", err)
-		}
-	}
-
-	writeJSON(w, http.StatusOK, inc)
+	h.changeIncident(w, r, "acknowledge", "")
 }
 
 func (h *Handler) ResolveIncident(w http.ResponseWriter, r *http.Request) {
-	id, err := httputil.ParseID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	inc, err := h.store.GetIncident(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "incident not found")
-			return
-		}
-		h.logger.Error("get incident for resolve", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get incident")
-		return
-	}
-
-	if inc.Status == incident.StatusResolved {
-		writeError(w, http.StatusConflict, "incident is already resolved")
-		return
-	}
-
-	now := time.Now().UTC()
-	inc.Status = incident.StatusResolved
-	inc.ResolvedAt = &now
-	inc.ResolvedBy = httputil.GetAPIKeyName(r.Context())
-
-	if err := h.store.UpdateIncident(r.Context(), inc); err != nil {
-		h.logger.Error("resolve incident", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to resolve incident")
-		return
-	}
-
-	if err := h.store.InsertIncidentEvent(r.Context(), newIncidentEvent(inc.ID, incident.EventResolved, "Manually resolved by "+inc.ResolvedBy)); err != nil {
-		h.logger.Error("insert resolve event", "error", err)
-	}
-
-	escalation.CancelEscalation(r.Context(), h.store, inc.ID)
-	h.audit(r, "resolve", "incident", id, "")
-
-	if h.notifier != nil {
-		if err := h.notifier.NotifyWithPayload(r.Context(), &notifier.Payload{
-			EventType: "incident.resolved",
-			Incident:  inc,
-		}); err != nil {
-			h.logger.Error("queue incident notification", "error", err)
-		}
-	}
-
-	writeJSON(w, http.StatusOK, inc)
-}
-
-func (h *Handler) DeleteIncident(w http.ResponseWriter, r *http.Request) {
-	id, err := httputil.ParseID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if _, err := h.store.GetIncident(r.Context(), id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "incident not found")
-			return
-		}
-		h.logger.Error("get incident for delete", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get incident")
-		return
-	}
-
-	if err := h.store.DeleteIncident(r.Context(), id); err != nil {
-		h.logger.Error("delete incident", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to delete incident")
-		return
-	}
-
-	h.audit(r, "delete", "incident", id, "")
-	w.WriteHeader(http.StatusNoContent)
+	h.changeIncident(w, r, "resolve", "")
 }
 
 func (h *Handler) SetIncidentSeverity(w http.ResponseWriter, r *http.Request) {
-	id, err := httputil.ParseID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	inc, err := h.store.GetIncident(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "incident not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get incident")
-		return
-	}
-
 	var req struct {
 		Severity string `json:"severity"`
 	}
@@ -224,21 +90,52 @@ func (h *Handler) SetIncidentSeverity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "severity must be one of: critical, major, minor, warning")
 		return
 	}
-
-	inc.Severity = req.Severity
-	if err := h.store.UpdateIncident(r.Context(), inc); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update severity")
-		return
-	}
-
-	h.audit(r, "set_severity", "incident", id, req.Severity)
-	writeJSON(w, http.StatusOK, inc)
+	h.changeIncident(w, r, "severity", req.Severity)
 }
 
-func newIncidentEvent(incidentID int64, eventType, message string) *storage.IncidentEvent {
-	return &storage.IncidentEvent{
-		IncidentID: incidentID,
-		Type:       eventType,
-		Message:    message,
+func (h *Handler) changeIncident(w http.ResponseWriter, r *http.Request, action, severity string) {
+	id, err := httputil.ParseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
+	ctx := r.Context()
+	inc, err := h.store.TransitionIncident(ctx, id, storage.IncidentTransition{
+		Action: action, Actor: httputil.GetAPIKeyName(ctx), Severity: severity,
+	}, httputil.MonitorAccess(ctx, "incidents."+action)...)
+	if h.incidentError(w, err) {
+		return
+	}
+	auditAction := action
+	if action == "severity" {
+		auditAction = "set_severity"
+	}
+	h.audit(r, auditAction, "incident", id, severity)
+	if h.notifier != nil && action != "severity" {
+		event := "incident.acknowledged"
+		if action == "resolve" {
+			event = "incident.resolved"
+		}
+		if err := h.notifier.NotifyWithPayload(ctx, &notifier.Payload{EventType: event, Incident: inc}); err != nil {
+			h.logger.Error("queue incident notification", "error", err)
+		}
+	}
+	if !httputil.GetAPIKey(ctx).AllowsMonitor("incidents.read", inc.MonitorID, inc.MonitorGroupID) {
+		writeJSON(w, http.StatusOK, map[string]int64{"id": inc.ID})
+		return
+	}
+	writeJSON(w, http.StatusOK, httputil.IncidentReadResponse(ctx, inc))
+}
+
+func (h *Handler) DeleteIncident(w http.ResponseWriter, r *http.Request) {
+	id, err := httputil.ParseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if h.incidentError(w, h.store.DeleteIncident(r.Context(), id, httputil.MonitorAccess(r.Context(), "incidents.delete")...)) {
+		return
+	}
+	h.audit(r, "delete", "incident", id, "")
+	w.WriteHeader(http.StatusNoContent)
 }
