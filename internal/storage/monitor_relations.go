@@ -29,6 +29,44 @@ type MonitorRelationChanges struct {
 // is held while it validates and prepares a replacement from current values.
 type MonitorUpdate func(current *Monitor) (*Monitor, MonitorRelationChanges, error)
 
+// MonitorClone has the same pure/no-I/O requirement as MonitorUpdate. Prepare
+// any new random credential before entering the transaction.
+type MonitorClone func(current *Monitor) (*Monitor, MonitorCreateOptions, error)
+
+func (s *SQLiteStore) CloneMonitorWithRelations(ctx context.Context, id int64, prepare MonitorClone, source, destination []MonitorAccess) (*Monitor, *Heartbeat, error) {
+	if prepare == nil {
+		return nil, nil, fmt.Errorf("monitor clone preparation is required")
+	}
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+	clause, args := monitorAccessSQL("m", source)
+	current, err := s.scanMonitor(tx.QueryRowContext(ctx, selectMonitorSQL+" WHERE m.id=?"+clause, append([]any{id}, args...)...))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := loadMonitorRelations(ctx, tx, current); err != nil {
+		return nil, nil, err
+	}
+	clone, options, err := prepare(current)
+	if err != nil {
+		return nil, nil, err
+	}
+	if clone == nil {
+		return nil, nil, fmt.Errorf("monitor clone preparation returned no monitor")
+	}
+	saved, heartbeat, err := s.insertMonitor(ctx, tx, clone, &options, destination...)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
+	}
+	return saved, heartbeat, nil
+}
+
 // UpdateMonitorWithRelations authorizes and prepares against one current
 // transactional snapshot, then writes fields and selected relationships together.
 // A preparation, encryption, relationship or commit failure returns no monitor.

@@ -14,7 +14,7 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...M
 	return s.createMonitor(ctx, m, nil, access...)
 }
 
-func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor, options MonitorCreateOptions, access ...MonitorAccess) error {
+func validateMonitorCreateOptions(m *Monitor, options MonitorCreateOptions) error {
 	if m.Type == "heartbeat" {
 		if options.Heartbeat == nil || options.Heartbeat.Token == "" || options.Heartbeat.Grace < 0 || options.Heartbeat.MonitorID != 0 || options.Heartbeat.ID != 0 {
 			return fmt.Errorf("a new heartbeat credential and nonnegative grace period are required")
@@ -22,14 +22,44 @@ func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor
 	} else if options.Heartbeat != nil {
 		return fmt.Errorf("heartbeat credentials require a heartbeat monitor")
 	}
+	return nil
+}
+
+func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor, options MonitorCreateOptions, access ...MonitorAccess) error {
 	return s.createMonitor(ctx, m, &options, access...)
 }
 
 func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) error {
-	if !allowedMonitorDestination(0, m.GroupID, access) {
-		return sql.ErrNoRows
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create monitor begin: %w", err)
 	}
-	output := m
+	defer tx.Rollback()
+	saved, heartbeat, err := s.insertMonitor(ctx, tx, m, options, access...)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create monitor commit: %w", err)
+	}
+	*m = *saved
+	if heartbeat != nil {
+		*options.Heartbeat = *heartbeat
+	}
+	return nil
+}
+
+// insertMonitor is shared by creation and cloning; its caller owns the writer
+// transaction and must not expose output values before committing it.
+func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sql.Tx, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) (*Monitor, *Heartbeat, error) {
+	if options != nil {
+		if err := validateMonitorCreateOptions(m, *options); err != nil {
+			return nil, nil, err
+		}
+	}
+	if !allowedMonitorDestination(0, m.GroupID, access) {
+		return nil, nil, sql.ErrNoRows
+	}
 	m = copyMonitorSnapshot(m)
 	tags, _ := json.Marshal(m.Tags)
 	if m.Settings == nil {
@@ -42,14 +72,8 @@ func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, options *Mo
 
 	settings, err := s.encryptSettings(string(m.Settings))
 	if err != nil {
-		return fmt.Errorf("encrypt settings: %w", err)
+		return nil, nil, fmt.Errorf("encrypt settings: %w", err)
 	}
-
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("create monitor begin: %w", err)
-	}
-	defer tx.Rollback()
 
 	var groupID any
 	if m.GroupID != nil {
@@ -71,46 +95,44 @@ func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, options *Mo
 		m.FailureThreshold, m.SuccessThreshold, boolToInt(m.UpsideDown), boolToInt(m.AgentEnabled), m.ResendInterval, m.SLATarget, m.AnomalySensitivity, groupID, proxyID, escalationPolicyID, now, now,
 	)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO monitor_status (monitor_id, status) VALUES (?, 'pending')`, id); err != nil {
-		return err
+		return nil, nil, err
 	}
 	var heartbeat *Heartbeat
 	if options != nil {
 		created := *m
 		created.ID = id
 		if err := replaceMonitorRelations(ctx, tx, &created, MonitorRelationChanges{Notifications: true, Tags: true, Agents: true}); err != nil {
-			return err
+			return nil, nil, err
 		}
 		if options.Heartbeat != nil {
 			copy := *options.Heartbeat
 			heartbeat = &copy
 			heartbeat.MonitorID, heartbeat.Status, heartbeat.LastPingAt = id, "pending", nil
 			if err := createHeartbeat(ctx, tx, heartbeat); err != nil {
-				return err
+				return nil, nil, err
 			}
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("create monitor commit: %w", err)
 	}
 
 	m.ID = id
 	m.CreatedAt = parseTime(now)
 	m.UpdatedAt = parseTime(now)
-	*output = *m
-	if heartbeat != nil {
-		*options.Heartbeat = *heartbeat
+	m.LastCheckAt = nil
+	m.ConsecFails, m.ConsecSuccesses = 0, 0
+	m.Status = "pending"
+	if !m.Enabled {
+		m.Status = "paused"
 	}
-	return nil
+	return m, heartbeat, nil
 }
 
 const selectMonitorSQL = `SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
