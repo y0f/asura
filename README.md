@@ -27,13 +27,13 @@ Asura monitors websites, APIs and network services from a single Go binary, with
 
 ## Why Asura?
 
-| Aspect | Asura |
-|---|---|
-| **Install** | A single binary, Docker container or Linux service. |
-| **Database** | SQLite built in; PostgreSQL available as an optional build. |
-| **Runtime** | Embedded web interface and assets; no Node runtime or separate frontend server. |
-| **API** | REST API and web interface share the same scoped access controls. |
-| **Scale** | Configurable check concurrency and distributed probes. |
+| Aspect | Asura | [Uptime Kuma 2.5.9](https://github.com/louislam/uptime-kuma/releases/tag/2.5.9) |
+|---|---|---|
+| **Install** | A single binary, Docker container or Linux service. | [Docker or Node.js/npm setup.](https://github.com/louislam/uptime-kuma/blob/2.5.9/README.md) |
+| **Database** | SQLite built in; PostgreSQL available as an optional build. | [SQLite or MariaDB.](https://github.com/louislam/uptime-kuma/blob/2.5.9/server/database.js) |
+| **Runtime** | Embedded web interface and assets; no Node runtime or separate frontend server. | [Node.js server with a built Vue interface.](https://github.com/louislam/uptime-kuma/blob/2.5.9/package.json) |
+| **API** | REST API and web interface share the same scoped access controls. | [Internal Socket.IO management; HTTP push, status and metrics endpoints.](https://github.com/louislam/uptime-kuma/wiki/Internal-API) |
+| **Scale** | Configurable check concurrency and distributed probes. | Server-run checks, [Globalping probes](https://github.com/louislam/uptime-kuma/blob/2.5.9/server/monitor-types/globalping.js) and push monitors. |
 
 ## Features
 
