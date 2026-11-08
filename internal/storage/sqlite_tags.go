@@ -2,9 +2,25 @@ package storage
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
+
+var ErrTagNameConflict = errors.New("tag name already in use")
+
+func tagWriteError(err error) error {
+	// Match only the database's unique-constraint classification. The tags
+	// insert/update statements have a single caller-controlled unique field.
+	var sqliteCode interface{ Code() int }
+	var postgresCode interface{ SQLState() string }
+	if (errors.As(err, &sqliteCode) && sqliteCode.Code() == 2067) ||
+		(errors.As(err, &postgresCode) && postgresCode.SQLState() == "23505") {
+		return fmt.Errorf("%w: %w", ErrTagNameConflict, err)
+	}
+	return err
+}
 
 func (s *SQLiteStore) CreateTag(ctx context.Context, t *Tag) error {
 	now := formatTime(time.Now())
@@ -12,7 +28,7 @@ func (s *SQLiteStore) CreateTag(ctx context.Context, t *Tag) error {
 		`INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)`,
 		t.Name, t.Color, now)
 	if err != nil {
-		return fmt.Errorf("create tag: %w", err)
+		return fmt.Errorf("create tag: %w", tagWriteError(err))
 	}
 	t.ID = id
 	t.CreatedAt = parseTime(now)
@@ -70,15 +86,28 @@ func (s *SQLiteStore) ListTags(ctx context.Context) ([]*Tag, error) {
 }
 
 func (s *SQLiteStore) UpdateTag(ctx context.Context, t *Tag) error {
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE tags SET name = ?, color = ? WHERE id = ?`,
-		t.Name, t.Color, t.ID)
-	return err
+	var createdAt string
+	err := s.writeDB.QueryRowContext(ctx,
+		`UPDATE tags SET name = ?, color = ? WHERE id = ? RETURNING created_at`,
+		t.Name, t.Color, t.ID).Scan(&createdAt)
+	if err != nil {
+		return tagWriteError(err)
+	}
+	t.CreatedAt = parseTime(createdAt)
+	return nil
 }
 
 func (s *SQLiteStore) DeleteTag(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, `DELETE FROM tags WHERE id = ?`, id)
-	return err
+	result, err := s.writeDB.ExecContext(ctx, `DELETE FROM tags WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if count, err := result.RowsAffected(); err != nil {
+		return err
+	} else if count != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *SQLiteStore) SetMonitorTags(ctx context.Context, monitorID int64, tags []MonitorTag) error {
