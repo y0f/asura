@@ -9,7 +9,7 @@ permalink: "/backup.html"
 
 # Backup and restore {#backup-and-restore}
 
-A recoverable Asura backup includes a consistent SQLite database, the configuration used to open it, and any external secrets or files referenced by that configuration. Use a database backup for disaster recovery and rollback. Use the JSON export in Settings to transfer portable configuration between installations.
+A recoverable Asura backup includes a consistent database backup, the configuration used to open it, and any external secrets or files referenced by that configuration. Use a database backup for disaster recovery and rollback. Use the JSON export in Settings to transfer portable configuration between installations.
 
 <span id="best-practices"></span>
 
@@ -28,11 +28,29 @@ sqlite3 /path/to/asura.db ".backup '/backup/asura.db'"
 
 SQLite's [online backup mechanism](https://sqlite.org/backup.html) produces a consistent snapshot; the [CLI reference](https://sqlite.org/cli.html) documents `.backup`. An ordinary copy of a live database file can miss changes in its WAL. For an offline file copy, stop Asura and preserve any remaining database companion files together with the database.
 
+## PostgreSQL backups {#postgresql-backups}
+
+The [optional PostgreSQL build](deployment.html#optional-postgresql-build) uses PostgreSQL backup tooling. SQLite file-copy, WAL and checkpoint instructions do not apply to it. Preserve the same YAML, encryption key, referenced files and matching Asura binary alongside the database backup.
+
+Use your database operator's backup and recovery policy. For a logical snapshot, PostgreSQL's [pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html) can capture a consistent database while it is running. This example uses a preconfigured [connection service](https://www.postgresql.org/docs/18/libpq-pgservice.html) so credentials stay out of command arguments:
+
+```sh
+pg_dump --dbname=service=asura-backup --format=custom --file=/backup/asura.dump
+```
+
+Provision a separate empty restore database and its owner role. With Asura stopped for that destination, restore the archive as the intended owner:
+
+```sh
+pg_restore --dbname=service=asura-restore --single-transaction --no-owner --no-privileges /backup/asura.dump
+```
+
+Review the [pg_restore options](https://www.postgresql.org/docs/18/app-pgrestore.html), backup command exit status and diagnostics. A single-database dump does not provision cluster roles. Test the restored database with its matching key and application version in an isolated environment before using it for recovery. Do not point a running Asura instance at an incomplete restore.
+
 ## Verify and restore {#verify-and-restore}
 
 Test the backup in a separate directory with a copy of the matching configuration and key. Keep the test instance isolated from production check targets, agents and notification destinations until you have reviewed its configuration. Confirm that the database opens, expected monitors and history are present, and stored credentials can be read.
 
-For a production restore, stop Asura first and preserve the current database and configuration separately. Restore into a clean data directory, with the correct file ownership and encryption key; do not mix the restored database with WAL or shared-memory files from another database. Start the matching Asura version and verify its logs and state before resuming normal operation.
+For a production restore, stop Asura first and preserve the current database and configuration separately. For SQLite, restore into a clean data directory with the correct file ownership and encryption key; do not mix the restored database with WAL or shared-memory files from another database. For PostgreSQL, use the restored dedicated database and its intended owner. Start the matching Asura version and verify its logs and state before resuming normal operation.
 
 <span id="export"></span>
 

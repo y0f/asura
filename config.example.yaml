@@ -55,6 +55,11 @@ server:
   # frame_ancestors: []
 
 database:
+  # SQLite is included in standard binaries. PostgreSQL requires a source
+  # build with -tags postgres; see docs/deployment.md.
+  driver: sqlite
+  # dsn: "${ASURA_DATABASE_DSN}" # Required only when driver is postgres.
+
   # SQLite database file path
   path: "asura.db"
 

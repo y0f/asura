@@ -97,6 +97,21 @@ Changes to SQL or migrations need real storage tests: fresh creation, supported 
 
 For a resource-limited machine, set `GOMAXPROCS=1`, use `go test -p 1`, and run heavy suites serially. Give Docker fixtures explicit CPU and memory caps, unique names and temporary data; stop them when finished. Do not delete a shared volume to fix a test.
 
+## Optional PostgreSQL backend
+
+`make build-postgres` regenerates the interface and builds `asura-postgres` with `-tags postgres`. Standard release and Docker builds remain SQLite-only. The agent must not link either database driver, even when the PostgreSQL tag is present.
+
+For changes to shared SQL or the optional backend, use a disposable PostgreSQL 18.6 test server. Set `ASURA_TEST_POSTGRES_DSN` to its administrative `postgres` database URL: the tests create isolated databases and a temporary role, then remove them. Never use a development or production database service as this fixture. The application itself is tested with a database-owning role without superuser, database-creation or role-creation privileges.
+
+```bash
+: "${ASURA_TEST_POSTGRES_DSN:?Set the disposable PostgreSQL fixture URL}"
+go vet -tags postgres ./...
+go test -tags postgres -race -count=1 -timeout=5m ./internal/storage -run '^TestPostgres'
+bash scripts/test-postgres-deps.sh
+```
+
+CI runs these contracts against both supported Go patches. They reuse storage behavior tests and cover schema parity, current scopes, failed-write rollback, read snapshots, ownership loss, startup cleanup and driver-error privacy. Run the ordinary SQLite suite too when shared queries change. Keep PostgreSQL DDL explicit; coordinate its baseline and future migrations with the SQLite schema version rather than translating SQL strings.
+
 ## Generated assets and releases
 
 Before committing generated application output, run `make generate css`. Run it again and verify `git diff` stays unchanged. CI verifies generation without writing back to the branch, and gates release binaries and container publication on tests, documentation checks, formatting, static checks and clean generated output.

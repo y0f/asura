@@ -1,7 +1,7 @@
 ---
 title: "Configuration"
 nav_title: "Configuration"
-description: "Configure Asura's server, SQLite storage, API keys, sessions and monitoring settings. Includes environment variables and deployment options."
+description: "Configure Asura's server, SQLite or optional PostgreSQL storage, API keys, sessions and monitoring settings. Includes environment variables and deployment options."
 permalink: "/configuration.html"
 ---
 
@@ -29,6 +29,28 @@ Everything lives in `config.yaml`. See [config.example.yaml](https://github.com/
 | `trusted_proxies` | `[]` | IPs/CIDRs whose `X-Real-IP`/`X-Forwarded-For` headers are trusted |
 | `rate_limit_per_sec` | `30` | Per-IP request rate limit |
 | `web_ui_enabled` | `true` | Serve the web dashboard. Set `false` for API-only operation; REST endpoints retain their authorization requirements |
+
+## Database backend {#database-backend}
+
+SQLite is the default. The standard release binaries, installer and Docker build include SQLite only. PostgreSQL requires the [optional source build](deployment.html#optional-postgresql-build); selecting `postgres` in a standard binary returns an actionable startup error.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `database.driver` | `sqlite` | `sqlite` or `postgres` |
+| `database.path` | `asura.db` | SQLite file; ignored by PostgreSQL |
+| `database.dsn` | empty | PostgreSQL connection string; invalid for SQLite |
+| `database.max_read_conns` | `4` | Maximum ordinary read connections; must be positive |
+| `database.encryption_key` | empty | Optional key for stored credentials, independent of connection TLS |
+
+```yaml
+database:
+  driver: postgres
+  dsn: "${ASURA_DATABASE_DSN}"
+  max_read_conns: 4
+  encryption_key: "${ASURA_ENCRYPTION_KEY}"
+```
+
+Set the environment values through your service's secret configuration. A PostgreSQL DSN can contain credentials; keep it out of source control and diagnostic output. For a remote database, configure certificate-verified TLS, for example `sslmode=verify-full` with the appropriate `sslrootcert`. Back up the encryption key separately from the database.
 
 ## Authentication {#authentication}
 

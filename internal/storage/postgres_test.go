@@ -105,6 +105,8 @@ func TestPostgresContracts(t *testing.T) {
 		{"totp", TestTOTPKeyCRUD},
 		{"proxies", TestProxyCRUD},
 		{"proxy_routing", TestProxyRoutingMutationsAreAtomic},
+		{"proxy_scope", TestProxyRoutingRequiresEveryCurrentMonitorScope},
+		{"proxy_scope_after_wait", TestProxyRoutingChecksAssignmentsAfterWaitingForWriter},
 		{"proxy_import", TestProxyImportRejectsIncompatibleDestinationAndRollsBack},
 		{"agent_proxy", TestAgentProxyAssignmentRemainsLocal},
 		{"agent_proxy_held_check", TestAgentProxyChangeRejectsHeldResult},

@@ -54,6 +54,52 @@ jobs:
           path: coverage.out
           retention-days: 14
 
+  postgres:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ["1.26.10", "1.27.3"]
+    services:
+      postgres:
+        # Official PostgreSQL 18.6 bookworm, linux/amd64.
+        image: postgres@sha256:02fb3245e038f33536cf13bc6c4e59f21d07b0cea3c1fe1c07c6e8aa8f083bcc
+        env:
+          POSTGRES_USER: asura
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U asura -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      ASURA_TEST_POSTGRES_DSN: postgres://asura:fixture-only@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Check optional backend and default dependency boundary
+        run: |
+          go vet -tags postgres ./...
+          go build -tags postgres ./cmd/asura
+          bash scripts/test-postgres-deps.sh
+      - name: Check optional backend source vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -tags postgres ./...
+      - name: PostgreSQL behavior and failure contracts
+        run: |
+          : "${ASURA_TEST_POSTGRES_DSN:?PostgreSQL fixture is required}"
+          go test -tags postgres -race -count=1 -timeout=5m -coverprofile=postgres-coverage.out ./internal/storage -run '^TestPostgres'
+      - name: Retain PostgreSQL coverage for review
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: coverage-postgres-go-${{ matrix.go-version }}
+          path: postgres-coverage.out
+          retention-days: 14
+
   quality:
     runs-on: ubuntu-latest
     steps:
@@ -73,7 +119,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [generated, docs, test, quality]
+    needs: [generated, docs, test, postgres, quality]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

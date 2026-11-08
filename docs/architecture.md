@@ -74,6 +74,8 @@ SQLite in WAL mode with separate connection pools:
 
 WAL permits concurrent readers and a writer, subject to SQLite locking and checkpoint behavior. Foreign keys, a bounded busy timeout and transactions enforce integrity. Long-range uptime queries use daily rollups plus uncovered raw intervals. The `Store` interface separates handlers and background services from SQL implementation details.
 
+The optional `postgres` build adds pgx and an independently authored PostgreSQL schema. Shared queries use explicit dialect fragments and positional binding; runtime code does not translate SQLite DDL. PostgreSQL keeps one writer, read-only repeatable-read snapshots and a separate ownership observer. Its session lock prevents multiple active Asura servers using the same database. The default binary does not link pgx, and probe agents link neither database backend. See [PostgreSQL deployment](deployment.html#optional-postgresql-build) for setup and operational boundaries.
+
 ## Checker Registry {#checker-registry}
 
 Each checker implements `Checker` with a `Check(ctx, monitor)` method and gets registered at startup. 17 implementations:

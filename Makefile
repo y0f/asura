@@ -8,7 +8,7 @@ TAILWIND := ./tailwindcss
 TEMPL_VERSION = $(shell go list -m -f '{{.Version}}' github.com/a-h/templ)
 TEMPL = go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 
-.PHONY: all build css docs docs-check watch dev check test lint run clean hash-key release generate agent
+.PHONY: all build build-postgres css docs docs-check watch dev check test lint run clean hash-key release generate agent
 
 all: build
 
@@ -33,6 +33,9 @@ dev:
 build: css
 	CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "$$LDFLAGS" -o $(BINARY) ./cmd/asura
 
+build-postgres: css
+	CGO_ENABLED=0 go build $(GOFLAGS) -tags postgres -ldflags "$$LDFLAGS" -o $(BINARY)-postgres ./cmd/asura
+
 test: generate
 	go test -race -count=1 ./...
 
@@ -51,7 +54,7 @@ run: build
 	./$(BINARY) -config config.yaml
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) $(BINARY)-postgres
 	rm -rf dist
 
 hash-key:

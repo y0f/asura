@@ -1,5 +1,7 @@
 /asura
 /asura.exe
+/asura-postgres
+/asura-postgres.exe
 /asura-agent
 /asura-agent.exe
 /asura-dev
@@ -24,6 +26,7 @@ dist/
 
 # Go artifacts
 coverage.out
+postgres-coverage.out
 *.cover
 *.prof
 __debug_bin*

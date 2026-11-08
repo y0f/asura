@@ -19,6 +19,23 @@ Keep the service on a private interface and put an HTTPS reverse proxy in front.
 </div>
 </details>
 
+## Optional PostgreSQL build {#optional-postgresql-build}
+
+SQLite remains the default and needs no database service. PostgreSQL is available through an explicit source build, tested against PostgreSQL 18.6. Follow the [source prerequisites](https://github.com/y0f/asura/blob/main/CONTRIBUTING.md#local-setup), then build:
+
+```sh
+make build-postgres
+./asura-postgres -config config.yaml
+```
+
+The target regenerates the embedded interface and writes `asura-postgres`. For unchanged committed assets, `go build -tags postgres -o asura-postgres ./cmd/asura` also builds the optional backend. Standard release binaries, the installer and the default Docker image keep the SQLite-only build.
+
+Provision a dedicated empty database owned by Asura's login role. The role needs ownership to create and migrate its tables, indexes, functions and triggers; it does not need superuser, role-creation or database-creation privileges. Asura uses the `public` schema and rejects unrelated existing objects during first initialization. Configure the [database driver and DSN](configuration.html#database-backend) before starting. Keep PostgreSQL autovacuum enabled.
+
+Run one Asura server per database. Its persistent writer connection holds an advisory ownership lock, while separate read-only connections serve queries and consistent snapshots. A second server fails startup. Loss of the writer session or ownership stops the running server; investigate database availability and restart explicitly. Do not route these connections through a transaction-pooling proxy: ownership requires a persistent database session. The server uses up to `max_read_conns + 2` database connections, including its writer and ownership observer.
+
+Changing `database.driver` does not convert a SQLite file. Transfer portable configuration into the new backend with [v2 export/import](backup.html#json-configuration-export), then re-enroll imported heartbeats and review explicit agent mappings. Historical data, sessions and subscriptions are not transferred. Keep the original database, configuration and encryption key for rollback.
+
 ## Configure the public address {#configure-the-public-address}
 
 For a Linux service behind a proxy on the same host, merge these settings into `/etc/asura/config.yaml`. Keep your existing `auth.api_keys` and database settings:
