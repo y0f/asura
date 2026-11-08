@@ -233,6 +233,10 @@ func TestBulkActionPermissions(t *testing.T) {
 						t.Fatalf("assignment without group visibility: %d", got)
 					}
 					key.Permissions = append(key.Permissions, "groups.read")
+					if got := request("http://example.com"); got != http.StatusForbidden {
+						t.Fatalf("assignment without update authority: %d", got)
+					}
+					key.Permissions = append(key.Permissions, "monitors.update")
 				}
 				if web && request("https://untrusted.invalid") != http.StatusForbidden {
 					t.Fatal("authorized bulk action accepted an invalid origin")

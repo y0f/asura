@@ -87,6 +87,7 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 		Active:     active,
 		Username:   httputil.GetAPIKeyName(r.Context()),
 		Perms:      perms,
+		Access:     httputil.GetAPIKey(r.Context()),
 		SuperAdmin: superAdmin,
 		Version:    h.version,
 		ToastKind:  toastKind,

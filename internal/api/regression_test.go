@@ -893,26 +893,26 @@ func TestExportImportKeepsAgentAssignment(t *testing.T) {
 	}
 }
 
-// failingAgentStore fails every attempt to store an agent assignment.
-type failingAgentStore struct {
-	storage.Store
-}
+// failingAgentStore injects failure at the complete monitor/assignment boundary.
+// Storage tests separately prove rollback after intermediate SQL writes.
+type failingAgentStore struct{ storage.Store }
 
-func (failingAgentStore) SetMonitorAgentIDs(context.Context, int64, []int64) error {
+func (failingAgentStore) CreateMonitorWithRelations(context.Context, *storage.Monitor, storage.MonitorCreateOptions, ...storage.MonitorAccess) error {
 	return errors.New("disk full")
 }
+func (failingAgentStore) UpdateMonitorWithRelations(context.Context, int64, storage.MonitorUpdate, ...storage.MonitorAccess) (*storage.Monitor, error) {
+	return nil, errors.New("disk full")
+}
+func (failingAgentStore) CloneMonitorWithRelations(context.Context, int64, storage.MonitorClone, []storage.MonitorAccess, []storage.MonitorAccess) (*storage.Monitor, *storage.Heartbeat, error) {
+	return nil, nil, errors.New("disk full")
+}
 
-// If storing an agent assignment fails, the monitor must not run on every
-// agent: create, update and clone leave it with agent checks off.
-func TestMonitorAgentAssignmentFailureKeepsAgentsOff(t *testing.T) {
+func TestMonitorAgentAssignmentFailureIsAtomic(t *testing.T) {
 	env := newTestEnv(t, nil, false, nil)
 	ctx := context.Background()
 	assigned := &storage.Agent{Name: "assigned", Enabled: true}
-	other := &storage.Agent{Name: "other", Enabled: true}
-	for _, a := range []*storage.Agent{assigned, other} {
-		if err := env.store.CreateAgent(ctx, a); err != nil {
-			t.Fatal(err)
-		}
+	if err := env.store.CreateAgent(ctx, assigned); err != nil {
+		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cfg := config.Defaults()
@@ -920,83 +920,42 @@ func TestMonitorAgentAssignmentFailureKeepsAgentsOff(t *testing.T) {
 	srv := server.NewServer(cfg, failingAgentStore{env.store}, nil, notifier.NewDispatcher(env.store, logger, true), nil, logger, "test")
 	t.Cleanup(srv.Close)
 	failing := &testEnv{srv: srv, store: env.store}
-
-	// checkOff asserts monitor id has agent checks off and, once enabled,
-	// is not offered to the agent it was not assigned to.
-	checkOff := func(step string, id int64) {
-		t.Helper()
-		if err := env.store.SetMonitorEnabled(ctx, id, true); err != nil {
-			t.Fatal(err)
+	source := &storage.Monitor{Name: "original", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: true, FailureThreshold: 1, SuccessThreshold: 1}
+	if err := env.store.CreateMonitor(ctx, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.store.SetMonitorAgentIDs(ctx, source.ID, []int64{assigned.ID}); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"name":"replacement","type":"http","target":"https://example.com","interval":60,"timeout":10,"failure_threshold":1,"success_threshold":1,"agent_enabled":true,"agent_ids":[%d]}`, assigned.ID)
+	base := "/api/v1/monitors/" + strconv.FormatInt(source.ID, 10)
+	for _, request := range []struct{ method, path, body string }{{"POST", "/api/v1/monitors", body}, {"PUT", base, body}, {"POST", base + "/clone", ""}} {
+		w := failing.do(request.method, request.path, request.body, admin)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("%s %s falsely succeeded: %d %s", request.method, request.path, w.Code, w.Body.String())
 		}
-		m, err := env.store.GetMonitor(ctx, id)
-		if err != nil {
-			t.Fatal(err)
+		stored, err := env.store.GetMonitor(ctx, source.ID)
+		if err != nil || stored.Name != "original" || !stored.Enabled || !stored.AgentEnabled {
+			t.Fatalf("failed write changed original: %+v, %v", stored, err)
 		}
-		if m.AgentEnabled {
-			t.Errorf("%s: agent checks on after the assignment failed", step)
+		ids, err := env.store.GetMonitorAgentIDs(ctx, source.ID)
+		if err != nil || len(ids) != 1 || ids[0] != assigned.ID {
+			t.Fatalf("failed write changed delegation: %v, %v", ids, err)
 		}
-		jobs, err := env.store.ListAgentJobs(ctx, other.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, j := range jobs {
-			if j.ID == id {
-				t.Errorf("%s: monitor %d runs on unassigned agent %q", step, id, other.Name)
-			}
+		result, err := env.store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 100})
+		if err != nil || result.Total != 1 {
+			t.Fatalf("failed write left partial monitor: %+v, %v", result, err)
 		}
 	}
-	agentIDs := `[` + strconv.FormatInt(assigned.ID, 10) + `]`
-	body := `{"name":"api","type":"http","target":"https://example.com","interval":60,"timeout":10,"failure_threshold":1,"success_threshold":1,"agent_enabled":true,"agent_ids":` + agentIDs + `}`
-
-	w := failing.do("POST", "/api/v1/monitors", body, admin)
+	w := env.do("POST", base+"/clone", "", admin)
 	if w.Code != http.StatusCreated {
-		t.Fatalf("create: %d %s", w.Code, w.Body.String())
-	}
-	var created storage.Monitor
-	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
-		t.Fatal(err)
-	}
-	checkOff("create", created.ID)
-
-	src := &storage.Monitor{
-		Name: "src", Type: "http", Target: "https://example.org", Interval: 60, Timeout: 10,
-		Enabled: true, AgentEnabled: true, Tags: []string{}, FailureThreshold: 1, SuccessThreshold: 1,
-	}
-	if err := env.store.CreateMonitor(ctx, src); err != nil {
-		t.Fatal(err)
-	}
-	srcID := strconv.FormatInt(src.ID, 10)
-	if w := failing.do("PUT", "/api/v1/monitors/"+srcID, body, admin); w.Code != http.StatusOK {
-		t.Fatalf("update: %d %s", w.Code, w.Body.String())
-	}
-	checkOff("update", src.ID)
-
-	src.AgentEnabled = true
-	if err := env.store.UpdateMonitor(ctx, src); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetMonitorAgentIDs(ctx, src.ID, []int64{assigned.ID}); err != nil {
-		t.Fatal(err)
-	}
-	w = failing.do("POST", "/api/v1/monitors/"+srcID+"/clone", "", admin)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("clone: %d %s", w.Code, w.Body.String())
+		t.Fatalf("working clone: %d %s", w.Code, w.Body.String())
 	}
 	var clone storage.Monitor
 	if err := json.Unmarshal(w.Body.Bytes(), &clone); err != nil {
 		t.Fatal(err)
 	}
-	if clone.AgentEnabled || len(clone.AgentIDs) != 0 {
-		t.Errorf("clone response: agent_enabled=%v agent_ids=%v, want off and none", clone.AgentEnabled, clone.AgentIDs)
-	}
-	checkOff("clone", clone.ID)
-
-	// With a working store the clone keeps agent checks on.
-	w = env.do("POST", "/api/v1/monitors/"+srcID+"/clone", "", admin)
-	if err := json.Unmarshal(w.Body.Bytes(), &clone); err != nil {
-		t.Fatal(err)
-	}
-	if m, err := env.store.GetMonitor(ctx, clone.ID); err != nil || !m.AgentEnabled {
-		t.Errorf("clone with a working store: agent checks off (%v)", err)
+	if !clone.AgentEnabled || len(clone.AgentIDs) != 1 || clone.AgentIDs[0] != assigned.ID {
+		t.Fatalf("working clone lost explicit delegation: %+v", clone)
 	}
 }

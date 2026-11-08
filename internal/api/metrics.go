@@ -179,6 +179,9 @@ func (h *Handler) MonitorMetrics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
+		return
+	}
 
 	now := time.Now().UTC()
 	from := now.Add(-24 * time.Hour)
@@ -195,22 +198,31 @@ func (h *Handler) MonitorMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	uptime, err := h.store.GetUptimePercent(r.Context(), id, from, to)
+	uptime, err := h.store.GetUptimePercent(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("get uptime", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get uptime")
 		return
 	}
 
-	p50, p95, p99, err := h.store.GetResponseTimePercentiles(r.Context(), id, from, to)
+	p50, p95, p99, err := h.store.GetResponseTimePercentiles(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("get percentiles", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get percentiles")
 		return
 	}
 
-	total, up, down, degraded, err := h.store.GetCheckCounts(r.Context(), id, from, to)
+	total, up, down, degraded, err := h.store.GetCheckCounts(r.Context(), id, from, to, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("get check counts", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get check counts")
 		return
@@ -232,6 +244,9 @@ func (h *Handler) MonitorChart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
+		return
+	}
 
 	now := time.Now().UTC()
 	var from time.Time
@@ -248,8 +263,11 @@ func (h *Handler) MonitorChart(w http.ResponseWriter, r *http.Request) {
 		from = now.Add(-24 * time.Hour)
 	}
 
-	points, err := h.store.GetResponseTimeSeries(r.Context(), id, from, now, 500)
+	points, err := h.store.GetResponseTimeSeries(r.Context(), id, from, now, 500, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("get chart data", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get chart data")
 		return
@@ -261,7 +279,7 @@ func (h *Handler) MonitorChart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
-	up, down, degraded, paused, err := h.store.CountMonitorsByStatus(r.Context())
+	up, down, degraded, paused, err := h.store.CountMonitorsByStatus(r.Context(), httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
 		h.logger.Error("overview", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get overview")

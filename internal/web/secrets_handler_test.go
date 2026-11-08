@@ -346,7 +346,7 @@ func TestMonitorFormRejectsUnknownAgentIDs(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.MonitorCreate(w, adminRequest("POST", "/monitors", httpMonitorForm("tok", agentIDs)))
-	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "agent 999999 does not exist") {
+	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "selected related resource no longer exists") {
 		t.Fatalf("create with an unknown agent id: code %d, want the form re-shown with an error", w.Code)
 	}
 
@@ -363,7 +363,7 @@ func TestMonitorFormRejectsUnknownAgentIDs(t *testing.T) {
 	r := adminRequest("POST", "/monitors/"+id, httpMonitorForm("tok", agentIDs))
 	r.SetPathValue("id", id)
 	h.MonitorUpdate(w, r)
-	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "agent 999999 does not exist") {
+	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "selected related resource no longer exists") {
 		t.Fatalf("update with an unknown agent id: code %d, want the form re-shown with an error", w.Code)
 	}
 	if got, _ := store.GetMonitorAgentIDs(ctx, mon.ID); len(got) != 1 || got[0] != agent.ID {

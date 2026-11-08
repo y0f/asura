@@ -1,0 +1,33 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/y0f/asura/internal/storage"
+)
+
+// HeartbeatCreatedParams is used only for the successful creation response.
+// PingURL contains the one-time token and must never come from an ordinary read.
+type HeartbeatCreatedParams struct {
+	LayoutParams
+	Monitor *storage.Monitor
+	PingURL string
+}
+
+templ HeartbeatCreatedPage(p HeartbeatCreatedParams) {
+	@Layout(p.LayoutParams) {
+		@PageHeader(PageHeaderParams{Title: "Heartbeat monitor created", Subtitle: p.Monitor.Name})
+		<section class="card card-pad max-w-2xl" aria-labelledby="heartbeat-save">
+			<h2 id="heartbeat-save" class="text-lg font-semibold">Save the ping URL</h2>
+			<p class="subtitle mt-1 mb-4">This URL is shown once. Anyone with it can report a heartbeat, so keep it private.</p>
+			@OneTimePingURL("heartbeat-ping-url", p.PingURL)
+			<div class="mt-5">
+				if p.CanMonitor("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+					<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Monitor.ID)) } class="btn-primary">View monitor</a>
+				} else {
+					<a href={ templ.SafeURL(p.HomePath()) } class="btn-primary">Continue</a>
+				}
+			</div>
+		</section>
+	}
+}

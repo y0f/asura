@@ -7,7 +7,7 @@ func MonitorBulkPermissions(action string) []string {
 	case "pause", "resume", "delete":
 		return []string{"monitors." + action}
 	case "set_group":
-		return []string{"monitors.assign", "groups.read"}
+		return []string{"monitors.update", "monitors.assign", "groups.read"}
 	default:
 		return nil
 	}

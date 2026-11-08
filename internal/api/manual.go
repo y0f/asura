@@ -27,10 +27,8 @@ func (h *Handler) SetManualStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mon, err := h.store.GetMonitor(r.Context(), id)
-	if err != nil {
-		h.logger.Error("set manual status: get monitor", "error", err)
-		writeError(w, http.StatusNotFound, "monitor not found")
+	mon, ok := h.requireMonitor(w, r, id, "monitors.status")
+	if !ok {
 		return
 	}
 
@@ -43,7 +41,10 @@ func (h *Handler) SetManualStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "monitoring is unavailable")
 		return
 	}
-	if err := h.pipeline.ProcessManualStatus(r.Context(), mon, req.Status, req.Message); err != nil {
+	if err := h.pipeline.ProcessManualStatus(r.Context(), mon, req.Status, req.Message, httputil.MonitorAccess(r.Context(), "monitors.status")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("set manual status", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to set monitor status")
 		return

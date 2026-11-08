@@ -1,10 +1,8 @@
 package api
 
 import (
-	"context"
-	"crypto/rand"
+	"bytes"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,9 +26,38 @@ type monitorCreateRequest struct {
 	Enabled *bool `json:"enabled"`
 }
 
+type monitorUpdateRequest struct {
+	monitorAlias
+	Enabled                      *bool    `json:"enabled"`
+	ClearSecrets                 []string `json:"clear_secrets"`
+	fields                       storage.MonitorRelationChanges
+	agentIDsSet, agentEnabledSet bool
+}
+
+func (req *monitorUpdateRequest) UnmarshalJSON(data []byte) error {
+	type plain monitorUpdateRequest
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode((*plain)(req)); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	req.fields = storage.MonitorRelationChanges{
+		Group: fields["group_id"] != nil, Proxy: fields["proxy_id"] != nil,
+		EscalationPolicy: fields["escalation_policy_id"] != nil,
+		Notifications:    fields["notification_channel_ids"] != nil, Tags: fields["monitor_tags"] != nil,
+		Agents: fields["agent_ids"] != nil || fields["agent_enabled"] != nil, Enabled: req.Enabled != nil,
+	}
+	req.agentIDsSet, req.agentEnabledSet = fields["agent_ids"] != nil, fields["agent_enabled"] != nil
+	return nil
+}
+
 func (h *Handler) ListMonitors(w http.ResponseWriter, r *http.Request) {
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{}, p)
+	result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{Access: httputil.MonitorAccess(r.Context(), "monitors.read")}, p)
 	if err != nil {
 		h.logger.Error("list monitors", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list monitors")
@@ -38,7 +65,7 @@ func (h *Handler) ListMonitors(w http.ResponseWriter, r *http.Request) {
 	}
 	if monitors, ok := result.Data.([]*storage.Monitor); ok {
 		for i, monitor := range monitors {
-			monitors[i] = redact.Monitor(monitor)
+			monitors[i] = monitorReadResponse(r, monitor)
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -50,7 +77,7 @@ func (h *Handler) GetMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	m, err := h.store.GetMonitor(r.Context(), id)
+	m, err := h.store.GetMonitor(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "monitor not found")
@@ -61,28 +88,49 @@ func (h *Handler) GetMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channelIDs, _ := h.store.GetMonitorNotificationChannelIDs(r.Context(), m.ID)
-	if channelIDs != nil {
-		m.NotificationChannelIDs = channelIDs
+	if m.NotificationChannelIDs, err = h.store.GetMonitorNotificationChannelIDs(r.Context(), m.ID, httputil.MonitorAccess(r.Context(), "monitors.read")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load monitor assignments")
+		return
+	}
+	if m.MonitorTags, err = h.store.GetMonitorTags(r.Context(), m.ID, httputil.MonitorAccess(r.Context(), "monitors.read")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load monitor assignments")
+		return
+	}
+	if m.AgentIDs, err = h.store.GetMonitorAgentIDs(r.Context(), m.ID, httputil.MonitorAccess(r.Context(), "monitors.read")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load monitor assignments")
+		return
 	}
 
-	m.MonitorTags, _ = h.store.GetMonitorTags(r.Context(), m.ID)
-	m.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), m.ID)
-
 	if m.Type == "heartbeat" {
-		hb, err := h.store.GetHeartbeatByMonitorID(r.Context(), m.ID)
+		hb, err := h.store.GetHeartbeatByMonitorID(r.Context(), m.ID, httputil.MonitorAccess(r.Context(), "monitors.read")...)
+		if err != nil {
+			if monitorMutationError(w, err) {
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to load heartbeat")
+			return
+		}
 		if err == nil && hb != nil {
 			// Storage returns a credential hash, never the original bearer token.
 			hb.Token = ""
 			writeJSON(w, http.StatusOK, map[string]any{
-				"monitor":   redact.Monitor(m),
+				"monitor":   monitorReadResponse(r, m),
 				"heartbeat": hb,
 			})
 			return
 		}
 	}
 
-	writeJSON(w, http.StatusOK, redact.Monitor(m))
+	writeJSON(w, http.StatusOK, monitorReadResponse(r, m))
 }
 
 func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
@@ -100,35 +148,30 @@ func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 		m.Enabled = true
 	}
 
+	if _, err := httputil.PrepareMonitorRelations(httputil.GetAPIKey(r.Context()), &m, nil, storage.MonitorRelationChanges{Group: true, Proxy: true, EscalationPolicy: true, Notifications: true, Tags: true, Agents: true}); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, httputil.ErrMonitorRelationForbidden) {
+			status = http.StatusForbidden
+		}
+		writeError(w, status, err.Error())
+		return
+	}
 	if err := validate.ValidateMonitor(&m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.validateAgentIDs(r.Context(), m.AgentIDs); err != nil {
+	options, err := httputil.MonitorCreateOptions(&m)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	agentEnabled := agentsOffUntilAssigned(&m, m.AgentIDs)
-	if err := h.store.CreateMonitor(r.Context(), &m); err != nil {
+	if err := h.store.CreateMonitorWithRelations(r.Context(), &m, options, httputil.MonitorAccess(r.Context(), "monitors.create")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("create monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create monitor")
 		return
-	}
-
-	if err := h.saveNewMonitorRelations(r.Context(), &m, agentEnabled); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	var heartbeat *storage.Heartbeat
-	if m.Type == "heartbeat" {
-		var err error
-		heartbeat, err = h.createHeartbeat(r.Context(), &m)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
 	}
 
 	h.audit(r, "create", "monitor", m.ID, "")
@@ -137,10 +180,10 @@ func (h *Handler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 		h.pipeline.ReloadMonitors()
 	}
 
-	if heartbeat != nil {
+	if options.Heartbeat != nil {
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"monitor":   monitorResponse(r, &m),
-			"heartbeat": heartbeat,
+			"heartbeat": options.Heartbeat,
 		})
 		return
 	}
@@ -154,83 +197,62 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.store.GetMonitor(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "monitor not found")
-			return
-		}
-		h.logger.Error("get monitor for update", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get monitor")
-		return
-	}
-
-	var req struct {
-		monitorAlias
-		ClearSecrets []string `json:"clear_secrets"`
-	}
+	var req monitorUpdateRequest
 	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	m := storage.Monitor(req.monitorAlias)
-	m.ID = existing.ID
-	m.CreatedAt = existing.CreatedAt
-	m.Enabled = existing.Enabled
-	if m.Type == existing.Type {
-		clear := secretClearSet(req.ClearSecrets)
-		key := httputil.GetAPIKey(r.Context())
-		if key == nil || !key.SuperAdmin {
-			if err := redact.CheckMonitorDestination(&m, existing, redact.MonitorSecretKeys[m.Type], clear); err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
-				return
+	key := httputil.GetAPIKey(r.Context())
+	var inputErr error
+	m, err := h.store.UpdateMonitorWithRelations(r.Context(), id, func(current *storage.Monitor) (*storage.Monitor, storage.MonitorRelationChanges, error) {
+		candidate := storage.Monitor(req.monitorAlias)
+		candidate.ID = id
+		if !req.agentIDsSet {
+			candidate.AgentIDs = current.AgentIDs
+		}
+		if !req.agentEnabledSet {
+			candidate.AgentEnabled = current.AgentEnabled && (!req.agentIDsSet || len(candidate.AgentIDs) > 0)
+		}
+		if req.Enabled != nil {
+			candidate.Enabled = *req.Enabled
+		}
+		changes, err := httputil.PrepareMonitorRelations(key, &candidate, current, req.fields)
+		if err == nil && candidate.Type == current.Type {
+			clear := secretClearSet(req.ClearSecrets)
+			if key == nil || !key.SuperAdmin {
+				err = redact.CheckMonitorDestination(&candidate, current, redact.MonitorSecretKeys[candidate.Type], clear)
+			}
+			if err == nil {
+				if len(candidate.Settings) == 0 {
+					candidate.Settings = current.Settings
+				}
+				candidate.Settings = redact.MergeSecrets(candidate.Settings, current.Settings, redact.MonitorSecretKeys[candidate.Type], clear)
+				candidate.Settings, err = redact.MergeMonitorHeaders(candidate.Settings, current.Settings, clear)
 			}
 		}
-		if len(m.Settings) == 0 {
-			m.Settings = existing.Settings
+		if err == nil {
+			err = validate.ValidateMonitor(&candidate)
 		}
-		m.Settings = redact.MergeSecrets(m.Settings, existing.Settings, redact.MonitorSecretKeys[m.Type], clear)
-		m.Settings, err = redact.MergeMonitorHeaders(m.Settings, existing.Settings, clear)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+		inputErr = err
+		return &candidate, changes, err
+	}, httputil.MonitorAccess(r.Context(), "monitors.update")...)
+	if err != nil {
+		if monitorMutationError(w, err) {
 			return
 		}
-	}
-
-	if err := validate.ValidateMonitor(&m); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.validateAgentIDs(r.Context(), m.AgentIDs); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	agentEnabled := agentsOffUntilAssigned(&m, m.AgentIDs)
-	if err := h.store.UpdateMonitor(r.Context(), &m); err != nil {
+		if inputErr != nil {
+			status := http.StatusBadRequest
+			if errors.Is(inputErr, httputil.ErrMonitorRelationForbidden) {
+				status = http.StatusForbidden
+			}
+			writeError(w, status, inputErr.Error())
+			return
+		}
 		h.logger.Error("update monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to update monitor")
 		return
 	}
 	checker.ClearOAuth2TokenCache(m.ID)
-
-	if err := h.store.SetMonitorNotificationChannels(r.Context(), m.ID, m.NotificationChannelIDs); err != nil {
-		h.logger.Error("set monitor notification channels", "error", err)
-	}
-
-	// Like the notification channels, the assignment is replaced: no agent_ids
-	// means the monitor runs on every agent again.
-	if err := h.assignAgents(r.Context(), &m, m.AgentIDs, agentEnabled); err != nil {
-		h.logger.Error("set monitor agents", "error", err)
-	}
-
-	if err := validate.ValidateMonitorTags(m.MonitorTags); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.store.SetMonitorTags(r.Context(), m.ID, m.MonitorTags); err != nil {
-		h.logger.Error("set monitor tags", "error", err)
-	}
 
 	h.audit(r, "update", "monitor", m.ID, "")
 
@@ -238,13 +260,7 @@ func (h *Handler) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 		h.pipeline.ReloadMonitors()
 	}
 
-	updated, _ := h.store.GetMonitor(r.Context(), id)
-	if updated != nil {
-		updated.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), id)
-		writeJSON(w, http.StatusOK, monitorResponse(r, updated))
-	} else {
-		writeJSON(w, http.StatusOK, monitorResponse(r, &m))
-	}
+	writeJSON(w, http.StatusOK, monitorResponse(r, m))
 }
 
 func (h *Handler) DeleteMonitor(w http.ResponseWriter, r *http.Request) {
@@ -254,18 +270,10 @@ func (h *Handler) DeleteMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.store.GetMonitor(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "monitor not found")
+	if err := h.store.DeleteMonitor(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.delete")...); err != nil {
+		if monitorMutationError(w, err) {
 			return
 		}
-		h.logger.Error("get monitor for delete", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get monitor")
-		return
-	}
-
-	if err := h.store.DeleteMonitor(r.Context(), id); err != nil {
 		h.logger.Error("delete monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete monitor")
 		return
@@ -286,7 +294,10 @@ func (h *Handler) PauseMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.store.SetMonitorEnabled(r.Context(), id, false); err != nil {
+	if err := h.store.SetMonitorEnabled(r.Context(), id, false, httputil.MonitorAccess(r.Context(), "monitors.pause")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("pause monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to pause monitor")
 		return
@@ -304,7 +315,10 @@ func (h *Handler) ResumeMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := h.store.SetMonitorEnabled(r.Context(), id, true); err != nil {
+	if err := h.store.SetMonitorEnabled(r.Context(), id, true, httputil.MonitorAccess(r.Context(), "monitors.resume")...); err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("resume monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to resume monitor")
 		return
@@ -322,9 +336,15 @@ func (h *Handler) ListChecks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
+		return
+	}
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListCheckResults(r.Context(), id, p)
+	result, err := h.store.ListCheckResults(r.Context(), id, p, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("list checks", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list checks")
 		return
@@ -338,9 +358,15 @@ func (h *Handler) ListChanges(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, ok := h.requireMonitor(w, r, id, "monitors.read"); !ok {
+		return
+	}
 	p := httputil.ParsePagination(r)
-	result, err := h.store.ListContentChanges(r.Context(), id, p)
+	result, err := h.store.ListContentChanges(r.Context(), id, p, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("list changes", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to list changes")
 		return
@@ -356,67 +382,32 @@ func (h *Handler) CloneMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	src, err := h.store.GetMonitor(ctx, id)
+	seed, err := httputil.MonitorCreateOptions(&storage.Monitor{Type: "heartbeat"})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "monitor not found")
-			return
-		}
-		h.logger.Error("get monitor for clone", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get monitor")
+		writeError(w, http.StatusInternalServerError, "failed to prepare monitor clone")
 		return
 	}
-
-	clone := &storage.Monitor{
-		Name:               src.Name + " (copy)",
-		Description:        src.Description,
-		Type:               src.Type,
-		Target:             src.Target,
-		Interval:           src.Interval,
-		Timeout:            src.Timeout,
-		Enabled:            false,
-		Settings:           src.Settings,
-		Assertions:         src.Assertions,
-		TrackChanges:       src.TrackChanges,
-		FailureThreshold:   src.FailureThreshold,
-		SuccessThreshold:   src.SuccessThreshold,
-		UpsideDown:         src.UpsideDown,
-		AgentEnabled:       src.AgentEnabled,
-		ResendInterval:     src.ResendInterval,
-		SLATarget:          src.SLATarget,
-		AnomalySensitivity: src.AnomalySensitivity,
-		GroupID:            src.GroupID,
-		ProxyID:            src.ProxyID,
-	}
-
-	agentIDs, _ := h.store.GetMonitorAgentIDs(ctx, id)
-	agentEnabled := agentsOffUntilAssigned(clone, agentIDs)
-	if err := h.store.CreateMonitor(ctx, clone); err != nil {
+	var inputErr error
+	clone, heartbeat, err := h.store.CloneMonitorWithRelations(ctx, id, func(source *storage.Monitor) (*storage.Monitor, storage.MonitorCreateOptions, error) {
+		clone, options, err := httputil.PrepareMonitorClone(httputil.GetAPIKey(ctx), source, seed.Heartbeat.Token)
+		inputErr = err
+		return clone, options, err
+	}, httputil.MonitorAccess(ctx, "monitors.read", "monitors.clone"), httputil.MonitorAccess(ctx, "monitors.clone"))
+	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
+		if inputErr != nil {
+			status := http.StatusBadRequest
+			if errors.Is(inputErr, httputil.ErrMonitorRelationForbidden) {
+				status = http.StatusForbidden
+			}
+			writeError(w, status, inputErr.Error())
+			return
+		}
 		h.logger.Error("clone monitor", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to clone monitor")
 		return
-	}
-
-	channelIDs, _ := h.store.GetMonitorNotificationChannelIDs(ctx, id)
-	if len(channelIDs) > 0 {
-		h.store.SetMonitorNotificationChannels(ctx, clone.ID, channelIDs)
-	}
-
-	srcTags, _ := h.store.GetMonitorTags(ctx, id)
-	if len(srcTags) > 0 {
-		h.store.SetMonitorTags(ctx, clone.ID, srcTags)
-	}
-
-	if len(agentIDs) > 0 {
-		if err := h.assignAgents(ctx, clone, agentIDs, agentEnabled); err != nil {
-			h.logger.Error("set monitor agents", "error", err)
-		} else {
-			clone.AgentIDs = agentIDs
-		}
-	}
-
-	if clone.Type == "heartbeat" {
-		h.createHeartbeat(ctx, clone)
 	}
 
 	h.audit(r, "clone", "monitor", clone.ID, fmt.Sprintf("from=%d", id))
@@ -425,6 +416,10 @@ func (h *Handler) CloneMonitor(w http.ResponseWriter, r *http.Request) {
 		h.pipeline.ReloadMonitors()
 	}
 
+	if heartbeat != nil {
+		writeJSON(w, http.StatusCreated, map[string]any{"monitor": monitorResponse(r, clone), "heartbeat": heartbeat})
+		return
+	}
 	writeJSON(w, http.StatusCreated, monitorResponse(r, clone))
 }
 
@@ -445,7 +440,7 @@ func (h *Handler) BulkMonitors(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "action must be one of: pause, resume, delete, set_group")
 		return
 	}
-	if !httputil.GetAPIKey(r.Context()).HasAllPermissions(scopes...) {
+	if !httputil.GetAPIKey(r.Context()).HasAllCapabilities(scopes...) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -457,6 +452,18 @@ func (h *Handler) BulkMonitors(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "max 500 monitors per request")
 		return
 	}
+	seen := make(map[int64]bool, len(req.IDs))
+	for _, id := range req.IDs {
+		if id <= 0 || seen[id] {
+			writeError(w, http.StatusBadRequest, "ids must contain unique positive monitor IDs")
+			return
+		}
+		seen[id] = true
+	}
+	if req.Action == "set_group" && req.GroupID != nil && *req.GroupID <= 0 {
+		writeError(w, http.StatusBadRequest, "group_id must be positive or null")
+		return
+	}
 
 	ctx := r.Context()
 	var affected int64
@@ -464,16 +471,19 @@ func (h *Handler) BulkMonitors(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Action {
 	case "pause":
-		affected, err = h.store.BulkSetMonitorsEnabled(ctx, req.IDs, false)
+		affected, err = h.store.BulkSetMonitorsEnabled(ctx, req.IDs, false, httputil.MonitorAccess(ctx, "monitors.pause")...)
 	case "resume":
-		affected, err = h.store.BulkSetMonitorsEnabled(ctx, req.IDs, true)
+		affected, err = h.store.BulkSetMonitorsEnabled(ctx, req.IDs, true, httputil.MonitorAccess(ctx, "monitors.resume")...)
 	case "delete":
-		affected, err = h.store.BulkDeleteMonitors(ctx, req.IDs)
+		affected, err = h.store.BulkDeleteMonitors(ctx, req.IDs, httputil.MonitorAccess(ctx, "monitors.delete")...)
 	case "set_group":
-		affected, err = h.store.BulkSetMonitorGroup(ctx, req.IDs, req.GroupID)
+		affected, err = h.store.BulkSetMonitorGroup(ctx, req.IDs, req.GroupID, httputil.MonitorAccess(ctx, "monitors.update", "monitors.assign")...)
 	}
 
 	if err != nil {
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("bulk monitors", "action", req.Action, "error", err)
 		writeError(w, http.StatusInternalServerError, "bulk operation failed")
 		return
@@ -510,119 +520,4 @@ func applyMonitorDefaults(m *storage.Monitor, cfg config.MonitorConfig) {
 	if m.Type == "manual" && m.Target == "" {
 		m.Target = "manual"
 	}
-}
-
-// saveNewMonitorRelations stores the notification channels, tags and agent
-// assignment of a just-created monitor, see assignAgents for agentEnabled. It
-// returns an error only for invalid tags; storage failures are logged, as for
-// the monitor's other relations.
-func (h *Handler) saveNewMonitorRelations(ctx context.Context, m *storage.Monitor, agentEnabled bool) error {
-	if len(m.NotificationChannelIDs) > 0 {
-		if err := h.store.SetMonitorNotificationChannels(ctx, m.ID, m.NotificationChannelIDs); err != nil {
-			h.logger.Error("set monitor notification channels", "error", err)
-		}
-	}
-	if len(m.AgentIDs) > 0 {
-		if err := h.assignAgents(ctx, m, m.AgentIDs, agentEnabled); err != nil {
-			h.logger.Error("set monitor agents", "error", err)
-		}
-	}
-	if len(m.MonitorTags) > 0 {
-		if err := validate.ValidateMonitorTags(m.MonitorTags); err != nil {
-			return err
-		}
-		if err := h.store.SetMonitorTags(ctx, m.ID, m.MonitorTags); err != nil {
-			h.logger.Error("set monitor tags", "error", err)
-		}
-	}
-	return nil
-}
-
-// agentsOffUntilAssigned turns agent checks off for a monitor that is to be
-// assigned to agentIDs and returns whether they were on. A monitor without an
-// assignment runs on every agent, so it is stored with agent checks off and
-// assignAgents switches them back on once the assignment is stored.
-func agentsOffUntilAssigned(m *storage.Monitor, agentIDs []int64) bool {
-	agentEnabled := m.AgentEnabled
-	if len(agentIDs) > 0 {
-		m.AgentEnabled = false
-	}
-	return agentEnabled
-}
-
-// assignAgents stores the agent assignment of the stored monitor m and then
-// switches its agent checks back on if agentEnabled (see
-// agentsOffUntilAssigned). If either step fails, agent checks stay off.
-func (h *Handler) assignAgents(ctx context.Context, m *storage.Monitor, agentIDs []int64, agentEnabled bool) error {
-	if err := h.store.SetMonitorAgentIDs(ctx, m.ID, agentIDs); err != nil {
-		return err
-	}
-	if agentEnabled && !m.AgentEnabled {
-		m.AgentEnabled = true
-		if err := h.store.UpdateMonitor(ctx, m); err != nil {
-			m.AgentEnabled = false
-			return err
-		}
-	}
-	return nil
-}
-
-// validateAgentIDs checks that every id names an existing agent.
-func (h *Handler) validateAgentIDs(ctx context.Context, ids []int64) error {
-	for _, id := range ids {
-		if _, err := h.store.GetAgent(ctx, id); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("agent_ids: agent %d does not exist", id)
-			}
-			return fmt.Errorf("agent_ids: %w", err)
-		}
-	}
-	return nil
-}
-
-func (h *Handler) createHeartbeat(ctx context.Context, m *storage.Monitor) (*storage.Heartbeat, error) {
-	token, err := generateToken()
-	if err != nil {
-		h.logger.Error("generate heartbeat token", "error", err)
-		return nil, fmt.Errorf("generate heartbeat token: %w", err)
-	}
-	grace := parseGraceFromSettings(m.Settings)
-	hb := &storage.Heartbeat{
-		MonitorID: m.ID,
-		Token:     token,
-		Grace:     grace,
-		Status:    "pending",
-	}
-	if err := h.store.CreateHeartbeat(ctx, hb); err != nil {
-		h.logger.Error("create heartbeat", "error", err)
-		return nil, fmt.Errorf("create heartbeat: %w", err)
-	}
-	return hb, nil
-}
-
-func generateToken() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
-}
-
-func parseGraceFromSettings(settings json.RawMessage) int {
-	if settings == nil {
-		return 0
-	}
-	var s map[string]any
-	if err := json.Unmarshal(settings, &s); err != nil {
-		return 0
-	}
-	g, ok := s["grace"]
-	if !ok {
-		return 0
-	}
-	gf, ok := g.(float64)
-	if !ok {
-		return 0
-	}
-	return int(gf)
 }
