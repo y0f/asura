@@ -101,7 +101,7 @@ func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sqlTransact
 	if m.EscalationPolicyID != nil {
 		escalationPolicyID = *m.EscalationPolicyID
 	}
-	res, err := tx.ExecContext(ctx,
+	id, err := insertID(ctx, tx,
 		`INSERT INTO monitors (name, description, type, target, interval_secs, timeout_secs, enabled, tags, settings, assertions, track_changes, failure_threshold, success_threshold, upside_down, agent_enabled, resend_interval, sla_target, anomaly_sensitivity, group_id, proxy_id, escalation_policy_id, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Description, m.Type, m.Target, m.Interval, m.Timeout, boolToInt(m.Enabled),
@@ -110,10 +110,6 @@ func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sqlTransact
 	)
 	if err != nil {
 		return nil, nil, monitorRelationError(err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, nil, err
 	}
 
 	if _, err := tx.ExecContext(ctx,
@@ -462,15 +458,11 @@ func insertCheckResult(ctx context.Context, writer monitorWriteExecutor, r *Chec
 		certExpiry = formatTime(*r.CertExpiry)
 	}
 	now := formatTime(time.Now())
-	res, err := writer.ExecContext(ctx,
+	id, err := insertID(ctx, writer,
 		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, agent_id, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.MonitorID, r.Status, r.ResponseTime, r.StatusCode, r.Message, r.Headers,
 		r.Body, r.BodyHash, nullStr(certExpiry), r.CertFingerprint, r.DNSRecords, r.AgentID, now)
-	if err != nil {
-		return err
-	}
-	id, err := res.LastInsertId()
 	if err != nil {
 		return err
 	}

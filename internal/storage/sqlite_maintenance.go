@@ -20,14 +20,10 @@ func (s *SQLiteStore) CreateMaintenanceWindow(ctx context.Context, mw *Maintenan
 	if err := checkMaintenanceTargets(ctx, tx, mw.MonitorIDs, access); err != nil {
 		return err
 	}
-	res, err := tx.ExecContext(ctx,
+	id, err := insertID(ctx, tx,
 		`INSERT INTO maintenance_windows (name, monitor_ids, start_time, end_time, recurring, cron_expr, active, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mw.Name, string(monitorIDs), formatTime(mw.StartTime), formatTime(mw.EndTime), mw.Recurring, mw.CronExpr, boolToInt(mw.Active), now, now)
-	if err != nil {
-		return err
-	}
-	id, err := res.LastInsertId()
 	if err != nil {
 		return err
 	}

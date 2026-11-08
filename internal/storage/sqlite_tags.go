@@ -8,13 +8,12 @@ import (
 
 func (s *SQLiteStore) CreateTag(ctx context.Context, t *Tag) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)`,
 		t.Name, t.Color, now)
 	if err != nil {
 		return fmt.Errorf("create tag: %w", err)
 	}
-	id, _ := res.LastInsertId()
 	t.ID = id
 	t.CreatedAt = parseTime(now)
 	return nil

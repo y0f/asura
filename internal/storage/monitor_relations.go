@@ -9,6 +9,7 @@ import (
 )
 
 type monitorWriteExecutor interface {
+	insertIDExecutor
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 

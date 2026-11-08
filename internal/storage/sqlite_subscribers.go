@@ -24,14 +24,14 @@ func (s *SQLiteStore) CreateStatusPageSubscriber(ctx context.Context, sub *Statu
 	sub.Token = token
 
 	confirmed := boolToInt(sub.Confirmed)
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO status_page_subscribers (status_page_id, type, email, webhook_url, confirmed, token)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		sub.StatusPageID, sub.Type, sub.Email, sub.WebhookURL, confirmed, token)
 	if err != nil {
 		return fmt.Errorf("create subscriber: %w", err)
 	}
-	sub.ID, _ = res.LastInsertId()
+	sub.ID = id
 	return nil
 }
 

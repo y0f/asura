@@ -9,14 +9,13 @@ import (
 
 func (s *SQLiteStore) CreateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO escalation_policies (name, description, enabled, repeat, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		ep.Name, ep.Description, boolToInt(ep.Enabled), boolToInt(ep.Repeat), now, now)
 	if err != nil {
 		return fmt.Errorf("create escalation policy: %w", err)
 	}
-	id, _ := res.LastInsertId()
 	ep.ID = id
 	ep.CreatedAt = parseTime(now)
 	ep.UpdatedAt = parseTime(now)
@@ -145,14 +144,13 @@ func (s *SQLiteStore) ReplaceEscalationPolicySteps(ctx context.Context, policyID
 func (s *SQLiteStore) CreateEscalationState(ctx context.Context, state *EscalationState) error {
 	now := formatTime(time.Now())
 	nextFire := formatTime(state.NextFireAt)
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO escalation_states (incident_id, policy_id, current_step, next_fire_at, started_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		state.IncidentID, state.PolicyID, state.CurrentStep, nextFire, now)
 	if err != nil {
 		return fmt.Errorf("create escalation state: %w", err)
 	}
-	id, _ := res.LastInsertId()
 	state.ID = id
 	state.StartedAt = parseTime(now)
 	return nil

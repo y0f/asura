@@ -11,13 +11,9 @@ func (s *SQLiteStore) CreateHeartbeat(ctx context.Context, h *Heartbeat) error {
 }
 
 func createHeartbeat(ctx context.Context, writer monitorWriteExecutor, h *Heartbeat) error {
-	res, err := writer.ExecContext(ctx,
+	id, err := insertID(ctx, writer,
 		`INSERT INTO heartbeats (monitor_id, token, grace, status) VALUES (?, ?, ?, ?)`,
 		h.MonitorID, sha256Hex(h.Token), h.Grace, h.Status)
-	if err != nil {
-		return err
-	}
-	id, err := res.LastInsertId()
 	if err != nil {
 		return err
 	}

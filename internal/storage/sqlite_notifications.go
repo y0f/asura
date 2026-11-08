@@ -14,14 +14,13 @@ func (s *SQLiteStore) CreateNotificationChannel(ctx context.Context, ch *Notific
 	if err != nil {
 		return fmt.Errorf("encrypt settings: %w", err)
 	}
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO notification_channels (name, type, enabled, settings, events, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		ch.Name, ch.Type, boolToInt(ch.Enabled), settings, string(events), now, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	ch.ID = id
 	ch.CreatedAt = parseTime(now)
 	ch.UpdatedAt = parseTime(now)

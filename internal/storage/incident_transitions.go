@@ -138,11 +138,7 @@ func (s *SQLiteStore) RecordIncidentFailure(ctx context.Context, monitorID int64
 	created := errors.Is(err, sql.ErrNoRows)
 	now := formatTime(time.Now())
 	if created {
-		result, err := tx.ExecContext(ctx, `INSERT INTO incidents (monitor_id,status,severity,cause,started_at,announcement_pending,escalation_pending) VALUES (?,'open',?,?,?,1,1)`, monitorID, severity, cause, now)
-		if err != nil {
-			return nil, false, err
-		}
-		id, err := result.LastInsertId()
+		id, err := insertID(ctx, tx, `INSERT INTO incidents (monitor_id,status,severity,cause,started_at,announcement_pending,escalation_pending) VALUES (?,'open',?,?,?,1,1)`, monitorID, severity, cause, now)
 		if err != nil {
 			return nil, false, err
 		}

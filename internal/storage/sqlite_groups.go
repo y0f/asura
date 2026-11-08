@@ -7,13 +7,12 @@ import (
 
 func (s *SQLiteStore) CreateMonitorGroup(ctx context.Context, g *MonitorGroup) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO monitor_groups (name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?)`,
 		g.Name, g.SortOrder, now, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	g.ID = id
 	g.CreatedAt = parseTime(now)
 	g.UpdatedAt = parseTime(now)

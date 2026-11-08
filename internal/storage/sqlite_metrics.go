@@ -10,14 +10,13 @@ import (
 
 func (s *SQLiteStore) InsertContentChange(ctx context.Context, c *ContentChange) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO content_changes (monitor_id, old_hash, new_hash, diff, old_body, new_body, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		c.MonitorID, c.OldHash, c.NewHash, c.Diff, c.OldBody, c.NewBody, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	c.ID = id
 	c.CreatedAt = parseTime(now)
 	return nil

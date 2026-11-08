@@ -18,14 +18,14 @@ func (s *SQLiteStore) CreateAgent(ctx context.Context, a *Agent) error {
 	}
 	a.Token = token
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO agents (name, location, token, enabled, created_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		a.Name, a.Location, sha256Hex(token), boolToInt(a.Enabled), now)
 	if err != nil {
 		return fmt.Errorf("create agent: %w", err)
 	}
-	a.ID, _ = res.LastInsertId()
+	a.ID = id
 	a.CreatedAt = parseTime(now)
 	return nil
 }

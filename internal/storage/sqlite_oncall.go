@@ -25,16 +25,12 @@ func (s *SQLiteStore) CreateOnCallRotation(ctx context.Context, r *OnCallRotatio
 	}
 	channelIDs, _ := json.Marshal(r.ChannelIDs)
 	now := formatTime(time.Now())
-	res, err := tx.ExecContext(ctx,
+	id, err := insertID(ctx, tx,
 		`INSERT INTO on_call_rotations (name, channel_ids, period, current_index, period_started_at,
 		 override_channel_id, override_until, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.Name, string(channelIDs), r.Period, r.CurrentIndex, now, r.OverrideChannelID, rotationOverrideUntil(r), now, now)
 	if err != nil {
 		return fmt.Errorf("create on-call rotation: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return err

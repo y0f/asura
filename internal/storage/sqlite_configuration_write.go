@@ -67,13 +67,9 @@ func (s *SQLiteStore) ApplyConfiguration(ctx context.Context, data *Configuratio
 }
 
 func (ic *configurationImport) insert(table string, sourceID int64, query string, args ...any) error {
-	res, err := ic.tx.ExecContext(ic.ctx, query, args...)
+	id, err := insertID(ic.ctx, ic.tx, query, args...)
 	if err != nil {
 		return fmt.Errorf("import %s: %w", table, err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return err
 	}
 	catalog := ic.catalogs[table]
 	catalog.ids[sourceID] = id

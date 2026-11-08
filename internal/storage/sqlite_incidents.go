@@ -13,13 +13,12 @@ func (s *SQLiteStore) CreateIncident(ctx context.Context, inc *Incident) error {
 		inc.Severity = "critical"
 	}
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO incidents (monitor_id, status, severity, cause, started_at, announcement_pending, escalation_pending) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		inc.MonitorID, inc.Status, inc.Severity, inc.Cause, now, boolToInt(inc.AnnouncementPending), boolToInt(inc.EscalationPending))
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	inc.ID = id
 	inc.StartedAt = parseTime(now)
 	return nil
@@ -199,13 +198,12 @@ func (s *SQLiteStore) GetOpenIncident(ctx context.Context, monitorID int64, acce
 
 func (s *SQLiteStore) InsertIncidentEvent(ctx context.Context, e *IncidentEvent) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO incident_events (incident_id, type, message, created_at) VALUES (?, ?, ?, ?)`,
 		e.IncidentID, e.Type, e.Message, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	e.ID = id
 	e.CreatedAt = parseTime(now)
 	return nil

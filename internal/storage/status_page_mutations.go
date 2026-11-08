@@ -158,6 +158,7 @@ func statusPageExpandsExposure(old, next *StatusPage) bool {
 }
 
 type statusPageExecutor interface {
+	insertIDExecutor
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
@@ -165,14 +166,11 @@ func saveStatusPage(ctx context.Context, db statusPageExecutor, sp *StatusPage, 
 	now := formatTime(time.Now())
 	args := []any{sp.Slug, sp.Title, sp.Description, sp.CustomCSS, boolToInt(sp.ShowIncidents), boolToInt(sp.Enabled), boolToInt(sp.APIEnabled), sp.SortOrder, sp.LogoURL, sp.FaviconURL, sp.CustomHeaderHTML, sp.PasswordHash, sp.AnalyticsScript, now}
 	if create {
-		res, err := db.ExecContext(ctx, `INSERT INTO status_pages (slug,title,description,custom_css,show_incidents,enabled,api_enabled,sort_order,logo_url,favicon_url,custom_header_html,password_hash,analytics_script,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, append(args, now)...)
+		id, err := insertID(ctx, db, `INSERT INTO status_pages (slug,title,description,custom_css,show_incidents,enabled,api_enabled,sort_order,logo_url,favicon_url,custom_header_html,password_hash,analytics_script,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, append(args, now)...)
 		if err != nil {
 			return err
 		}
-		sp.ID, err = res.LastInsertId()
-		if err != nil {
-			return err
-		}
+		sp.ID = id
 		sp.CreatedAt = parseTime(now)
 	} else {
 		if _, err := db.ExecContext(ctx, `UPDATE status_pages SET slug=?,title=?,description=?,custom_css=?,show_incidents=?,enabled=?,api_enabled=?,sort_order=?,logo_url=?,favicon_url=?,custom_header_html=?,password_hash=?,analytics_script=?,updated_at=? WHERE id=?`, append(args, sp.ID)...); err != nil {
