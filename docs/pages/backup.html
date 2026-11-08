@@ -1,49 +1,80 @@
-<h1>Backup & Restore</h1>
+<h1>Backup and restore</h1>
 
-<p>The Settings page (<code>/settings</code> in the web UI) lets you export and import your entire configuration as JSON. Use this to create backups, migrate between instances, or share configurations.</p>
+<p>A recoverable Asura backup includes a consistent SQLite database, the configuration used to open it, and any external secrets or files referenced by that configuration. Use a database backup for disaster recovery and rollback. Use the JSON export in Settings to transfer portable configuration between installations.</p>
 
-<h2>Export</h2>
+<h2>Back up the database and configuration</h2>
 
-<p>Downloads all monitors, groups, proxies, notification channels, maintenance windows, and status pages as a single JSON file. Two options:</p>
+<ol>
+  <li>Find the database file from <code>database.path</code> in your active configuration. For Docker, use the persistent data volume, not the container's disposable filesystem.</li>
+  <li>Create a consistent database snapshot with SQLite's backup command, or stop Asura cleanly before copying its database files.</li>
+  <li>Save <code>config.yaml</code>, environment or secret files, and any referenced TLS certificates or keys. Preserve <code>database.encryption_key</code> when configured: restoring the database without the matching key will not recover encrypted credentials.</li>
+  <li>Record the Asura version and keep a compatible binary or container image reference with the backup.</li>
+</ol>
 
-<ul>
-  <li><strong>Export</strong>. includes all data including secrets (passwords, tokens, bearer keys). Use this for backups</li>
-  <li><strong>Export (redacted)</strong>. leaves out secrets for safe sharing: notification channel settings, proxy credentials, monitor passwords, tokens and keys, and all custom header values. A redacted file cannot restore those secrets</li>
-</ul>
+<p>With the SQLite CLI installed, this example creates a snapshot while Asura is running. Replace both paths with your actual database and backup destination:</p>
 
-<p>Via API:</p>
+<pre><code>sqlite3 /path/to/asura.db ".backup '/backup/asura.db'"</code></pre>
 
-<pre><code>curl -H "X-API-Key: ak_..." https://example.com/api/v1/export &gt; backup.json
-curl -H "X-API-Key: ak_..." https://example.com/api/v1/export?redact_secrets=true &gt; backup-safe.json</code></pre>
+<p>SQLite's <a href="https://sqlite.org/backup.html">online backup mechanism</a> produces a consistent snapshot; the <a href="https://sqlite.org/cli.html">CLI reference</a> documents <code>.backup</code>. An ordinary copy of a live database file can miss changes in its WAL. For an offline file copy, stop Asura and preserve any remaining database companion files together with the database.</p>
 
-<p>The API export is a full backup unless you add <code>?redact_secrets=true</code>; redaction is opt-in. The web UI offers both buttons.</p>
+<h2>Verify and restore</h2>
 
-<h2>Import</h2>
+<p>Test the backup in a separate directory with a copy of the matching configuration and key. Keep the test instance isolated from production check targets, agents and notification destinations until you have reviewed its configuration. Confirm that the database opens, expected monitors and history are present, and stored credentials can be read.</p>
 
-<p>Upload a previously exported JSON file to restore or transfer configuration between instances. Two modes:</p>
+<p>For a production restore, stop Asura first and preserve the current database and configuration separately. Restore into a clean data directory, with the correct file ownership and encryption key; do not mix the restored database with WAL or shared-memory files from another database. Start the matching Asura version and verify its logs and state before resuming normal operation.</p>
+
+<h2>JSON configuration export</h2>
+
+<p>Settings offers full and redacted v2 exports. Both require <code>super_admin: true</code>; ordinary resource permissions do not grant configuration transfer access. IDs in an export belong to that file. Import resolves their relationships to the destination's IDs.</p>
 
 <table>
-  <thead>
-    <tr><th>Mode</th><th>Behavior</th></tr>
-  </thead>
+  <thead><tr><th>Resource</th><th>Portable configuration</th></tr></thead>
   <tbody>
-    <tr><td><strong>Merge</strong></td><td>Creates new items, skips items that already exist (by name). Existing data is untouched.</td></tr>
-    <tr><td><strong>Replace</strong></td><td>Deletes all existing monitors, groups, proxies, channels, maintenance windows, and status pages, then imports the file contents.</td></tr>
+    <tr><td>Monitors</td><td>Definitions, protocol settings, assertions, groups, tags, channel routing, proxy references, escalation references, and explicit agent references</td></tr>
+    <tr><td>Shared resources</td><td>Groups, tags, proxies, notification channels, escalation policies and their steps</td></tr>
+    <tr><td>Operations</td><td>Maintenance schedules, active state and monitor selections; on-call rotations, cadence anchors and overrides</td></tr>
+    <tr><td>Status pages</td><td>Page settings, branding, password protection, monitor membership and display order</td></tr>
   </tbody>
 </table>
 
-<p>Via API:</p>
+<p>History, sessions, audit records and status-page subscribers stay in the database backup. Authentication, roles, server settings and other YAML configuration stay in the configuration backup. Agent enrollment tokens and heartbeat credentials are never portable export data.</p>
 
-<pre><code>curl -X POST -H "X-API-Key: ak_..." \
-  -H "Content-Type: application/json" --data-binary @backup.json \
-  https://example.com/api/v1/import?mode=merge</code></pre>
+<p>A full export contains credentials for its portable resources, including channel and proxy settings and status-page password hashes. Store it as a secret. A redacted export is for sharing: it removes targets, settings, assertions, channel settings, proxy credentials and page password hashes. Import rejects redacted files. Review names, descriptions, branding and other free-form content before sharing either kind of file.</p>
 
-<h2>Best Practices</h2>
+<pre><code>curl --fail --show-error -H "X-API-Key: ${ASURA_API_KEY}" \
+  https://example.com/api/v1/export &gt; configuration.json
 
-<ul>
-  <li>Schedule regular exports as part of your backup strategy</li>
-  <li>Use <strong>redacted</strong> exports when sharing configs between team members</li>
-  <li>Test imports on a separate instance before replacing production data</li>
-  <li><strong>Replace</strong> mode is destructive. it deletes everything before importing</li>
-  <li>Import and export (including redacted exports) require <code>super_admin: true</code> or the legacy <code>admin</code> role. Ordinary resource permissions cannot grant configuration transfer access</li>
-</ul>
+curl --fail --show-error -H "X-API-Key: ${ASURA_API_KEY}" \
+  'https://example.com/api/v1/export?redact_secrets=true' &gt; configuration-redacted.json</code></pre>
+
+<p>Add your configured <code>server.base_path</code> before <code>/api/v1</code> when Asura is hosted below the domain root.</p>
+
+<h2>JSON configuration import</h2>
+
+<p>Import transfers supported configuration into an instance. It does not restore historical database state. Test the file on an isolated instance and take a database backup before replacing existing configuration.</p>
+
+<table>
+  <thead><tr><th>Mode</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>merge</code></td><td>Create imported items and retain uniquely matching existing items. Resources match by name; status pages match by slug. Ambiguous existing names cause the import to fail.</td></tr>
+    <tr><td><code>replace</code></td><td>Delete the existing portable configuration and replace it with the file. This also deletes related monitoring and notification history, and status-page subscribers. Notification history is removed when its channel is deleted, including entries without a monitor. Take a database backup first.</td></tr>
+  </tbody>
+</table>
+
+<pre><code>curl --fail --show-error -X POST -H "X-API-Key: ${ASURA_API_KEY}" \
+  -H "Content-Type: application/json" --data-binary @configuration.json \
+  'https://example.com/api/v1/import?mode=merge'</code></pre>
+
+<p>Import validates and writes the configuration in one transaction. A failure rolls back the import, including a replacement's deletions. The success response reports created and skipped entries. Review the resulting configuration and check targets before allowing normal monitoring and notification delivery. Import requires the same explicit super-admin authority as export.</p>
+
+<h3>Heartbeat enrollment</h3>
+
+<p>Each newly imported heartbeat monitor receives a fresh credential. The web import result shows its new ping URL once; the API response returns <code>heartbeats</code> entries containing <code>monitor_id</code>, <code>monitor_name</code> and the one-time <code>token</code>. Update the corresponding job with this new credential. A heartbeat skipped during a merge keeps its existing credential. Exports cannot recover either credential.</p>
+
+<h3>Agent references</h3>
+
+<p>Agent references resolve to already enrolled destination agents with unique matching names, or to an explicit source-to-destination agent mapping supplied with the import. Import never creates or enables agents or transfers agent tokens. Review every mapping before importing: assignment delegates eligible monitor data to that agent.</p>
+
+<h3>Older export files</h3>
+
+<p>V1 files can resolve the name-based relationships they contain. V1 maintenance selections with numeric monitor IDs are rejected because those files did not include the monitor IDs needed to translate the selections safely. Review and recreate those selections explicitly, or export v2 configuration from an upgraded copy of the original database.</p>

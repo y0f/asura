@@ -352,16 +352,17 @@
 
 <p>Import and export require super administrator access, including redacted exports. No collection of ordinary resource permissions grants this access.</p>
 
-<p>Export downloads all monitors, groups, tags, proxies, notification channels, maintenance windows, and status pages as a portable JSON file. Relationships are stored by name (not ID) so imports work across instances. Each monitor includes its assigned tags with per-monitor values; tags are created automatically on import if they don't exist.</p>
+<p>A full v2 export contains portable monitor configuration and relationships, groups, tags, proxies, notification channels, escalation policies, on-call rotations, maintenance windows and status pages. Relationships use file-local IDs that are remapped on import. Database history, subscribers, authentication and role configuration, agent enrollment tokens and heartbeat credentials are excluded. See <a href="backup.html">backup and configuration transfer</a> for the complete inventory and disaster-recovery procedure.</p>
 
 <p>Query parameters:</p>
 <ul>
-  <li><code>GET /api/v1/export?redact_secrets=true</code>: strips notification channel settings and proxy credentials</li>
-  <li><code>POST /api/v1/import?mode=merge</code>: skip entities that already exist (default)</li>
-  <li><code>POST /api/v1/import?mode=replace</code>: overwrite all</li>
+  <li><code>GET /api/v1/export?redact_secrets=true</code>: produces a sharing file with sensitive configuration removed. It cannot be imported; review free text and branding before sharing.</li>
+  <li><code>POST /api/v1/import?mode=merge</code>: keeps existing uniquely named entities, with status pages matched by slug, and reports them as skipped (default). Ambiguous existing names are rejected.</li>
+  <li><code>POST /api/v1/import?mode=replace</code>: replaces all portable configuration, deleting its related monitoring and notification history, and status-page subscribers.</li>
+  <li><code>agent_mapping=7:2,8:5</code>: optionally maps exported agent IDs to existing destination agent IDs. Unique matching agent names resolve automatically. Import never enrolls or enables agents.</li>
 </ul>
 
-<p>The import response returns counts of created, skipped, and errored entities.</p>
+<p>Imports accept up to 32 MiB of JSON and commit as one transaction. Any validation or write failure rolls back the entire import. Success returns created counts for each entity type and a skipped count. Newly imported heartbeat monitors also return a one-time <code>heartbeats</code> array containing <code>monitor_id</code>, <code>monitor_name</code> and <code>token</code>; update those pingers with the new credentials. The response uses <code>Cache-Control: no-store</code>. Existing heartbeat monitors skipped during a merge retain their credentials.</p>
 
 <h2>Tags</h2>
 
