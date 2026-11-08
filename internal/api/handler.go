@@ -58,9 +58,8 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// readJSON decodes the request body into v. Detailed decoder errors are logged
-// server-side; callers receive a generic message so internal struct details and
-// parser internals are not leaked to clients.
+// readJSON accepts exactly one JSON document. Decoder errors may include
+// submitted field names or values, so neither responses nor logs repeat them.
 func (h *Handler) readJSON(r *http.Request, v any) error {
 	defer r.Body.Close()
 	dec := json.NewDecoder(r.Body)
@@ -69,8 +68,13 @@ func (h *Handler) readJSON(r *http.Request, v any) error {
 		if errors.Is(err, io.EOF) {
 			return fmt.Errorf("request body is empty")
 		}
-		h.logger.Warn("decode request body", "method", r.Method, "path", r.URL.Path, "error", err)
+		h.logger.Warn("invalid JSON request body", "method", r.Method, "route", r.Pattern)
 		return fmt.Errorf("invalid request body")
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		h.logger.Warn("invalid JSON request body", "method", r.Method, "route", r.Pattern)
+		return fmt.Errorf("request body must contain exactly one JSON document")
 	}
 	return nil
 }
