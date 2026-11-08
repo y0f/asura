@@ -354,6 +354,9 @@ func ValidateProxy(p *storage.Proxy) error {
 	if p.Port < 1 || p.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
+	if len(p.AuthUser) > 1024 || len(p.AuthPass) > 16384 {
+		return fmt.Errorf("proxy credentials exceed the supported length")
+	}
 	return nil
 }
 

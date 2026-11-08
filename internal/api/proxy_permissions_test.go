@@ -1,0 +1,81 @@
+package api_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/y0f/asura/internal/config"
+	"github.com/y0f/asura/internal/storage"
+)
+
+func TestProxyPasswordsRoundTripWithIndependentReadAuthority(t *testing.T) {
+	env := newTestEnv(t, func(c *config.Config) {
+		c.Auth.APIKeys = append(c.Auth.APIKeys,
+			config.APIKeyConfig{Name: "writer", Hash: config.HashAPIKey("writer"), Permissions: []string{"proxies.create", "proxies.update", "proxies.delete"}},
+			config.APIKeyConfig{Name: "reader", Hash: config.HashAPIKey("reader"), Permissions: []string{"proxies.read"}})
+	}, false, nil)
+	writer := map[string]string{"X-API-Key": "writer"}
+	w := env.do("POST", "/api/v1/proxies", `{"name":"private-proxy","protocol":"http","host":"proxy.test","port":8080,"auth_user":"user","auth_pass":"saved-secret","enabled":true}`, writer)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	var response map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || len(response) != 1 || response["id"] == nil {
+		t.Fatalf("write-only create response exposed data: %s", w.Body.String())
+	}
+	var id int64
+	if err := json.Unmarshal(response["id"], &id); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/proxies/%d", id)
+	assertStored := func(host, password string) {
+		t.Helper()
+		got, err := env.store.GetProxy(context.Background(), id)
+		if err != nil || got.Host != host || got.AuthPass != password || !got.Enabled {
+			t.Fatalf("stored proxy fields or password changed unexpectedly: %v", err)
+		}
+	}
+	assertStored("proxy.test", "saved-secret")
+	w = env.do("GET", path, "", map[string]string{"X-API-Key": "reader"})
+	if w.Code != 200 || strings.Contains(w.Body.String(), "saved-secret") || strings.Contains(w.Body.String(), "auth_pass") {
+		t.Fatalf("read response contains credential: %d %s", w.Code, w.Body.String())
+	}
+	var editable storage.Proxy
+	if err := json.Unmarshal(w.Body.Bytes(), &editable); err != nil {
+		t.Fatal(err)
+	}
+	editable.Name = "renamed"
+	body, _ := json.Marshal(editable)
+	w = env.do("PUT", path, string(body), writer)
+	if w.Code != 200 || w.Body.String() != fmt.Sprintf("{\"id\":%d}\n", id) {
+		t.Fatalf("write-only redacted round trip: %d %s", w.Code, w.Body.String())
+	}
+	assertStored("proxy.test", "saved-secret")
+	for _, body := range []string{`{"host":"other.test"}`, `{"port":8081}`, `{"protocol":"socks5"}`, `{"auth_user":"another-user"}`, `{"host":"other.test","auth_pass":""}`} {
+		w = env.do("PUT", path, body, writer)
+		if w.Code != 400 || !strings.Contains(w.Body.String(), "credential destination") || strings.Contains(w.Body.String(), "saved-secret") {
+			t.Fatalf("retarget retained hidden password: %d %s", w.Code, w.Body.String())
+		}
+		assertStored("proxy.test", "saved-secret")
+	}
+	w = env.do("PUT", path, `{"host":"other.test","auth_pass":"replacement-secret"}`, writer)
+	if w.Code != 200 || strings.Contains(w.Body.String(), "secret") {
+		t.Fatalf("replacement: %d %s", w.Code, w.Body.String())
+	}
+	assertStored("other.test", "replacement-secret")
+	w = env.do("PUT", path, `{"host":"third.test","clear_auth_pass":true}`, writer)
+	if w.Code != 200 {
+		t.Fatalf("clear: %d %s", w.Code, w.Body.String())
+	}
+	assertStored("third.test", "")
+	if w := env.do("DELETE", path, "", writer); w.Code != 200 {
+		t.Fatalf("delete: %d", w.Code)
+	}
+	if w := env.do("DELETE", path, "", writer); w.Code != 404 {
+		t.Fatalf("missing delete: %d", w.Code)
+	}
+}

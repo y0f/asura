@@ -77,10 +77,14 @@ templ ProxyListPage(p ProxyListParams) {
 }
 
 func (p ProxyFormParams) header() PageHeaderParams {
-	if p.Proxy.ID > 0 {
-		return PageHeaderParams{Title: "Edit proxy", Subtitle: p.Proxy.Name, BackHref: p.BasePath + "/proxies", BackLabel: "Proxies"}
+	back, label := p.HomePath(), "Back"
+	if p.Can("proxies.read") {
+		back, label = p.BasePath+"/proxies", "Proxies"
 	}
-	return PageHeaderParams{Title: "New proxy", BackHref: p.BasePath + "/proxies", BackLabel: "Proxies"}
+	if p.Proxy.ID > 0 {
+		return PageHeaderParams{Title: "Edit proxy", Subtitle: p.Proxy.Name, BackHref: back, BackLabel: label}
+	}
+	return PageHeaderParams{Title: "New proxy", BackHref: back, BackLabel: label}
 }
 
 templ ProxyFormPage(p ProxyFormParams) {
@@ -128,6 +132,7 @@ templ ProxyFormPage(p ProxyFormParams) {
 							class="form-input"
 						/>
 						if p.PasswordStored {
+							<p class="form-hint">When changing the host, port, protocol or username, enter a replacement password or remove the saved value.</p>
 							<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
 								<input type="checkbox" name="clear_auth_pass" class="form-checkbox"/>
 								Remove saved value
@@ -148,7 +153,7 @@ templ ProxyFormPage(p ProxyFormParams) {
 						Create proxy
 					}
 				</button>
-				<a href={ templ.SafeURL(p.BasePath + "/proxies") } class="btn-secondary">Cancel</a>
+				<a href={ templ.SafeURL(p.header().BackHref) } class="btn-secondary">Cancel</a>
 			</div>
 		</form>
 	}

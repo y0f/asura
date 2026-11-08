@@ -219,10 +219,14 @@ func ProxyListPage(p ProxyListParams) templ.Component {
 }
 
 func (p ProxyFormParams) header() PageHeaderParams {
-	if p.Proxy.ID > 0 {
-		return PageHeaderParams{Title: "Edit proxy", Subtitle: p.Proxy.Name, BackHref: p.BasePath + "/proxies", BackLabel: "Proxies"}
+	back, label := p.HomePath(), "Back"
+	if p.Can("proxies.read") {
+		back, label = p.BasePath+"/proxies", "Proxies"
 	}
-	return PageHeaderParams{Title: "New proxy", BackHref: p.BasePath + "/proxies", BackLabel: "Proxies"}
+	if p.Proxy.ID > 0 {
+		return PageHeaderParams{Title: "Edit proxy", Subtitle: p.Proxy.Name, BackHref: back, BackLabel: label}
+	}
+	return PageHeaderParams{Title: "New proxy", BackHref: back, BackLabel: label}
 }
 
 func ProxyFormPage(p ProxyFormParams) templ.Component {
@@ -265,7 +269,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(proxyFormAction(p.BasePath, p.Proxy))).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 89, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 93, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -278,7 +282,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.Proxy.Name).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 93, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 97, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -311,7 +315,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.Proxy.Host).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 105, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 109, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
@@ -324,7 +328,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprint(p.Proxy.Port)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 109, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 113, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -337,7 +341,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.Proxy.AuthUser).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 115, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 119, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
@@ -350,7 +354,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.Proxy.AuthPass).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 123, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 127, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -371,7 +375,7 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.PasswordStored {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<label class=\"mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted\"><input type=\"checkbox\" name=\"clear_auth_pass\" class=\"form-checkbox\"> Remove saved value</label>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p class=\"form-hint\">When changing the host, port, protocol or username, enter a replacement password or remove the saved value.</p><label class=\"mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted\"><input type=\"checkbox\" name=\"clear_auth_pass\" class=\"form-checkbox\"> Remove saved value</label>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -406,9 +410,9 @@ func ProxyFormPage(p ProxyFormParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
-			templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/proxies")).ResolveURL(ctx)
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.header().BackHref)).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 151, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/proxies.templ`, Line: 156, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {

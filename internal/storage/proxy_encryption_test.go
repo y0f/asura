@@ -45,7 +45,35 @@ func TestProxyReadsFailClosedOnUnreadablePasswords(t *testing.T) {
 			if got, err := s.ListProxies(ctx); err == nil || got != nil || strings.Contains(err.Error(), ciphertext) || strings.Contains(err.Error(), p.AuthPass) {
 				t.Fatalf("ListProxies returned partial credentials or exposed values: %v", err)
 			}
+			called := false
+			if got, err := s.UpdateProxyWith(ctx, p.ID, func(current *Proxy) (*Proxy, error) {
+				called = true
+				return current, nil
+			}); err == nil || got != nil || called || strings.Contains(err.Error(), p.AuthPass) {
+				t.Fatalf("update continued with unreadable credentials: %v", err)
+			}
 		})
+	}
+}
+
+func TestProxyLiteralEncryptionPrefixRequiresEncryption(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := &Proxy{Name: "literal", Protocol: "http", Host: "proxy.test", Port: 8080, AuthPass: "enc:literal-password"}
+	if err := s.CreateProxy(ctx, p); err == nil || p.ID != 0 || strings.Contains(err.Error(), p.AuthPass) {
+		t.Fatal("ambiguous unencrypted credential was stored or exposed")
+	}
+	gcm, err := newGCM([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.enc = &Encryptor{gcm: gcm, legacyGCM: gcm}
+	if err := s.CreateProxy(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetProxy(ctx, p.ID)
+	if err != nil || got.AuthPass != p.AuthPass {
+		t.Fatal("encrypted literal prefix did not round-trip")
 	}
 }
 

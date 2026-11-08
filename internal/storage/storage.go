@@ -192,6 +192,7 @@ type Store interface {
 	GetProxy(ctx context.Context, id int64) (*Proxy, error)
 	ListProxies(ctx context.Context) ([]*Proxy, error)
 	UpdateProxy(ctx context.Context, p *Proxy) error
+	UpdateProxyWith(ctx context.Context, id int64, prepare ProxyUpdate) (*Proxy, error)
 	DeleteProxy(ctx context.Context, id int64) error
 
 	// Escalation policies
