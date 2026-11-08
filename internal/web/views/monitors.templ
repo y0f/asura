@@ -26,26 +26,29 @@ type MonitorListParams struct {
 
 type MonitorDetailParams struct {
 	LayoutParams
-	Monitor      *storage.Monitor
-	Checks       *storage.PaginatedResult
-	Changes      *storage.PaginatedResult
-	ChecksPage   int
-	ChangesPage  int
-	Uptime24h    float64
-	Uptime7d     float64
-	Uptime30d    float64
-	P50          float64
-	P95          float64
-	P99          float64
-	TotalChecks  int64
-	UpChecks     int64
-	DownChecks   int64
-	LatestCheck  *storage.CheckResult
-	OpenIncident *storage.Incident
-	Tags         []storage.MonitorTag
-	SLA          *SLAData
-	Heatmap      []HeatmapDay
-	CloneAllowed bool
+	Monitor          *storage.Monitor
+	Checks           *storage.PaginatedResult
+	Changes          *storage.PaginatedResult
+	ChecksPage       int
+	ChangesPage      int
+	Uptime24h        float64
+	Uptime7d         float64
+	Uptime30d        float64
+	Uptime24hHasData bool
+	Uptime7dHasData  bool
+	Uptime30dHasData bool
+	P50              float64
+	P95              float64
+	P99              float64
+	TotalChecks      int64
+	UpChecks         int64
+	DownChecks       int64
+	LatestCheck      *storage.CheckResult
+	OpenIncident     *storage.Incident
+	Tags             []storage.MonitorTag
+	SLA              *SLAData
+	Heatmap          []HeatmapDay
+	CloneAllowed     bool
 }
 
 type SLAData struct {
@@ -196,6 +199,27 @@ func (p MonitorDetailParams) showPercentiles() bool {
 		return true
 	}
 	return false
+}
+
+func (p MonitorDetailParams) hasResponseTimes() bool {
+	return p.Monitor.Type != "manual" && p.Monitor.Type != "heartbeat"
+}
+
+templ uptimeStat(label string, percent float64, hasData bool) {
+	if hasData {
+		@StatCard(label, UptimeFmt(percent), UptimeTone(percent))
+	} else {
+		@StatCard(label, "—", "muted") {
+			<div class="text-xs text-muted mt-0.5">No check data</div>
+		}
+	}
+}
+
+func durationPercentile(value float64, successfulChecks int64) string {
+	if successfulChecks == 0 {
+		return "—"
+	}
+	return FormatFloat(value)
 }
 
 func (p MonitorDetailParams) canClone() bool {
@@ -527,8 +551,9 @@ func (p MonitorDetailParams) slaState() (label, badge string) {
 templ configRow(label string) {
 	<div class="flex items-center justify-between gap-4 py-2 border-b border-line">
 		<dt class="text-muted">{ label }</dt>
-		<dd class="text-white tabular-nums text-right">{ children... }
-</dd>
+		<dd class="text-white tabular-nums text-right">
+			{ children... }
+		</dd>
 	</div>
 }
 
@@ -603,9 +628,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			}
 			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-				@StatCard("Uptime 24h", UptimeFmt(p.Uptime24h), UptimeTone(p.Uptime24h))
-				@StatCard("Uptime 7d", UptimeFmt(p.Uptime7d), UptimeTone(p.Uptime7d))
-				@StatCard("Uptime 30d", UptimeFmt(p.Uptime30d), UptimeTone(p.Uptime30d))
+				@uptimeStat("Uptime 24h", p.Uptime24h, p.Uptime24hHasData)
+				@uptimeStat("Uptime 7d", p.Uptime7d, p.Uptime7dHasData)
+				@uptimeStat("Uptime 30d", p.Uptime30d, p.Uptime30dHasData)
 				@StatCard("Checks 24h", fmt.Sprint(p.TotalChecks), "") {
 					if p.DownChecks > 0 {
 						<div class="text-xs text-crit mt-0.5">{ fmt.Sprint(p.DownChecks) } failed</div>
@@ -614,51 +639,53 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					}
 				}
 			</div>
-			<div
-				id={ fmt.Sprintf("response-chart-%d", p.Monitor.ID) }
-				hx-preserve="true"
-				data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
-				class="card card-pad mb-6"
-				x-data="monitorChart()"
-				x-cloak
-			>
-				<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-					<h2 class="text-md font-semibold">Response time</h2>
-					<div class="flex gap-1" role="group" aria-label="Time range">
-						<template x-for="r in ['1h','6h','24h','7d','30d']" :key="r">
-							<button
-								type="button"
-								@click="range = r; fetchData()"
-								:aria-pressed="range === r"
-								:class="range === r ? 'bg-surface-200 text-white' : 'text-muted-light hover:text-white hover:bg-surface-200'"
-								class="h-7 px-2 text-xs rounded-control"
-								x-text="r"
-							></button>
-						</template>
+			if p.hasResponseTimes() {
+				<div
+					id={ fmt.Sprintf("response-chart-%d", p.Monitor.ID) }
+					hx-preserve="true"
+					data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
+					class="card card-pad mb-6"
+					x-data="monitorChart()"
+					x-cloak
+				>
+					<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+						<h2 class="text-md font-semibold">Response time</h2>
+						<div class="flex gap-1" role="group" aria-label="Time range">
+							<template x-for="r in ['1h','6h','24h','7d','30d']" :key="r">
+								<button
+									type="button"
+									@click="range = r; fetchData()"
+									:aria-pressed="range === r"
+									:class="range === r ? 'bg-surface-200 text-white' : 'text-muted-light hover:text-white hover:bg-surface-200'"
+									class="h-7 px-2 text-xs rounded-control"
+									x-text="r"
+								></button>
+							</template>
+						</div>
+					</div>
+					<div role="status" class="text-xs text-muted mb-2" x-show="loading || error">
+						<span x-text="error || (points.length ? 'Updating chart…' : 'Loading chart…')"></span>
+						<span x-show="error && points.length" x-text="' Showing the last loaded ' + loadedRange + ' range.'"></span>
+						<button type="button" x-show="error" @click="fetchData()" class="ml-2 text-brand underline">Retry</button>
+					</div>
+					<div x-show="!points.length" class="h-[200px] flex items-center justify-center text-sm text-muted">
+						<span x-text="loading ? 'Loading…' : error ? 'Chart unavailable.' : 'No data for this range.'"></span>
+					</div>
+					<div x-show="points.length" class="relative">
+						<div x-ref="chart" role="img" :aria-label="summary"></div>
+						<div x-ref="tooltip" class="absolute pointer-events-none bg-surface-100 border border-line-light rounded-control px-2 py-1.5 z-10" style="display:none">
+							<div class="tip-date text-xs text-muted"></div>
+							<div class="tip-value text-sm text-white font-mono"></div>
+							<div class="tip-status text-xs text-crit" style="display:none"></div>
+						</div>
 					</div>
 				</div>
-				<div role="status" class="text-xs text-muted mb-2" x-show="loading || error">
-					<span x-text="error || (points.length ? 'Updating chart…' : 'Loading chart…')"></span>
-					<span x-show="error && points.length" x-text="' Showing the last loaded ' + loadedRange + ' range.'"></span>
-					<button type="button" x-show="error" @click="fetchData()" class="ml-2 text-brand underline">Retry</button>
-				</div>
-				<div x-show="!points.length" class="h-[200px] flex items-center justify-center text-sm text-muted">
-					<span x-text="loading ? 'Loading…' : error ? 'Chart unavailable.' : 'No data for this range.'"></span>
-				</div>
-				<div x-show="points.length" class="relative">
-					<div x-ref="chart" role="img" :aria-label="summary"></div>
-					<div x-ref="tooltip" class="absolute pointer-events-none bg-surface-100 border border-line-light rounded-control px-2 py-1.5 z-10" style="display:none">
-						<div class="tip-date text-xs text-muted"></div>
-						<div class="tip-value text-sm text-white font-mono"></div>
-						<div class="tip-status text-xs text-crit" style="display:none"></div>
-					</div>
-				</div>
-			</div>
+			}
 			if p.showPercentiles() {
 				<div class="grid grid-cols-3 gap-3 mb-6">
-					@StatCard("p50", FormatFloat(p.P50), "")
-					@StatCard("p95", FormatFloat(p.P95), "")
-					@StatCard("p99", FormatFloat(p.P99), "")
+					@StatCard("p50", durationPercentile(p.P50, p.UpChecks), "")
+					@StatCard("p95", durationPercentile(p.P95, p.UpChecks), "")
+					@StatCard("p99", durationPercentile(p.P99, p.UpChecks), "")
 				</div>
 			}
 			if p.SLA != nil && p.CanMonitor("sla.read", p.Monitor.ID, p.Monitor.GroupID) {
@@ -742,7 +769,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 								<thead>
 									<tr class="border-b border-line">
 										<th class="th">Status</th>
-										<th class="th">Response</th>
+										if p.hasResponseTimes() {
+											<th class="th">Response</th>
+										}
 										if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
 											<th class="th">Code</th>
 										}
@@ -757,7 +786,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 									for _, ck := range cks {
 										<tr>
 											<td class="px-4 py-2">@StatusPill(ck.Status)</td>
-											<td class="px-4 py-2 text-sm text-muted-light tabular-nums font-mono">{ FormatMs(ck.ResponseTime) }</td>
+											if p.hasResponseTimes() {
+												<td class="px-4 py-2 text-sm text-muted-light tabular-nums font-mono">{ FormatMs(ck.ResponseTime) }</td>
+											}
 											if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
 												if ck.StatusCode != 0 {
 													<td class={ "px-4 py-2 text-sm tabular-nums font-mono", HttpStatusColor(ck.StatusCode) }>{ fmt.Sprint(ck.StatusCode) }</td>
