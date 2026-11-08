@@ -27,6 +27,10 @@ func (h *Handler) requireMonitor(w http.ResponseWriter, r *http.Request, id int6
 }
 
 func monitorMutationError(w http.ResponseWriter, err error) bool {
+	if errors.Is(err, storage.ErrInvalidMonitorProxy) {
+		writeError(w, http.StatusBadRequest, storage.ErrInvalidMonitorProxy.Error())
+		return true
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "monitor not found")
 		return true

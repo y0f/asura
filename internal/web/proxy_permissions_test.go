@@ -14,6 +14,26 @@ import (
 	"github.com/y0f/asura/internal/storage"
 )
 
+func TestProxyRoutingWebDeleteReturnsConflict(t *testing.T) {
+	h, store := storeHandler(t)
+	ctx := context.Background()
+	p := &storage.Proxy{Name: "egress", Protocol: "http", Host: "proxy.test", Port: 8080, Enabled: true}
+	if err := store.CreateProxy(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	m := &storage.Monitor{Name: "routed", Type: "http", Target: "https://example.test", Interval: 60, Timeout: 10, ProxyID: &p.ID}
+	if err := store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	r := adminRequest("POST", "/proxies/"+strconvI(p.ID)+"/delete", nil)
+	r.SetPathValue("id", strconvI(p.ID))
+	w := httptest.NewRecorder()
+	h.ProxyDelete(w, r)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "change their routing") {
+		t.Fatalf("referenced proxy deletion: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestProxyFormRetargetAndWriteOnlyRedirect(t *testing.T) {
 	h, store := storeHandler(t)
 	h.cfg.Server.BasePath = "/console"

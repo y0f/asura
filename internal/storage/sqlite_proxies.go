@@ -64,7 +64,19 @@ func (s *SQLiteStore) UpdateProxy(ctx context.Context, p *Proxy) error {
 }
 
 func (s *SQLiteStore) DeleteProxy(ctx context.Context, id int64) error {
-	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM proxies WHERE id=?", id)
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var inUse bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM monitors WHERE proxy_id=?) FROM proxies WHERE id=?", id, id).Scan(&inUse); err != nil {
+		return err
+	}
+	if inUse {
+		return ErrProxyInUse
+	}
+	result, err := tx.ExecContext(ctx, "DELETE FROM proxies WHERE id=?", id)
 	if err != nil {
 		return err
 	}
@@ -73,5 +85,5 @@ func (s *SQLiteStore) DeleteProxy(ctx context.Context, id int64) error {
 	} else if count != 1 {
 		return sql.ErrNoRows
 	}
-	return nil
+	return tx.Commit()
 }

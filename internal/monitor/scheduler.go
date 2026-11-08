@@ -3,9 +3,11 @@ package monitor
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -261,7 +263,7 @@ func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Mo
 		}
 		u := &url.URL{
 			Scheme: p.Protocol,
-			Host:   fmt.Sprintf("%s:%d", p.Host, p.Port),
+			Host:   net.JoinHostPort(strings.Trim(p.Host, "[]"), strconv.Itoa(p.Port)),
 		}
 		if p.AuthUser != "" {
 			u.User = url.UserPassword(p.AuthUser, p.AuthPass)

@@ -104,7 +104,7 @@ Agent assignment is a trust decision: eligible jobs include their target, custom
 }
 ```
 
-Asura fetches a token from the token URL using the client credentials grant, caches it in memory, and automatically refreshes before expiry. If the token endpoint is unreachable, the monitor goes down with a distinct error message.
+Asura fetches a token from the token URL using the client credentials grant and the monitor's proxy, when configured. It caches the token in memory for at most one day and refreshes before expiry. Credential, recipient or proxy changes invalidate reuse. The token endpoint must respond directly; redirects are not followed with client credentials. An unreachable or invalid token endpoint makes the check fail without recording its response body.
 
 #### Mutual TLS (mTLS) {#mutual-tls-mtls}
 

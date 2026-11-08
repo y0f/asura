@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -58,6 +59,9 @@ func (s *SQLiteStore) ApplyConfiguration(ctx context.Context, data *Configuratio
 		}
 	}
 	if err := ic.write(s); err != nil {
+		if errors.Is(err, ErrInvalidMonitorProxy) {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidConfiguration, err)
+		}
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

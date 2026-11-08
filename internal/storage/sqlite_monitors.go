@@ -86,6 +86,9 @@ func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sqlTransact
 	if err := checkMonitorGroup(ctx, tx, m.GroupID); err != nil {
 		return nil, nil, err
 	}
+	if err := checkMonitorProxy(ctx, tx, m); err != nil {
+		return nil, nil, err
+	}
 	tags, _ := json.Marshal(m.Tags)
 	now := formatTime(time.Now())
 
@@ -290,7 +293,7 @@ func (s *SQLiteStore) updateMonitor(ctx context.Context, writer *sqlTransaction,
 	destinationClause, destinationArgs := monitorDestinationSQL(&monitorDestination{groupID: m.GroupID}, access)
 	clause += destinationClause
 	accessArgs = append(accessArgs, destinationArgs...)
-	if m.GroupID != nil {
+	if m.GroupID != nil || m.ProxyID != nil {
 		if len(access) > 0 {
 			// Preserve scoped not-found behavior before reporting an invalid
 			// destination; the transaction prevents either decision going stale.
@@ -300,6 +303,9 @@ func (s *SQLiteStore) updateMonitor(ctx context.Context, writer *sqlTransaction,
 			}
 		}
 		if err := checkMonitorGroup(ctx, writer, m.GroupID); err != nil {
+			return err
+		}
+		if err := checkMonitorProxy(ctx, writer, m); err != nil {
 			return err
 		}
 	}

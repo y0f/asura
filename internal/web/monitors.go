@@ -747,6 +747,8 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 		lp.Error = "Failed to create monitor"
 		if errors.Is(err, storage.ErrInvalidMonitorRelation) {
 			lp.Error = "A selected related resource no longer exists. Review the selections and try again."
+		} else if errors.Is(err, storage.ErrInvalidMonitorProxy) {
+			lp.Error = storage.ErrInvalidMonitorProxy.Error()
 		}
 		fd := monitorToFormData(mon)
 		keepRawJSON(r, fd)
@@ -866,6 +868,8 @@ func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
 			message = inputErr.Error()
 		} else if errors.Is(err, storage.ErrInvalidMonitorRelation) {
 			message = "A selected related resource no longer exists. Review the selections and try again."
+		} else if errors.Is(err, storage.ErrInvalidMonitorProxy) {
+			message = storage.ErrInvalidMonitorProxy.Error()
 		} else {
 			h.logger.Error("web: update monitor", "error", err)
 		}

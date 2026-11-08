@@ -53,7 +53,18 @@ func (r *Registry) Get(typ string) (Checker, error) {
 	if !ok {
 		return nil, fmt.Errorf("no checker registered for type: %s", typ)
 	}
-	return c, nil
+	return proxyChecked{Checker: c}, nil
+}
+
+// A configured proxy is a routing requirement. Unsupported or unresolved
+// routes must never fall back to a direct connection in a protocol checker.
+type proxyChecked struct{ Checker }
+
+func (c proxyChecked) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	if err := validateMonitorProxy(monitor); err != nil {
+		return nil, err
+	}
+	return c.Checker.Check(ctx, monitor)
 }
 
 // DefaultRegistry creates a registry with all built-in checkers.

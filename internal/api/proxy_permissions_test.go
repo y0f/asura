@@ -12,6 +12,34 @@ import (
 	"github.com/y0f/asura/internal/storage"
 )
 
+func TestProxyRoutingAPIRejectsUnsupportedAndReferencedMutations(t *testing.T) {
+	env := newTestEnv(t, nil, false, nil)
+	ctx := context.Background()
+	p := &storage.Proxy{Name: "egress", Protocol: "socks5", Host: "proxy.test", Port: 1080, Enabled: true}
+	if err := env.store.CreateProxy(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	m := &storage.Monitor{Name: "tcp", Type: "tcp", Target: "example.test:443", Interval: 60, Timeout: 10, Enabled: true, ProxyID: &p.ID}
+	if err := env.store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/proxies/%d", p.ID)
+	if w := env.do("DELETE", path, "", admin); w.Code != http.StatusConflict {
+		t.Fatalf("assigned delete: %d %s", w.Code, w.Body.String())
+	}
+	if w := env.do("PUT", path, `{"protocol":"http"}`, admin); w.Code != http.StatusBadRequest {
+		t.Fatalf("incompatible protocol: %d %s", w.Code, w.Body.String())
+	}
+	body := fmt.Sprintf(`{"name":"unsupported","type":"smtp","target":"mail.test","interval":60,"timeout":10,"proxy_id":%d}`, p.ID)
+	if w := env.do("POST", "/api/v1/monitors", body, admin); w.Code != http.StatusBadRequest {
+		t.Fatalf("incompatible monitor: %d %s", w.Code, w.Body.String())
+	}
+	got, err := env.store.GetMonitor(ctx, m.ID)
+	if err != nil || got.ProxyID == nil || *got.ProxyID != p.ID {
+		t.Fatalf("rejected HTTP mutation changed routing: %v", err)
+	}
+}
+
 func TestProxyPasswordsRoundTripWithIndependentReadAuthority(t *testing.T) {
 	env := newTestEnv(t, func(c *config.Config) {
 		c.Auth.APIKeys = append(c.Auth.APIKeys,

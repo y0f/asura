@@ -26,9 +26,10 @@ const maxBodyRead = 1 << 20 // 1MB
 var oauth2TokenCache sync.Map // map[int64]*oauth2CachedToken
 
 type oauth2CachedToken struct {
-	mu        sync.Mutex
-	token     string
-	expiresAt time.Time
+	mu            sync.Mutex
+	token         string
+	expiresAt     time.Time
+	configuration [32]byte
 }
 
 type HTTPChecker struct {
@@ -68,7 +69,7 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Resul
 	applyBodyAndHeaders(req, settings)
 
 	if settings.AuthMethod == "oauth2" {
-		token, err := fetchOAuth2Token(ctx, monitor.ID, settings, c.AllowPrivate)
+		token, err := fetchOAuth2Token(ctx, monitor, settings, c.AllowPrivate)
 		if err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("oauth2 token fetch failed: %v", err)}, nil
 		}
@@ -253,14 +254,18 @@ func applyAuthentication(req *http.Request, settings model.HTTPSettings) {
 	}
 }
 
-func fetchOAuth2Token(ctx context.Context, monitorID int64, settings model.HTTPSettings, allowPrivate bool) (string, error) {
-	val, _ := oauth2TokenCache.LoadOrStore(monitorID, &oauth2CachedToken{})
+func fetchOAuth2Token(ctx context.Context, monitor *model.Monitor, settings model.HTTPSettings, allowPrivate bool) (string, error) {
+	val, _ := oauth2TokenCache.LoadOrStore(monitor.ID, &oauth2CachedToken{})
 	cached := val.(*oauth2CachedToken)
 
 	cached.mu.Lock()
 	defer cached.mu.Unlock()
 
-	if cached.token != "" && time.Now().Before(cached.expiresAt.Add(-30*time.Second)) {
+	// Jobs may outlive configuration reloads, and agents do not receive the web
+	// cache-invalidation signal. Bind reuse to credentials, recipient and route.
+	key, _ := json.Marshal([]string{monitor.Target, monitor.ProxyURL, settings.OAuth2TokenURL, settings.OAuth2ClientID, settings.OAuth2ClientSecret, settings.OAuth2Scopes, settings.OAuth2Audience, strconv.FormatBool(allowPrivate)})
+	fingerprint := sha256.Sum256(key)
+	if cached.configuration == fingerprint && cached.token != "" && time.Now().Before(cached.expiresAt.Add(-30*time.Second)) {
 		return cached.token, nil
 	}
 
@@ -278,45 +283,49 @@ func fetchOAuth2Token(ctx context.Context, monitorID int64, settings model.HTTPS
 
 	req, err := http.NewRequestWithContext(ctx, "POST", settings.OAuth2TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return "", fmt.Errorf("invalid token endpoint request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: 10 * time.Second,
-				Control: safenet.MaybeDialControl(allowPrivate),
-			}).DialContext,
-			DisableKeepAlives: true,
-		},
+	baseDial := (&net.Dialer{Timeout: 10 * time.Second, Control: safenet.MaybeDialControl(allowPrivate)}).DialContext
+	transport := &http.Transport{DialContext: baseDial, DisableKeepAlives: true}
+	applyHTTPProxy(transport, monitor.ProxyURL, baseDial, allowPrivate)
+	if HTTPProxyURL(monitor.ProxyURL) != nil {
+		if err := validateProxyTarget(ctx, req.URL.Host, allowPrivate); err != nil {
+			return "", fmt.Errorf("token endpoint is not allowed through the proxy")
+		}
+	}
+	client := &http.Client{Timeout: 10 * time.Second, Transport: transport,
+		// A redirect must not forward client credentials to another recipient.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("request: %w", err)
+		return "", fmt.Errorf("token endpoint request failed")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("token endpoint returned status %d", resp.StatusCode)
 	}
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBodyRead)).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("invalid token endpoint response")
 	}
 	if tokenResp.AccessToken == "" {
 		return "", fmt.Errorf("empty access_token in response")
 	}
 
 	cached.token = tokenResp.AccessToken
+	cached.configuration = fingerprint
 	if tokenResp.ExpiresIn > 0 {
-		cached.expiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		// Bound the duration before conversion, avoiding integer overflow for
+		// malformed servers and periodically refreshing long-lived tokens.
+		cached.expiresAt = time.Now().Add(time.Duration(min(tokenResp.ExpiresIn, 86400)) * time.Second)
 	} else {
 		cached.expiresAt = time.Now().Add(time.Hour)
 	}

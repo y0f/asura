@@ -205,7 +205,9 @@ Assign monitors by setting `group_id` under the creation or move permissions des
 | `auth_pass` | string |  | Authentication password |
 | `enabled` | bool |  | Whether proxy is active (API creation default: false; the web creation form starts enabled) |
 
-Assign a proxy with `proxy_id`. HTTP proxies are supported by HTTP and WebSocket checks. SOCKS5 is supported by HTTP, WebSocket, TCP, TLS, domain WHOIS, gRPC and MQTT checks, plus DNS checks with an explicit `settings.server` using TCP. Other types currently do not apply proxy settings, including HTTP multi-step, SSH, SMTP, Redis, PostgreSQL, UDP and ICMP. Do not rely on an assigned proxy to route an unsupported check.
+Assign a proxy with `proxy_id`. HTTP proxies are supported by HTTP and WebSocket checks. SOCKS5 is supported by HTTP, WebSocket, TCP, TLS, domain WHOIS, gRPC and MQTT checks, plus DNS checks with an explicit `settings.server` using TCP. Other types reject proxy assignments, including HTTP multi-step, SSH, SMTP, Redis, PostgreSQL, UDP and ICMP. A proxy protocol change must remain compatible with every assigned monitor. A disabled, unavailable or incompatible saved proxy makes the check fail; it never falls back to a direct connection. Proxy-assigned monitors run on the server because agents do not receive proxy credentials.
+
+Deleting an assigned proxy returns `409`. Change each monitor's routing explicitly before deleting it. HTTP OAuth token requests use the monitor's proxy too; token endpoints must respond directly because redirects are not followed with client credentials.
 
 Proxy reads hide `auth_pass`. An omitted or blank password on update retains the saved value; `clear_auth_pass: true` removes it, and a nonempty value replaces it. Other omitted fields are preserved. An ordinary editor changing protocol, host, port or authentication username must replace or remove a retained password. A super administrator can retain it across that destination change. Mutations without `proxies.read` return only the proxy ID.
 

@@ -123,7 +123,7 @@ func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		if errors.Is(err, httputil.ErrInvalidProxy) || errors.Is(err, storage.ErrProxyPasswordStorage) {
+		if errors.Is(err, httputil.ErrInvalidProxy) || errors.Is(err, storage.ErrProxyPasswordStorage) || errors.Is(err, storage.ErrInvalidMonitorProxy) {
 			h.proxyFormError(w, r, p, passwordStored, err)
 			return
 		}
@@ -145,6 +145,10 @@ func (h *Handler) ProxyDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.DeleteProxy(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrProxyInUse) {
+			http.Error(w, storage.ErrProxyInUse.Error(), http.StatusConflict)
+			return
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
 			return

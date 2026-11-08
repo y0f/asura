@@ -61,6 +61,11 @@ func (s *SQLiteStore) UpdateProxyWith(ctx context.Context, id int64, prepare Pro
 	next := *candidate
 	next.ID, next.CreatedAt = id, current.CreatedAt
 	next.UpdatedAt = parseTime(formatTime(time.Now()))
+	if next.Protocol != current.Protocol {
+		if err := s.checkProxyMonitors(ctx, tx, id, next.Protocol); err != nil {
+			return nil, err
+		}
+	}
 	password, err := s.encryptProxyPassword(next.AuthPass)
 	if err != nil {
 		return nil, err

@@ -121,6 +121,10 @@ func proxyResponse(r *http.Request, p *storage.Proxy) any {
 
 func proxyMutationError(w http.ResponseWriter, err error) bool {
 	switch {
+	case errors.Is(err, storage.ErrProxyInUse):
+		writeError(w, http.StatusConflict, storage.ErrProxyInUse.Error())
+	case errors.Is(err, storage.ErrInvalidMonitorProxy):
+		writeError(w, http.StatusBadRequest, storage.ErrInvalidMonitorProxy.Error())
 	case errors.Is(err, sql.ErrNoRows):
 		writeError(w, http.StatusNotFound, "proxy not found")
 	case errors.Is(err, httputil.ErrInvalidProxy), errors.Is(err, storage.ErrProxyPasswordStorage):

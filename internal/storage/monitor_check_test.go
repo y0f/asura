@@ -49,7 +49,11 @@ func TestMonitorRevisionInvalidatesQueuedChecks(t *testing.T) {
 			p.Host = "new.example"
 			return s.UpdateProxy(ctx, p)
 		}},
-		{"proxy deleted", func(ctx context.Context, s *SQLiteStore, _ *Monitor, _ *Agent, p *Proxy) error {
+		{"proxy explicitly detached and deleted", func(ctx context.Context, s *SQLiteStore, m *Monitor, _ *Agent, p *Proxy) error {
+			m.ProxyID = nil
+			if err := s.UpdateMonitor(ctx, m); err != nil {
+				return err
+			}
 			return s.DeleteProxy(ctx, p.ID)
 		}},
 	}
