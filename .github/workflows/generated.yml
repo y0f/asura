@@ -23,7 +23,7 @@ jobs:
           go-version-file: "go.mod"
       - name: Download pinned Tailwind CLI
         run: |
-          curl --fail --location --silent --show-error -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
           echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
           chmod +x tailwindcss
       - name: Check generated templates and CSS
