@@ -3,6 +3,8 @@ package monitor
 import (
 	"container/heap"
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net"
 	"net/url"
@@ -87,29 +89,38 @@ func (s *Scheduler) TriggerReload() {
 func (s *Scheduler) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	retry := time.NewTicker(5 * time.Second)
+	defer retry.Stop()
 
-	s.loadMonitors(ctx)
+	reloadPending := !s.loadMonitors(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-s.reload:
-			s.loadMonitors(ctx)
+			reloadPending = !s.loadMonitors(ctx)
+		case <-retry.C:
+			if reloadPending {
+				reloadPending = !s.loadMonitors(ctx)
+			}
 		case now := <-ticker.C:
 			s.dispatch(now)
 		}
 	}
 }
 
-func (s *Scheduler) loadMonitors(ctx context.Context) {
+func (s *Scheduler) loadMonitors(ctx context.Context) bool {
 	monitors, err := s.store.GetAllEnabledMonitors(ctx)
 	if err != nil {
 		s.logger.Error("scheduler: load monitors", "error", err)
-		return
+		return false
 	}
 
-	s.resolveProxyURLs(ctx, monitors)
+	if err := s.resolveProxyURLs(ctx, monitors); err != nil {
+		s.logger.Error("scheduler: load proxy routes", "error", err)
+		return false
+	}
 
 	activeIDs := make(map[int64]struct{}, len(monitors))
 	newMonitors := make(map[int64]*storage.Monitor, len(monitors))
@@ -148,6 +159,7 @@ func (s *Scheduler) loadMonitors(ctx context.Context) {
 
 	s.monitors = newMonitors
 	s.logger.Debug("scheduler: loaded monitors", "count", len(monitors))
+	return true
 }
 
 // applyEditedInterval resets the effective interval of an edited monitor to
@@ -244,7 +256,7 @@ func (s *Scheduler) GetMultiplier(monitorID int64) float64 {
 }
 
 // resolveProxyURLs populates ProxyURL for monitors that have a ProxyID set.
-func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Monitor) {
+func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Monitor) error {
 	proxyIDs := make(map[int64]struct{})
 	for _, m := range monitors {
 		if m.ProxyID != nil {
@@ -252,13 +264,19 @@ func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Mo
 		}
 	}
 	if len(proxyIDs) == 0 {
-		return
+		return nil
 	}
 
 	proxyCache := make(map[int64]string)
 	for id := range proxyIDs {
 		p, err := s.store.GetProxy(ctx, id)
-		if err != nil || !p.Enabled {
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // A missing configured route stays fail-closed.
+		}
+		if err != nil {
+			return err // Keep the previous complete snapshot and retry transient reads.
+		}
+		if !p.Enabled {
 			continue
 		}
 		u := &url.URL{
@@ -276,6 +294,7 @@ func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Mo
 			m.ProxyURL = proxyCache[*m.ProxyID]
 		}
 	}
+	return nil
 }
 
 // UpdateInterval sets the effective interval for a monitor and adjusts the heap.
