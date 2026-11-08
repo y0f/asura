@@ -418,4 +418,13 @@ Scheduled monitors show a 365-day uptime calendar with neutral and blue shading.
 
 Manual and heartbeat monitors report state, not sampled uptime or latency. Their detail pages show the latest reported state and update; heartbeat details also show the last ping and grace period. State history remains available, but response charts, sampled uptime, heatmaps and SLA budgets are unavailable. Uptime and response badges show `n/a`, and public JSON uptime is `null`.
 
+History records its source independently of the monitor's current type. Scheduled
+server and agent results are probes; manual state changes remain manual observations.
+Heartbeat pings update state without adding scheduled-check samples. Changing a
+monitor's type preserves history and never turns manual state into uptime or latency
+samples. Pre-schema-41 records have an unknown source and are excluded from verified
+sample metrics. Genuine probe history remains available after later type changes,
+including a measured response time of `0` ms. See the
+[upgrade note](upgrading.html#review-historical-metrics) before migrating an existing database.
+
 Legacy SLA targets on passive monitors remain stored and inactive. An unrelated edit preserves that value; clear it explicitly to remove it. When changing a scheduled monitor to a passive type, clear any active SLA target to `0` first. Custom targets, including `100`, are preserved by the form.

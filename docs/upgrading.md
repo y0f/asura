@@ -28,6 +28,20 @@ Plan an upgrade around the database, configuration and credentials together. V2 
 
 Asura applies database migrations during startup. A JSON configuration export is useful for transferring supported definitions, but does not preserve history or every resource needed for rollback.
 
+## Review historical metrics {#review-historical-metrics}
+
+Schema 41 records the source of each observation. Earlier raw history and hourly/daily
+summaries remain stored as `unknown`: older versions did not record enough information
+to distinguish scheduled probes from manual state changes reliably. **Verified uptime,
+latency, anomaly baselines and SLA calculations restart with new probe observations.**
+Windows with no verified samples show unavailable values rather than healthy defaults.
+
+The migration preserves existing incident and state history. Raw observations and
+summaries continue to follow the configured retention policy. Changing a monitor's type
+does not reclassify past observations; genuine probe history remains available after a
+later switch to a passive type. Review dashboards, SLA reports and monitoring queries
+that previously assumed every history row was a measured check.
+
 ## Review access rules {#review-access-rules}
 
 V2 separates reading a resource from changing it. Grants such as `monitors.update`, `monitors.pause` and `notifications.test` authorize different operations. A resource's `.write` grant covers that resource's mutation actions; it does not imply read access or access to another resource.
