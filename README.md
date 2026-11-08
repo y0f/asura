@@ -23,7 +23,7 @@
 
 Asura monitors websites, APIs and network services from a single Go binary. It includes an embedded web interface and SQLite storage, with distributed probe agents and an optional PostgreSQL build.
 
-![Asura dashboard with monitor health, response times and open incidents](assets/webpanel.png)
+![Asura dashboard in dark mode with monitor health, response times and open incidents](assets/webpanel.png)
 
 ## Features
 
@@ -80,4 +80,4 @@ Rollback requires the previous binary and its matching database backup. A config
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development, tests and review requirements, [architecture](https://y0f.github.io/asura/architecture.html) for the internals, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Built with Go, templ, HTMX, Alpine.js and Tailwind CSS; Node is not required.
 
-Licensed under [MIT](LICENSE).
+Licensed under [MIT](LICENSE). Copyright 2025-2026 [hu.ci](https://hu.ci).
