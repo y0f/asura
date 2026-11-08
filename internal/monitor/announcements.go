@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"context"
-	"sync"
 	"time"
 )
 
@@ -51,12 +50,11 @@ func (p *Pipeline) reconcilePendingIncident(ctx context.Context, id int64) {
 	if err != nil {
 		return
 	}
-	mu, _ := p.statusLocks.LoadOrStore(inc.MonitorID, &sync.Mutex{})
-	lock := mu.(*sync.Mutex)
-	if !lock.TryLock() {
+	unlock, locked := p.statusLocks.tryLock(inc.MonitorID)
+	if !locked {
 		return // Retry a busy transition in a later batch without delaying others.
 	}
-	defer lock.Unlock()
+	defer unlock()
 	// Recheck after taking the status lock: a ping or check may have resolved it
 	// while this batch was waiting for a previous transition.
 	inc, err = p.store.GetIncident(ctx, id)

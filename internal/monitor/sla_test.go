@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -136,11 +135,9 @@ func TestSLABatchReconcilesQuietManualMonitorAndSkipsBusyLock(t *testing.T) {
 	s.up = 0
 	ctx := context.Background()
 	now := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
-	mu := &sync.Mutex{}
-	p.statusLocks.Store(m.ID, mu)
-	mu.Lock()
+	unlock := p.lockMonitorStatus(m.ID)
 	p.reconcileSLABatch(ctx, 0, now)
-	mu.Unlock()
+	unlock()
 	if s.reads != 0 {
 		t.Fatal("reconciler read budget of a busy monitor")
 	}

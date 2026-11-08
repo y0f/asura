@@ -62,6 +62,7 @@ type Scheduler struct {
 	heap              schedulerHeap
 	effectiveInterval map[int64]int64 // nanoseconds
 	reload            chan struct{}
+	afterLoad         func(context.Context, map[int64]struct{}) bool
 	droppedJobs       atomic.Int64
 }
 
@@ -130,7 +131,6 @@ func (s *Scheduler) loadMonitors(ctx context.Context) bool {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	nowNano := time.Now().UnixNano()
 
@@ -158,7 +158,11 @@ func (s *Scheduler) loadMonitors(ctx context.Context) bool {
 	}
 
 	s.monitors = newMonitors
+	s.mu.Unlock()
 	s.logger.Debug("scheduler: loaded monitors", "count", len(monitors))
+	if s.afterLoad != nil {
+		return s.afterLoad(ctx, activeIDs)
+	}
 	return true
 }
 

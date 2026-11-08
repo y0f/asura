@@ -36,23 +36,20 @@ type Pipeline struct {
 	workers              int
 	adaptiveIntervals    bool
 	droppedNotifications atomic.Int64
-	lastNotified         sync.Map // map[int64]time.Time — tracks last resend per monitor
-	slaStates            sync.Map // map[int64]slaAlertState — guarded by each monitor's status lock
-	statusLocks          sync.Map // map[int64]*sync.Mutex — serializes status read-modify-write per monitor
-	sources              sync.Map // map[int64]monitorSources — per-location result streaks (guarded by statusLocks)
-	sourceCheckedAt      sync.Map // map[int64]map[string]time.Time — newest applied checked_at per location (guarded by statusLocks)
-	sourceRevision       sync.Map // map[int64]int64 — configuration shared by source caches (guarded by statusLocks)
-	incidentOpen         sync.Map // map[int64]bool — false once a recovery pass found no open incident; absent = unknown
+	lastNotified         sync.Map     // map[int64]time.Time — tracks last resend per monitor
+	slaStates            sync.Map     // map[int64]slaAlertState — guarded by each monitor's status lock
+	statusLocks          monitorLocks // serializes status read-modify-write per monitor
+	sources              sync.Map     // map[int64]monitorSources — per-location result streaks (guarded by statusLocks)
+	sourceCheckedAt      sync.Map     // map[int64]map[string]time.Time — newest applied checked_at per location (guarded by statusLocks)
+	sourceRevision       sync.Map     // map[int64]int64 — configuration shared by source caches (guarded by statusLocks)
+	incidentOpen         sync.Map     // map[int64]bool — false once a recovery pass found no open incident; absent = unknown
 }
 
 // lockMonitorStatus serializes the monitor_status read-modify-write for a
 // single monitor so concurrent writers (the local worker and remote agent
 // result handlers) cannot lose counter increments. It returns the unlock func.
 func (p *Pipeline) lockMonitorStatus(monitorID int64) func() {
-	mu, _ := p.statusLocks.LoadOrStore(monitorID, &sync.Mutex{})
-	m := mu.(*sync.Mutex)
-	m.Lock()
-	return m.Unlock
+	return p.statusLocks.lock(monitorID)
 }
 
 // NotificationEvent is emitted when something noteworthy happens.
@@ -69,7 +66,7 @@ func NewPipeline(store storage.Store, registry *checker.Registry, incMgr *incide
 	results := make(chan WorkerResult, workers*2)
 	notifyChan := make(chan NotificationEvent, 100)
 
-	return &Pipeline{
+	p := &Pipeline{
 		store:             store,
 		registry:          registry,
 		incMgr:            incMgr,
@@ -81,6 +78,8 @@ func NewPipeline(store storage.Store, registry *checker.Registry, incMgr *incide
 		workers:           workers,
 		adaptiveIntervals: adaptiveIntervals,
 	}
+	p.scheduler.afterLoad = p.pruneDeletedMonitorCaches
+	return p
 }
 
 // NotifyChan returns the channel for notification events.

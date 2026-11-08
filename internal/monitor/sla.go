@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/y0f/asura/internal/sla"
@@ -113,14 +112,13 @@ func (p *Pipeline) reconcileSLABatch(ctx context.Context, cursor int64, now time
 		if ctx.Err() != nil {
 			return cursor
 		}
-		mu, _ := p.statusLocks.LoadOrStore(id, &sync.Mutex{})
-		lock := mu.(*sync.Mutex)
-		if lock.TryLock() {
+		unlock, locked := p.statusLocks.tryLock(id)
+		if locked {
 			mon, err := p.store.GetMonitor(ctx, id)
 			if err == nil {
 				p.checkSLABreachAt(ctx, mon, now)
 			}
-			lock.Unlock()
+			unlock()
 		}
 		cursor = id
 	}
