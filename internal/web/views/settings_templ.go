@@ -345,46 +345,46 @@ func SettingsPage(p SettingsParams) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.SuperAdmin {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"grid gap-6 md:grid-cols-2\"><section class=\"card card-pad\" aria-labelledby=\"export-title\"><h2 id=\"export-title\" class=\"text-lg font-semibold\">Export</h2><p class=\"subtitle mt-1 mb-4\">Download monitors, groups, proxies, notification channels, maintenance windows and status pages as JSON.</p><div class=\"flex flex-wrap items-center gap-2\"><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"grid gap-6 md:grid-cols-2\"><section class=\"card card-pad\" aria-labelledby=\"export-title\"><h2 id=\"export-title\" class=\"text-lg font-semibold\">Export</h2><p class=\"subtitle mt-1 mb-4\">Transfer monitors and their relationships, groups, tags, proxies, notification channels, escalation policies, on-call rotations, maintenance windows and status pages as JSON.</p><div class=\"flex flex-wrap items-center gap-2\"><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var20 string
-				templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true")).ResolveURL(ctx)
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false")).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 84, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 84, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" class=\"btn-secondary\">Export without secrets</a> <a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" class=\"btn-secondary\">Full export</a> <a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var21 string
-				templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false")).ResolveURL(ctx)
+				templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true")).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 85, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 85, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"btn-secondary\">Export with secrets</a></div></section><section class=\"card card-pad\" aria-labelledby=\"import-title\"><h2 id=\"import-title\" class=\"text-lg font-semibold\">Import</h2><p class=\"subtitle mt-1 mb-4\">Import supported configuration from an exported file. Historical data requires a database backup.</p><form action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"btn-secondary\">Redacted export for sharing</a></div><p class=\"form-hint mt-3\">Full exports contain credentials. Redacted exports cannot be imported; review free text and branding before sharing. History, agent credentials, access roles and server configuration require a separate backup.</p></section><section class=\"card card-pad\" aria-labelledby=\"import-title\"><h2 id=\"import-title\" class=\"text-lg font-semibold\">Import</h2><p class=\"subtitle mt-1 mb-4\">Import a full configuration export, up to 32 MiB. Back up the database, server configuration and encryption key before replacing configuration.</p><form action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/settings/import")).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 92, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 93, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" method=\"POST\" enctype=\"multipart/form-data\" class=\"space-y-4\" x-data=\"{ fileName: '', mode: 'merge' }\" @submit=\"if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace mode deletes the current configuration before importing. Continue?', onConfirm: () => { $el.dataset.confirmed = '1'; $el.requestSubmit() } }) }\"><div><label class=\"form-label\" for=\"import-mode\">Mode</label> <select id=\"import-mode\" name=\"mode\" x-model=\"mode\" class=\"form-select\"><option value=\"merge\">Merge: keep existing, skip duplicates</option> <option value=\"replace\">Replace supported configuration</option></select></div><div><label class=\"form-label\" for=\"import-file\">File</label> <input id=\"import-file\" type=\"file\" name=\"file\" accept=\".json,application/json\" required class=\"block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer\"></div><button type=\"submit\" class=\"btn-primary\">Import</button></form></section></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" method=\"POST\" enctype=\"multipart/form-data\" class=\"space-y-4\" x-data=\"{ mode: 'merge' }\" @submit=\"if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace current portable configuration, deleting its monitor history and status-page subscribers? The entire import rolls back if any step fails.', onConfirm: () => { $el.dataset.confirmed = '1'; try { $el.requestSubmit() } finally { delete $el.dataset.confirmed } } }) }\"><div><label class=\"form-label\" for=\"import-mode\">Mode</label> <select id=\"import-mode\" name=\"mode\" x-model=\"mode\" class=\"form-select\"><option value=\"merge\">Merge: keep existing, skip duplicates</option> <option value=\"replace\">Replace portable configuration</option></select></div><div><label class=\"form-label\" for=\"import-file\">File</label> <input id=\"import-file\" type=\"file\" name=\"file\" accept=\".json,application/json\" required class=\"block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer\"></div><div><label class=\"form-label\" for=\"import-agent-mapping\">Agent mapping <span class=\"text-muted font-normal\">(optional)</span></label> <input id=\"import-agent-mapping\" type=\"text\" name=\"agent_mapping\" placeholder=\"7:2,8:5\" class=\"form-input font-mono\" aria-describedby=\"import-agent-help\"><p id=\"import-agent-help\" class=\"form-hint\">Unique existing agent names resolve automatically. To map IDs explicitly, enter source:destination pairs separated by commas. Import does not enroll or enable agents.</p></div><button type=\"submit\" class=\"btn-primary\">Import</button></form></section></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -397,7 +397,7 @@ func SettingsPage(p SettingsParams) templ.Component {
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/settings/vacuum").ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 128, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/settings.templ`, Line: 134, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 				if templ_7745c5c3_Err != nil {
