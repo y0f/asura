@@ -799,7 +799,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					@DailyUptimeData(p.Monitor.Name+": daily uptime", heatmapDailyBars(p.Heatmap))
 				</div>
 			}
-			if p.LatestCheck != nil && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
+			if p.LatestCheck != nil && p.LatestCheck.ObservationKind == storage.ObservationProbe && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
 				<div class="card card-pad mb-6 flex items-center justify-between gap-4">
 					<div>
 						<h2 class="text-md font-semibold">TLS certificate</h2>
@@ -808,7 +808,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="text-sm text-muted font-mono">{ p.LatestCheck.CertExpiry.Format("2006-01-02") }</div>
 				</div>
 			}
-			if p.LatestCheck != nil && p.Monitor.Type == "dns" && p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+			if p.LatestCheck != nil && p.LatestCheck.ObservationKind == storage.ObservationProbe && p.Monitor.Type == "dns" && p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
 				if records := ParseDNS(p.LatestCheck.DNSRecords); len(records) > 0 {
 					<div class="card card-pad mb-6">
 						<h2 class="text-md font-semibold mb-2">DNS records</h2>
@@ -835,21 +835,23 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						}
 					</div>
 					if !p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
-						<p class="px-4 py-3 text-xs text-muted border-b border-line">Detailed check output requires diagnostic access. Status and timing remain visible.</p>
+						<p class="px-4 py-3 text-xs text-muted border-b border-line">Detailed check output requires diagnostic access. Status and measured probe timings remain visible.</p>
 					}
 					if cks := p.checks(); len(cks) > 0 {
+						{{ columns := p.historyColumns() }}
 						<div class="overflow-x-auto">
 							<table class="w-full min-w-[560px]">
 								<thead>
 									<tr class="border-b border-line">
 										<th class="th">Status</th>
-										if p.hasResponseTimes() {
+										<th class="th">Source</th>
+										if columns.Response {
 											<th class="th">Response</th>
 										}
-										if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
+										if columns.Code {
 											<th class="th">Code</th>
 										}
-										if p.Monitor.Type == "tls" {
+										if columns.Certificate {
 											<th class="th">Cert</th>
 										}
 										if p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
@@ -862,18 +864,25 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 									for _, ck := range cks {
 										<tr>
 											<td class="px-4 py-2">@StatusPill(ck.Status)</td>
-											if p.hasResponseTimes() {
-												<td class="px-4 py-2 text-sm text-muted-light tabular-nums font-mono">{ FormatMs(ck.ResponseTime) }</td>
+											<td class="px-4 py-2 text-xs text-muted whitespace-nowrap">{ observationLabel(ck.ObservationKind) }</td>
+											if columns.Response {
+												<td class="px-4 py-2 text-sm text-muted-light tabular-nums font-mono">
+													if ck.ObservationKind == storage.ObservationProbe {
+														{ FormatMs(ck.ResponseTime) }
+													} else {
+														—
+													}
+												</td>
 											}
-											if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
-												if ck.StatusCode != 0 {
+											if columns.Code {
+												if ck.ObservationKind == storage.ObservationProbe && ck.StatusCode != 0 {
 													<td class={ "px-4 py-2 text-sm tabular-nums font-mono", HttpStatusColor(ck.StatusCode) }>{ fmt.Sprint(ck.StatusCode) }</td>
 												} else {
 													<td class="px-4 py-2 text-sm text-muted">—</td>
 												}
 											}
-											if p.Monitor.Type == "tls" {
-												if ck.CertExpiry != nil {
+											if columns.Certificate {
+												if ck.ObservationKind == storage.ObservationProbe && ck.CertExpiry != nil {
 													<td class={ "px-4 py-2 text-sm", CertColor(ck.CertExpiry) }>{ fmt.Sprint(CertDays(ck.CertExpiry)) }d</td>
 												} else {
 													<td class="px-4 py-2 text-sm text-muted">—</td>

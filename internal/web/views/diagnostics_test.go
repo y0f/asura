@@ -29,7 +29,7 @@ func TestDiagnosticViewsIntersectOwnerReads(t *testing.T) {
 			incident := &storage.Incident{ID: 1, MonitorID: 1, Cause: "private-cause-marker"}
 			monitor := MonitorDetailParams{
 				LayoutParams: lp, Monitor: &storage.Monitor{ID: 1, Type: "dns"},
-				LatestCheck: &storage.CheckResult{DNSRecords: `["private-dns-marker"]`},
+				LatestCheck: &storage.CheckResult{ObservationKind: storage.ObservationProbe, DNSRecords: `["private-dns-marker"]`},
 				Checks:      &storage.PaginatedResult{Data: []*storage.CheckResult{{Message: "private-check-marker"}}},
 				Changes:     &storage.PaginatedResult{Data: []*storage.ContentChange{{Diff: "private-diff-marker"}}},
 			}
