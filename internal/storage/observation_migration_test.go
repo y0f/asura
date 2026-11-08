@@ -64,10 +64,9 @@ func downgradeObservationKinds(t *testing.T, s *SQLiteStore) {
 	}
 }
 
-func TestObservationMigrationPreservesUnclassifiedHistory(t *testing.T) {
-	ctx := context.Background()
+func observationV40Fixture(t *testing.T) (string, time.Time) {
+	t.Helper()
 	day := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -2)
-	const monitorID int64 = 1
 	path := filepath.Join(t.TempDir(), "historical.db")
 	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), OmitHost: true}).String()
 	db, err := sql.Open("sqlite", uri+"?_pragma=foreign_keys(ON)")
@@ -99,6 +98,13 @@ func TestObservationMigrationPreservesUnclassifiedHistory(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
+	return path, day
+}
+
+func TestObservationMigrationPreservesUnclassifiedHistory(t *testing.T) {
+	ctx := context.Background()
+	const monitorID int64 = 1
+	path, day := observationV40Fixture(t)
 	s, err := NewSQLiteStore(path, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -125,5 +131,81 @@ func TestObservationMigrationPreservesUnclassifiedHistory(t *testing.T) {
 	}
 	if _, err := s.writeDB.Exec("UPDATE check_results SET observation_kind='forged'"); err == nil {
 		t.Fatal("unknown provenance enum accepted")
+	}
+}
+
+func TestObservationMigrationLateFailureRollsBackAndRetries(t *testing.T) {
+	path, _ := observationV40Fixture(t)
+	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), OmitHost: true}).String()
+	db, err := sql.Open("sqlite", uri+"?_pragma=foreign_keys(ON)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Abort the final version write, after both destructive table rebuilds and
+	// cache invalidation have executed. Every preceding DDL/DML must roll back.
+	if _, err := db.Exec(`CREATE TRIGGER reject_observation_migration
+		BEFORE UPDATE ON schema_version WHEN NEW.version=41
+		BEGIN SELECT RAISE(ABORT, 'fixture migration failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := NewSQLiteStore(path, 1); err == nil {
+		s.Close()
+		t.Fatal("late migration failure unexpectedly succeeded")
+	} else if !strings.Contains(err.Error(), "fixture migration failure") {
+		t.Fatalf("migration failed at unintended boundary: %v", err)
+	}
+	var version int
+	if err := db.QueryRow("SELECT version FROM schema_version").Scan(&version); err != nil || version != 40 {
+		t.Fatalf("failed migration changed version: %d %v", version, err)
+	}
+	for _, table := range []string{"check_results", "monitor_status", "check_result_hourly", "check_result_daily"} {
+		var count, kinds int
+		if err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil || count != 1 {
+			t.Fatalf("rollback lost %s rows: %d %v", table, count, err)
+		}
+		if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name='observation_kind'", table).Scan(&kinds); err != nil || kinds != 0 {
+			t.Fatalf("rollback retained %s provenance column: %d %v", table, kinds, err)
+		}
+		if table == "check_result_hourly" || table == "check_result_daily" {
+			var columns int
+			if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE pk>0", table).Scan(&columns); err != nil || columns != 2 {
+				t.Fatalf("rollback changed %s primary key: %d %v", table, columns, err)
+			}
+		}
+	}
+	var avg, stddev float64
+	var updated string
+	if err := db.QueryRow("SELECT baseline_avg,baseline_stddev,baseline_updated_at FROM monitor_status WHERE monitor_id=1").Scan(&avg, &stddev, &updated); err != nil || avg != 25 || stddev != 1 || updated == "" {
+		t.Fatalf("rollback lost baseline: %v/%v/%q %v", avg, stddev, updated, err)
+	}
+	var message string
+	var unknownSum sql.NullInt64
+	if err := db.QueryRow("SELECT message FROM check_results WHERE monitor_id=1").Scan(&message); err != nil || message != "legacy message" {
+		t.Fatalf("rollback changed raw history: %q %v", message, err)
+	}
+	if err := db.QueryRow("SELECT sum_rt FROM check_result_hourly WHERE monitor_id=1").Scan(&unknownSum); err != nil || unknownSum.Valid {
+		t.Fatalf("rollback fabricated an exact legacy sum: %+v %v", unknownSum, err)
+	}
+	if _, err := db.Exec("DROP TRIGGER reject_observation_migration"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewSQLiteStore(path, 1)
+	if err != nil {
+		t.Fatalf("migration retry failed: %v", err)
+	}
+	defer s.Close()
+	for _, table := range []string{"check_results", "monitor_status", "check_result_hourly", "check_result_daily"} {
+		var count int
+		if err := s.readDB.QueryRow("SELECT COUNT(*) FROM " + table + " WHERE observation_kind='unknown'").Scan(&count); err != nil || count != 1 {
+			t.Fatalf("retry changed preserved %s rows: %d %v", table, count, err)
+		}
+	}
+	status, err := s.GetMonitorStatus(context.Background(), 1)
+	if err != nil || status.BaselineAvg != 0 || status.BaselineStddev != 0 || status.BaselineUpdatedAt != nil {
+		t.Fatalf("successful retry retained unproven baseline: %+v %v", status, err)
 	}
 }
