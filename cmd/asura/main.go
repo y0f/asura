@@ -98,6 +98,11 @@ func main() {
 		logger.Info("encryption at rest enabled")
 	}
 
+	if err := store.FinalizeLegacyAgentAssignments(ctx); err != nil {
+		logger.Error("failed to migrate explicit agent assignments", "error", err)
+		os.Exit(1)
+	}
+
 	purgeStaleSessionsOnStartup(ctx, store, cfg, logger)
 
 	registry := checker.DefaultRegistry(cfg.Monitor.CommandAllowlist, cfg.Monitor.AllowPrivateTargets)

@@ -48,6 +48,11 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 			t.Fatal(err)
 		}
 	}
+	if v < 39 {
+		if _, err := s.writeDB.Exec("DROP TABLE legacy_agent_assignments"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if downgrade != nil {
 		downgrade(s)
 	}

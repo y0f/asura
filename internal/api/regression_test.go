@@ -296,6 +296,9 @@ func agentMonitor(t *testing.T, env *testEnv) (*storage.Agent, *storage.Monitor)
 	if err := env.store.CreateMonitor(ctx, m); err != nil {
 		t.Fatal(err)
 	}
+	if err := env.store.SetMonitorAgentIDs(ctx, m.ID, []int64{a.ID}); err != nil {
+		t.Fatal(err)
+	}
 	return a, m
 }
 
@@ -331,7 +334,7 @@ func TestAgentResultsRequireAssignment(t *testing.T) {
 	}
 }
 
-// Jobs follow the assignment; a monitor without one runs on every agent.
+// Jobs follow explicit assignments; new agents receive no jobs automatically.
 func TestAgentJobsFollowAssignment(t *testing.T) {
 	env := newTestEnv(t, nil, false, nil)
 	ctx := context.Background()
@@ -362,10 +365,17 @@ func TestAgentJobsFollowAssignment(t *testing.T) {
 		return out
 	}
 	if got := ids(a); len(got) != 1 || got[0] != open.ID {
-		t.Errorf("agent %q jobs = %v, want only the unassigned monitor %d", a.Name, got, open.ID)
+		t.Errorf("agent %q jobs = %v, want only assigned monitor %d", a.Name, got, open.ID)
 	}
-	if got := ids(other); len(got) != 2 {
-		t.Errorf("agent %q jobs = %v, want the unassigned and the pinned monitor", other.Name, got)
+	if got := ids(other); len(got) != 1 || got[0] != pinned.ID {
+		t.Errorf("agent %q jobs = %v, want only assigned monitor %d", other.Name, got, pinned.ID)
+	}
+	newAgent := &storage.Agent{Name: "new-probe", Enabled: true}
+	if err := env.store.CreateAgent(ctx, newAgent); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(newAgent); len(got) != 0 {
+		t.Errorf("new agent received jobs without explicit assignment: %v", got)
 	}
 }
 
@@ -658,6 +668,9 @@ func TestAgentResultsRejectedForServerOnlyMonitor(t *testing.T) {
 		Settings: json.RawMessage(`{"auth_method":"bearer","bearer_token":"secret"}`),
 	}
 	if err := env.store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.store.SetMonitorAgentIDs(ctx, m.ID, []int64{a.ID}); err != nil {
 		t.Fatal(err)
 	}
 	jobs, _ := env.store.ListAgentJobs(ctx, a.ID)

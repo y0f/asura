@@ -1,8 +1,14 @@
 package storage
 
-const schemaVersion = 38
+const schemaVersion = 39
 
-const schema = `
+const legacyAgentAssignmentsSchema = `CREATE TABLE IF NOT EXISTS legacy_agent_assignments (
+	kind TEXT NOT NULL CHECK (kind IN ('monitor', 'agent')),
+	id INTEGER NOT NULL,
+	PRIMARY KEY (kind, id)
+);`
+
+const schema = legacyAgentAssignmentsSchema + `
 CREATE TABLE IF NOT EXISTS schema_version (
 	version INTEGER NOT NULL
 );
@@ -667,5 +673,15 @@ WHERE status IN ('open','acknowledged') AND (announcement_pending=1 OR escalatio
 		version: 38,
 		sql: `ALTER TABLE on_call_rotations ADD COLUMN period_started_at TEXT NOT NULL DEFAULT '';
 UPDATE on_call_rotations SET period_started_at=updated_at;`,
+	},
+	{
+		version: 39,
+		sql: legacyAgentAssignmentsSchema + `
+INSERT INTO legacy_agent_assignments (kind, id)
+SELECT 'monitor', m.id FROM monitors m
+WHERE m.agent_enabled=1 AND m.type NOT IN ('heartbeat','manual','docker','command')
+AND NOT EXISTS (SELECT 1 FROM monitor_agents ma WHERE ma.monitor_id=m.id);
+INSERT INTO legacy_agent_assignments (kind, id)
+SELECT 'agent', id FROM agents WHERE enabled=1;`,
 	},
 }

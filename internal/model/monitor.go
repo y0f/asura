@@ -36,7 +36,7 @@ type Monitor struct {
 	// Transient fields (not stored in monitors table)
 	NotificationChannelIDs []int64      `json:"notification_channel_ids,omitempty"`
 	MonitorTags            []MonitorTag `json:"monitor_tags,omitempty"`
-	// AgentIDs are the agents this monitor is assigned to; empty means every agent.
+	// AgentIDs are explicitly delegated agents; empty means no remote agent jobs.
 	AgentIDs []int64 `json:"agent_ids,omitempty"`
 	ProxyURL string  `json:"-"` // resolved at check time
 
