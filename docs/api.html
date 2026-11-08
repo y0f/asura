@@ -56,7 +56,7 @@
     </details>
     <main id="content" class="prose-docs" tabindex="-1"><h1 id="api-reference"><a class="heading-link" href="#api-reference">API Reference</a></h1>
 
-<p>All endpoints return JSON. Pass your key in the <code>X-API-Key</code> header. If you set a <code>base_path</code>, all paths get prefixed (e.g. <code>/asura/api/v1/health</code>).</p>
+<p>REST resource endpoints return JSON; badges return SVG and the live event endpoint uses server-sent events. Pass your key in the <code>X-API-Key</code> header. If you set a <code>base_path</code>, all paths get prefixed (e.g. <code>/asura/api/v1/health</code>). See <a href="access-control.html">Access control</a> for role bindings, object scopes and privileged operations.</p>
 
 <p>Pagination: <code>?page=1&amp;per_page=20</code> applies to the paginated list endpoints only: monitors, checks, changes, incidents, notification history, request-logs, and audit. Other list endpoints return the full set as <code>{"data":[...]}</code>.</p>
 
@@ -513,13 +513,15 @@
 
 <p>Agent results are processed through the full pipeline: monitor status updates, incident creation/resolution, and notifications all work the same as central checks. Monitors whose settings include credentials or mTLS material (basic auth password, bearer token, OAuth2 client secret, mTLS client key, client certificate or CA certificate, password) are not offered to agents; they are checked only by the central server.</p>
 
-<p>Only monitors with <code>agent_enabled</code> set to true are included in agent job responses. Disable this flag on monitors targeting localhost or private IPs that should only be checked by the central server. An agent refuses private, loopback and other reserved targets unless it is started with <code>-allow-private</code>.</p>
+<p>Only enabled monitors with <code>agent_enabled</code> set to true and an explicit assignment to the authenticated, enabled agent are included in job responses. Empty assignments mean no remote jobs. Disable this flag on monitors targeting localhost or private IPs that should only be checked by the central server. An agent refuses private, loopback and other reserved targets unless it is started with <code>-allow-private</code>.</p>
 
 <p>Custom request headers and bodies (including those of <code>http_multi</code> steps) are sent to agents unchanged and often carry credentials such as <code>Authorization</code>, <code>X-API-Key</code> or <code>Cookie</code>. A monitor that has them is therefore only offered to the agents it is explicitly assigned to (<code>agent_ids</code>), never to every agent.</p>
 
 <p>Deleting an agent never widens a monitor to every agent: a monitor whose only assigned agent is deleted gets <code>agent_enabled</code> set to false, which is recorded in the audit log. The <code>DELETE</code> response lists these monitors in <code>agent_disabled_monitor_ids</code>.</p>
 
-<p>Each object posted to <code>/api/v1/agent/results</code> has <code>monitor_id</code>, <code>status</code>, <code>response_time</code> (ms), <code>status_code</code>, <code>message</code>, <code>body_hash</code>, <code>cert_fingerprint</code>, and optionally <code>dns_records</code> (a JSON-encoded array of strings, used for <code>dns_record</code> assertions; when it is absent those assertions are skipped) and <code>checked_at</code> (RFC 3339 time the check ran; defaults to the time the result is received, and a time in the future counts as the receive time). A result checked before the newest result already applied from the same agent is kept in the history but does not change the monitor's status or incidents. There is no age limit, and results from the server or other agents never make an agent's result stale, so an agent with a long cycle is still applied.</p>
+<p>Each object posted to <code>/api/v1/agent/results</code> has <code>monitor_id</code>, the positive <code>config_revision</code> copied unchanged from its job, <code>status</code>, <code>response_time</code> (ms), <code>status_code</code>, <code>message</code>, <code>body_hash</code>, <code>cert_fingerprint</code>, and optionally <code>dns_records</code> (a JSON-encoded array of strings, used for <code>dns_record</code> assertions; when it is absent those assertions are skipped) and <code>checked_at</code> (RFC 3339 time the check ran; defaults to the time the result is received, and a time in the future counts as the receive time). For the same current configuration revision, a result checked before the newest result already applied from the same agent is kept in the history but does not change the monitor's status or incidents. There is no age limit, and results from the server or other agents never make an agent's result stale, so an agent with a long cycle is still applied.</p>
+
+<p>Upgrade the server and agents together to v2. Results without a positive revision are rejected. Monitor edits, delegation changes, agent enable/disable changes and proxy edits invalidate earlier jobs; the server rechecks revision and delegation in the transaction that stores the result. An obsolete job writes no history, status or incident. The response reports <code>accepted</code> and <code>rejected</code> counts, plus rejected subsets <code>stale</code> (obsolete or no longer delegated) and <code>failed</code> (server persistence/read failures); remaining rejections have invalid fields. The agent reports incomplete acceptance and fetches current jobs on its next poll.</p>
 
 <h3 id="running-an-agent"><a class="heading-link" href="#running-an-agent">Running an Agent</a></h3>
 
@@ -541,7 +543,7 @@
 
 <p>Flags can be written with one or two dashes (<code>-server</code> or <code>--server</code>).</p>
 
-<p>The agent binary polls the server for jobs, runs checks locally, and posts results back. Only outbound HTTPS is needed. The agent binary is ~16MB and runs on any Linux server.</p>
+<p>The agent binary polls the server for jobs, runs checks locally, and posts results back. It needs an outbound connection to the configured server; use HTTPS for remote connections. Choose the binary matching the host operating system and architecture.</p>
 
 <h2 id="on-call-rotations"><a class="heading-link" href="#on-call-rotations">On-Call Rotations</a></h2>
 
