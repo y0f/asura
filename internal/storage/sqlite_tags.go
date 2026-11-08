@@ -109,8 +109,13 @@ func (s *SQLiteStore) SetMonitorTags(ctx context.Context, monitorID int64, tags 
 	return tx.Commit()
 }
 
-func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64) ([]MonitorTag, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]MonitorTag, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT mt.tag_id, t.name, t.color, mt.value
 		 FROM monitor_tags mt
 		 JOIN tags t ON t.id = mt.tag_id
@@ -135,17 +140,19 @@ func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64) ([]Mo
 	return tags, rows.Err()
 }
 
-func (s *SQLiteStore) GetMonitorTagsBatch(ctx context.Context, monitorIDs []int64) (map[int64][]MonitorTag, error) {
+func (s *SQLiteStore) GetMonitorTagsBatch(ctx context.Context, monitorIDs []int64, access ...MonitorAccess) (map[int64][]MonitorTag, error) {
 	if len(monitorIDs) == 0 {
 		return map[int64][]MonitorTag{}, nil
 	}
 
 	placeholders, args := bulkArgs(monitorIDs)
+	clause, accessArgs := monitorOwnerAccessSQL("mt.monitor_id", access)
+	args = append(args, accessArgs...)
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT mt.monitor_id, mt.tag_id, t.name, t.color, mt.value
 		 FROM monitor_tags mt
 		 JOIN tags t ON t.id = mt.tag_id
-		 WHERE mt.monitor_id IN (`+placeholders+`)
+		 WHERE mt.monitor_id IN (`+placeholders+`)`+clause+`
 		 ORDER BY t.name COLLATE NOCASE ASC`, args...)
 	if err != nil {
 		return nil, err

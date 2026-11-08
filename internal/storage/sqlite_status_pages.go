@@ -24,7 +24,7 @@ func (s *SQLiteStore) IsMonitorOnStatusPage(ctx context.Context, monitorID int64
 	return exists == 1, nil
 }
 
-func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time) ([]*DailyUptime, error) {
+func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*DailyUptime, error) {
 	from, to = from.UTC(), to.UTC()
 	results := make([]*DailyUptime, 0)
 	if !from.Before(to) {
@@ -45,6 +45,9 @@ func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from,
 		return nil, err
 	}
 	defer tx.Rollback()
+	if err := authorizeMonitorRead(ctx, tx, monitorID, access...); err != nil {
+		return nil, err
+	}
 	rows, err := tx.QueryContext(ctx,
 		`SELECT day, total, up_count, down_count FROM check_result_daily
 		 WHERE monitor_id=? AND day>=? AND day<? ORDER BY day`,

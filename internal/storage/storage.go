@@ -35,9 +35,9 @@ type Store interface {
 	// Check results
 	InsertCheckResult(ctx context.Context, r *CheckResult) error
 	RecordMonitorCheck(ctx context.Context, expected *Monitor, result *CheckResult, status *MonitorStatus) error
-	ListCheckResults(ctx context.Context, monitorID int64, p Pagination) (*PaginatedResult, error)
-	GetLatestCheckResult(ctx context.Context, monitorID int64) (*CheckResult, error)
-	GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int) (map[int64][]*SparklinePoint, error)
+	ListCheckResults(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error)
+	GetLatestCheckResult(ctx context.Context, monitorID int64, access ...MonitorAccess) (*CheckResult, error)
+	GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int, access ...MonitorAccess) (map[int64][]*SparklinePoint, error)
 
 	// Incidents
 	CreateIncident(ctx context.Context, inc *Incident) error
@@ -52,7 +52,7 @@ type Store interface {
 	PrepareIncidentEscalation(ctx context.Context, incidentID int64, state *EscalationState) error
 	ListPendingIncidentIDs(ctx context.Context, afterID int64, limit int) ([]int64, error)
 	DeleteIncident(ctx context.Context, id int64, access ...MonitorAccess) error
-	GetOpenIncident(ctx context.Context, monitorID int64) (*Incident, error)
+	GetOpenIncident(ctx context.Context, monitorID int64, access ...MonitorAccess) (*Incident, error)
 
 	// Incident events
 	InsertIncidentEvent(ctx context.Context, e *IncidentEvent) error
@@ -80,12 +80,12 @@ type Store interface {
 
 	// Content changes
 	InsertContentChange(ctx context.Context, c *ContentChange) error
-	ListContentChanges(ctx context.Context, monitorID int64, p Pagination) (*PaginatedResult, error)
+	ListContentChanges(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error)
 
 	// Heartbeats
 	CreateHeartbeat(ctx context.Context, h *Heartbeat) error
 	GetHeartbeatByToken(ctx context.Context, token string) (*Heartbeat, error)
-	GetHeartbeatByMonitorID(ctx context.Context, monitorID int64) (*Heartbeat, error)
+	GetHeartbeatByMonitorID(ctx context.Context, monitorID int64, access ...MonitorAccess) (*Heartbeat, error)
 	UpdateHeartbeatPing(ctx context.Context, monitorID int64, token string) error
 	ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, error)
 	ExpireHeartbeat(ctx context.Context, monitorID int64) (bool, error)
@@ -93,15 +93,15 @@ type Store interface {
 	DeleteHeartbeat(ctx context.Context, monitorID int64) error
 
 	// Analytics
-	GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error)
-	GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time) (float64, error)
-	GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time) (p50, p95, p99 float64, err error)
-	GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time) (total, up, down, degraded int64, err error)
+	GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int, access ...MonitorAccess) ([]*TimeSeriesPoint, error)
+	GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (float64, error)
+	GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (p50, p95, p99 float64, err error)
+	GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (total, up, down, degraded int64, err error)
 	CountMonitorsByStatus(ctx context.Context, access ...MonitorAccess) (up, down, degraded, paused int64, err error)
 	GetLatestResponseTimes(ctx context.Context, access ...MonitorAccess) (map[int64]int64, error)
 
 	// Monitor notification routing
-	GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64) ([]int64, error)
+	GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]int64, error)
 	SetMonitorNotificationChannels(ctx context.Context, monitorID int64, channelIDs []int64) error
 
 	// Monitor groups
@@ -119,8 +119,8 @@ type Store interface {
 	UpdateTag(ctx context.Context, t *Tag) error
 	DeleteTag(ctx context.Context, id int64) error
 	SetMonitorTags(ctx context.Context, monitorID int64, tags []MonitorTag) error
-	GetMonitorTags(ctx context.Context, monitorID int64) ([]MonitorTag, error)
-	GetMonitorTagsBatch(ctx context.Context, monitorIDs []int64) (map[int64][]MonitorTag, error)
+	GetMonitorTags(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]MonitorTag, error)
+	GetMonitorTagsBatch(ctx context.Context, monitorIDs []int64, access ...MonitorAccess) (map[int64][]MonitorTag, error)
 
 	// Audit
 	InsertAudit(ctx context.Context, entry *AuditEntry) error
@@ -152,7 +152,7 @@ type Store interface {
 	PurgeOldRequestLogs(ctx context.Context, before time.Time) (int64, error)
 
 	// Status pages
-	GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time) ([]*DailyUptime, error)
+	GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*DailyUptime, error)
 	IsMonitorOnStatusPage(ctx context.Context, monitorID int64) (bool, error)
 	CreateStatusPage(ctx context.Context, sp *StatusPage) error
 	GetStatusPage(ctx context.Context, id int64) (*StatusPage, error)
@@ -221,7 +221,7 @@ type Store interface {
 	DeleteAgent(ctx context.Context, id int64) ([]int64, error)
 	ListAgentJobs(ctx context.Context, agentID int64) ([]*AgentJob, error)
 	AgentMayCheckMonitor(ctx context.Context, agentID, monitorID int64) (bool, error)
-	GetMonitorAgentIDs(ctx context.Context, monitorID int64) ([]int64, error)
+	GetMonitorAgentIDs(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]int64, error)
 	SetMonitorAgentIDs(ctx context.Context, monitorID int64, agentIDs []int64) error
 
 	// Data rollup
@@ -230,8 +230,8 @@ type Store interface {
 	RollupDaily(ctx context.Context, day string) error
 	PurgeHourlyBefore(ctx context.Context, before time.Time) (int64, error)
 	PurgeDailyBefore(ctx context.Context, before time.Time) (int64, error)
-	GetTimeSeriesFromHourly(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error)
-	GetTimeSeriesFromDaily(ctx context.Context, monitorID int64, from, to time.Time) ([]*TimeSeriesPoint, error)
+	GetTimeSeriesFromHourly(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int, access ...MonitorAccess) ([]*TimeSeriesPoint, error)
+	GetTimeSeriesFromDaily(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*TimeSeriesPoint, error)
 
 	// Data retention
 	PurgeOldData(ctx context.Context, before time.Time) (int64, error)

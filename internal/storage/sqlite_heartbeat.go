@@ -38,10 +38,15 @@ func (s *SQLiteStore) GetHeartbeatByToken(ctx context.Context, token string) (*H
 	return &h, nil
 }
 
-func (s *SQLiteStore) GetHeartbeatByMonitorID(ctx context.Context, monitorID int64) (*Heartbeat, error) {
+func (s *SQLiteStore) GetHeartbeatByMonitorID(ctx context.Context, monitorID int64, access ...MonitorAccess) (*Heartbeat, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var h Heartbeat
 	var lastPing sql.NullString
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		`SELECT id, monitor_id, token, grace, last_ping_at, status FROM heartbeats WHERE monitor_id=?`, monitorID).
 		Scan(&h.ID, &h.MonitorID, &h.Token, &h.Grace, &lastPing, &h.Status)
 	if err != nil {

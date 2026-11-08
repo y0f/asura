@@ -213,8 +213,13 @@ func (s *SQLiteStore) AgentMayCheckMonitor(ctx context.Context, agentID, monitor
 
 // GetMonitorAgentIDs returns the agents monitorID is assigned to, in id order;
 // empty means no remote agent jobs.
-func (s *SQLiteStore) GetMonitorAgentIDs(ctx context.Context, monitorID int64) ([]int64, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetMonitorAgentIDs(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]int64, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT agent_id FROM monitor_agents WHERE monitor_id = ? ORDER BY agent_id`, monitorID)
 	if err != nil {
 		return nil, err

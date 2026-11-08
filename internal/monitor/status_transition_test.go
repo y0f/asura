@@ -21,8 +21,8 @@ type heldIncidentReadStore struct {
 	release chan struct{}
 }
 
-func (s *heldIncidentReadStore) GetOpenIncident(ctx context.Context, id int64) (*storage.Incident, error) {
-	inc, err := s.SQLiteStore.GetOpenIncident(ctx, id)
+func (s *heldIncidentReadStore) GetOpenIncident(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.Incident, error) {
+	inc, err := s.SQLiteStore.GetOpenIncident(ctx, id, access...)
 	if s.reads.Add(1) <= 2 {
 		s.entered <- struct{}{}
 		select {

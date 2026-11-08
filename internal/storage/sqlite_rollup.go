@@ -106,8 +106,13 @@ func (s *SQLiteStore) PurgeDailyBefore(ctx context.Context, before time.Time) (i
 	return res.RowsAffected()
 }
 
-func (s *SQLiteStore) GetTimeSeriesFromHourly(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetTimeSeriesFromHourly(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int, access ...MonitorAccess) ([]*TimeSeriesPoint, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT hour || ':00:00Z', avg_rt,
 		        CASE WHEN down_count > 0 THEN 'down' WHEN total > up_count + down_count THEN 'degraded' ELSE 'up' END
 		 FROM check_result_hourly
@@ -132,8 +137,13 @@ func (s *SQLiteStore) GetTimeSeriesFromHourly(ctx context.Context, monitorID int
 	return points, rows.Err()
 }
 
-func (s *SQLiteStore) GetTimeSeriesFromDaily(ctx context.Context, monitorID int64, from, to time.Time) ([]*TimeSeriesPoint, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetTimeSeriesFromDaily(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*TimeSeriesPoint, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT day || 'T00:00:00Z', avg_rt,
 		        CASE WHEN down_count > 0 THEN 'down' WHEN total > up_count + down_count THEN 'degraded' ELSE 'up' END
 		 FROM check_result_daily

@@ -23,14 +23,14 @@ func (s *reportStore) ListMonitors(_ context.Context, _ storage.MonitorListFilte
 	return &storage.PaginatedResult{Data: []*storage.Monitor{{ID: int64(p.Page), Name: "report fixture", SLATarget: s.target}}, TotalPages: max(s.pages, 1)}, nil
 }
 
-func (s *reportStore) GetUptimePercent(context.Context, int64, time.Time, time.Time) (float64, error) {
+func (s *reportStore) GetUptimePercent(context.Context, int64, time.Time, time.Time, ...storage.MonitorAccess) (float64, error) {
 	if s.total == 0 {
 		return 100, s.fail
 	}
 	return float64(s.up) / float64(s.total) * 100, s.fail
 }
 
-func (s *reportStore) GetDailyUptime(_ context.Context, _ int64, from, to time.Time) ([]*storage.DailyUptime, error) {
+func (s *reportStore) GetDailyUptime(_ context.Context, _ int64, from, to time.Time, _ ...storage.MonitorAccess) ([]*storage.DailyUptime, error) {
 	s.from, s.to = from, to
 	return []*storage.DailyUptime{{Date: from.Format("2006-01-02"), TotalChecks: s.total, UpChecks: s.up, DownChecks: s.down}}, s.fail
 }

@@ -42,14 +42,14 @@ func (s *countingStore) IsMonitorInMaintenance(ctx context.Context, id int64, at
 	return s.SQLiteStore.IsMonitorInMaintenance(ctx, id, at)
 }
 
-func (s *countingStore) GetOpenIncident(ctx context.Context, id int64) (*storage.Incident, error) {
+func (s *countingStore) GetOpenIncident(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.Incident, error) {
 	s.openIncCalls.Add(1)
-	return s.SQLiteStore.GetOpenIncident(ctx, id)
+	return s.SQLiteStore.GetOpenIncident(ctx, id, access...)
 }
 
-func (s *countingStore) GetLatestCheckResult(ctx context.Context, id int64) (*storage.CheckResult, error) {
+func (s *countingStore) GetLatestCheckResult(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.CheckResult, error) {
 	s.latestCRCalls.Add(1)
-	cr, err := s.SQLiteStore.GetLatestCheckResult(ctx, id)
+	cr, err := s.SQLiteStore.GetLatestCheckResult(ctx, id, access...)
 	if cr != nil {
 		s.latestCRBytes.Add(int64(len(cr.Body)))
 	}
@@ -84,14 +84,14 @@ func (s *countingStore) ListExpiredHeartbeats(ctx context.Context) ([]*storage.H
 	return s.SQLiteStore.ListExpiredHeartbeats(ctx)
 }
 
-func (s *countingStore) GetHeartbeatByMonitorID(ctx context.Context, id int64) (*storage.Heartbeat, error) {
+func (s *countingStore) GetHeartbeatByMonitorID(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.Heartbeat, error) {
 	for _, hb := range s.expired {
 		if hb.MonitorID == id {
 			cp := *hb
 			return &cp, nil
 		}
 	}
-	return s.SQLiteStore.GetHeartbeatByMonitorID(ctx, id)
+	return s.SQLiteStore.GetHeartbeatByMonitorID(ctx, id, access...)
 }
 
 func (s *countingStore) ExpireHeartbeat(ctx context.Context, id int64) (bool, error) {

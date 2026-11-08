@@ -479,16 +479,21 @@ func insertCheckResult(ctx context.Context, writer monitorWriteExecutor, r *Chec
 	return nil
 }
 
-func (s *SQLiteStore) ListCheckResults(ctx context.Context, monitorID int64, p Pagination) (*PaginatedResult, error) {
+func (s *SQLiteStore) ListCheckResults(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var total int64
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM check_results WHERE monitor_id=?", monitorID).Scan(&total)
 	if err != nil {
 		return nil, err
 	}
 
 	offset := (p.Page - 1) * p.PerPage
-	rows, err := s.readDB.QueryContext(ctx,
+	rows, err := reader.QueryContext(ctx,
 		`SELECT id, monitor_id, status, response_time, status_code, message, body_hash, cert_expiry, dns_records, created_at
 		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		monitorID, p.PerPage, offset)
@@ -527,11 +532,16 @@ func (s *SQLiteStore) ListCheckResults(ctx context.Context, monitorID int64, p P
 	}, nil
 }
 
-func (s *SQLiteStore) GetLatestCheckResult(ctx context.Context, monitorID int64) (*CheckResult, error) {
+func (s *SQLiteStore) GetLatestCheckResult(ctx context.Context, monitorID int64, access ...MonitorAccess) (*CheckResult, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var r CheckResult
 	var certExp sql.NullString
 	var createdAt string
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		`SELECT id, monitor_id, status, response_time, status_code, message, body, body_hash, cert_expiry, dns_records, created_at
 		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT 1`, monitorID).
 		Scan(&r.ID, &r.MonitorID, &r.Status, &r.ResponseTime, &r.StatusCode,
@@ -544,7 +554,7 @@ func (s *SQLiteStore) GetLatestCheckResult(ctx context.Context, monitorID int64)
 	return &r, nil
 }
 
-func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int) (map[int64][]*SparklinePoint, error) {
+func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int, access ...MonitorAccess) (map[int64][]*SparklinePoint, error) {
 	result := make(map[int64][]*SparklinePoint, len(monitorIDs))
 	if len(monitorIDs) == 0 || n <= 0 {
 		return result, nil
@@ -552,9 +562,10 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 
 	// One indexed LIMIT query per monitor reads only the n newest rows. A single
 	// ROW_NUMBER() query over all monitors would number every retained row.
+	clause, args := monitorOwnerAccessSQL("monitor_id", access)
 	stmt, err := s.readDB.PrepareContext(ctx,
 		`SELECT status, response_time FROM check_results
-		 WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT ?`)
+		 WHERE monitor_id=?`+clause+` ORDER BY created_at DESC, id DESC LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +575,7 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 		if _, done := result[id]; done {
 			continue
 		}
-		rows, err := stmt.QueryContext(ctx, id, n)
+		rows, err := stmt.QueryContext(ctx, append(append([]any{id}, args...), n)...)
 		if err != nil {
 			return nil, err
 		}
@@ -591,8 +602,13 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 	return result, nil
 }
 
-func (s *SQLiteStore) GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64) ([]int64, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]int64, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT channel_id FROM monitor_notifications WHERE monitor_id=? ORDER BY channel_id`, monitorID)
 	if err != nil {
 		return nil, err

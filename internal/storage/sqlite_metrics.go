@@ -23,16 +23,21 @@ func (s *SQLiteStore) InsertContentChange(ctx context.Context, c *ContentChange)
 	return nil
 }
 
-func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p Pagination) (*PaginatedResult, error) {
+func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var total int64
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM content_changes WHERE monitor_id=?", monitorID).Scan(&total)
 	if err != nil {
 		return nil, err
 	}
 
 	offset := (p.Page - 1) * p.PerPage
-	rows, err := s.readDB.QueryContext(ctx,
+	rows, err := reader.QueryContext(ctx,
 		`SELECT id, monitor_id, old_hash, new_hash, diff, created_at
 		 FROM content_changes WHERE monitor_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		monitorID, p.PerPage, offset)
@@ -69,20 +74,25 @@ func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p
 
 // --- Analytics ---
 
-func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error) {
+func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int, access ...MonitorAccess) ([]*TimeSeriesPoint, error) {
 	span := to.Sub(from)
 	if span > 90*24*time.Hour {
-		return s.GetTimeSeriesFromDaily(ctx, monitorID, from, to)
+		return s.GetTimeSeriesFromDaily(ctx, monitorID, from, to, access...)
 	}
 	if span > 7*24*time.Hour {
-		return s.GetTimeSeriesFromHourly(ctx, monitorID, from, to, maxPoints)
+		return s.GetTimeSeriesFromHourly(ctx, monitorID, from, to, maxPoints, access...)
 	}
 
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	fromStr := formatTime(from)
 	toStr := formatTime(to)
 
 	var count int64
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
 		monitorID, fromStr, toStr).Scan(&count)
 	if err != nil {
@@ -91,7 +101,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 
 	var rows *sql.Rows
 	if count <= int64(maxPoints) {
-		rows, err = s.readDB.QueryContext(ctx,
+		rows, err = reader.QueryContext(ctx,
 			`SELECT created_at, response_time, status
 			 FROM check_results
 			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
@@ -102,7 +112,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 		if bucketSecs < 1 {
 			bucketSecs = 1
 		}
-		rows, err = s.readDB.QueryContext(ctx,
+		rows, err = reader.QueryContext(ctx,
 			`SELECT MIN(created_at) as created_at,
 			        CAST(AVG(response_time) AS INTEGER) as response_time,
 			        CASE
@@ -145,8 +155,8 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 	return points, nil
 }
 
-func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time) (float64, error) {
-	days, err := s.GetDailyUptime(ctx, monitorID, from, to)
+func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (float64, error) {
+	days, err := s.GetDailyUptime(ctx, monitorID, from, to, access...)
 	if err != nil {
 		return 0, err
 	}
@@ -161,8 +171,13 @@ func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, fro
 	return float64(up) / float64(total) * 100, nil
 }
 
-func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time) (p50, p95, p99 float64, err error) {
-	err = s.readDB.QueryRowContext(ctx,
+func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (p50, p95, p99 float64, err error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	defer release()
+	err = reader.QueryRowContext(ctx,
 		`WITH s AS (
 		   SELECT response_time,
 		          ROW_NUMBER() OVER (ORDER BY response_time) AS rn,
@@ -203,8 +218,13 @@ func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context, access ...Moni
 	return result, nil
 }
 
-func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time) (total, up, down, degraded int64, err error) {
-	err = s.readDB.QueryRowContext(ctx,
+func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (total, up, down, degraded int64, err error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	defer release()
+	err = reader.QueryRowContext(ctx,
 		`SELECT COUNT(*),
 		        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
 		        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0),

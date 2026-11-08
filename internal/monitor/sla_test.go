@@ -19,7 +19,7 @@ type slaBudgetStore struct {
 	fail      error
 }
 
-func (s *slaBudgetStore) GetDailyUptime(context.Context, int64, time.Time, time.Time) ([]*storage.DailyUptime, error) {
+func (s *slaBudgetStore) GetDailyUptime(context.Context, int64, time.Time, time.Time, ...storage.MonitorAccess) ([]*storage.DailyUptime, error) {
 	s.reads++
 	return []*storage.DailyUptime{{TotalChecks: s.total, UpChecks: s.up, DownChecks: s.total - s.up}}, s.fail
 }

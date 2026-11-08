@@ -64,16 +64,16 @@ type ReportEntry struct {
 }
 
 // Compute calculates the SLA status for a monitor.
-func Compute(ctx context.Context, store storage.Store, monitorID int64, target float64) (*Status, error) {
-	return computeAt(ctx, store, monitorID, target, time.Now().UTC())
+func Compute(ctx context.Context, store storage.Store, monitorID int64, target float64, access ...storage.MonitorAccess) (*Status, error) {
+	return computeAt(ctx, store, monitorID, target, time.Now().UTC(), access...)
 }
 
-func computeAt(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time) (*Status, error) {
-	status, err := ComputeMonthly(ctx, store, monitorID, target, now)
+func computeAt(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time, access ...storage.MonitorAccess) (*Status, error) {
+	status, err := ComputeMonthly(ctx, store, monitorID, target, now, access...)
 	if err != nil {
 		return nil, err
 	}
-	status.UptimePct30d, err = store.GetUptimePercent(ctx, monitorID, now.Add(-30*24*time.Hour), now)
+	status.UptimePct30d, err = store.GetUptimePercent(ctx, monitorID, now.Add(-30*24*time.Hour), now, access...)
 	if err != nil {
 		return nil, fmt.Errorf("get 30d uptime: %w", err)
 	}
@@ -82,12 +82,12 @@ func computeAt(ctx context.Context, store storage.Store, monitorID int64, target
 
 // ComputeMonthly reads one rollup-aware snapshot for the current month's SLA.
 // Alert evaluation does not need the additional rolling-30-day chart query.
-func ComputeMonthly(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time) (*Status, error) {
+func ComputeMonthly(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time, access ...storage.MonitorAccess) (*Status, error) {
 	now = now.UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0)
 
-	days, err := store.GetDailyUptime(ctx, monitorID, monthStart, now)
+	days, err := store.GetDailyUptime(ctx, monitorID, monthStart, now, access...)
 	if err != nil {
 		return nil, fmt.Errorf("get monthly uptime: %w", err)
 	}
