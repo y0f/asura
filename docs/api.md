@@ -78,6 +78,8 @@ Heartbeat (push) monitors expect periodic pings from your job or service. Hit th
 
 See [Monitors](monitors.html) for the full field reference and protocol settings.
 
+The monitor list accepts `type`, `group`, `tag`, `status`, `sort` and `q` query parameters. Group and tag values must be positive IDs. Status is one of `up`, `down`, `degraded`, `paused` or `pending`; sort is `name`, `status`, `last_check` or `response_time`. `q` matches the start of a monitor name, up to 255 UTF-8 bytes; it never searches targets or settings. Filters intersect the caller's monitor scope before counts and pagination. Invalid values return HTTP 400.
+
 Omitted relationship fields on `PUT` preserve the current assignments inside the update transaction. This includes `agent_ids`, `monitor_tags`, `notification_channel_ids`, `group_id`, `proxy_id` and `escalation_policy_id`. An explicit empty array clears a list assignment; null clears an optional single relationship. Changing an assignment requires `monitors.assign` and the related resource's read permission. Empty agent assignments mean no remote jobs. Initial group placement is authorized by destination `monitors.create`; later group moves also require source and destination update/assignment authority and `groups.read`.
 
 ### Bulk Operations {#bulk-operations}
@@ -385,6 +387,8 @@ Distributed probe agents run checks from remote locations and report results bac
 Agent results are processed through the full pipeline: monitor status updates, incident creation/resolution, and notifications all work the same as central checks. Monitors whose settings include credentials or mTLS material (basic auth password, bearer token, OAuth2 client secret, mTLS client key, client certificate or CA certificate, password) are not offered to agents; they are checked only by the central server.
 
 Only enabled monitors with `agent_enabled` set to true and an explicit assignment to the authenticated, enabled agent are included in job responses. Empty assignments mean no remote jobs. Disable this flag on monitors targeting localhost or private IPs that should only be checked by the central server. An agent refuses private, loopback and other reserved targets unless it is started with `-allow-private`.
+
+Monitors with a proxy assignment run on the server. They are not offered to agents, and proxy credentials are never included in agent jobs.
 
 Custom request headers and bodies (including those of `http_multi` steps) are sent to agents unchanged and often carry credentials such as `Authorization`, `X-API-Key` or `Cookie`. A monitor that has them is therefore only offered to the agents it is explicitly assigned to (`agent_ids`), never to every agent.
 

@@ -40,12 +40,12 @@ Asura supports 19 monitor types: 17 active protocol checks, heartbeat monitors f
 | `failure_threshold` | int |  | Failures before incident (default: 3) |
 | `success_threshold` | int |  | Successes before recovery (default: 1) |
 | `upside_down` | bool |  | Inverted mode. "up" becomes "down" and vice versa |
-| `agent_enabled` | bool |  | Enable remote checks on explicitly assigned agents (API creation default: false). Empty assignments produce no remote jobs. Typed authentication settings, mTLS material and server-only monitor types remain ineligible for delegation |
+| `agent_enabled` | bool |  | Enable remote checks on explicitly assigned agents (API creation default: false). Empty assignments produce no remote jobs. Proxy assignments, typed authentication settings, mTLS material and server-only monitor types remain ineligible for delegation |
 | `agent_ids` | int\[\] |  | Existing trusted agent IDs. An omitted `PUT` field preserves current assignments; `[]` removes them. Changing delegation requires `monitors.assign` and `agents.read`. Newly enrolled agents receive no jobs until assigned |
 | `resend_interval` | int |  | Seconds between reminder notifications while an incident is open (0 = notify once only) |
 | `sla_target` | float |  | SLA uptime target percentage (e.g. 99.9). Set to 0 to disable SLA tracking |
 
-Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps typed authentication and mTLS settings local. Upgrade the server and agents together; v2 jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
+Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps proxy-routed checks, typed authentication and mTLS settings local. Upgrade the server and agents together; v2 jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
 
 ## Protocol Settings {#protocol-settings}
 

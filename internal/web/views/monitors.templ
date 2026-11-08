@@ -292,7 +292,7 @@ templ MonitorListPage(p MonitorListParams) {
 		}
 		<div x-data={ monitorListXData(bulkPermissions) } @htmx:after-swap="const list = $el.querySelector('#monitor-list'); if (list) syncBulk(list.dataset.bulkPermissions)">
 			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="filter-toolbar">
-				@SearchInput("q", p.Search, "Search monitors")
+				@SearchInput("q", p.Search, "Name starts with…")
 				<details class="filter-disclosure" open x-data="{filtersOpen: false}" :open="!mobile || filtersOpen" @toggle="if (mobile) filtersOpen=$el.open">
 					<summary class="btn-secondary md:hidden! list-none">
 						Filters
