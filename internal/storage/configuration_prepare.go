@@ -259,27 +259,6 @@ func (ic *configurationImport) checkReferences() error {
 	return nil
 }
 
-// Existing installations may retain inert legacy agent_enabled flags. A
-// snapshot preserves those values; only new imports enforce delegation policy.
-func (ic *configurationImport) checkDelegation() error {
-	for _, m := range ic.data.Monitors {
-		if !m.AgentEnabled {
-			continue
-		}
-		if len(m.AgentIDs) == 0 {
-			return invalidConfiguration("monitor %d requires explicit agent assignments; clear agent_enabled for server-only monitoring", m.ID)
-		}
-		switch m.Type {
-		case "heartbeat", "manual", "docker", "command":
-			return invalidConfiguration("monitor %d has a server-only check type; clear agent_enabled", m.ID)
-		}
-		if !agentMayReceiveSettings(string(m.Settings), true) {
-			return invalidConfiguration("monitor %d uses settings that must remain on the server; clear agent_enabled", m.ID)
-		}
-	}
-	return nil
-}
-
 // Prepare every ciphertext and fresh heartbeat credential before the first
 // DELETE or INSERT. The writer transaction protects the already checked maps.
 func (ic *configurationImport) prepareSecrets(s *SQLiteStore) error {

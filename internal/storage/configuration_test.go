@@ -150,7 +150,6 @@ func TestConfigurationPreflightRejectsInvalidReferencesBeforeWrites(t *testing.T
 		{"missing channel", func(c *ConfigurationSnapshot) { c.Monitors[0].NotificationChannelIDs = []int64{999} }},
 		{"missing tag", func(c *ConfigurationSnapshot) { c.Monitors[0].MonitorTags[0].TagID = 999 }},
 		{"missing agent", func(c *ConfigurationSnapshot) { c.Monitors[0].AgentIDs = []int64{999} }},
-		{"implicit agent widening", func(c *ConfigurationSnapshot) { c.Monitors[0].AgentEnabled = true }},
 		{"heartbeat missing grace", func(c *ConfigurationSnapshot) { delete(c.HeartbeatGrace, 52) }},
 		{"heartbeat invalid grace", func(c *ConfigurationSnapshot) { c.HeartbeatGrace[52] = -1 }},
 		{"heartbeat wrong type", func(c *ConfigurationSnapshot) { c.HeartbeatGrace[51] = 1 }},
@@ -351,10 +350,6 @@ func TestConfigurationAgentMappingsNeverCreateOrWidenEnrollments(t *testing.T) {
 			if _, err := s.GetAgentByToken(ctx, second.Token); err != nil {
 				t.Fatal("destination token changed")
 			}
-			c.Monitors[0].Settings = json.RawMessage(`{"basic_auth_pass":"server-only"}`)
-			if result, err := s.ApplyConfiguration(ctx, c, options); !errors.Is(err, ErrInvalidConfiguration) || result != nil {
-				t.Fatalf("typed server credential delegation accepted: %v", err)
-			}
 		})
 	}
 }
@@ -403,8 +398,78 @@ func TestConfigurationSnapshotPreservesInertLegacyDelegationFlags(t *testing.T) 
 	if err != nil || len(snapshot.Monitors) != 2 || !snapshot.Monitors[0].AgentEnabled || !snapshot.Monitors[1].AgentEnabled {
 		t.Fatalf("inert legacy flags prevented or changed export: %v", err)
 	}
-	if result, err := s.ApplyConfiguration(ctx, snapshot, configurationOptions("replace")); !errors.Is(err, ErrInvalidConfiguration) || result != nil || !strings.Contains(err.Error(), "clear agent_enabled") {
-		t.Fatalf("new import must reject unsafe delegation actionably: %v", err)
+	if _, err := s.ApplyConfiguration(ctx, snapshot, configurationOptions("replace")); err != nil {
+		t.Fatalf("inert configuration must remain portable: %v", err)
+	}
+}
+
+func TestConfigurationAgentJobEligibilitySurvivesFullRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	source, destination := testStore(t), testStore(t)
+	sourceAgent, destinationAgent := &Agent{Name: "probe", Enabled: true}, &Agent{Name: "probe", Enabled: true}
+	if err := source.CreateAgent(ctx, sourceAgent); err != nil {
+		t.Fatal(err)
+	}
+	// A different ID at the destination proves assignments are actually remapped.
+	if err := destination.CreateAgent(ctx, &Agent{Name: "unrelated", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := destination.CreateAgent(ctx, destinationAgent); err != nil {
+		t.Fatal(err)
+	}
+	c := configurationFixture()
+	c.Monitors[0].Name, c.Monitors[1].Name = "typed auth", "heartbeat"
+	c.Agents = []ConfigurationAgent{{ID: 91, Name: "probe"}}
+	for _, m := range c.Monitors {
+		m.AgentEnabled, m.AgentIDs = true, []int64{91}
+	}
+	for i, name := range []string{"eligible request data", "unassigned", "delegation disabled"} {
+		m := copyMonitorSnapshot(c.Monitors[0])
+		m.ID, m.Name = int64(53+i), name
+		m.Settings = json.RawMessage(`{"headers":{"X-Token":"explicit request data"}}`)
+		if name == "unassigned" {
+			m.AgentIDs = nil
+		}
+		if name == "delegation disabled" {
+			m.AgentEnabled = false
+		}
+		c.Monitors = append(c.Monitors, m)
+	}
+	if _, err := source.ApplyConfiguration(ctx, c, configurationOptions("replace")); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := source.SnapshotConfiguration(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := destination.ApplyConfiguration(ctx, snapshot, configurationOptions("replace")); err != nil {
+		t.Fatal(err)
+	}
+	for _, pair := range []struct {
+		store *SQLiteStore
+		agent *Agent
+	}{{source, sourceAgent}, {destination, destinationAgent}} {
+		jobs, err := pair.store.ListAgentJobs(ctx, pair.agent.ID)
+		if err != nil || len(jobs) != 1 || jobs[0].Name != "eligible request data" {
+			t.Fatalf("round trip changed effective delegation: jobs=%+v err=%v", jobs, err)
+		}
+		state, err := pair.store.SnapshotConfiguration(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range state.Monitors {
+			eligible, err := pair.store.AgentMayCheckMonitor(ctx, pair.agent.ID, m.ID)
+			if err != nil || eligible != (m.Name == "eligible request data") {
+				t.Fatalf("agent result admission changed for %s: %v %v", m.Name, eligible, err)
+			}
+			if m.Name == "unassigned" {
+				if !m.AgentEnabled || len(m.AgentIDs) != 0 {
+					t.Fatal("inert flag or empty assignments changed")
+				}
+			} else if len(m.AgentIDs) != 1 || m.AgentIDs[0] != pair.agent.ID {
+				t.Fatal("explicit assignment was lost or widened")
+			}
+		}
 	}
 }
 

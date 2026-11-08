@@ -44,9 +44,6 @@ func (s *SQLiteStore) ApplyConfiguration(ctx context.Context, data *Configuratio
 	if err := ic.checkReferences(); err != nil {
 		return nil, err
 	}
-	if err := ic.checkDelegation(); err != nil {
-		return nil, err
-	}
 	if err := ic.prepareSecrets(s); err != nil {
 		return nil, err
 	}
