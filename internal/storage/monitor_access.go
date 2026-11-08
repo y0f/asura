@@ -132,6 +132,11 @@ func (s *SQLiteStore) mutateMonitorSet(ctx context.Context, ids []int64, access 
 	if count != len(ids) {
 		return 0, sql.ErrNoRows
 	}
+	if destination != nil {
+		if err := checkMonitorGroup(ctx, tx, destination.groupID); err != nil {
+			return 0, err
+		}
+	}
 	result, err := tx.ExecContext(ctx, statement+" WHERE "+where, append(args, whereArgs...)...)
 	if err != nil {
 		return 0, err

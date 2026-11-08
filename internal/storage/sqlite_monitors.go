@@ -61,19 +61,33 @@ func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sql.Tx, m *Monitor,
 		return nil, nil, sql.ErrNoRows
 	}
 	m = copyMonitorSnapshot(m)
-	tags, _ := json.Marshal(m.Tags)
 	if m.Settings == nil {
 		m.Settings = json.RawMessage("{}")
 	}
 	if m.Assertions == nil {
 		m.Assertions = json.RawMessage("[]")
 	}
-	now := formatTime(time.Now())
-
 	settings, err := s.encryptSettings(string(m.Settings))
 	if err != nil {
 		return nil, nil, fmt.Errorf("encrypt settings: %w", err)
 	}
+	return s.insertPreparedMonitor(ctx, tx, m, settings, options)
+}
+
+// insertPreparedMonitor writes a private, validated snapshot using ciphertext
+// prepared before any configuration replacement. The caller owns the transaction
+// and must expose neither the monitor nor fresh heartbeat token before commit.
+func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sql.Tx, m *Monitor, settings string, options *MonitorCreateOptions) (*Monitor, *Heartbeat, error) {
+	if options != nil {
+		if err := validateMonitorCreateOptions(m, *options); err != nil {
+			return nil, nil, err
+		}
+	}
+	if err := checkMonitorGroup(ctx, tx, m.GroupID); err != nil {
+		return nil, nil, err
+	}
+	tags, _ := json.Marshal(m.Tags)
+	now := formatTime(time.Now())
 
 	var groupID any
 	if m.GroupID != nil {
@@ -95,7 +109,7 @@ func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sql.Tx, m *Monitor,
 		m.FailureThreshold, m.SuccessThreshold, boolToInt(m.UpsideDown), boolToInt(m.AgentEnabled), m.ResendInterval, m.SLATarget, m.AnomalySensitivity, groupID, proxyID, escalationPolicyID, now, now,
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, monitorRelationError(err)
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
@@ -238,10 +252,23 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 }
 
 func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
-	return s.updateMonitor(ctx, s.writeDB, m, access...)
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	copy := copyMonitorSnapshot(m)
+	if err := s.updateMonitor(ctx, tx, copy, access...); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	*m = *copy
+	return nil
 }
 
-func (s *SQLiteStore) updateMonitor(ctx context.Context, writer monitorWriteExecutor, m *Monitor, access ...MonitorAccess) error {
+func (s *SQLiteStore) updateMonitor(ctx context.Context, writer *sql.Tx, m *Monitor, access ...MonitorAccess) error {
 	tags, _ := json.Marshal(m.Tags)
 	now := formatTime(time.Now())
 	var groupID any
@@ -264,6 +291,19 @@ func (s *SQLiteStore) updateMonitor(ctx context.Context, writer monitorWriteExec
 	destinationClause, destinationArgs := monitorDestinationSQL(&monitorDestination{groupID: m.GroupID}, access)
 	clause += destinationClause
 	accessArgs = append(accessArgs, destinationArgs...)
+	if m.GroupID != nil {
+		if len(access) > 0 {
+			// Preserve scoped not-found behavior before reporting an invalid
+			// destination; the transaction prevents either decision going stale.
+			var id int64
+			if err := writer.QueryRowContext(ctx, "SELECT id FROM monitors WHERE id=?"+clause, append([]any{m.ID}, accessArgs...)...).Scan(&id); err != nil {
+				return err
+			}
+		}
+		if err := checkMonitorGroup(ctx, writer, m.GroupID); err != nil {
+			return err
+		}
+	}
 	args := []any{
 		m.Name, m.Description, m.Type, m.Target, m.Interval, m.Timeout, boolToInt(m.Enabled),
 		string(tags), settings, string(m.Assertions), boolToInt(m.TrackChanges),
@@ -275,7 +315,7 @@ func (s *SQLiteStore) updateMonitor(ctx context.Context, writer monitorWriteExec
 		 upside_down=?, agent_enabled=?, resend_interval=?, sla_target=?, anomaly_sensitivity=?, group_id=?, proxy_id=?, escalation_policy_id=?, updated_at=?
 		 WHERE id=?`+clause, append(args, accessArgs...)...)
 	if err := scopedMutationResult(result, err, access); err != nil {
-		return err
+		return monitorRelationError(err)
 	}
 	m.UpdatedAt = parseTime(now)
 	return nil

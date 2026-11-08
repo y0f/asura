@@ -3,12 +3,43 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 )
 
 type monitorWriteExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+var ErrInvalidMonitorRelation = errors.New("a referenced monitor resource does not exist")
+
+func monitorRelationError(err error) error {
+	// SQLite's extended SQLITE_CONSTRAINT_FOREIGNKEY code is 787. Match the
+	// structured result, never error strings or unrelated constraint failures.
+	// https://www.sqlite.org/rescode.html#constraint_foreignkey
+	var coded interface{ Code() int }
+	if errors.As(err, &coded) && coded.Code() == 787 {
+		return fmt.Errorf("%w: %w", ErrInvalidMonitorRelation, err)
+	}
+	return err
+}
+
+// The legacy group_id column has no FK. Call under the writer transaction so
+// deletion cannot race admission; DeleteMonitorGroup clears memberships under
+// that same writer lock before deleting its group.
+func checkMonitorGroup(ctx context.Context, tx *sql.Tx, groupID *int64) error {
+	if groupID == nil {
+		return nil
+	}
+	var exists bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM monitor_groups WHERE id=?)", *groupID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrInvalidMonitorRelation
+	}
+	return nil
 }
 
 // MonitorCreateOptions carries dependent state that must be created with a
@@ -213,21 +244,21 @@ func replaceMonitorRelations(ctx context.Context, tx *sql.Tx, m *Monitor, change
 	if changes.Notifications {
 		for _, channelID := range m.NotificationChannelIDs {
 			if _, err := tx.ExecContext(ctx, "INSERT INTO monitor_notifications (monitor_id, channel_id) VALUES (?, ?)", m.ID, channelID); err != nil {
-				return err
+				return monitorRelationError(err)
 			}
 		}
 	}
 	if changes.Tags {
 		for _, tag := range m.MonitorTags {
 			if _, err := tx.ExecContext(ctx, "INSERT INTO monitor_tags (monitor_id, tag_id, value) VALUES (?, ?, ?)", m.ID, tag.TagID, tag.Value); err != nil {
-				return err
+				return monitorRelationError(err)
 			}
 		}
 	}
 	if changes.Agents {
 		for _, agentID := range m.AgentIDs {
 			if _, err := tx.ExecContext(ctx, "INSERT INTO monitor_agents (monitor_id, agent_id) VALUES (?, ?)", m.ID, agentID); err != nil {
-				return err
+				return monitorRelationError(err)
 			}
 		}
 	}
