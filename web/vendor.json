@@ -1,0 +1,105 @@
+{
+  "notices": "static/third-party-notices.txt",
+  "libraries": [
+    {
+      "name": "htmx",
+      "version": "2.0.11",
+      "license": "0BSD",
+      "upstream": "https://github.com/bigskysoftware/htmx",
+      "archive": "https://registry.npmjs.org/htmx.org/-/htmx.org-2.0.11.tgz",
+      "archive_integrity": "sha512-Thx/WtpeOQqSrqBCw/A1cwGJGg4UrVa3+sW0GmrM3p4gJgO89ecH4qtbnyzDDWFvBTqjnIMCgELTNt636dtamA==",
+      "files": [
+        {
+          "path": "static/htmx.min.js",
+          "archive_path": "package/dist/htmx.min.js",
+          "sha256": "d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717"
+        }
+      ]
+    },
+    {
+      "name": "Alpine.js",
+      "version": "3.17.5",
+      "license": "MIT",
+      "upstream": "https://github.com/alpinejs/alpine",
+      "archive": "https://registry.npmjs.org/alpinejs/-/alpinejs-3.17.5.tgz",
+      "archive_integrity": "sha512-XewMqRC6zjy8iaUPn86dxjvooAsNai3hUtQbdn0A5H2w7Jt10xHGZ1SczN5+Dvp3UKkuSEt9moy/UaUWOwKdnQ==",
+      "files": [
+        {
+          "path": "static/alpine.min.js",
+          "archive_path": "package/dist/cdn.min.js",
+          "sha256": "b4036e9e9ac22fa6f6ae1ba292e015e1f3e9c85d0d79e73e4c8eb9bb139b522e"
+        }
+      ],
+      "bundled_dependencies": [
+        {
+          "name": "@vue/shared",
+          "version": "3.5.41",
+          "license": "MIT"
+        },
+        {
+          "name": "@vue/reactivity",
+          "version": "3.5.41",
+          "license": "MIT"
+        }
+      ],
+      "license_source": "https://github.com/alpinejs/alpine/blob/v3.17.5/LICENSE.md"
+    },
+    {
+      "name": "uPlot",
+      "version": "1.6.32",
+      "license": "MIT",
+      "upstream": "https://github.com/leeoniya/uPlot",
+      "archive": "https://registry.npmjs.org/uplot/-/uplot-1.6.32.tgz",
+      "archive_integrity": "sha512-KIMVnG68zvu5XXUbC4LQEPnhwOxBuLyW1AHtpm6IKTXImkbLgkMy+jabjLgSLMasNuGGzQm/ep3tOkyTxpiQIw==",
+      "files": [
+        {
+          "path": "static/uplot.iife.min.js",
+          "archive_path": "package/dist/uPlot.iife.min.js",
+          "sha256": "19c8d4c6ad88929a79f4ae49d6f7161566dfd0ba3d15cc495e974f787eb78f1f"
+        },
+        {
+          "path": "static/uplot.min.css",
+          "archive_path": "package/dist/uPlot.min.css",
+          "sha256": "df630c6a8d6f8eeaff264b50f73ce5b114f646ffd9a0bb74f049b0a00135fa04"
+        }
+      ]
+    },
+    {
+      "name": "Inter",
+      "version": "4.001;git-66647c0bb",
+      "version_source": "Embedded font metadata; original download source is not recorded.",
+      "license": "OFL-1.1",
+      "upstream": "https://github.com/rsms/inter",
+      "license_source": "https://github.com/rsms/inter/blob/66647c0bbbe41a850d79d9c76fb13add3378940f/LICENSE.txt",
+      "files": [
+        {
+          "path": "static/fonts/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "name": "JetBrains Mono",
+      "version": "2.211",
+      "version_source": "Embedded font metadata; original download source is not recorded.",
+      "license": "OFL-1.1",
+      "upstream": "https://github.com/JetBrains/JetBrainsMono",
+      "license_source": "https://github.com/JetBrains/JetBrainsMono/blob/v2.210/OFL.txt",
+      "files": [
+        {
+          "path": "static/fonts/jetbrains-mono.woff2",
+          "sha256": "83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be"
+        }
+      ]
+    }
+  ],
+  "build_dependencies": [
+    {
+      "name": "Tailwind CSS",
+      "version": "4.2.1",
+      "license": "MIT",
+      "upstream": "https://github.com/tailwindlabs/tailwindcss/tree/v4.2.1",
+      "output": "static/tailwind.css"
+    }
+  ]
+}

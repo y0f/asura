@@ -22,7 +22,7 @@ internal/web/views/       # templ templates
   layout.templ            # app shell: sidebar, mobile top bar, command palette
   components.templ        # PageHeader, StatCard, StatusPill, Pager, RelTime, dialogs, toasts, buttons
   helpers.go              # status tones and labels, formatting, SVG sparkline/heatmap/uptime bars
-  secrets.go              # which settings keys are secrets; redaction and merge-on-save
+  access.go               # visibility helpers for the current action and resource
   assets.go               # content-hashed static URLs (cache busting)
   render_test.go          # renders every page and checks structure and accessibility invariants
   *.templ                 # one file per page
@@ -32,7 +32,8 @@ internal/web/views/       # templ templates
 ## Design system
 
 The look is flat and dense: a near-black neutral ramp, a blue accent, 1px borders, 4px radii,
-32px controls and clear page headings. Both themes use grayscale and blue only.
+36px standard controls with font-aware minimum heights, and clear page headings.
+Navigation controls start at 32px; coarse pointers get 44px targets. Both themes use grayscale and blue only.
 
 **Theme.** `data-theme` on `<html>` (`dark` default, `light` remap) is resolved before first paint
 by `themeScript`. Every neutral utility (`bg-surface`, `text-muted`, `border-line`, …) resolves to a
@@ -90,13 +91,30 @@ make generate # templ generate (regenerate *_templ.go after editing *.templ)
 
 CI runs both and fails the build if the committed output differs.
 
+## Bundled dependencies
+
+Browser libraries and fonts are served locally. `vendor.json` records their versions,
+upstream sources and SHA-256 digests; `static/third-party-notices.txt` contains their
+licenses and is embedded with the assets. Font versions come from the existing font
+metadata; their original download locations were not recorded.
+
+To update a library, select a supported release, verify the upstream archive's published
+integrity, and copy only the required distribution files. Update the manifest and notices,
+including bundled dependencies such as Vue's reactivity engine in Alpine. No npm install
+or Node runtime is needed. Run `go test ./web` and the browser checks in
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) after an update. Keep generated Tailwind CSS on the
+version pinned in the Makefile and CI; regenerate it through `make css`.
+
 ## House rules
 
 - Each page renders exactly one `<h1>`, through `PageHeader`.
 - Status wording and colour come from the helpers (`StatusTone`, `StatusLabel`, `UptimeTone`), so
   every page agrees on what "degraded" or "at risk" means.
-- Hide write actions from read-only keys with `p.Can("perm")`.
-- Never render a stored secret into HTML. Add new secret settings keys to `secrets.go`.
+- Check each action and current resource scope through the shared permission helpers;
+  the corresponding handler and storage transaction must enforce the same authority.
+- Never render a stored credential into HTML. Keep secret detection, redaction and
+  omitted-value merge rules in `internal/redact`; use explicit replacement and removal
+  controls. Raw diagnostics require the separate scoped `diagnostics.read` grant.
 - Build query strings with `net/url` (`url.Values`), never by concatenation.
 - Every control needs a label (`<label for>`, a wrapping label, or `aria-label`); icon-only buttons
   need `aria-label`. `render_test.go` enforces this.
