@@ -34,17 +34,18 @@ templ AgentListPage(p AgentListParams) {
 				}
 			}
 			if p.NewAgentToken != "" {
-				<div class="card card-pad mb-6 border-brand" role="status" x-data={ fmt.Sprintf("{ copied: false, cmd: '%s' }", JSEscapeString(p.runCommand(p.NewAgentToken))) }>
-					<h2 class="text-lg font-semibold">{ fmt.Sprintf("Agent \"%s\" created", p.NewAgentName) }</h2>
-					<p class="subtitle mt-1 mb-3">Copy the token now. It is not shown again.</p>
-					<div class="flex flex-col sm:flex-row gap-2">
-						<code class="flex-1 min-w-0 px-3 py-2 rounded-control border border-line-light bg-surface text-xs font-mono text-white break-all">{ p.runCommand(p.NewAgentToken) }</code>
-						<button type="button" class="btn-secondary shrink-0" @click="navigator.clipboard.writeText(cmd).then(() => copied = true)">
-							<span x-text="copied ? 'Copied' : 'Copy command'">Copy command</span>
-						</button>
-					</div>
-				</div>
+				<div class="card card-pad mb-6 border-brand" x-data="{message: ''}">
+                    <h2 class="text-lg font-semibold">{ fmt.Sprintf("Agent \"%s\" created", p.NewAgentName) }</h2>
+                    <p class="subtitle mt-1 mb-3">Copy the token now. It is not shown again. Assign monitors explicitly before this agent can receive checks.</p>
+                    <label class="form-label" for="agent-command">Run command</label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input id="agent-command" x-ref="command" type="text" readonly value={ p.runCommand(p.NewAgentToken) } autocomplete="off" spellcheck="false" class="form-input font-mono text-xs min-w-0" @focus="$el.select()"/>
+                        <button type="button" class="btn-secondary shrink-0" @click="if (!navigator.clipboard) { $refs.command.focus(); $refs.command.select(); message='Command selected. Use your device Copy command.'; } else { navigator.clipboard.writeText($refs.command.value).then(() => message='Command copied.').catch(() => { $refs.command.focus(); $refs.command.select(); message='Command selected. Use your device Copy command.'; }); }">Copy command</button>
+                    </div>
+                    <p class="text-sm text-muted-light mt-2" role="status" x-text="message"></p>
+                </div>
 			}
+			if p.Can("agents.read") {
 			if len(p.Agents) > 0 {
 				<div class="panel overflow-x-auto">
 					<table class="w-full min-w-[560px]">
@@ -86,7 +87,7 @@ templ AgentListPage(p AgentListParams) {
 									</td>
 									<td class="px-4 py-3 text-right">
 										if p.Can("agents.delete") {
-											@DeleteButton(fmt.Sprintf("%s/agents/%d/delete", p.BasePath, a.ID), "Delete this agent? Monitors it was checking will fall back to checks from this server.")
+											@DeleteButton(fmt.Sprintf("%s/agents/%d/delete", p.BasePath, a.ID), "Delete this agent? Its monitor assignments will be removed.")
 										}
 									</td>
 								</tr>
@@ -103,6 +104,7 @@ templ AgentListPage(p AgentListParams) {
 						<button type="button" @click="showForm = true" class="btn-secondary mt-4">Create your first agent</button>
 					}
 				</div>
+			}
 			}
 			if p.Can("agents.create") {
 				@FormModal("showForm", "max-w-md", "'New agent'") {
