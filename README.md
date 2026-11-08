@@ -27,6 +27,8 @@ Asura monitors websites, APIs and network services from a single Go binary, with
 
 ## Why Asura?
 
+Benchmarked with **1,000+ monitors on a $5/month VPS**.
+
 | Aspect | Asura | [Uptime Kuma 2.5.9](https://github.com/louislam/uptime-kuma/releases/tag/2.5.9) |
 |---|---|---|
 | **Install** | A single binary, Docker container or Linux service. | [Docker or Node.js/npm setup.](https://github.com/louislam/uptime-kuma/blob/2.5.9/README.md) |
