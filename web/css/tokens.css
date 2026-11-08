@@ -64,10 +64,10 @@
   --text-lg: 18px;    --text-lg--line-height: 1.4;
   --text-xl: 20px;    --text-xl--line-height: 1.35;
   --text-2xl: 24px;   --text-2xl--line-height: 1.25;
-  --text-3xl: 30px;   --text-3xl--line-height: 1.2;
+  --text-3xl: 26px;   --text-3xl--line-height: 1.25;
 
-  --radius-control: 4px;
-  --radius-card: 4px;
+  --radius-control: 5px;
+  --radius-card: 6px;
 }
 
 html[data-theme="light"] {

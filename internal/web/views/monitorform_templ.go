@@ -309,7 +309,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " class=\"max-w-3xl space-y-6 pb-24 md:pb-4\"><div class=\"card card-pad\"><h2 class=\"text-lg font-semibold mb-4\">General</h2><div class=\"space-y-4\"><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"name\">Name</label> <input id=\"name\" type=\"text\" name=\"name\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " class=\"monitor-editor max-w-3xl space-y-5 pb-4\"><div class=\"card card-pad\"><h2 class=\"text-lg font-semibold mb-4\">General</h2><div class=\"space-y-4\"><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\"><div><label class=\"form-label\" for=\"name\">Name</label> <input id=\"name\" type=\"text\" name=\"name\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1125,7 +1125,7 @@ func MonitorFormPage(p MonitorFormParams) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "</div></div></div></div><div class=\"sticky bottom-0 z-10 flex items-center gap-2 py-3 border-t border-line bg-surface md:static md:py-0 md:border-0 md:bg-transparent\"><button type=\"submit\" class=\"btn-primary\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 104, "</div></div></div></div><div class=\"form-actions\"><button type=\"submit\" class=\"btn-primary\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

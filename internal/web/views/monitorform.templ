@@ -228,7 +228,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 				} else {
 					action={ templ.SafeURL(p.BasePath + "/monitors") }
 				}
-				class="max-w-3xl space-y-6 pb-24 md:pb-4"
+				class="monitor-editor max-w-3xl space-y-5 pb-4"
 			>
 				<div class="card card-pad">
 					<h2 class="text-lg font-semibold mb-4">General</h2>
@@ -594,7 +594,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 						</div>
 					</div>
 				</div>
-				<div class="sticky bottom-0 z-10 flex items-center gap-2 py-3 border-t border-line bg-surface md:static md:py-0 md:border-0 md:bg-transparent">
+				<div class="form-actions">
 					<button type="submit" class="btn-primary">
 						if p.Monitor.ID != 0 {
 							Save changes

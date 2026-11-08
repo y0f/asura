@@ -125,6 +125,16 @@ func (p MonitorListParams) filtered() bool {
 	return p.Type != "" || p.Search != "" || p.TagFilter != nil || p.GroupFilter != nil || p.StatusFilter != ""
 }
 
+func (p MonitorListParams) filterCount() int {
+	count := 0
+	for _, active := range []bool{p.Type != "", p.TagFilter != nil, p.GroupFilter != nil, p.StatusFilter != "", p.SortParam != ""} {
+		if active {
+			count++
+		}
+	}
+	return count
+}
+
 var monitorTypes = []string{"http", "http_multi", "tcp", "icmp", "dns", "smtp", "ssh", "tls", "domain", "redis", "postgresql", "websocket", "grpc", "mqtt", "udp", "docker", "command", "heartbeat", "manual"}
 
 func monitorListXData(permissions string) string {
@@ -275,124 +285,135 @@ templ manualStatusButton(basePath string, monitorID int64, status string) {
 templ MonitorListPage(p MonitorListParams) {
 	@Layout(p.LayoutParams) {
 		{{ bulkPermissions := p.bulkPermissions() }}
-		@PageHeader(PageHeaderParams{Title: "Monitors", Subtitle: "Every check Asura runs, with its latest status."}) {
+		@PageHeader(PageHeaderParams{Title: "Monitors", Subtitle: "Availability, recent results and configuration for your services."}) {
 			if p.HasCapability("monitors.create") {
 				@ToolbarNewButton(p.BasePath+"/monitors/new", "New monitor")
 			}
 		}
 		<div x-data={ monitorListXData(bulkPermissions) } @htmx:after-swap="const list = $el.querySelector('#monitor-list'); if (list) syncBulk(list.dataset.bulkPermissions)">
-			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="mb-4 flex flex-wrap items-center gap-2">
+			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="filter-toolbar">
 				@SearchInput("q", p.Search, "Search monitors")
-				<select name="status" onchange="this.form.submit()" class="form-select-sm" aria-label="Status">
-					<option
-						value=""
-						if p.StatusFilter == "" {
-							selected
+				<details class="filter-disclosure" open x-data="{filtersOpen: false}" :open="!mobile || filtersOpen" @toggle="if (mobile) filtersOpen=$el.open">
+					<summary class="btn-secondary md:hidden! list-none">
+						Filters
+						if count := p.filterCount(); count > 0 {
+							<span class="badge">{ fmt.Sprint(count) }</span>
 						}
-					>All statuses</option>
-					<option
-						value="up"
-						if p.StatusFilter == "up" {
-							selected
-						}
-					>Up</option>
-					<option
-						value="down"
-						if p.StatusFilter == "down" {
-							selected
-						}
-					>Down</option>
-					<option
-						value="degraded"
-						if p.StatusFilter == "degraded" {
-							selected
-						}
-					>Degraded</option>
-					<option
-						value="paused"
-						if p.StatusFilter == "paused" {
-							selected
-						}
-					>Paused</option>
-				</select>
-				<select name="type" onchange="this.form.submit()" class="form-select-sm" aria-label="Type">
-					<option
-						value=""
-						if p.Type == "" {
-							selected
-						}
-					>All types</option>
-					for _, t := range monitorTypes {
-						<option
-							value={ t }
-							if p.Type == t {
-								selected
-							}
-						>{ TypeLabel(t) }</option>
-					}
-				</select>
-				if len(p.Groups) > 0 {
-					<select name="group" onchange="this.form.submit()" class="form-select-sm" aria-label="Group">
-						<option
-							value=""
-							if p.GroupFilter == nil {
-								selected
-							}
-						>All groups</option>
-						for _, g := range p.Groups {
+						<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+					</summary>
+					<div class="filter-options">
+						<select name="status" onchange="this.form.submit()" class="form-select-sm" aria-label="Status">
 							<option
-								value={ fmt.Sprint(g.ID) }
-								if p.GroupFilter != nil && *p.GroupFilter == g.ID {
+								value=""
+								if p.StatusFilter == "" {
 									selected
 								}
-							>{ g.Name }</option>
-						}
-					</select>
-				}
-				if len(p.AllTags) > 0 {
-					<select name="tag" onchange="this.form.submit()" class="form-select-sm" aria-label="Tag">
-						<option
-							value=""
-							if p.TagFilter == nil {
-								selected
-							}
-						>All tags</option>
-						for _, tag := range p.AllTags {
+							>All statuses</option>
 							<option
-								value={ fmt.Sprint(tag.ID) }
-								if p.TagFilter != nil && *p.TagFilter == tag.ID {
+								value="up"
+								if p.StatusFilter == "up" {
 									selected
 								}
-							>{ tag.Name }</option>
+							>Up</option>
+							<option
+								value="down"
+								if p.StatusFilter == "down" {
+									selected
+								}
+							>Down</option>
+							<option
+								value="degraded"
+								if p.StatusFilter == "degraded" {
+									selected
+								}
+							>Degraded</option>
+							<option
+								value="paused"
+								if p.StatusFilter == "paused" {
+									selected
+								}
+							>Paused</option>
+						</select>
+						<select name="type" onchange="this.form.submit()" class="form-select-sm" aria-label="Type">
+							<option
+								value=""
+								if p.Type == "" {
+									selected
+								}
+							>All types</option>
+							for _, t := range monitorTypes {
+								<option
+									value={ t }
+									if p.Type == t {
+										selected
+									}
+								>{ TypeLabel(t) }</option>
+							}
+						</select>
+						if len(p.Groups) > 0 {
+							<select name="group" onchange="this.form.submit()" class="form-select-sm" aria-label="Group">
+								<option
+									value=""
+									if p.GroupFilter == nil {
+										selected
+									}
+								>All groups</option>
+								for _, g := range p.Groups {
+									<option
+										value={ fmt.Sprint(g.ID) }
+										if p.GroupFilter != nil && *p.GroupFilter == g.ID {
+											selected
+										}
+									>{ g.Name }</option>
+								}
+							</select>
 						}
-					</select>
-				}
-				<select name="sort" onchange="this.form.submit()" class="form-select-sm" aria-label="Sort by">
-					<option
-						value=""
-						if p.SortParam == "" {
-							selected
+						if len(p.AllTags) > 0 {
+							<select name="tag" onchange="this.form.submit()" class="form-select-sm" aria-label="Tag">
+								<option
+									value=""
+									if p.TagFilter == nil {
+										selected
+									}
+								>All tags</option>
+								for _, tag := range p.AllTags {
+									<option
+										value={ fmt.Sprint(tag.ID) }
+										if p.TagFilter != nil && *p.TagFilter == tag.ID {
+											selected
+										}
+									>{ tag.Name }</option>
+								}
+							</select>
 						}
-					>Sort: name</option>
-					<option
-						value="status"
-						if p.SortParam == "status" {
-							selected
-						}
-					>Sort: status</option>
-					<option
-						value="last_check"
-						if p.SortParam == "last_check" {
-							selected
-						}
-					>Sort: last check</option>
-					<option
-						value="response_time"
-						if p.SortParam == "response_time" {
-							selected
-						}
-					>Sort: response time</option>
-				</select>
+						<select name="sort" onchange="this.form.submit()" class="form-select-sm" aria-label="Sort by">
+							<option
+								value=""
+								if p.SortParam == "" {
+									selected
+								}
+							>Sort: name</option>
+							<option
+								value="status"
+								if p.SortParam == "status" {
+									selected
+								}
+							>Sort: status</option>
+							<option
+								value="last_check"
+								if p.SortParam == "last_check" {
+									selected
+								}
+							>Sort: last check</option>
+							<option
+								value="response_time"
+								if p.SortParam == "response_time" {
+									selected
+								}
+							>Sort: response time</option>
+						</select>
+					</div>
+				</details>
 				<noscript><button type="submit" class="btn-secondary btn-sm">Apply</button></noscript>
 				if p.filtered() || p.SortParam != "" {
 					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="text-sm text-muted hover:text-white px-1">Clear</a>
@@ -461,7 +482,7 @@ templ MonitorListPage(p MonitorListParams) {
 									}
 									<th class="th">Name</th>
 									<th class="th w-px hidden md:table-cell">Type</th>
-									<th class="th w-px">Status</th>
+									<th class="th w-px hidden sm:table-cell">Status</th>
 									<th class="th w-px hidden md:table-cell">Last check</th>
 									<th class="th w-px"><span class="sr-only">Actions</span></th>
 								</tr>
@@ -476,18 +497,19 @@ templ MonitorListPage(p MonitorListParams) {
 										}
 										<td class="px-4 py-3 min-w-0 max-w-0 w-full">
 											<div class="flex items-center gap-2 flex-wrap">
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="text-sm font-medium text-white hover:underline">{ m.Name }</a>
+												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="text-sm font-medium text-white hover:text-brand [overflow-wrap:anywhere]">{ m.Name }</a>
 												for _, tag := range p.TagMap[m.ID] {
-													<span class="badge" title={ tagTooltip(tag) }>
+													<span class="badge hidden! sm:inline-flex!" title={ tagTooltip(tag) }>
 														<span class={ "dot w-1.5 h-1.5", TagTone(tag.Color) }></span>
 														{ tag.Name }
 													</span>
 												}
 											</div>
 											<div class="text-xs text-muted mt-0.5 truncate font-mono">{ m.Target }</div>
+											<div class="sm:hidden mt-1">@StatusPill(m.Status)</div>
 										</td>
 										<td class="px-4 py-3 text-sm text-muted-light whitespace-nowrap hidden md:table-cell">{ TypeLabel(m.Type) }</td>
-										<td class="px-4 py-3">
+										<td class="px-4 py-3 hidden sm:table-cell">
 											@StatusPill(m.Status)
 										</td>
 										<td class="px-4 py-3 text-sm text-muted whitespace-nowrap hidden md:table-cell">
@@ -510,11 +532,13 @@ templ MonitorListPage(p MonitorListParams) {
 					}
 				} else if p.filtered() {
 					<div class="px-4 py-12 text-center">
+						@emptyMark()
 						<p class="text-sm text-muted-light">No monitors match these filters.</p>
 						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="btn-secondary mt-4">Clear filters</a>
 					</div>
 				} else {
 					<div class="px-4 py-12 text-center">
+						@emptyMark()
 						<p class="text-sm text-muted-light">No monitors yet.</p>
 						if p.HasCapability("monitors.create") {
 							<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary mt-4">Create your first monitor</a>
@@ -630,7 +654,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="ml-auto text-white underline underline-offset-2">View incident</a>
 				</div>
 			}
-			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+			<div class="summary-strip">
 				@uptimeStat("Uptime 24h", p.Uptime24h, p.Uptime24hHasData)
 				@uptimeStat("Uptime 7d", p.Uptime7d, p.Uptime7dHasData)
 				@uptimeStat("Uptime 30d", p.Uptime30d, p.Uptime30dHasData)
@@ -685,8 +709,8 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 				</div>
 			}
 			if p.showPercentiles() {
-				<div class="grid grid-cols-3 gap-3 mb-6">
-					@StatCard("p50", durationPercentile(p.P50, p.UpChecks), "")
+				<div class="percentile-summary grid grid-cols-3 gap-3 mb-6">
+					@StatCard("Median · p50", durationPercentile(p.P50, p.UpChecks), "")
 					@StatCard("p95", durationPercentile(p.P95, p.UpChecks), "")
 					@StatCard("p99", durationPercentile(p.P99, p.UpChecks), "")
 				</div>
@@ -725,9 +749,8 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						if p.heatmapHasData() {
 							<div class="flex flex-wrap items-center gap-3 text-xs text-muted">
 								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-ok"></span>≥ 99.9%</span>
-								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-warn"></span>≥ 99%</span>
-								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-major"></span>≥ 95%</span>
-								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-crit"></span>&lt; 95%</span>
+								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-warn"></span>99% to &lt;99.9%</span>
+								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-crit"></span>&lt; 99%</span>
 							</div>
 						}
 					</div>

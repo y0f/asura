@@ -18,21 +18,21 @@ type PageHeaderParams struct {
 // an optional subtitle below it. Children are the page actions, shown on the
 // right of the title (or wrapped below it on narrow screens).
 templ PageHeader(h PageHeaderParams) {
-	<div class="mb-6">
+	<div class="page-heading">
 		if h.BackHref != "" {
 			<a href={ templ.SafeURL(h.BackHref) } class="inline-flex items-center gap-1 mb-2 text-sm text-muted hover:text-white">
 				<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 				{ h.BackLabel }
 			</a>
 		}
-		<div class="flex flex-wrap items-center gap-x-4 gap-y-3">
-			<h1 class="text-2xl sm:text-3xl font-bold text-white [overflow-wrap:anywhere] min-w-0">{ h.Title }</h1>
-			<div class="flex flex-wrap items-center gap-2 grow">
+		<div class="page-heading-row">
+			<h1 class="page-title">{ h.Title }</h1>
+			<div class="page-actions">
 				{ children... }
 			</div>
 		</div>
 		if h.Subtitle != "" {
-			<p class="subtitle mt-1.5">{ h.Subtitle }</p>
+			<p class="page-description">{ h.Subtitle }</p>
 		}
 	</div>
 }
@@ -40,9 +40,9 @@ templ PageHeader(h PageHeaderParams) {
 // StatCard is a single labelled metric. tone is a status tone ("ok", "warn",
 // "crit") or "" for a neutral value.
 templ StatCard(label, value, tone string) {
-	<div class="card px-4 py-3 min-w-0">
+	<div class="stat-card card px-4 py-3 min-w-0">
 		<div class="stat-label">{ label }</div>
-		<div class={ "text-xl sm:text-2xl font-semibold tabular-nums truncate", toneText(tone) }>{ value }</div>
+		<div class={ "stat-value truncate", toneText(tone) }>{ value }</div>
 		{ children... }
 	</div>
 }
@@ -172,6 +172,7 @@ templ DeleteButton(action, message string) {
 // and an optional call-to-action link.
 templ EmptyState(message, actionHref, actionLabel string) {
 	<div class="card px-6 py-12 flex flex-col items-center text-center">
+		@emptyMark()
 		<p class="text-sm text-muted-light">{ message }</p>
 		if actionHref != "" {
 			<a href={ templ.SafeURL(actionHref) } class="btn-secondary mt-4">{ actionLabel }</a>
@@ -183,11 +184,18 @@ templ EmptyState(message, actionHref, actionLabel string) {
 // the surrounding scope (e.g. "showForm = true") to open a create dialog.
 templ EmptyStateModal(message, clickExpr, actionLabel string) {
 	<div class="card px-6 py-12 flex flex-col items-center text-center">
+		@emptyMark()
 		<p class="text-sm text-muted-light">{ message }</p>
 		if actionLabel != "" {
 			<button type="button" @click={ clickExpr } class="btn-secondary mt-4">{ actionLabel }</button>
 		}
 	</div>
+}
+
+templ emptyMark() {
+	<span class="empty-mark" aria-hidden="true">
+		<svg focusable="false" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h5M8 16h3"></path></svg>
+	</span>
 }
 
 // FormModal is the shared centered dialog for create/edit forms whose open state
@@ -294,7 +302,7 @@ templ ToolbarNewButtonClick(clickExpr, label string) {
 templ SearchInput(name, value, placeholder string) {
 	<div class="relative w-full sm:w-64">
 		<svg aria-hidden="true" focusable="false" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-		<input type="search" name={ name } value={ value } placeholder={ placeholder } aria-label={ placeholder } class="form-input h-8 pl-8"/>
+		<input type="search" name={ name } value={ value } placeholder={ placeholder } aria-label={ placeholder } class="form-input pl-8"/>
 	</div>
 }
 

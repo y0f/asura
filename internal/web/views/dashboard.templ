@@ -104,8 +104,12 @@ templ DashboardPage(p DashboardParams) {
 			@htmx:send-error="refreshError = true"
 		>
 			<div x-show="refreshError" x-cloak role="status" class="mb-4 text-xs text-crit">Refresh failed. Showing the last loaded dashboard; retrying.</div>
-			@PageHeader(PageHeaderParams{Title: "Dashboard", Subtitle: p.summary()})
-			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+			@PageHeader(PageHeaderParams{Title: "Dashboard", Subtitle: p.summary()}) {
+				if p.HasCapability("monitors.create") {
+					@ToolbarNewButton(p.BasePath+"/monitors/new", "New monitor")
+				}
+			}
+			<div class="summary-strip">
 				@StatCard("Up", fmt.Sprint(p.Up), toneIf(p.Up > 0, "ok"))
 				@StatCard("Down", fmt.Sprint(p.Down), toneIf(p.Down > 0, "crit"))
 				@StatCard("Degraded", fmt.Sprint(p.Degraded), toneIf(p.Degraded > 0, "warn"))
@@ -115,14 +119,11 @@ templ DashboardPage(p DashboardParams) {
 					@StatCard("Paused", fmt.Sprint(p.Paused), "muted")
 				}
 			</div>
-			<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-				<section class={ "min-w-0", templ.KV("xl:col-span-2", p.HasCapability("incidents.read")), templ.KV("xl:col-span-3", !p.HasCapability("incidents.read")) } aria-labelledby="dash-monitors">
-					<div class="flex items-center gap-3 mb-3">
-						<h2 id="dash-monitors" class="text-xl font-bold">Monitors</h2>
-						if p.HasCapability("monitors.create") {
-							<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary btn-sm">+ Add</a>
-						}
-						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
+			<div class={ "dashboard-grid", templ.KV("dashboard-grid-split", p.HasCapability("incidents.read")) }>
+				<section class="min-w-0" aria-labelledby="dash-monitors">
+					<div class="section-heading">
+						<h2 id="dash-monitors">Monitors</h2>
+						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="section-link">View all monitors</a>
 					</div>
 					<div id="monitor-grid" class="panel">
 						if len(p.Monitors) > 0 {
@@ -131,19 +132,24 @@ templ DashboardPage(p DashboardParams) {
 									<li>
 										<a
 											href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) }
-											class="flex items-center justify-between gap-4 px-4 py-3 hover:bg-surface-200 group"
+											class="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-200 group"
 										>
 											<div class="min-w-0">
 												<div class="text-sm font-medium text-white truncate">{ m.Name }</div>
-												<div class="text-xs text-muted truncate">{ TypeLabel(m.Type) } · <span class="font-mono">{ m.Target }</span></div>
+												<div class="text-xs text-muted truncate mt-0.5">
+													{ TypeLabel(m.Type) }
+													if m.Target != "" {
+														<span aria-hidden="true">· </span><span class="font-mono">{ m.Target }</span>
+													}
+												</div>
 											</div>
-											<div class="flex items-center gap-4 shrink-0">
+											<div class="flex items-center gap-3 shrink-0">
 												<span class="hidden sm:block w-14 text-right text-xs text-muted tabular-nums font-mono">
-													if rt := p.ResponseTimes[m.ID]; rt > 0 {
+													if rt := p.ResponseTimes[m.ID]; rt > 0 && m.Type != "manual" && m.Type != "heartbeat" {
 														{ FormatMs(rt) }
 													}
 												</span>
-												<span class="hidden md:flex w-[79px] justify-end items-center">
+												<span class="dashboard-sparkline w-[79px] justify-end items-center">
 													if pts := p.Sparklines[m.ID]; len(pts) > 0 {
 														@templ.Raw(sparklineSVG(pts))
 													}
@@ -160,6 +166,7 @@ templ DashboardPage(p DashboardParams) {
 							<div class="px-4 py-10 text-center text-sm text-muted">{ fmt.Sprintf("No %s monitors.", TypeLabel(p.Filter)) }</div>
 						} else {
 							<div class="px-4 py-10 text-center">
+								@emptyMark()
 								<p class="text-sm text-muted-light">No monitors yet.</p>
 								if p.HasCapability("monitors.create") {
 									<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary mt-4">Create your first monitor</a>
@@ -173,9 +180,9 @@ templ DashboardPage(p DashboardParams) {
 				</section>
 				if p.HasCapability("incidents.read") {
 					<section class="min-w-0" aria-labelledby="dash-incidents">
-						<div class="flex items-center gap-3 mb-3">
-							<h2 id="dash-incidents" class="text-xl font-bold">Open incidents</h2>
-							<a href={ templ.SafeURL(p.BasePath + "/incidents") } class="ml-auto text-sm text-muted hover:text-white">View all</a>
+						<div class="section-heading">
+							<h2 id="dash-incidents">Open incidents</h2>
+							<a href={ templ.SafeURL(p.BasePath + "/incidents") } class="section-link">View all</a>
 						</div>
 						<div class="panel">
 							if len(p.Incidents) > 0 {
@@ -186,6 +193,7 @@ templ DashboardPage(p DashboardParams) {
 								</div>
 							} else {
 								<div class="px-4 py-10 text-center">
+									<span class="empty-mark">@StatusIcon("up")</span>
 									<p class="text-sm text-muted-light">No open incidents.</p>
 								</div>
 							}

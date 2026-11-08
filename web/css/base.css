@@ -25,6 +25,7 @@ body {
 }
 
 h1, h2, h3, h4 { color: var(--color-white); }
+.app-wordmark { color: var(--color-white); font-size: var(--text-xl); font-weight: 650; letter-spacing: -0.045em; line-height: 1; }
 
 .tabular, td, th, .font-mono { font-variant-numeric: tabular-nums; }
 
@@ -40,7 +41,7 @@ h1, h2, h3, h4 { color: var(--color-white); }
 /* Sidebar link state (driven by aria-current so hx-boost can re-mark) */
 #sidenav .nav-link { color: var(--color-muted-light); }
 #sidenav .nav-link:hover { color: var(--color-white); background-color: var(--color-surface-200); }
-#sidenav .nav-link[aria-current="page"] { color: var(--color-brand); background-color: var(--color-surface-200); }
+#sidenav .nav-link[aria-current="page"] { color: var(--color-brand); background-color: color-mix(in srgb, var(--color-brand) 9%, var(--color-surface-50)); font-weight: 500; }
 #sidenav .nav-icon { color: currentColor; }
 
 /* Scrollbars */
@@ -66,6 +67,8 @@ summary:focus-visible,
 
 /* Tables */
 table thead th { font-weight: 600; }
+table thead { background: var(--color-surface); }
+table tbody td { height: 2.75rem; }
 table tbody tr { transition: background-color 120ms ease; }
 table tbody tr:hover { background-color: color-mix(in srgb, var(--color-surface-200) 50%, transparent); }
 

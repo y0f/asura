@@ -58,7 +58,7 @@ templ Layout(p LayoutParams) {
 				<div class="flex-1 flex flex-col min-w-0" :inert="mobile && nav">
 					@topbar(p)
 					@CommandPalette(p)
-					<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+					<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
 						<div class="max-w-7xl mx-auto">
 							if p.ToastMsg != "" {
 								@Toast(p.ToastKind, p.ToastMsg)
@@ -254,28 +254,28 @@ templ Sidebar(p LayoutParams) {
 		:aria-hidden="(mobile && !nav) ? 'true' : null"
 		:role="mobile && nav ? 'dialog' : null"
 		:aria-modal="mobile && nav ? 'true' : null"
-		class="app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-screen w-64 md:w-56 transform flex-col border-r border-line bg-surface"
+		class="app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-dvh w-64 md:w-[232px] transform flex-col border-r border-line bg-surface-50"
 		aria-label="Main navigation"
 	>
-		<div class="h-14 flex items-center shrink-0 px-4 gap-2" :class="navCollapsed ? 'md:justify-center md:px-0' : 'justify-between'">
+		<div class="h-16 flex items-center shrink-0 px-5 gap-2" :class="navCollapsed ? 'md:justify-center md:px-0' : 'justify-between'">
 			<a href={ templ.SafeURL(p.HomePath()) } class="flex items-center gap-2 min-w-0" x-show="!navCollapsed">
-				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
+				<span class="app-wordmark">Asura<span class="text-brand">.</span></span>
 				if p.Version != "" {
 					<span class="font-mono text-2xs text-muted truncate">{ p.Version }</span>
 				}
 			</a>
 			<a href={ templ.SafeURL(p.HomePath()) } x-cloak x-show="navCollapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
-				<img src={ p.BasePath + "/static/favicon.ico" } alt="" class="h-6 w-6"/>
+				<span class="app-wordmark" aria-hidden="true">A</span>
 			</a>
 			<button x-ref="navClose" @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
 				@iconX()
 			</button>
 		</div>
-		<div class="px-3 pb-2 shrink-0">
+		<div class="px-3 pb-4 shrink-0">
 			<button
 				type="button"
 				@click="nav=false; $nextTick(() => { if (mobile) $refs.navOpen.focus(); window.dispatchEvent(new CustomEvent('cmdk-open')); })"
-				class="sidebar-search-btn flex h-8 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface-50 px-2.5 text-sm text-muted hover:text-white"
+				class="sidebar-search-btn flex h-9 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface px-2.5 text-sm text-muted hover:text-white"
 				:class="collapsed && 'md:justify-center md:px-0'"
 				:title="collapsed ? 'Go to (Ctrl K)' : null"
 				aria-label="Open search"
@@ -320,29 +320,29 @@ templ Sidebar(p LayoutParams) {
 				@navLink(p, "/notifications/history", "notification-history", "Notification history") {
 					<svg aria-hidden="true" focusable="false" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
 				}
-				@navLink(p, "/escalation-policies", "escalation-policies", "Escalation Policies") {
+				@navLink(p, "/escalation-policies", "escalation-policies", "Escalation policies") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"></path><path d="M7 20v-4"></path><path d="M12 20v-8"></path><path d="M17 20V8"></path><path d="M22 4v16"></path></svg>
 				}
-				@navLink(p, "/on-call", "on-call", "On-Call") {
+				@navLink(p, "/on-call", "on-call", "On-call") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
 				}
 			}
 			@navGroup("Operations", p.CanVisit("/sla") || p.CanVisit("/maintenance") || p.CanVisit("/status-pages")) {
-				@navLink(p, "/sla", "sla", "SLA Report") {
+				@navLink(p, "/sla", "sla", "SLA report") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
 				}
 				@navLink(p, "/maintenance", "maintenance", "Maintenance") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"></path></svg>
 				}
-				@navLink(p, "/status-pages", "status-pages", "Status Pages") {
+				@navLink(p, "/status-pages", "status-pages", "Status pages") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 				}
 			}
 			@navGroup("System", p.CanVisit("/logs") || p.CanVisit("/audit") || p.CanVisit("/agents") || p.CanVisit("/proxies") || p.CanVisit("/settings")) {
-				@navLink(p, "/logs", "logs", "Request Logs") {
+				@navLink(p, "/logs", "logs", "Request logs") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
 				}
-				@navLink(p, "/audit", "audit", "Audit Log") {
+				@navLink(p, "/audit", "audit", "Audit log") {
 					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
 				}
 				@navLink(p, "/agents", "agents", "Agents") {
@@ -386,7 +386,7 @@ templ navLink(p LayoutParams, href, key, label string) {
 			if key == p.Active {
 				aria-current="page"
 			}
-			class="nav-link flex items-center gap-2.5 rounded-control px-2 h-8 text-sm"
+			class="nav-link flex items-center gap-2.5 rounded-control px-2.5 h-8 text-sm"
 			:class="collapsed && 'md:justify-center md:px-0'"
 		>
 			{ children... }
@@ -402,7 +402,7 @@ templ topbar(p LayoutParams) {
 		<button x-ref="navOpen" @click="openNav($el)" class="icon-btn -ml-2" aria-label="Open navigation" :aria-expanded="nav">
 			<svg focusable="false" aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
 		</button>
-		<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
+		<span class="app-wordmark">Asura<span class="text-brand">.</span></span>
 		<span id="page-title" class="text-sm text-muted truncate">{ p.Title }</span>
 	</header>
 }
