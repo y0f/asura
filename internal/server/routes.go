@@ -129,11 +129,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("GET "+s.p("/settings/export"), webPerm(s.web.ExportConfig))
 		mux.Handle("POST "+s.p("/settings/import"), webPerm(s.web.ImportConfig))
 		mux.Handle("POST "+s.p("/settings/vacuum"), webPerm(s.web.DBVacuum, "database.maintain"))
-		mux.Handle("GET "+s.p("/events"), webPerm(s.events.ServeHTTP, "monitors.read"))
+		mux.Handle("GET "+s.p("/events"), webPerm(s.serveEvents))
 	}
 
 	mux.HandleFunc("GET "+s.p("/api/v1/health"), s.api.Health)
-	mux.Handle("GET "+s.p("/api/v1/events"), apiPerm(s.events.ServeHTTP, "monitors.read"))
+	mux.Handle("GET "+s.p("/api/v1/events"), apiPerm(s.serveEvents))
 	mux.Handle("GET "+s.p("/metrics"), apiPerm(s.api.Metrics, "metrics.read"))
 	mux.HandleFunc("POST "+s.p("/api/v1/heartbeat/{token}"), s.api.HeartbeatPing)
 	mux.HandleFunc("GET "+s.p("/api/v1/heartbeat/{token}"), s.api.HeartbeatPing)

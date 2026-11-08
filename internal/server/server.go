@@ -49,6 +49,8 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 		statusSlugs:  make(map[string]int64),
 	}
 
+	s.events.authorize = s.authorizeEvent
+
 	cspDirective := buildFrameAncestorsDirective(cfg.Server.FrameAncestors)
 
 	// One login limiter for the API and the web UI, so status page password

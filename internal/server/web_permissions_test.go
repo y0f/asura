@@ -12,7 +12,7 @@ import (
 func webLoginCookie(t *testing.T, srv *Server, key string) *http.Cookie {
 	t.Helper()
 	form := url.Values{"api_key": {key}}
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, srv.cfg.Server.BasePath+"/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

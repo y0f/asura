@@ -89,14 +89,14 @@ func permissionRoutes() []permissionRoute {
 		{"status_pages", "status-pages/999"}, {"agents", "agents/status"}, {"on_call", "on-call/current"},
 		{"sla", "monitors/999/sla"}, {"sla", "reports/sla"}, {"sla", "reports/sla/export"},
 		{"request_logs", "request-logs"}, {"request_logs", "request-logs/stats"}, {"database", "db/size"},
-		{"subscribers", "status-pages/999/subscribers"}, {"monitors", "events"},
+		{"subscribers", "status-pages/999/subscribers"},
 	} {
 		add(false, "GET", "/api/v1/"+resource.path, resource.scope+".read")
 	}
 	for _, resource := range []struct{ scope, path string }{
 		{"monitors", "/monitors/999"}, {"monitors", "/monitors/999/chart"}, {"incidents", "/incidents/999"},
 		{"groups", "/groups/999"}, {"sla", "/sla"}, {"sla", "/sla/export"}, {"request_logs", "/logs"},
-		{"settings", "/settings"}, {"monitors", "/events"},
+		{"settings", "/settings"},
 	} {
 		add(true, "GET", resource.path, resource.scope+".read")
 	}

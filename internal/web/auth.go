@@ -409,6 +409,7 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), httputil.CtxKeyAPIKey, apiKey)
+		ctx = context.WithValue(ctx, httputil.CtxKeySessionTokenHash, tokenHash)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

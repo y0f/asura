@@ -20,8 +20,9 @@ import (
 type ContextKey string
 
 const (
-	CtxKeyRequestID ContextKey = "request_id"
-	CtxKeyAPIKey    ContextKey = "api_key"
+	CtxKeyRequestID        ContextKey = "request_id"
+	CtxKeyAPIKey           ContextKey = "api_key"
+	CtxKeySessionTokenHash ContextKey = "session_token_hash"
 )
 
 func GetRequestID(ctx context.Context) string {

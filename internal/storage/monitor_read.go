@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type monitorReadQuery interface {
@@ -35,4 +36,16 @@ func (s *SQLiteStore) monitorReader(ctx context.Context, id int64, access ...Mon
 		return nil, nil, err
 	}
 	return tx, func() { tx.Rollback() }, nil
+}
+
+// MonitorMatchesAccess checks current membership without loading settings or
+// names. Streaming requests use it immediately before sending object metadata.
+func (s *SQLiteStore) MonitorMatchesAccess(ctx context.Context, id int64, access ...MonitorAccess) (bool, error) {
+	clause, args := monitorAccessSQL("m", access)
+	var present int
+	err := s.readDB.QueryRowContext(ctx, "SELECT 1 FROM monitors m WHERE m.id=?"+clause, append([]any{id}, args...)...).Scan(&present)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }

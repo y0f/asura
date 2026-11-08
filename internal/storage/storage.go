@@ -16,6 +16,7 @@ type Store interface {
 	CreateMonitorWithRelations(ctx context.Context, m *Monitor, options MonitorCreateOptions, access ...MonitorAccess) error
 	CloneMonitorWithRelations(ctx context.Context, id int64, prepare MonitorClone, source, destination []MonitorAccess) (*Monitor, *Heartbeat, error)
 	GetMonitor(ctx context.Context, id int64, access ...MonitorAccess) (*Monitor, error)
+	MonitorMatchesAccess(ctx context.Context, id int64, access ...MonitorAccess) (bool, error)
 	ListMonitors(ctx context.Context, f MonitorListFilter, p Pagination) (*PaginatedResult, error)
 	UpdateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error
 	UpdateMonitorWithRelations(ctx context.Context, id int64, prepare MonitorUpdate, access ...MonitorAccess) (*Monitor, error)

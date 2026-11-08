@@ -80,7 +80,11 @@ func openEventStream(t *testing.T, url string) *http.Response {
 // The server-wide WriteTimeout (30s by default, equal to the heartbeat) must
 // not cut SSE streams.
 func TestSSESurvivesServerWriteTimeout(t *testing.T) {
-	srv, _ := regressionServer(t, headless)
+	srv, store := regressionServer(t, headless)
+	mon := &storage.Monitor{Name: "stream monitor", Type: "http", Interval: 60, Timeout: 10}
+	if err := store.CreateMonitor(context.Background(), mon); err != nil {
+		t.Fatal(err)
+	}
 	ts := httptest.NewUnstartedServer(srv)
 	ts.Config.WriteTimeout = 1 * time.Second
 	ts.Start()
@@ -102,7 +106,7 @@ func TestSSESurvivesServerWriteTimeout(t *testing.T) {
 	}()
 
 	time.Sleep(1500 * time.Millisecond)
-	srv.EventBroker().Broadcast(SSEEvent{Type: "incident.created", Data: map[string]int{"id": 1}})
+	srv.EventBroker().Broadcast(SSEEvent{Type: "incident.created", MonitorID: mon.ID, IncidentID: 1})
 
 	timeout := time.After(2 * time.Second)
 	for {
@@ -301,6 +305,8 @@ func (c *countingFlushWriter) Write(p []byte) (int, error) {
 func BenchmarkSSEFanout(b *testing.B) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	broker := NewEventBroker(logger)
+	// This benchmark isolates encoding and fan-out; authorization has separate tests.
+	broker.authorize = func(*http.Request, *SSEEvent) (bool, error) { return true, nil }
 	const clients = 100
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -312,23 +318,12 @@ func BenchmarkSSEFanout(b *testing.B) {
 	for broker.ClientCount() < clients {
 		time.Sleep(time.Millisecond)
 	}
-	now := time.Now()
-	payload := &notifier.Payload{
-		EventType: "incident.created",
-		Monitor: &storage.Monitor{
-			ID: 1, Name: "api.example.com", Type: "http", Target: "https://api.example.com/health",
-			Interval: 60, Timeout: 10, Enabled: true, Tags: []string{"prod", "api", "eu"},
-			Settings:         json.RawMessage(`{"method":"GET","headers":{"Accept":"application/json"},"expected_status":200}`),
-			Assertions:       json.RawMessage(`[{"type":"status_code","operator":"eq","value":"200"}]`),
-			FailureThreshold: 3, SuccessThreshold: 1, CreatedAt: now, UpdatedAt: now, LastCheckAt: &now,
-		},
-		Incident: &storage.Incident{ID: 1, MonitorID: 1, MonitorName: "api.example.com", Status: "open", Severity: "critical", Cause: "connection refused"},
-	}
+	event := SSEEvent{Type: "incident.created", MonitorID: 1, IncidentID: 1, Status: "open"}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		wg.Add(clients)
-		broker.Broadcast(SSEEvent{Type: "incident.created", Data: payload})
+		broker.Broadcast(event)
 		wg.Wait()
 	}
 }

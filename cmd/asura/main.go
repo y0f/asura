@@ -222,7 +222,13 @@ func forwardNotifications(ctx context.Context, producersDone <-chan struct{}, ev
 			}
 		}
 		if broker != nil {
-			broker.Broadcast(server.SSEEvent{Type: event.EventType, Data: payload})
+			update := server.SSEEvent{Type: event.EventType, MonitorID: event.MonitorID}
+			if event.Incident != nil {
+				update.MonitorID = event.Incident.MonitorID
+				update.IncidentID = event.Incident.ID
+				update.Status = event.Incident.Status
+			}
+			broker.Broadcast(update)
 		}
 	}
 	for {

@@ -43,13 +43,13 @@ func TestEventBrokerBroadcast(t *testing.T) {
 	c1 := broker.Subscribe()
 	c2 := broker.Subscribe()
 
-	event := SSEEvent{Type: "incident.created", Data: map[string]string{"id": "1"}}
+	event := SSEEvent{Type: "incident.created", MonitorID: 1, IncidentID: 1}
 	broker.Broadcast(event)
 
 	select {
 	case got := <-c1.ch:
-		if !strings.HasPrefix(string(got), "event: incident.created\n") {
-			t.Fatalf("c1: expected incident.created frame, got %q", got)
+		if !strings.HasPrefix(string(got.data), "event: incident.created\n") {
+			t.Fatalf("c1: expected incident.created frame, got %q", got.data)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("c1: timeout waiting for event")
@@ -57,8 +57,8 @@ func TestEventBrokerBroadcast(t *testing.T) {
 
 	select {
 	case got := <-c2.ch:
-		if !strings.HasPrefix(string(got), "event: incident.created\n") {
-			t.Fatalf("c2: expected incident.created frame, got %q", got)
+		if !strings.HasPrefix(string(got.data), "event: incident.created\n") {
+			t.Fatalf("c2: expected incident.created frame, got %q", got.data)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("c2: timeout waiting for event")
@@ -109,7 +109,7 @@ func TestEventBrokerDropsSlowClient(t *testing.T) {
 	c := broker.Subscribe()
 
 	for i := 0; i < clientBufferSize+5; i++ {
-		broker.Broadcast(SSEEvent{Type: "test", Data: i})
+		broker.Broadcast(SSEEvent{Type: "content.changed", MonitorID: int64(i + 1)})
 	}
 
 	count := 0
