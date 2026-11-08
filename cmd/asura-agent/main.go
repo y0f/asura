@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -110,8 +111,14 @@ type agent struct {
 }
 
 func newAgent(client *http.Client, server, token string, registry *checker.Registry, logger *slog.Logger) *agent {
+	// The control-plane token belongs to the configured endpoint. Copy the
+	// client so enforcing this boundary does not change a caller's transport.
+	controlClient := *client
+	controlClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return errors.New("agent server redirects are not allowed")
+	}
 	return &agent{
-		client:      client,
+		client:      &controlClient,
 		server:      server,
 		token:       token,
 		registry:    registry,
@@ -256,8 +263,9 @@ func fetchJobs(ctx context.Context, client *http.Client, server, token string) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		// A reverse proxy may echo credentials or private request data in its
+		// error body. Never load that body into the agent's error/log output.
+		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
 	}
 
 	var response struct {

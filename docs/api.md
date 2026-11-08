@@ -448,6 +448,10 @@ Flags can be written with one or two dashes (`-server` or `--server`).
 
 The agent binary polls the server for jobs, runs checks locally, and posts results back. It needs an outbound connection to the configured server; use HTTPS for remote connections. Choose the binary matching the host operating system and architecture.
 
+Set `--server` to the final server URL, including any configured base path. The agent
+rejects redirects for job polling and result submission so its token stays at that
+endpoint. HTTP failures report the status code without logging the response body.
+
 ## On-Call Rotations {#on-call-rotations}
 
 | Method | Endpoint | Description |

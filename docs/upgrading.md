@@ -57,6 +57,7 @@ Review every existing key against its actual job. Broad V1-era permissions used 
 - Notification filters distinguish all events from a selected list. A selected list must contain at least one supported event. Review filters when adding new event types.
 - HTTP notification destinations must return a 2xx response. Configure their final URL directly; redirects now fail delivery instead of forwarding credentials or silently accepting an undelivered notification.
 - Agent jobs use explicit assignments. The upgrade converts eligible implicit assignments to explicit assignments for existing enabled agents. Newly registered agents receive no monitor jobs until assigned. Upgrade the server and agents together: v2 jobs carry a configuration revision that agent results must return.
+- Point agent `--server` URLs at the final HTTPS endpoint and base path. Control requests no longer follow redirects, which could forward the agent token elsewhere.
 - Heartbeat URLs are credentials. Newly created or imported heartbeat monitors show their fresh token once; ordinary reads and configuration exports do not recover it.
 - Check reverse-proxy and `server.base_path` configuration, login redirects, static assets, live refresh and public status-page URLs after switching versions.
 
