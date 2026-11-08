@@ -8,7 +8,8 @@ permissions:
 
 env:
   GOTOOLCHAIN: local
-  TAILWIND_VERSION: "4.2.1"
+  # Official Tailwind v4.2.1 linux-x64 release asset.
+  TAILWIND_ASSET_ID: "360733128"
   TAILWIND_SHA256: "39e8d4e24b3c83b0a6e69e100a972fbc75d5fef8dce47b3ddac3cf92dea81fe3"
 
 jobs:
@@ -23,7 +24,9 @@ jobs:
           go-version-file: "go.mod"
       - name: Download pinned Tailwind CLI
         run: |
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 -o tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 \
+            -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -o tailwindcss "https://api.github.com/repos/tailwindlabs/tailwindcss/releases/assets/${TAILWIND_ASSET_ID}"
           echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
           chmod +x tailwindcss
       - name: Check generated templates and CSS
