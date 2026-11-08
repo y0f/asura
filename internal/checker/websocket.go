@@ -46,6 +46,7 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *model.Monitor) (*
 		}
 	}
 	transport := &http.Transport{DialContext: baseDial}
+	defer transport.CloseIdleConnections()
 	if monitor.ProxyURL != "" {
 		if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 			transport.DialContext = socks
@@ -54,9 +55,16 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *model.Monitor) (*
 		}
 	}
 
-	opts := &websocket.DialOptions{
-		HTTPClient: &http.Client{Transport: transport},
+	// websocket.Dial installs its own redirect hook, so an explicit ceiling
+	// is needed to retain net/http's usual ten-hop bound. HTTP proxies also
+	// need destination validation on every hop, before the proxy connects.
+	checkRedirect := redirectPolicy(10)
+	if HTTPProxyURL(monitor.ProxyURL) != nil {
+		checkRedirect = proxiedRedirectPolicy(checkRedirect, c.AllowPrivate)
 	}
+	opts := &websocket.DialOptions{HTTPClient: &http.Client{
+		Transport: transport, CheckRedirect: checkRedirect,
+	}}
 	if len(settings.Headers) > 0 {
 		header := http.Header{}
 		for k, v := range settings.Headers {
@@ -107,7 +115,8 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *model.Monitor) (*
 		}
 	}
 
-	conn.Close(websocket.StatusNormalClosure, "check complete")
+	// The probe is complete. CloseNow in the defer releases the socket without
+	// starting the library's independent five-second close-handshake timeout.
 
 	return &Result{
 		Status:       "up",
