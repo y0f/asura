@@ -95,7 +95,7 @@ func TestDispatcherGracefulDrainAndImmutableSnapshots(t *testing.T) {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		if string(got.Settings) != `{"token":"original"}` || p.Incident.Status != "open" || p.Monitor.Tags[0] != "original" || *p.Monitor.GroupID != 7 {
+		if string(got.Settings) != `{"token":"original"}` || p.Incident.Status != "open" || *p.Incident.MonitorGroupID != 7 || p.Monitor.Tags[0] != "original" || *p.Monitor.GroupID != 7 {
 			checked <- "snapshot mutated"
 		}
 		if strings.Contains(string(p.Monitor.Settings), "private-token") || p.Monitor.ProxyURL != "" || p.Change.OldBody != "" || p.Change.NewBody != "" {
@@ -104,7 +104,7 @@ func TestDispatcherGracefulDrainAndImmutableSnapshots(t *testing.T) {
 		return nil
 	}))
 	group := int64(7)
-	p := &Payload{EventType: "incident.created", Incident: &storage.Incident{Status: "open"},
+	p := &Payload{EventType: "incident.created", Incident: &storage.Incident{Status: "open", MonitorGroupID: &group},
 		Monitor: &storage.Monitor{Tags: []string{"original"}, GroupID: &group, ProxyURL: "http://secret", Settings: []byte(`{"bearer_token":"private-token"}`)},
 		Change:  &storage.ContentChange{OldBody: "large old body", NewBody: "large new body"}}
 	if err := d.NotifyWithPayload(context.Background(), p); err != nil {

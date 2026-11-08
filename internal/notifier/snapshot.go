@@ -22,6 +22,7 @@ func snapshotPayload(p *Payload) *Payload {
 	copy := *p
 	copy.Incident = copyPointer(p.Incident)
 	if inc := copy.Incident; inc != nil {
+		inc.MonitorGroupID = copyPointer(inc.MonitorGroupID)
 		inc.AcknowledgedAt = copyPointer(inc.AcknowledgedAt)
 		inc.ResolvedAt = copyPointer(inc.ResolvedAt)
 	}
