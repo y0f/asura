@@ -291,10 +291,14 @@ func (s *SQLiteStore) ListStatusPageMonitors(ctx context.Context, pageID int64, 
 // ListStatusPageMonitorsWithStatus returns only public display fields. Targets,
 // settings, credentials and assertions are never loaded or decrypted here.
 func (s *SQLiteStore) ListStatusPageMonitorsWithStatus(ctx context.Context, pageID int64) ([]*Monitor, []StatusPageMonitor, error) {
-	rows, err := s.readDB.QueryContext(ctx, `SELECT m.id,m.name,m.type,COALESCE(ms.status,'pending'),spm.sort_order,spm.group_name
+	return statusPageMonitorsQuery(ctx, s.readDB, s.readDB.dialect, pageID)
+}
+
+func statusPageMonitorsQuery(ctx context.Context, reader monitorReadQuery, dialect sqlDialect, pageID int64) ([]*Monitor, []StatusPageMonitor, error) {
+	rows, err := reader.QueryContext(ctx, `SELECT m.id,m.name,m.type,COALESCE(ms.status,'pending'),spm.sort_order,spm.group_name
 		FROM status_page_monitors spm JOIN monitors m ON m.id=spm.monitor_id
 		LEFT JOIN monitor_status ms ON ms.monitor_id=m.id
-		WHERE spm.page_id=? AND m.enabled=1 ORDER BY spm.sort_order,`+s.readDB.dialect.noCase("m.name")+``, pageID)
+		WHERE spm.page_id=? AND m.enabled=1 ORDER BY spm.sort_order,`+dialect.noCase("m.name")+``, pageID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list status page monitors with status: %w", err)
 	}

@@ -166,8 +166,19 @@ Subscribers are notified when incidents are created or resolved for monitors on 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/status-pages/{id}/subscribe` | Subscribe (email or webhook) |
-| `GET` | `/api/v1/status-pages/{id}/subscribers` | Subscriber count; requires `subscribers.read` |
+| `GET` | `/api/v1/status-pages/{id}/subscribers` | Confirmed subscriber count and contact records; webhook URLs are redacted; requires `subscribers.read` |
 | `DELETE` | `/api/v1/status-pages/{id}/subscribers/{subId}` | Remove subscriber; requires `subscribers.delete` |
+
+The HTML page, public JSON and RSS feed read the page's current visibility,
+password protection, members and displayed data from one database snapshot.
+Subscription creation checks the same current page authority in its write
+transaction. Confirmation and unsubscribe tokens work only for their own page;
+existing subscribers can still unsubscribe after a page is disabled.
+
+Web and JSON subscription forms use the same destination limits: email addresses
+up to 254 bytes and HTTPS webhook URLs up to 2,048 bytes. Private webhook targets
+require the server's explicit private-target setting; delivery rechecks addresses
+when connecting. Token-result pages do not reveal private page branding.
 
 Enable subscriptions by adding an SMTP config to your `config.yaml`:
 

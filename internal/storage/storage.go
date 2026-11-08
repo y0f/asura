@@ -176,6 +176,7 @@ type Store interface {
 	CreateStatusPage(ctx context.Context, sp *StatusPage) error
 	SaveStatusPage(ctx context.Context, id int64, prepare StatusPagePrepare, access StatusPageAccess) (*StatusPage, error)
 	GetStatusPage(ctx context.Context, id int64) (*StatusPage, error)
+	GetPublicStatusPageSnapshot(ctx context.Context, id int64, access PublicStatusPageAccess, now time.Time, includeUptime bool) (*PublicStatusPageSnapshot, error)
 	GetStatusPageBySlug(ctx context.Context, slug string) (*StatusPage, error)
 	ListStatusPages(ctx context.Context) ([]*StatusPage, error)
 	UpdateStatusPage(ctx context.Context, sp *StatusPage) error
@@ -190,9 +191,10 @@ type Store interface {
 
 	// Status page subscribers
 	CreateStatusPageSubscriber(ctx context.Context, sub *StatusPageSubscriber) error
+	CreatePublicStatusPageSubscriber(ctx context.Context, sub *StatusPageSubscriber, access PublicStatusPageAccess) (*StatusPage, error)
+	ConfirmPageSubscriber(ctx context.Context, pageID int64, token string) error
+	DeletePageSubscriberByToken(ctx context.Context, pageID int64, token string) error
 	GetSubscriberByToken(ctx context.Context, token string) (*StatusPageSubscriber, error)
-	ConfirmSubscriber(ctx context.Context, token string) error
-	DeleteSubscriberByToken(ctx context.Context, token string) error
 	CountSubscribersByPage(ctx context.Context, pageID int64) (int64, error)
 	ListConfirmedSubscribers(ctx context.Context, pageID int64) ([]*StatusPageSubscriber, error)
 	ListConfirmedSubscribersAfter(ctx context.Context, pageID, afterID int64, limit int) ([]*StatusPageSubscriber, error)

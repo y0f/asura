@@ -295,7 +295,9 @@ templ SubscriberResultPage(p SubscriberResultParams) {
 					<h1 class="text-xl font-bold">{ p.Heading }</h1>
 				</div>
 				<p class="text-sm text-muted-light mb-5">{ p.Message }</p>
-				<a href={ templ.SafeURL(p.BasePath + "/" + p.Slug) } class="btn-secondary">Back to { p.Title }</a>
+				if p.Slug != "" {
+					<a href={ templ.SafeURL(p.BasePath + "/" + p.Slug) } class="btn-secondary">Back to { p.Title }</a>
+				}
 			</main>
 		</body>
 	</html>

@@ -169,6 +169,13 @@ func TestPostgresContracts(t *testing.T) {
 		{"manual_transitions", TestManualTransitionCommitsHistoryAndStatus},
 		{"manual_scope", TestManualTransitionRequiresCurrentTypeAndEveryScope},
 		{"badge_snapshot", TestPublicBadgeDataUsesPublicationSnapshot},
+		{"public_page_snapshot", TestPublicStatusPageSnapshotKeepsPublicationAndDataTogether},
+		{"public_page_incidents", TestPublicStatusPageIncidentSelectionIsBoundedAndPrivate},
+		{"public_page_visibility", TestPublicStatusPageSnapshotRequiresCurrentHashAndVisibility},
+		{"public_page_failures", TestPublicStatusPageSnapshotNeverReturnsPartialReadFailures},
+		{"public_subscription_admission", TestPublicSubscriptionRechecksAuthorityAfterWaitingForWriter},
+		{"public_subscription_failure", TestPublicSubscriptionFailureDoesNotExposeUncommittedEnrollment},
+		{"public_subscription_tokens", TestPublicSubscriptionTokenMutationsBindPageAndAllowDisabledUnsubscribe},
 	} {
 		t.Run(test.name, test.run)
 	}

@@ -264,29 +264,3 @@ func OverallStatus(monitors []*storage.Monitor) string {
 	}
 	return overall
 }
-
-func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storage.StatusPage, monitors []*storage.Monitor, now time.Time) ([]*storage.Incident, error) {
-	if !sp.ShowIncidents || len(monitors) == 0 {
-		return []*storage.Incident{}, nil
-	}
-
-	ids := make([]int64, len(monitors))
-	for i, m := range monitors {
-		ids[i] = m.ID
-	}
-
-	// The page's monitors and the cutoff are filtered in SQL, so a public hit is
-	// one indexed query however many incidents other monitors have.
-	const wantIncidents = 10
-	incidents, err := store.ListRecentIncidents(ctx, ids, now.AddDate(0, 0, -7), wantIncidents)
-	if err != nil {
-		return nil, err
-	}
-	filtered := make([]*storage.Incident, 0, len(incidents))
-	for _, inc := range incidents {
-		safe := *inc
-		safe.Cause = ""
-		filtered = append(filtered, &safe)
-	}
-	return filtered, nil
-}

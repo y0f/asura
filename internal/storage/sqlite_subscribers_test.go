@@ -76,7 +76,7 @@ func TestSubscriberCRUD(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := store.ConfirmSubscriber(ctx, sub.Token); err != nil {
+		if err := store.ConfirmPageSubscriber(ctx, sp.ID, sub.Token); err != nil {
 			t.Fatal(err)
 		}
 
@@ -92,7 +92,7 @@ func TestSubscriberCRUD(t *testing.T) {
 		}
 	})
 
-	t.Run("confirm already confirmed returns error", func(t *testing.T) {
+	t.Run("confirm already confirmed is idempotent", func(t *testing.T) {
 		sub := &StatusPageSubscriber{
 			StatusPageID: sp.ID,
 			Type:         "email",
@@ -101,11 +101,11 @@ func TestSubscriberCRUD(t *testing.T) {
 		if err := store.CreateStatusPageSubscriber(ctx, sub); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.ConfirmSubscriber(ctx, sub.Token); err != nil {
+		if err := store.ConfirmPageSubscriber(ctx, sp.ID, sub.Token); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.ConfirmSubscriber(ctx, sub.Token); err == nil {
-			t.Fatal("expected error confirming already confirmed")
+		if err := store.ConfirmPageSubscriber(ctx, sp.ID, sub.Token); err != nil {
+			t.Fatalf("repeated confirmation failed: %v", err)
 		}
 	})
 
@@ -130,7 +130,7 @@ func TestSubscriberCRUD(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := store.DeleteSubscriberByToken(ctx, sub.Token); err != nil {
+		if err := store.DeletePageSubscriberByToken(ctx, sp.ID, sub.Token); err != nil {
 			t.Fatal(err)
 		}
 
@@ -172,7 +172,7 @@ func TestSubscriberCRUD(t *testing.T) {
 	})
 
 	t.Run("delete nonexistent token returns error", func(t *testing.T) {
-		err := store.DeleteSubscriberByToken(ctx, "nonexistent-token-value")
+		err := store.DeletePageSubscriberByToken(ctx, sp.ID, "nonexistent-token-value")
 		if err == nil {
 			t.Fatal("expected error deleting nonexistent token")
 		}

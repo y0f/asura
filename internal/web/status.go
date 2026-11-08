@@ -59,15 +59,20 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 		return
 	}
 
-	monitors, spms, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
+	now := time.Now().UTC()
+	snapshot, err := h.store.GetPublicStatusPageSnapshot(ctx, sp.ID, storage.PublicStatusPageAccess{
+		ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageWeb,
+	}, now, true)
 	if err != nil {
-		h.logger.Error("web: status page monitors", "error", err)
-		http.Error(w, "Failed to load status page monitors", http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		h.logger.Error("web: public status snapshot", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
 		return
 	}
-
-	now := time.Now().UTC()
-	from := now.AddDate(0, 0, -90)
+	sp, monitors, spms := snapshot.Page, snapshot.Monitors, snapshot.Members
 
 	groupNameMap := make(map[int64]string, len(spms))
 	for _, spm := range spms {
@@ -76,12 +81,7 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 
 	var monitorData []views.MonitorWithUptime
 	for _, m := range monitors {
-		daily, err := h.store.GetDailyUptime(ctx, m.ID, from, now)
-		if err != nil {
-			h.logger.Error("web: status uptime", "monitor_id", m.ID, "error", err)
-			http.Error(w, "Failed to load uptime", http.StatusInternalServerError)
-			return
-		}
+		daily := snapshot.DailyUptime[m.ID]
 		bars := buildDailyBars(daily, now)
 		uptime, total := storage.SummarizeUptime(daily)
 		label := "\u2014"
@@ -111,12 +111,7 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 	}
 
 	overall := httputil.OverallStatus(monitors)
-	incidents, err := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
-	if err != nil {
-		h.logger.Error("web: status incidents", "error", err)
-		http.Error(w, "Failed to load incidents", http.StatusInternalServerError)
-		return
-	}
+	incidents := snapshot.Incidents
 
 	msg := r.URL.Query().Get("msg")
 

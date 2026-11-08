@@ -2,22 +2,15 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"net/mail"
-	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
+	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
-)
-
-const (
-	maxSubscriberEmailLen   = 254
-	maxSubscriberWebhookLen = 2048
 )
 
 // ListSubscribers requires the explicit subscribers.read scope, because
@@ -57,16 +50,17 @@ func (h *Handler) ListSubscribers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ConfirmSubscription(w http.ResponseWriter, r *http.Request, pageID int64) {
 	ctx := r.Context()
 	token := r.URL.Query().Get("token")
-	sub, err := h.store.GetSubscriberByToken(ctx, token)
-	if token == "" || err != nil || sub.StatusPageID != pageID {
+	if token == "" {
 		writeError(w, http.StatusNotFound, "invalid or expired confirmation link")
 		return
 	}
-	if !sub.Confirmed {
-		if err := h.store.ConfirmSubscriber(ctx, token); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to confirm subscription")
+	if err := h.store.ConfirmPageSubscriber(ctx, pageID, token); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "invalid or expired confirmation link")
 			return
 		}
+		writeError(w, http.StatusInternalServerError, "failed to confirm subscription")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "confirmed"})
 }
@@ -76,13 +70,12 @@ func (h *Handler) ConfirmSubscription(w http.ResponseWriter, r *http.Request, pa
 func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request, pageID int64) {
 	ctx := r.Context()
 	token := r.URL.Query().Get("token")
-	sub, err := h.store.GetSubscriberByToken(ctx, token)
-	if token == "" || err != nil || sub.StatusPageID != pageID {
+	if token == "" {
 		// Already removed or never existed: the outcome the caller wants.
 		writeJSON(w, http.StatusOK, map[string]string{"status": "unsubscribed"})
 		return
 	}
-	if err := h.store.DeleteSubscriberByToken(ctx, token); err != nil {
+	if err := h.store.DeletePageSubscriberByToken(ctx, pageID, token); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusInternalServerError, "failed to unsubscribe")
 		return
 	}
@@ -104,7 +97,11 @@ func (h *Handler) DeleteSubscriber(w http.ResponseWriter, r *http.Request) {
 	// Scope the delete to the page in the URL so a subscriber cannot be removed
 	// via another page's endpoint; the WHERE clause also covers unconfirmed rows.
 	if err := h.store.DeleteSubscriber(r.Context(), pageID, subID); err != nil {
-		writeError(w, http.StatusNotFound, "subscriber not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "subscriber not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to delete subscriber")
 		return
 	}
 
@@ -120,6 +117,10 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sp, err := h.store.GetStatusPage(r.Context(), id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusInternalServerError, "failed to load status page")
+		return
+	}
 	if err != nil || sp == nil || !sp.Enabled {
 		writeError(w, http.StatusNotFound, "status page not found")
 		return
@@ -133,32 +134,14 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Type       string `json:"type"`
-		Email      string `json:"email"`
-		WebhookURL string `json:"webhook_url"`
-	}
+	var req httputil.SubscriptionInput
 	if err := h.readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	req.Email = strings.TrimSpace(req.Email)
-	req.WebhookURL = strings.TrimSpace(req.WebhookURL)
-
-	switch req.Type {
-	case "email":
-		if msg := h.validateSubscriberEmail(req.Email); msg != "" {
-			writeError(w, http.StatusBadRequest, msg)
-			return
-		}
-	case "webhook":
-		if msg := h.validateSubscriberWebhook(r.Context(), req.WebhookURL); msg != "" {
-			writeError(w, http.StatusBadRequest, msg)
-			return
-		}
-	default:
-		writeError(w, http.StatusBadRequest, "type must be 'email' or 'webhook'")
+	if msg := req.Validate(r.Context(), h.cfg.Monitor.AllowPrivateTargets); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -170,8 +153,15 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 		Confirmed:    req.Type == "webhook",
 	}
 
-	if err := h.store.CreateStatusPageSubscriber(r.Context(), sub); err != nil {
-		writeError(w, http.StatusConflict, "subscription failed, may already exist")
+	sp, err = h.store.CreatePublicStatusPageSubscriber(r.Context(), sub, storage.PublicStatusPageAccess{
+		ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageAPISubscription,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "status page not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to create subscription")
 		return
 	}
 
@@ -196,53 +186,4 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 		msg = "confirmation email queued"
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"status": msg})
-}
-
-func (h *Handler) validateSubscriberEmail(email string) string {
-	if email == "" {
-		return "email is required"
-	}
-	if len(email) > maxSubscriberEmailLen {
-		return "email is too long"
-	}
-	if _, err := mail.ParseAddress(email); err != nil {
-		return "invalid email address"
-	}
-	return ""
-}
-
-func (h *Handler) validateSubscriberWebhook(ctx context.Context, raw string) string {
-	if raw == "" {
-		return "webhook_url is required"
-	}
-	if len(raw) > maxSubscriberWebhookLen {
-		return "webhook_url is too long"
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return "webhook_url must be a valid https URL"
-	}
-	if !h.cfg.Monitor.AllowPrivateTargets && !h.webhookHostAllowed(ctx, u.Hostname()) {
-		return "webhook_url host is not allowed"
-	}
-	return ""
-}
-
-func (h *Handler) webhookHostAllowed(ctx context.Context, host string) bool {
-	if host == "" {
-		return false
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return !safenet.IsPrivateIP(ip)
-	}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil || len(ips) == 0 {
-		return false
-	}
-	for _, ip := range ips {
-		if safenet.IsPrivateIP(ip.IP) {
-			return false
-		}
-	}
-	return true
 }

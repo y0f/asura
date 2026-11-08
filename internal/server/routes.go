@@ -20,8 +20,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	}
 
 	if !s.cfg.IsWebUIEnabled() {
-		// Subscriber emails link to {slug}/confirm and {slug}/unsubscribe,
-		// which statusPageRouter serves when the web UI is on.
+		// With the web UI enabled, statusPageRouter serves these token links
+		// without introducing ambiguous patterns alongside /static/.
 		mux.HandleFunc("GET "+s.p("/{slug}/confirm"), s.subscriberLink(s.api.ConfirmSubscription))
 		mux.HandleFunc("GET "+s.p("/{slug}/unsubscribe"), s.subscriberLink(s.api.Unsubscribe))
 	}

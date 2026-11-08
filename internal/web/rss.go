@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/internal/storage"
 )
 
 type rssChannel struct {
@@ -53,20 +53,20 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 		return
 	}
 
-	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
-	if err != nil {
-		h.logger.Error("web: RSS monitors", "error", err)
-		http.Error(w, "Failed to load status page monitors", http.StatusInternalServerError)
-		return
-	}
-
 	now := time.Now().UTC()
-	incidents, err := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	snapshot, err := h.store.GetPublicStatusPageSnapshot(ctx, sp.ID, storage.PublicStatusPageAccess{
+		ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageWeb,
+	}, now, false)
 	if err != nil {
-		h.logger.Error("web: RSS incidents", "error", err)
-		http.Error(w, "Failed to load incidents", http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		h.logger.Error("web: RSS snapshot", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
 		return
 	}
+	sp, incidents := snapshot.Page, snapshot.Incidents
 
 	extURL := h.cfg.ResolvedExternalURL()
 	pageURL := fmt.Sprintf("%s/%s", extURL, sp.Slug)

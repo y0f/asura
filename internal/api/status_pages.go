@@ -173,15 +173,20 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
+	now := time.Now().UTC()
+	snapshot, err := h.store.GetPublicStatusPageSnapshot(ctx, sp.ID, storage.PublicStatusPageAccess{
+		ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageJSON,
+	}, now, true)
 	if err != nil {
-		h.logger.Error("public status page: list monitors", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to load monitors")
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "status page not found")
+			return
+		}
+		h.logger.Error("public status page snapshot", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load status page")
 		return
 	}
-
-	now := time.Now().UTC()
-	from := now.AddDate(0, 0, -90)
+	sp, monitors := snapshot.Page, snapshot.Monitors
 
 	type safeMonitor struct {
 		ID          int64                  `json:"id"`
@@ -195,12 +200,7 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]safeMonitor, 0, len(monitors))
 	for _, m := range monitors {
-		daily, err := h.store.GetDailyUptime(ctx, m.ID, from, now)
-		if err != nil {
-			h.logger.Error("public status page uptime", "monitor_id", m.ID, "error", err)
-			writeError(w, http.StatusInternalServerError, "failed to load uptime")
-			return
-		}
+		daily := snapshot.DailyUptime[m.ID]
 		uptime, total := storage.SummarizeUptime(daily)
 		var measured *float64
 		if total > 0 {
@@ -218,12 +218,6 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	overall := httputil.OverallStatus(monitors)
-	incidents, err := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
-	if err != nil {
-		h.logger.Error("public status page incidents", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to load incidents")
-		return
-	}
 
 	if sp.PasswordHash == "" {
 		w.Header().Set("Cache-Control", "public, max-age=30")
@@ -237,7 +231,7 @@ func (h *Handler) PublicStatusPage(w http.ResponseWriter, r *http.Request) {
 		},
 		"overall_status": overall,
 		"monitors":       result,
-		"incidents":      incidents,
+		"incidents":      snapshot.Incidents,
 	})
 }
 

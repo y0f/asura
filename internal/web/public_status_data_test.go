@@ -14,22 +14,19 @@ import (
 
 type publicReadStore struct {
 	storage.Store
-	dailyCalls               int
+	snapshotCalls            int
 	failDaily, failIncidents bool
 }
 
-func (s *publicReadStore) GetDailyUptime(ctx context.Context, id int64, from, to time.Time, access ...storage.MonitorAccess) ([]*storage.DailyUptime, error) {
-	s.dailyCalls++
-	if s.failDaily {
+func (s *publicReadStore) GetPublicStatusPageSnapshot(ctx context.Context, id int64, access storage.PublicStatusPageAccess, now time.Time, uptime bool) (*storage.PublicStatusPageSnapshot, error) {
+	s.snapshotCalls++
+	if uptime && s.failDaily {
 		return nil, errors.New("injected uptime failure")
 	}
-	return s.Store.GetDailyUptime(ctx, id, from, to, access...)
-}
-func (s *publicReadStore) ListRecentIncidents(ctx context.Context, ids []int64, from time.Time, limit int) ([]*storage.Incident, error) {
 	if s.failIncidents {
 		return nil, errors.New("injected incident failure")
 	}
-	return s.Store.ListRecentIncidents(ctx, ids, from, limit)
+	return s.Store.GetPublicStatusPageSnapshot(ctx, id, access, now, uptime)
 }
 
 func TestPublicStatusMissingDataAndReadErrors(t *testing.T) {
@@ -51,8 +48,8 @@ func TestPublicStatusMissingDataAndReadErrors(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.StatusPageByID(w, httptest.NewRequest("GET", "/services", nil), sp.ID)
 	body := w.Body.String()
-	if w.Code != http.StatusOK || wrapped.dailyCalls != 1 || !strings.Contains(body, "Awaiting check data") || strings.Contains(body, "100.00%") || strings.Contains(body, "window.bad") {
-		t.Fatalf("missing data/branding response: %d calls=%d body=%s", w.Code, wrapped.dailyCalls, body)
+	if w.Code != http.StatusOK || wrapped.snapshotCalls != 1 || !strings.Contains(body, "Awaiting check data") || strings.Contains(body, "100.00%") || strings.Contains(body, "window.bad") {
+		t.Fatalf("missing data/branding response: %d calls=%d body=%s", w.Code, wrapped.snapshotCalls, body)
 	}
 	if w.Header().Get("Referrer-Policy") != "no-referrer" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "img-src 'self' data: https://images.example;") {
 		t.Fatalf("public header policy: %v", w.Header())
