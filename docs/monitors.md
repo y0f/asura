@@ -284,6 +284,14 @@ curl -X POST https://example.com/asura/api/v1/monitors/1/status \
 
 Valid statuses are `up`, `down` and `degraded`. An authorized status change records a check and updates the state immediately; down or degraded opens or updates an incident, and up resolves it. Maintenance can defer incident notifications. The detail page offers status controls to principals with `monitors.status` authority on that monitor.
 
+## Inspecting private diagnostics {#inspecting-private-diagnostics}
+
+Ordinary monitor reads show status and measured timing while keeping response headers, bodies, errors, content hashes and diffs private. Inspecting those stored details requires `monitors.read` together with `diagnostics.read` for the same monitor. Raw incident causes and timeline text use `incidents.read` plus `diagnostics.read`. Viewer and operator roles do not include diagnostic access by default.
+
+Assertion definitions and multi-step extraction regex/JSON expressions may contain private literals, so ordinary editor views hide them too. An unrelated edit with those fields left blank preserves the current stored definitions. Supply new nonempty definitions to replace them, or explicitly remove them with the saved-value control or API `clear_secrets` paths. Saved request credentials, bodies, command arguments and full URLs remain hidden even with diagnostic access. See [API diagnostic fields](api.html#diagnostic-fields) for exact fields and removal paths.
+
+A multi-step edit that retains private inputs must preserve the ordered request flow, including destinations, extraction rules and references in later requests. Unchanged independent requests may be reordered only without extraction or interpolation. Changing the flow requires replacing or clearing borrowed private inputs, or super administrator authority. This prevents a new step from forwarding an authenticated response elsewhere.
+
 ## Assertions {#assertions}
 
 Assertions are evaluated after each check. A failed assertion marks a monitor `down` or, if `degraded` is set, `degraded` instead.

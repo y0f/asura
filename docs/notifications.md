@@ -27,6 +27,12 @@ In the web form, choose **All events** explicitly or select at least one event. 
 </div>
 </details>
 
+## Diagnostic data in deliveries {#diagnostic-data-in-deliveries}
+
+Automatic notification channels and public status-page subscriber deliveries use fixed incident summaries instead of raw checker errors. Content-change payloads retain identifiers and timestamps but contain no response bodies, hashes or diffs. Monitor payloads omit assertion definitions and mask private request fields. Changing a notification destination therefore does not grant access to diagnostic evidence from other monitors.
+
+The original evidence remains stored and can be inspected through the authenticated API and web interface with the matching resource read permission and scoped `diagnostics.read`. There is no automatic raw-diagnostic delivery option. Notification history exposes a generic delivery failure instead of provider error text, which can contain credentials or private URLs.
+
 ## Webhook {#webhook}
 
 ```

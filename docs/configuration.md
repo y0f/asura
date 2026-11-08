@@ -120,6 +120,7 @@ Permissions use `resource.action`, for example `monitors.pause`. Each resource w
 | Resource | Actions |
 | --- | --- |
 | `monitors` | `read`, `create`, `update`, `delete`, `pause`, `resume`, `status`, `clone`, `assign` |
+| `diagnostics` | `read` |
 | `incidents` | `read`, `acknowledge`, `resolve`, `severity`, `delete` |
 | `notifications` | `read`, `create`, `update`, `delete`, `test` |
 | `notification_history` | `read` |
@@ -140,6 +141,8 @@ Permissions use `resource.action`, for example `monitors.pause`. Each resource w
 | `sla` | `read` |
 
 Operations may require several independent actions. Cloning checks source read/clone, destination clone, and permission to copy relationships. Moving a monitor checks source/destination update and assignment plus `groups.read`. Editing a resource through a form requires its read and update actions. Bulk changes authorize every selected object. Configuration import and export require `super_admin: true`, even when every ordinary permission is granted. Subscriber contacts require `subscribers.read`; global metrics require the separate operational-export grant `metrics.read`.
+
+`diagnostics.read` supports monitor/group scope and must be granted explicitly for raw check output, incident causes/timeline text and assertion/extraction definitions. It is absent from the built-in viewer/operator roles and the frozen legacy readonly role; administrator includes it. It never grants ordinary monitor or incident reads by itself. See [Diagnostic access](access-control.html#diagnostic-access).
 
 ### Upgrading permissions from v1 {#upgrading-permissions-from-v1}
 

@@ -82,13 +82,23 @@ Multiple bindings add grants for the same action. They never transfer an action 
 
 ## Which resources can be scoped {#which-resources-can-be-scoped}
 
-Monitor and group selectors apply to `monitors`, `incidents`, `sla`, `request_logs`, `notification_history` and `maintenance`. Incidents, reports and log/history entries use the monitor they belong to. Entries without an associated monitor require a global grant. A maintenance window requires authority over every monitor it affects; an all-monitor window requires a global grant.
+Monitor and group selectors apply to `monitors`, `diagnostics`, `incidents`, `sla`, `request_logs`, `notification_history` and `maintenance`. Incidents, reports and log/history entries use the monitor they belong to. Entries without an associated monitor require a global grant. A maintenance window requires authority over every monitor it affects; an all-monitor window requires a global grant.
 
 Other resources require `all: true`, including group administration, tags, notification channels, escalation policies, proxies, agents, status-page administration, subscriber contacts, on-call schedules, audit records, settings, database operations and aggregate metrics. A group selector grants access to its member monitors, not to administration of that group. A role containing any global-only permission cannot be bound to monitor or group IDs; split it into separate roles and bindings.
 
 `metrics.read` is an explicit global operational-export permission. Its output includes monitor names, types and tags and global incident/request aggregates. It excludes credentials, targets and settings and grants no ordinary monitor API reads. Do not use it as a substitute for a narrowly scoped viewer role.
 
 Related resource access is independent. A monitor permission does not grant channel secrets, proxy settings, agent credentials, subscriber contacts or unrelated nested names. Necessary relationship IDs may remain visible without the related resource's read permission. Changing a relationship requires the appropriate assignment authority and access to the selected related resource; unrelated edits preserve inaccessible relationships.
+
+## Diagnostic access {#diagnostic-access}
+
+`diagnostics.read` is a separate monitor/group-scoped permission for potentially sensitive check output and execution expressions. It is excluded from `viewer`, `operator` and the frozen legacy `readonly` grants. `administrator` includes it. Grant it explicitly only to principals who need to inspect response content or diagnostic errors.
+
+Raw check history, content-change details and assertion/extraction definitions require both `monitors.read` and `diagnostics.read` for the same monitor. Raw incident causes and timeline messages require both `incidents.read` and `diagnostics.read` for that incident's current monitor. The two actions are intersected; a read grant for one group and diagnostic grant for another do not combine. Diagnostic access alone grants no monitor or incident access. Incident cause searches use the same diagnostic scope before counting or paginating results.
+
+For example, a custom role can contain `permissions: [monitors.read, incidents.read, diagnostics.read]` and be bound to `scope: {group_ids: [7]}`. Keep the ordinary viewer binding if diagnostic access should cover only part of its monitor scope.
+
+Ordinary readers retain status, timing and event timestamps. They receive safe incident summaries instead of raw errors, and no response headers, bodies, content hashes or diffs. Stored credentials and request payloads remain hidden even from diagnostic readers; diagnostic access is not a credential-backup permission. See [API diagnostic fields](api.html#diagnostic-fields) for the exact boundary.
 
 ## Creation, cloning and moving monitors {#creation-cloning-and-moving-monitors}
 
