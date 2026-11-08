@@ -184,26 +184,26 @@ func UptimeBarsSVG(bars []DailyBar) string {
 		total = 90
 	)
 	vw := total*barW + (total-1)*gap
-	s := fmt.Sprintf(`<svg viewBox="0 0 %d %d" preserveAspectRatio="none" class="w-full" style="height:28px;display:block">`, vw, h)
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg aria-hidden="true" focusable="false" viewBox="0 0 %d %d" preserveAspectRatio="none" class="w-full" style="height:28px;display:block">`, vw, h)
 	for i, bar := range bars {
 		x := i * (barW + gap)
 		fill := UptimeBarFill(bar.UptimePct, bar.HasData)
 		tooltip := UptimeBarTooltip(bar.UptimePct, bar.HasData, bar.Label)
-		s += fmt.Sprintf(`<rect x="%d" y="0" width="%d" height="%d" rx="1" fill="%s" opacity="0.85" style="cursor:default" @mouseenter="tooltip='%s';show=true;mx=$event.clientX;my=$event.clientY" @mousemove="mx=$event.clientX;my=$event.clientY" @mouseleave="show=false"/>`, x, barW, h, fill, tooltip)
+		fmt.Fprintf(&b, `<rect x="%d" y="0" width="%d" height="%d" rx="1" fill="%s" opacity="0.85" style="cursor:default" data-tooltip="%s" @mouseenter="tooltip=$el.dataset.tooltip;show=true;mx=$event.clientX;my=$event.clientY" @mousemove="mx=$event.clientX;my=$event.clientY" @mouseleave="show=false"/>`, x, barW, h, fill, html.EscapeString(tooltip))
 	}
-	s += `</svg>`
-	return s
+	b.WriteString(`</svg>`)
+	return b.String()
 }
 
 func UptimeBarTooltip(pct float64, hasData bool, label string) string {
-	safe := jsSingleQuoteEscaper.Replace(label)
 	if !hasData {
-		return safe + " — No data"
+		return label + " — No data"
 	}
 	if pct >= 99.995 {
-		return safe + " — 100% uptime"
+		return label + " — 100% uptime"
 	}
-	return fmt.Sprintf("%s — %.2f%% uptime", safe, pct)
+	return fmt.Sprintf("%s — %.2f%% uptime", label, pct)
 }
 
 func JSEscapeString(s string) string {
@@ -593,6 +593,14 @@ func heatmapColor(pct float64, hasData bool) string {
 	return UptimeBarFill(pct, hasData)
 }
 
+func heatmapDailyBars(days []HeatmapDay) []DailyBar {
+	bars := make([]DailyBar, len(days))
+	for i, day := range days {
+		bars[i] = DailyBar{Date: day.Date, Label: day.Label, UptimePct: day.UptimePct, HasData: day.HasData}
+	}
+	return bars
+}
+
 func HeatmapSVG(days []HeatmapDay) string {
 	if len(days) == 0 {
 		return ""
@@ -611,7 +619,7 @@ func HeatmapSVG(days []HeatmapDay) string {
 	h := 7 * step
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" preserveAspectRatio="xMidYMid meet" style="width:100%%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">`, w, h)
+	fmt.Fprintf(&b, `<svg aria-hidden="true" focusable="false" viewBox="0 0 %d %d" preserveAspectRatio="xMidYMid meet" style="width:100%%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">`, w, h)
 	for _, d := range days {
 		x := d.Week * step
 		y := d.Weekday * step

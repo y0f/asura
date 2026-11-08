@@ -51,11 +51,11 @@ templ Layout(p LayoutParams) {
 			@shellScript()
 		</head>
 		<body class="bg-surface text-muted-light font-sans antialiased">
-			<a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
-			<div x-data="shell" class="flex min-h-screen" @keydown.escape.window="nav=false">
+			<div x-data="shell" class="flex min-h-screen" @keydown.escape="if (!document.querySelector('dialog[open]')) nav=false" @cmdk-open.window="nav=false">
+				<a href="#content" :inert="mobile && nav" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
 				@Sidebar(p)
 				<div x-show="nav" x-cloak @click="nav=false" class="modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden"></div>
-				<div class="flex-1 flex flex-col min-w-0">
+				<div class="flex-1 flex flex-col min-w-0" :inert="mobile && nav">
 					@topbar(p)
 					@CommandPalette(p)
 					<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
@@ -94,14 +94,55 @@ templ shellScript() {
 				nav: false,
 				mobile: window.matchMedia("(max-width: 767px)").matches,
 				collapsed: localStorage.getItem("navc") === "1",
+				get navCollapsed() { return !this.mobile && this.collapsed; },
 				theme: localStorage.getItem("theme") || "dark",
 				ready: false,
 				init() {
 					const mq = window.matchMedia("(max-width: 767px)");
-					mq.addEventListener("change", () => { this.mobile = mq.matches; if (!mq.matches) this.nav = false; });
+					this._mobileQuery = mq;
+					this._mobileChange = () => {
+						this.mobile = mq.matches;
+						if (!mq.matches) this.nav = false;
+						else if (this.$refs.sidebar.contains(document.activeElement)) this.$nextTick(() => this.$refs.navOpen.focus());
+					};
+					mq.addEventListener("change", this._mobileChange);
 					this._mql = window.matchMedia("(prefers-color-scheme: dark)");
-					this._mql.addEventListener("change", () => { if (this.theme === "system") this.applyTheme(); });
+					this._themeChange = () => { if (this.theme === "system") this.applyTheme(); };
+					this._mql.addEventListener("change", this._themeChange);
+					this.$watch("nav", open => this.syncNav(open));
 					requestAnimationFrame(() => requestAnimationFrame(() => { this.ready = true; }));
+				},
+				destroy() {
+					this._mobileQuery.removeEventListener("change", this._mobileChange);
+					this._mql.removeEventListener("change", this._themeChange);
+					document.documentElement.classList.remove("nav-open");
+				},
+				syncNav(open) {
+					document.documentElement.classList.toggle("nav-open", this.mobile && open);
+					if (this.mobile && open) {
+						this.$nextTick(() => this.$refs.navClose.focus());
+					} else {
+						this.$nextTick(() => {
+							if (document.querySelector("dialog[open]")) return;
+							if (!this.mobile) {
+								if (!document.activeElement.getClientRects().length) {
+									const link = this.$refs.sidebar.querySelector('[aria-current="page"]');
+									if (link) link.focus({ preventScroll: true });
+								}
+								return;
+							}
+							const opener = this._navOpener;
+							if (opener && opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });
+						});
+					}
+				},
+				openNav(opener) { this._navOpener = opener; this.nav = true; },
+				trapNav(event) {
+					if (!this.mobile || !this.nav || document.querySelector("dialog[open]")) return;
+					const controls = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button, input, select, textarea, [tabindex="0"]')).filter(el => !el.disabled && el.getClientRects().length);
+					const first = controls[0], last = controls[controls.length - 1];
+					if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+					else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 				},
 				applyTheme() {
 					const dark = this.theme === "dark" || (this.theme === "system" && this._mql.matches);
@@ -206,40 +247,44 @@ templ navScrollScript() {
 
 templ Sidebar(p LayoutParams) {
 	<aside
+		x-ref="sidebar"
+		@keydown.tab="trapNav($event)"
 		:class="{ 'translate-x-0': nav, '-translate-x-full md:translate-x-0': !nav, 'md:!w-[60px]': collapsed, 'transition-[transform,width] duration-200 ease-out': ready }"
 		:inert="mobile && !nav"
 		:aria-hidden="(mobile && !nav) ? 'true' : null"
+		:role="mobile && nav ? 'dialog' : null"
+		:aria-modal="mobile && nav ? 'true' : null"
 		class="app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-screen w-64 md:w-56 transform flex-col border-r border-line bg-surface"
 		aria-label="Main navigation"
 	>
-		<div class="h-14 flex items-center shrink-0 px-4 gap-2" :class="collapsed ? 'md:justify-center md:px-0' : 'justify-between'">
-			<a href={ templ.SafeURL(p.HomePath()) } class="flex items-center gap-2 min-w-0" x-show="!collapsed">
+		<div class="h-14 flex items-center shrink-0 px-4 gap-2" :class="navCollapsed ? 'md:justify-center md:px-0' : 'justify-between'">
+			<a href={ templ.SafeURL(p.HomePath()) } class="flex items-center gap-2 min-w-0" x-show="!navCollapsed">
 				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
 				if p.Version != "" {
 					<span class="font-mono text-2xs text-muted truncate">{ p.Version }</span>
 				}
 			</a>
-			<a href={ templ.SafeURL(p.HomePath()) } x-cloak x-show="collapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
+			<a href={ templ.SafeURL(p.HomePath()) } x-cloak x-show="navCollapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
 				<img src={ p.BasePath + "/static/favicon.ico" } alt="" class="h-6 w-6"/>
 			</a>
-			<button @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
+			<button x-ref="navClose" @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
 				@iconX()
 			</button>
 		</div>
 		<div class="px-3 pb-2 shrink-0">
 			<button
 				type="button"
-				@click="window.dispatchEvent(new CustomEvent('cmdk-open'))"
+				@click="nav=false; $nextTick(() => { if (mobile) $refs.navOpen.focus(); window.dispatchEvent(new CustomEvent('cmdk-open')); })"
 				class="sidebar-search-btn flex h-8 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface-50 px-2.5 text-sm text-muted hover:text-white"
 				:class="collapsed && 'md:justify-center md:px-0'"
 				:title="collapsed ? 'Go to (Ctrl K)' : null"
 				aria-label="Open search"
 			>
 				<svg focusable="false" aria-hidden="true" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-				<span class="flex-1 text-left" x-show="!collapsed">Go to…</span>
+				<span class="flex-1 text-left" x-show="!navCollapsed">Go to…</span>
 				<kbd
 					x-data="{ mac: /Mac|iPhone|iPad/i.test((navigator.platform || '') + ' ' + navigator.userAgent) }"
-					x-show="!collapsed"
+					x-show="!navCollapsed"
 					class="inline-flex h-5 items-center gap-0.5 rounded-[3px] border border-line-light px-1 font-mono text-2xs text-muted"
 				>
 					<span x-show="!mac">Ctrl</span><span x-cloak x-show="mac">⌘</span><span>K</span>
@@ -320,7 +365,7 @@ templ Sidebar(p LayoutParams) {
 templ navGroup(title string, visible bool) {
 	if visible {
 		<div class="space-y-0.5">
-			<div x-show="!collapsed" class="px-2 pb-1 text-xs font-medium text-muted">{ title }</div>
+			<div x-show="!navCollapsed" class="px-2 pb-1 text-xs font-medium text-muted">{ title }</div>
 			{ children... }
 		</div>
 	}
@@ -345,7 +390,7 @@ templ navLink(p LayoutParams, href, key, label string) {
 			:class="collapsed && 'md:justify-center md:px-0'"
 		>
 			{ children... }
-			<span class="flex-1 truncate" x-show="!collapsed">{ label }</span>
+			<span class="flex-1 truncate" x-show="!navCollapsed">{ label }</span>
 		</a>
 	}
 }
@@ -354,7 +399,7 @@ templ navLink(p LayoutParams, href, key, label string) {
 // sidebar carries the brand and each page renders its own heading.
 templ topbar(p LayoutParams) {
 	<header class="md:hidden h-14 flex items-center gap-3 px-4 border-b border-line bg-surface sticky top-0 z-20">
-		<button @click="nav=true" class="icon-btn -ml-2" aria-label="Open navigation" :aria-expanded="nav">
+		<button x-ref="navOpen" @click="openNav($el)" class="icon-btn -ml-2" aria-label="Open navigation" :aria-expanded="nav">
 			<svg focusable="false" aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
 		</button>
 		<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
@@ -366,20 +411,22 @@ templ topbar(p LayoutParams) {
 // signed-in key opening an upward menu with the theme switcher, the sidebar
 // collapse toggle and sign-out.
 templ sidebarUser(p LayoutParams) {
-	<div class="relative border-t border-line p-3 shrink-0" x-data="{ open: false }" @keydown.escape.window="open=false">
+	<div class="relative border-t border-line p-3 shrink-0" x-data="{ open: false }" @keydown.escape="if (open) { $event.stopPropagation(); $event.preventDefault(); open=false; $refs.accountButton.focus() }" @focusout="if (!$el.contains($event.relatedTarget)) open=false">
 		<button
+			x-ref="accountButton"
 			@click="open=!open"
 			class="flex w-full items-center gap-2.5 rounded-control px-2 h-9 hover:bg-surface-200"
 			:class="{ 'bg-surface-200': open, 'md:justify-center md:px-0': collapsed }"
-			aria-haspopup="true"
+			aria-controls="account-options"
 			:aria-expanded="open"
 			aria-label="Account menu"
 		>
 			<span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-surface-300 text-xs font-semibold text-white uppercase">{ initial(p.Username) }</span>
-			<span class="flex-1 truncate text-left text-sm font-medium text-white" x-show="!collapsed">{ username(p.Username) }</span>
-			<svg focusable="false" aria-hidden="true" x-show="!collapsed" class="w-4 h-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+			<span class="flex-1 truncate text-left text-sm font-medium text-white" x-show="!navCollapsed">{ username(p.Username) }</span>
+			<svg focusable="false" aria-hidden="true" x-show="!navCollapsed" class="w-4 h-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
 		</button>
 		<div
+			id="account-options"
 			x-show="open"
 			x-cloak
 			@click.outside="open=false"

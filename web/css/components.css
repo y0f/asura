@@ -167,7 +167,7 @@ select.form-input[multiple] { height: auto; min-height: 9rem; padding: 0.5rem; }
 .modal-dialog { margin: auto; padding: 0; border: 0; background: transparent; color: inherit; max-height: calc(100dvh - 2rem); }
 .modal-dialog:not([open]) { display: none; }
 .modal-dialog::backdrop { background: rgb(0 0 0 / 0.7); }
-html:has(dialog[open]) { overflow: hidden; }
+html:has(dialog[open]), html.nav-open { overflow: hidden; }
 .cmdk-input:focus,
 .cmdk-input:focus-visible { outline: none !important; }
 .cmdk-hit:hover { background-color: var(--color-surface-200); }

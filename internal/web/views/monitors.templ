@@ -687,6 +687,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="overflow-x-auto">
 						@templ.Raw(HeatmapSVG(p.Heatmap))
 					</div>
+					@DailyUptimeData(p.Monitor.Name+": daily uptime", heatmapDailyBars(p.Heatmap))
 				</div>
 			}
 			if p.LatestCheck != nil && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {

@@ -32,8 +32,8 @@ h1, h2, h3, h4 { color: var(--color-white); }
    boots so a cold load of a collapsed sidebar does not expand then snap. */
 @media (min-width: 768px) {
   html.nav-collapsed .app-sidebar { width: 60px; }
-  html.nav-collapsed .app-sidebar [x-show="!collapsed"] { display: none !important; }
-  html.nav-collapsed .app-sidebar [x-show="collapsed"] { display: flex !important; }
+  html.nav-collapsed .app-sidebar [x-show="!navCollapsed"] { display: none !important; }
+  html.nav-collapsed .app-sidebar [x-show="navCollapsed"] { display: flex !important; }
   html.nav-collapsed .app-sidebar .nav-link { justify-content: center; padding-left: 0; padding-right: 0; }
 }
 

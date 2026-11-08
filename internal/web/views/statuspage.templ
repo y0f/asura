@@ -242,10 +242,20 @@ templ statusSubscribeWidget(basePath, slug string) {
 			</div>
 			<form x-show="open" x-cloak method="POST" action={ templ.SafeURL(basePath + "/" + slug + "/subscribe") } class="mt-4 pt-4 border-t border-line space-y-4">
 				<div class="flex gap-1" role="group" aria-label="Delivery method">
-					<button type="button" @click="type = 'email'" :aria-pressed="type === 'email'"
-						:class="type === 'email' ? 'filter-active' : 'filter-inactive'" class="filter-tab">Email</button>
-					<button type="button" @click="type = 'webhook'" :aria-pressed="type === 'webhook'"
-						:class="type === 'webhook' ? 'filter-active' : 'filter-inactive'" class="filter-tab">Webhook</button>
+					<button
+						type="button"
+						@click="type = 'email'"
+						:aria-pressed="type === 'email'"
+						:class="type === 'email' ? 'filter-active' : 'filter-inactive'"
+						class="filter-tab"
+					>Email</button>
+					<button
+						type="button"
+						@click="type = 'webhook'"
+						:aria-pressed="type === 'webhook'"
+						:class="type === 'webhook' ? 'filter-active' : 'filter-inactive'"
+						class="filter-tab"
+					>Webhook</button>
 				</div>
 				<input type="hidden" name="type" :value="type"/>
 				<div x-show="type === 'email'">
@@ -339,27 +349,34 @@ templ statusMonitorRow(mwu MonitorWithUptime) {
 				@templ.Raw(UptimeBarsSVG(mwu.DailyBars))
 			</div>
 			<p class="sr-only">{ uptimeSummary(mwu) }</p>
-			<div x-show="show" x-cloak
+			<div
+				x-show="show"
+				x-cloak
 				class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-white shadow-lg pointer-events-none whitespace-nowrap"
 				:style="`top: ${my - 40}px; left: ${mx}px`"
-				x-text="tooltip"></div>
+				x-text="tooltip"
+			></div>
 		</div>
 		<div class="flex items-center justify-between mt-2 text-xs text-muted">
 			<span>90 days ago</span>
 			<span>Today</span>
 		</div>
+		@DailyUptimeData(mwu.Monitor.Name+": daily uptime", mwu.DailyBars)
 	</div>
 }
 
 func uptimeSummary(mwu MonitorWithUptime) string {
-	bad := 0
+	bad, measured := 0, 0
 	for _, b := range mwu.DailyBars {
-		if b.HasData && b.UptimePct < 99.9 {
-			bad++
+		if b.HasData {
+			measured++
+			if b.UptimePct < 99.9 {
+				bad++
+			}
 		}
 	}
-	if bad == 0 {
-		return mwu.UptimeLabel + " uptime over the last 90 days, no days with notable downtime."
+	if measured == 0 {
+		return "No check data for the last 90 days."
 	}
-	return fmt.Sprintf("%s uptime over the last 90 days, %d days with downtime.", mwu.UptimeLabel, bad)
+	return fmt.Sprintf("%s uptime over the last 90 days; %d days with checks, %d below 99.9%% uptime.", mwu.UptimeLabel, measured, bad)
 }

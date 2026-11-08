@@ -368,6 +368,36 @@ templ MonitorListListener(basePath, targetID string) {
 	<script src={ Asset(basePath, "sse-refresh.js") } defer></script>
 }
 
+// DailyUptimeData provides exact chart values without requiring hover or
+// adding a keyboard stop for every SVG cell. Native details works without JS.
+templ DailyUptimeData(label string, days []DailyBar) {
+	if len(days) > 0 {
+		<details class="mt-3 text-xs">
+			<summary class="cursor-pointer py-2 text-muted-light hover:text-white">Daily uptime data</summary>
+			<div class="max-h-48 overflow-auto rounded-control border border-line" tabindex="0" role="region" aria-label={ label }>
+				<table class="w-full text-left tabular-nums">
+					<caption class="sr-only">{ label }</caption>
+					<thead><tr><th scope="col" class="px-3 py-2">Day</th><th scope="col" class="px-3 py-2">Uptime</th></tr></thead>
+					<tbody>
+						for _, day := range days {
+							<tr class="border-t border-line">
+								<th scope="row" class="px-3 py-1.5 font-normal text-muted-light">{ day.Label }</th>
+								<td class="px-3 py-1.5 text-white">
+									if day.HasData {
+										{ fmt.Sprintf("%.2f%%", day.UptimePct) }
+									} else {
+										No checks
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</details>
+	}
+}
+
 // Settings field helpers shared by the per-type monitor settings blocks.
 
 // SettingText renders a labelled single-line text-ish input (text, url, etc.).

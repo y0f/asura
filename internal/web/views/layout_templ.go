@@ -224,7 +224,7 @@ func Layout(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</head><body class=\"bg-surface text-muted-light font-sans antialiased\"><a href=\"#content\" class=\"sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary\">Skip to content</a><div x-data=\"shell\" class=\"flex min-h-screen\" @keydown.escape.window=\"nav=false\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</head><body class=\"bg-surface text-muted-light font-sans antialiased\"><div x-data=\"shell\" class=\"flex min-h-screen\" @keydown.escape=\"if (!document.querySelector('dialog[open]')) nav=false\" @cmdk-open.window=\"nav=false\"><a href=\"#content\" :inert=\"mobile && nav\" class=\"sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary\">Skip to content</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -232,7 +232,7 @@ func Layout(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div x-show=\"nav\" x-cloak @click=\"nav=false\" class=\"modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden\"></div><div class=\"flex-1 flex flex-col min-w-0\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div x-show=\"nav\" x-cloak @click=\"nav=false\" class=\"modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden\"></div><div class=\"flex-1 flex flex-col min-w-0\" :inert=\"mobile && nav\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -322,7 +322,7 @@ func shellScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<script>\n\t\tdocument.addEventListener(\"alpine:init\", () => {\n\t\t\tAlpine.data(\"shell\", () => ({\n\t\t\t\tnav: false,\n\t\t\t\tmobile: window.matchMedia(\"(max-width: 767px)\").matches,\n\t\t\t\tcollapsed: localStorage.getItem(\"navc\") === \"1\",\n\t\t\t\ttheme: localStorage.getItem(\"theme\") || \"dark\",\n\t\t\t\tready: false,\n\t\t\t\tinit() {\n\t\t\t\t\tconst mq = window.matchMedia(\"(max-width: 767px)\");\n\t\t\t\t\tmq.addEventListener(\"change\", () => { this.mobile = mq.matches; if (!mq.matches) this.nav = false; });\n\t\t\t\t\tthis._mql = window.matchMedia(\"(prefers-color-scheme: dark)\");\n\t\t\t\t\tthis._mql.addEventListener(\"change\", () => { if (this.theme === \"system\") this.applyTheme(); });\n\t\t\t\t\trequestAnimationFrame(() => requestAnimationFrame(() => { this.ready = true; }));\n\t\t\t\t},\n\t\t\t\tapplyTheme() {\n\t\t\t\t\tconst dark = this.theme === \"dark\" || (this.theme === \"system\" && this._mql.matches);\n\t\t\t\t\tdocument.documentElement.setAttribute(\"data-theme\", dark ? \"dark\" : \"light\");\n\t\t\t\t\twindow.dispatchEvent(new CustomEvent(\"theme-changed\"));\n\t\t\t\t},\n\t\t\t\tsetTheme(t) { this.theme = t; localStorage.setItem(\"theme\", t); this.applyTheme(); },\n\t\t\t\ttoggleCollapse() {\n\t\t\t\t\tthis.collapsed = !this.collapsed;\n\t\t\t\t\tlocalStorage.setItem(\"navc\", this.collapsed ? \"1\" : \"0\");\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-collapsed\", this.collapsed);\n\t\t\t\t},\n\t\t\t}));\n\t\t});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<script>\n\t\tdocument.addEventListener(\"alpine:init\", () => {\n\t\t\tAlpine.data(\"shell\", () => ({\n\t\t\t\tnav: false,\n\t\t\t\tmobile: window.matchMedia(\"(max-width: 767px)\").matches,\n\t\t\t\tcollapsed: localStorage.getItem(\"navc\") === \"1\",\n\t\t\t\tget navCollapsed() { return !this.mobile && this.collapsed; },\n\t\t\t\ttheme: localStorage.getItem(\"theme\") || \"dark\",\n\t\t\t\tready: false,\n\t\t\t\tinit() {\n\t\t\t\t\tconst mq = window.matchMedia(\"(max-width: 767px)\");\n\t\t\t\t\tthis._mobileQuery = mq;\n\t\t\t\t\tthis._mobileChange = () => {\n\t\t\t\t\t\tthis.mobile = mq.matches;\n\t\t\t\t\t\tif (!mq.matches) this.nav = false;\n\t\t\t\t\t\telse if (this.$refs.sidebar.contains(document.activeElement)) this.$nextTick(() => this.$refs.navOpen.focus());\n\t\t\t\t\t};\n\t\t\t\t\tmq.addEventListener(\"change\", this._mobileChange);\n\t\t\t\t\tthis._mql = window.matchMedia(\"(prefers-color-scheme: dark)\");\n\t\t\t\t\tthis._themeChange = () => { if (this.theme === \"system\") this.applyTheme(); };\n\t\t\t\t\tthis._mql.addEventListener(\"change\", this._themeChange);\n\t\t\t\t\tthis.$watch(\"nav\", open => this.syncNav(open));\n\t\t\t\t\trequestAnimationFrame(() => requestAnimationFrame(() => { this.ready = true; }));\n\t\t\t\t},\n\t\t\t\tdestroy() {\n\t\t\t\t\tthis._mobileQuery.removeEventListener(\"change\", this._mobileChange);\n\t\t\t\t\tthis._mql.removeEventListener(\"change\", this._themeChange);\n\t\t\t\t\tdocument.documentElement.classList.remove(\"nav-open\");\n\t\t\t\t},\n\t\t\t\tsyncNav(open) {\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-open\", this.mobile && open);\n\t\t\t\t\tif (this.mobile && open) {\n\t\t\t\t\t\tthis.$nextTick(() => this.$refs.navClose.focus());\n\t\t\t\t\t} else {\n\t\t\t\t\t\tthis.$nextTick(() => {\n\t\t\t\t\t\t\tif (document.querySelector(\"dialog[open]\")) return;\n\t\t\t\t\t\t\tif (!this.mobile) {\n\t\t\t\t\t\t\t\tif (!document.activeElement.getClientRects().length) {\n\t\t\t\t\t\t\t\t\tconst link = this.$refs.sidebar.querySelector('[aria-current=\"page\"]');\n\t\t\t\t\t\t\t\t\tif (link) link.focus({ preventScroll: true });\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tconst opener = this._navOpener;\n\t\t\t\t\t\t\tif (opener && opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t\topenNav(opener) { this._navOpener = opener; this.nav = true; },\n\t\t\t\ttrapNav(event) {\n\t\t\t\t\tif (!this.mobile || !this.nav || document.querySelector(\"dialog[open]\")) return;\n\t\t\t\t\tconst controls = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button, input, select, textarea, [tabindex=\"0\"]')).filter(el => !el.disabled && el.getClientRects().length);\n\t\t\t\t\tconst first = controls[0], last = controls[controls.length - 1];\n\t\t\t\t\tif (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }\n\t\t\t\t\telse if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }\n\t\t\t\t},\n\t\t\t\tapplyTheme() {\n\t\t\t\t\tconst dark = this.theme === \"dark\" || (this.theme === \"system\" && this._mql.matches);\n\t\t\t\t\tdocument.documentElement.setAttribute(\"data-theme\", dark ? \"dark\" : \"light\");\n\t\t\t\t\twindow.dispatchEvent(new CustomEvent(\"theme-changed\"));\n\t\t\t\t},\n\t\t\t\tsetTheme(t) { this.theme = t; localStorage.setItem(\"theme\", t); this.applyTheme(); },\n\t\t\t\ttoggleCollapse() {\n\t\t\t\t\tthis.collapsed = !this.collapsed;\n\t\t\t\t\tlocalStorage.setItem(\"navc\", this.collapsed ? \"1\" : \"0\");\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-collapsed\", this.collapsed);\n\t\t\t\t},\n\t\t\t}));\n\t\t});\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -411,27 +411,27 @@ func Sidebar(p LayoutParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<aside :class=\"{ 'translate-x-0': nav, '-translate-x-full md:translate-x-0': !nav, 'md:!w-[60px]': collapsed, 'transition-[transform,width] duration-200 ease-out': ready }\" :inert=\"mobile && !nav\" :aria-hidden=\"(mobile && !nav) ? 'true' : null\" class=\"app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-screen w-64 md:w-56 transform flex-col border-r border-line bg-surface\" aria-label=\"Main navigation\"><div class=\"h-14 flex items-center shrink-0 px-4 gap-2\" :class=\"collapsed ? 'md:justify-center md:px-0' : 'justify-between'\"><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<aside x-ref=\"sidebar\" @keydown.tab=\"trapNav($event)\" :class=\"{ 'translate-x-0': nav, '-translate-x-full md:translate-x-0': !nav, 'md:!w-[60px]': collapsed, 'transition-[transform,width] duration-200 ease-out': ready }\" :inert=\"mobile && !nav\" :aria-hidden=\"(mobile && !nav) ? 'true' : null\" :role=\"mobile && nav ? 'dialog' : null\" :aria-modal=\"mobile && nav ? 'true' : null\" class=\"app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-screen w-64 md:w-56 transform flex-col border-r border-line bg-surface\" aria-label=\"Main navigation\"><div class=\"h-14 flex items-center shrink-0 px-4 gap-2\" :class=\"navCollapsed ? 'md:justify-center md:px-0' : 'justify-between'\"><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.HomePath())).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 216, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 261, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" class=\"flex items-center gap-2 min-w-0\" x-show=\"!collapsed\"><img src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" class=\"flex items-center gap-2 min-w-0\" x-show=\"!navCollapsed\"><img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/static/logo.gif").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 217, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 262, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
@@ -449,7 +449,7 @@ func Sidebar(p LayoutParams) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(p.Version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 219, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 264, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -467,26 +467,26 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.HomePath())).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 222, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 267, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" x-cloak x-show=\"collapsed\" class=\"hidden md:flex items-center justify-center\" aria-label=\"Asura home\"><img src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" x-cloak x-show=\"navCollapsed\" class=\"hidden md:flex items-center justify-center\" aria-label=\"Asura home\"><img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/static/favicon.ico").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 223, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 268, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" alt=\"\" class=\"h-6 w-6\"></a> <button @click=\"nav=false\" class=\"md:hidden icon-btn -mr-1\" aria-label=\"Close navigation\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" alt=\"\" class=\"h-6 w-6\"></a> <button x-ref=\"navClose\" @click=\"nav=false\" class=\"md:hidden icon-btn -mr-1\" aria-label=\"Close navigation\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -494,7 +494,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</button></div><div class=\"px-3 pb-2 shrink-0\"><button type=\"button\" @click=\"window.dispatchEvent(new CustomEvent('cmdk-open'))\" class=\"sidebar-search-btn flex h-8 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface-50 px-2.5 text-sm text-muted hover:text-white\" :class=\"collapsed && 'md:justify-center md:px-0'\" :title=\"collapsed ? 'Go to (Ctrl K)' : null\" aria-label=\"Open search\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4 shrink-0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.35-4.35\"></path></svg> <span class=\"flex-1 text-left\" x-show=\"!collapsed\">Go to…</span> <kbd x-data=\"{ mac: /Mac|iPhone|iPad/i.test((navigator.platform || '') + ' ' + navigator.userAgent) }\" x-show=\"!collapsed\" class=\"inline-flex h-5 items-center gap-0.5 rounded-[3px] border border-line-light px-1 font-mono text-2xs text-muted\"><span x-show=\"!mac\">Ctrl</span><span x-cloak x-show=\"mac\">⌘</span><span>K</span></kbd></button></div><nav id=\"sidenav\" hx-boost=\"true\" hx-target=\"#content\" hx-select=\"#content\" hx-swap=\"outerHTML show:window:top\" hx-sync=\"this:replace\" class=\"flex-1 px-3 pb-3 overflow-y-auto overflow-x-hidden space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</button></div><div class=\"px-3 pb-2 shrink-0\"><button type=\"button\" @click=\"nav=false; $nextTick(() => { if (mobile) $refs.navOpen.focus(); window.dispatchEvent(new CustomEvent('cmdk-open')); })\" class=\"sidebar-search-btn flex h-8 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface-50 px-2.5 text-sm text-muted hover:text-white\" :class=\"collapsed && 'md:justify-center md:px-0'\" :title=\"collapsed ? 'Go to (Ctrl K)' : null\" aria-label=\"Open search\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4 shrink-0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.35-4.35\"></path></svg> <span class=\"flex-1 text-left\" x-show=\"!navCollapsed\">Go to…</span> <kbd x-data=\"{ mac: /Mac|iPhone|iPad/i.test((navigator.platform || '') + ' ' + navigator.userAgent) }\" x-show=\"!navCollapsed\" class=\"inline-flex h-5 items-center gap-0.5 rounded-[3px] border border-line-light px-1 font-mono text-2xs text-muted\"><span x-show=\"!mac\">Ctrl</span><span x-cloak x-show=\"mac\">⌘</span><span>K</span></kbd></button></div><nav id=\"sidenav\" hx-boost=\"true\" hx-target=\"#content\" hx-select=\"#content\" hx-swap=\"outerHTML show:window:top\" hx-sync=\"this:replace\" class=\"flex-1 px-3 pb-3 overflow-y-auto overflow-x-hidden space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -991,14 +991,14 @@ func navGroup(title string, visible bool) templ.Component {
 		templ_7745c5c3_Var44 := templ.GetChildren(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if visible {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<div class=\"space-y-0.5\"><div x-show=\"!collapsed\" class=\"px-2 pb-1 text-xs font-medium text-muted\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<div class=\"space-y-0.5\"><div x-show=\"!navCollapsed\" class=\"px-2 pb-1 text-xs font-medium text-muted\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 323, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 368, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -1051,7 +1051,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + href)).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 336, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 381, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 			if templ_7745c5c3_Err != nil {
@@ -1064,7 +1064,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templruntime.NewAttributeExpression(key).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 337, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 382, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 			if templ_7745c5c3_Err != nil {
@@ -1077,7 +1077,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 340, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 385, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 			if templ_7745c5c3_Err != nil {
@@ -1101,14 +1101,14 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<span class=\"flex-1 truncate\" x-show=\"!collapsed\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<span class=\"flex-1 truncate\" x-show=\"!navCollapsed\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 348, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 393, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -1142,14 +1142,14 @@ func topbar(p LayoutParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<header class=\"md:hidden h-14 flex items-center gap-3 px-4 border-b border-line bg-surface sticky top-0 z-20\"><button @click=\"nav=true\" class=\"icon-btn -ml-2\" aria-label=\"Open navigation\" :aria-expanded=\"nav\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" stroke-linejoin=\"round\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\"><path d=\"M4 6h16M4 12h16M4 18h16\"></path></svg></button> <img src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<header class=\"md:hidden h-14 flex items-center gap-3 px-4 border-b border-line bg-surface sticky top-0 z-20\"><button x-ref=\"navOpen\" @click=\"openNav($el)\" class=\"icon-btn -ml-2\" aria-label=\"Open navigation\" :aria-expanded=\"nav\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" stroke-linejoin=\"round\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\"><path d=\"M4 6h16M4 12h16M4 18h16\"></path></svg></button> <img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templruntime.NewAttributeExpression(p.BasePath + "/static/logo.gif").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 360, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 405, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -1162,7 +1162,7 @@ func topbar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 361, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 406, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1196,40 +1196,40 @@ func sidebarUser(p LayoutParams) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<div class=\"relative border-t border-line p-3 shrink-0\" x-data=\"{ open: false }\" @keydown.escape.window=\"open=false\"><button @click=\"open=!open\" class=\"flex w-full items-center gap-2.5 rounded-control px-2 h-9 hover:bg-surface-200\" :class=\"{ 'bg-surface-200': open, 'md:justify-center md:px-0': collapsed }\" aria-haspopup=\"true\" :aria-expanded=\"open\" aria-label=\"Account menu\"><span class=\"flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-surface-300 text-xs font-semibold text-white uppercase\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<div class=\"relative border-t border-line p-3 shrink-0\" x-data=\"{ open: false }\" @keydown.escape=\"if (open) { $event.stopPropagation(); $event.preventDefault(); open=false; $refs.accountButton.focus() }\" @focusout=\"if (!$el.contains($event.relatedTarget)) open=false\"><button x-ref=\"accountButton\" @click=\"open=!open\" class=\"flex w-full items-center gap-2.5 rounded-control px-2 h-9 hover:bg-surface-200\" :class=\"{ 'bg-surface-200': open, 'md:justify-center md:px-0': collapsed }\" aria-controls=\"account-options\" :aria-expanded=\"open\" aria-label=\"Account menu\"><span class=\"flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-surface-300 text-xs font-semibold text-white uppercase\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(initial(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 378, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 424, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</span> <span class=\"flex-1 truncate text-left text-sm font-medium text-white\" x-show=\"!collapsed\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</span> <span class=\"flex-1 truncate text-left text-sm font-medium text-white\" x-show=\"!navCollapsed\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 379, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 425, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</span> <svg focusable=\"false\" aria-hidden=\"true\" x-show=\"!collapsed\" class=\"w-4 h-4 shrink-0 text-muted\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m7 15 5 5 5-5\"></path><path d=\"m7 9 5-5 5 5\"></path></svg></button><div x-show=\"open\" x-cloak @click.outside=\"open=false\" class=\"absolute bottom-full left-3 mb-2 w-56 rounded-card border border-line-light bg-surface-100 p-1 shadow-lg shadow-black/30 z-30\"><div class=\"px-2 py-1.5 border-b border-line mb-1\"><div class=\"text-xs text-muted\">Signed in as</div><div class=\"text-sm font-medium text-white truncate\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</span> <svg focusable=\"false\" aria-hidden=\"true\" x-show=\"!navCollapsed\" class=\"w-4 h-4 shrink-0 text-muted\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m7 15 5 5 5-5\"></path><path d=\"m7 9 5-5 5 5\"></path></svg></button><div id=\"account-options\" x-show=\"open\" x-cloak @click.outside=\"open=false\" class=\"absolute bottom-full left-3 mb-2 w-56 rounded-card border border-line-light bg-surface-100 p-1 shadow-lg shadow-black/30 z-30\"><div class=\"px-2 py-1.5 border-b border-line mb-1\"><div class=\"text-xs text-muted\">Signed in as</div><div class=\"text-sm font-medium text-white truncate\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 390, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 437, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
@@ -1242,7 +1242,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/logout")).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 410, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 457, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 		if templ_7745c5c3_Err != nil {
@@ -1294,7 +1294,7 @@ func PrevPageBtn(href string) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 434, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 481, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {
@@ -1332,7 +1332,7 @@ func NextPageBtn(href string) templ.Component {
 		var templ_7745c5c3_Var62 string
 		templ_7745c5c3_Var62, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 440, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 487, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 		if templ_7745c5c3_Err != nil {

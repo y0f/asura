@@ -52,8 +52,8 @@
   --color-crit: rgb(108 178 255);
   --color-info: rgb(108 178 255);
 
-  --font-sans: "Inter", "system-ui", "-apple-system", "sans-serif";
-  --font-mono: "JetBrains Mono", "Menlo", "Consolas", "monospace";
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* Type scale - templates use these steps, never text-[Npx]. */
   --text-2xs: 11px;   --text-2xs--line-height: 1.45;
