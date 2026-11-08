@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -16,15 +18,55 @@ import (
 )
 
 func (h *Handler) Maintenance(w http.ResponseWriter, r *http.Request) {
-	windows, err := h.store.ListMaintenanceWindows(r.Context())
+	windows, err := h.store.ListMaintenanceWindows(r.Context(), httputil.MonitorAccess(r.Context(), "maintenance.read")...)
 	if err != nil {
 		h.logger.Error("web: list maintenance", "error", err)
+		http.Error(w, "Failed to load maintenance", http.StatusInternalServerError)
+		return
+	}
+	key := httputil.GetAPIKey(r.Context())
+	actions := make(map[int64]map[string]bool)
+	for _, action := range []string{"maintenance.update", "maintenance.delete", "maintenance.toggle"} {
+		if key.HasPermission(action) || !key.HasCapability(action) {
+			continue
+		}
+		allowed, err := h.store.ListMaintenanceWindows(r.Context(), httputil.MonitorAccess(r.Context(), action)...)
+		if err != nil {
+			h.logger.Error("web: maintenance action coverage", "error", err)
+			http.Error(w, "Failed to load maintenance", http.StatusInternalServerError)
+			return
+		}
+		for _, window := range allowed {
+			if actions[window.ID] == nil {
+				actions[window.ID] = make(map[string]bool)
+			}
+			actions[window.ID][action] = true
+		}
+	}
+	var choices []views.MaintenanceMonitorChoice
+	if key.HasCapability("maintenance.create") {
+		monitors, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{Access: httputil.MonitorAccess(r.Context(), "maintenance.create")}, storage.Pagination{Page: 1, PerPage: 10000})
+		if err != nil {
+			h.logger.Error("web: maintenance monitor choices", "error", err)
+			http.Error(w, "Failed to load maintenance", http.StatusInternalServerError)
+			return
+		} else if rows, ok := monitors.Data.([]*storage.Monitor); ok {
+			for _, monitor := range rows {
+				label := fmt.Sprintf("Monitor #%d", monitor.ID)
+				if key.AllowsMonitor("monitors.read", monitor.ID, monitor.GroupID) {
+					label = monitor.Name
+				}
+				choices = append(choices, views.MaintenanceMonitorChoice{ID: monitor.ID, Label: label})
+			}
+		}
 	}
 
 	lp := h.newLayoutParams(r, "Maintenance", "maintenance")
 	h.renderComponent(w, r, views.MaintenanceListPage(views.MaintenanceListParams{
-		LayoutParams: lp,
-		Windows:      windows,
+		LayoutParams:   lp,
+		Windows:        windows,
+		AllowedActions: actions,
+		MonitorChoices: choices,
 	}))
 }
 
@@ -32,91 +74,126 @@ func (h *Handler) MaintenanceCreate(w http.ResponseWriter, r *http.Request) {
 	mw, err := h.parseMaintenanceForm(r)
 	if err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
 	if err := validate.ValidateMaintenanceWindow(mw); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
-	if err := h.store.CreateMaintenanceWindow(r.Context(), mw); err != nil {
+	if err := h.store.CreateMaintenanceWindow(r.Context(), mw, httputil.MonitorAccess(r.Context(), "maintenance.create")...); err != nil {
+		if maintenanceMutationMissing(w, r, err) {
+			return
+		}
 		h.logger.Error("web: create maintenance", "error", err)
-		h.setError(w, "Failed to create maintenance window")
-		h.redirect(w, r, "/maintenance")
+		http.Error(w, "Failed to create maintenance window", http.StatusInternalServerError)
 		return
 	}
 	h.setFlash(w, "Maintenance window created")
-	h.redirect(w, r, "/maintenance")
+	h.maintenanceRedirect(w, r)
 }
 
 func (h *Handler) MaintenanceUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
 	mw, err := h.parseMaintenanceForm(r)
 	if err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
 	mw.ID = id
 	if err := validate.ValidateMaintenanceWindow(mw); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
-	if err := h.store.UpdateMaintenanceWindow(r.Context(), mw); err != nil {
+	_, err = h.store.UpdateMaintenanceWindowWithActions(r.Context(), id, func(current *storage.MaintenanceWindow) (*storage.MaintenanceWindow, error) {
+		next := *mw
+		if !r.Form.Has("active") {
+			next.Active = current.Active
+		}
+		if !r.Form.Has("monitor_ids") && !r.Form.Has("all_monitors") {
+			next.MonitorIDs = current.MonitorIDs
+		}
+		return &next, nil
+	}, storage.MaintenanceUpdateAccess{Update: httputil.MonitorAccess(r.Context(), "maintenance.update"), Toggle: httputil.MonitorAccess(r.Context(), "maintenance.toggle")})
+	if err != nil {
+		if maintenanceMutationMissing(w, r, err) {
+			return
+		}
 		h.logger.Error("web: update maintenance", "error", err)
-		h.setError(w, "Failed to update maintenance window")
-		h.redirect(w, r, "/maintenance")
+		http.Error(w, "Failed to update maintenance window", http.StatusInternalServerError)
 		return
 	}
 	h.setFlash(w, "Maintenance window updated")
-	h.redirect(w, r, "/maintenance")
+	h.maintenanceRedirect(w, r)
 }
 
 func (h *Handler) MaintenanceDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
-	if err := h.store.DeleteMaintenanceWindow(r.Context(), id); err != nil {
+	if err := h.store.DeleteMaintenanceWindow(r.Context(), id, httputil.MonitorAccess(r.Context(), "maintenance.delete")...); err != nil {
+		if maintenanceMutationMissing(w, r, err) {
+			return
+		}
 		h.logger.Error("web: delete maintenance", "error", err)
+		http.Error(w, "Failed to delete maintenance window", http.StatusInternalServerError)
+		return
 	}
 	h.setFlash(w, "Maintenance window deleted")
-	h.redirect(w, r, "/maintenance")
+	h.maintenanceRedirect(w, r)
 }
 
 func (h *Handler) MaintenanceToggle(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/maintenance")
+		h.maintenanceRedirect(w, r)
 		return
 	}
-	mw, err := h.store.GetMaintenanceWindow(r.Context(), id)
+	mw, err := h.store.FlipMaintenanceWindow(r.Context(), id, httputil.MonitorAccess(r.Context(), "maintenance.toggle"))
 	if err != nil {
-		h.setError(w, "Maintenance window not found")
+		if maintenanceMutationMissing(w, r, err) {
+			return
+		}
+		h.logger.Error("web: toggle maintenance", "error", err)
+		http.Error(w, "Failed to toggle maintenance window", http.StatusInternalServerError)
+		return
+	}
+	if mw.Active {
+		h.setFlash(w, "Maintenance started")
+		h.notifyMaintenance(r.Context(), mw, "started")
+	} else {
+		h.setFlash(w, "Maintenance stopped")
+		h.notifyMaintenance(r.Context(), mw, "ended")
+	}
+
+	h.maintenanceRedirect(w, r)
+}
+
+func (h *Handler) maintenanceRedirect(w http.ResponseWriter, r *http.Request) {
+	lp := h.newLayoutParams(r, "", "")
+	if lp.HasCapability("maintenance.read") {
 		h.redirect(w, r, "/maintenance")
 		return
 	}
-	newActive := !mw.Active
-	if err := h.store.ToggleMaintenanceWindow(r.Context(), id, newActive); err != nil {
-		h.logger.Error("web: toggle maintenance", "error", err)
-		h.setError(w, "Failed to toggle maintenance window")
-	} else {
-		if newActive {
-			h.setFlash(w, "Maintenance started")
-			h.notifyMaintenance(r.Context(), mw, "started")
-		} else {
-			h.setFlash(w, "Maintenance stopped")
-			h.notifyMaintenance(r.Context(), mw, "ended")
-		}
+	lp.BasePath = ""
+	h.redirect(w, r, lp.HomePath())
+}
+
+func maintenanceMutationMissing(w http.ResponseWriter, r *http.Request, err error) bool {
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return true
 	}
-	h.redirect(w, r, "/maintenance")
+	return false
 }
 
 func (h *Handler) parseMaintenanceForm(r *http.Request) (*storage.MaintenanceWindow, error) {

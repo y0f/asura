@@ -15,6 +15,7 @@ func (h *Handler) RequestLogs(w http.ResponseWriter, r *http.Request) {
 	p := httputil.ParsePagination(r)
 
 	f := storage.RequestLogFilter{
+		Access:     httputil.MonitorAccess(r.Context(), "request_logs.read"),
 		RouteGroup: q.Get("group"),
 		Method:     q.Get("method"),
 		ClientIP:   q.Get("ip"),
@@ -42,16 +43,22 @@ func (h *Handler) RequestLogs(w http.ResponseWriter, r *http.Request) {
 	result, err := h.store.ListRequestLogs(r.Context(), f, p)
 	if err != nil {
 		h.logger.Error("web: list request logs", "error", err)
+		http.Error(w, "Failed to load request logs", http.StatusInternalServerError)
+		return
 	}
 
-	stats, err := h.store.GetRequestLogStats(r.Context(), f.From, f.To)
+	stats, err := h.store.GetRequestLogStats(r.Context(), f.From, f.To, f.Access...)
 	if err != nil {
 		h.logger.Error("web: get request log stats", "error", err)
+		http.Error(w, "Failed to load request logs", http.StatusInternalServerError)
+		return
 	}
 
-	topIPs, err := h.store.ListTopClientIPs(r.Context(), f.From, f.To, 50)
+	topIPs, err := h.store.ListTopClientIPs(r.Context(), f.From, f.To, 50, f.Access...)
 	if err != nil {
 		h.logger.Error("web: list top client IPs", "error", err)
+		http.Error(w, "Failed to load request logs", http.StatusInternalServerError)
+		return
 	}
 	if f.ClientIP != "" {
 		found := false

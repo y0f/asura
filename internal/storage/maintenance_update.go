@@ -84,3 +84,12 @@ func (s *SQLiteStore) UpdateMaintenanceWindowWithActions(ctx context.Context, id
 	}
 	return &next, nil
 }
+
+// FlipMaintenanceWindow changes only active state and returns the current row
+// committed by that transition. Empty access denies the operation.
+func (s *SQLiteStore) FlipMaintenanceWindow(ctx context.Context, id int64, access []MonitorAccess) (*MaintenanceWindow, error) {
+	return s.UpdateMaintenanceWindowWithActions(ctx, id, func(current *MaintenanceWindow) (*MaintenanceWindow, error) {
+		current.Active = !current.Active
+		return current, nil
+	}, MaintenanceUpdateAccess{Update: access, Toggle: access})
+}

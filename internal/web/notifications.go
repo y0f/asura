@@ -193,7 +193,7 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var f storage.NotifHistoryFilter
+	f := storage.NotifHistoryFilter{Access: httputil.MonitorAccess(r.Context(), "notification_history.read")}
 	if v := q.Get("channel_id"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 			f.ChannelID = id
@@ -206,17 +206,24 @@ func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
 	result, err := h.store.ListNotificationHistory(r.Context(), f, p)
 	if err != nil {
 		h.logger.Error("web: list notification history", "error", err)
+		http.Error(w, "Failed to load notification history", http.StatusInternalServerError)
+		return
 	}
 
-	channels, err := h.store.ListNotificationChannels(r.Context())
-	if err != nil {
-		h.logger.Error("web: list channels for history", "error", err)
+	var channels []*storage.NotificationChannel
+	if httputil.GetAPIKey(r.Context()).HasPermission("notifications.read") {
+		channels, err = h.store.ListNotificationChannels(r.Context())
+		if err != nil {
+			h.logger.Error("web: list channels for history", "error", err)
+			http.Error(w, "Failed to load notification history", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	lp := h.newLayoutParams(r, "Notification History", "notification-history")
 	h.renderComponent(w, r, views.NotificationHistoryPage(views.NotificationHistoryParams{
 		LayoutParams: lp,
-		Result:       result,
+		Result:       httputil.NotificationHistoryResponse(r.Context(), result),
 		Channels:     channels,
 		Filter:       f,
 	}))

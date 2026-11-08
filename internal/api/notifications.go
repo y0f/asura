@@ -179,7 +179,7 @@ func (h *Handler) TestNotification(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListNotificationHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var f storage.NotifHistoryFilter
+	f := storage.NotifHistoryFilter{Access: httputil.MonitorAccess(r.Context(), "notification_history.read")}
 	if v := q.Get("channel_id"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 			f.ChannelID = id
@@ -195,5 +195,5 @@ func (h *Handler) ListNotificationHistory(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "failed to list notification history")
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, httputil.NotificationHistoryResponse(r.Context(), result))
 }

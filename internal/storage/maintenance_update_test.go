@@ -127,3 +127,46 @@ func TestMaintenanceUpdatePreservesConcurrentStateAndRollsBackPrepareFailure(t *
 		t.Fatalf("prepare error changed data: %+v %v", stored, err)
 	}
 }
+
+func TestMaintenanceConcurrentFlipsSerializeWithoutLosingTransitions(t *testing.T) {
+	store, _, monitors := accessFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	window := &MaintenanceWindow{Name: "current", MonitorIDs: []int64{monitors[0].ID}, Recurring: "manual"}
+	if err := store.CreateMaintenanceWindow(ctx, window); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FlipMaintenanceWindow(ctx, window.ID, nil); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("empty flip access did not deny: %v", err)
+	}
+	type result struct {
+		window *MaintenanceWindow
+		err    error
+	}
+	results := make(chan result, 2)
+	start := make(chan struct{})
+	for range 2 {
+		go func() {
+			<-start
+			got, err := store.FlipMaintenanceWindow(ctx, window.ID, []MonitorAccess{{All: true}})
+			results <- result{got, err}
+		}()
+	}
+	close(start)
+	states := make(map[bool]int)
+	for range 2 {
+		select {
+		case got := <-results:
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			states[got.window.Active]++
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	stored, err := store.GetMaintenanceWindow(ctx, window.ID)
+	if err != nil || stored.Active || states[true] != 1 || states[false] != 1 {
+		t.Fatalf("two flips lost a transition: %+v %v states%v", stored, err, states)
+	}
+}

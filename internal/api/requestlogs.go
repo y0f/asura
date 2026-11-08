@@ -14,6 +14,7 @@ func (h *Handler) ListRequestLogs(w http.ResponseWriter, r *http.Request) {
 	p := httputil.ParsePagination(r)
 
 	f := storage.RequestLogFilter{
+		Access:     httputil.MonitorAccess(r.Context(), "request_logs.read"),
 		RouteGroup: q.Get("group"),
 		Method:     q.Get("method"),
 	}
@@ -65,7 +66,7 @@ func (h *Handler) RequestLogStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	stats, err := h.store.GetRequestLogStats(r.Context(), from, to)
+	stats, err := h.store.GetRequestLogStats(r.Context(), from, to, httputil.MonitorAccess(r.Context(), "request_logs.read")...)
 	if err != nil {
 		h.logger.Error("api: request log stats", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to get request log stats")
