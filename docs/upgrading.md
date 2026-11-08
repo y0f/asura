@@ -44,6 +44,11 @@ that previously assumed every history row was a measured check.
 
 ## Review access rules {#review-access-rules}
 
+Visitors to password-protected status pages must sign in again after upgrading:
+v2 rejects older status-page cookies and enforces a seven-day expiry on new ones.
+Existing page passwords remain valid. Set or reset a page password to upgrade
+its stored hash to the salted format described in [status-page access](status-pages.html#password-protection).
+
 Startup removes heartbeat path credentials and URL userinfo, query parameters and
 fragments from previously stored request history. Request counts are preserved;
 new request and process logs use the same credential-safe URL projection. This

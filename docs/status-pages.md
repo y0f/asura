@@ -60,7 +60,7 @@ Expand **Branding and access** to customise the public page. Public image loadin
 
 ## Password Protection {#password-protection}
 
-Set a password under **Branding and access**. Visitors are redirected to `/{slug}/auth` and receive a 7-day `HttpOnly` cookie on success. Branding and page contents are not rendered before successful authentication.
+Set a password under **Branding and access**. Visitors are redirected to `/{slug}/auth` and receive a 7-day `HttpOnly` cookie on success. The server enforces its expiry and binds it to the page and current password hash; resetting the password invalidates existing cookies. Branding and page contents are not rendered before successful authentication. Older status-page cookies are rejected after upgrading to v2, so visitors must sign in again.
 
 - Newly set or reset passwords use PBKDF2-HMAC-SHA256 with 600,000 iterations and a random 16-byte salt; plaintext is never stored. New passwords are limited to 1,024 UTF-8 bytes without truncation.
 - Existing lowercase SHA-256 password hashes remain valid, including legacy longer passwords. Explicitly reset a legacy password to upgrade it; login does not rewrite stored protection. Full configuration transfer preserves supported opaque hashes.

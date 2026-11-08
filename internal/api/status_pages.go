@@ -1,10 +1,7 @@
 package api
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -279,7 +276,5 @@ func statusPageAuthValid(r *http.Request, pageID int64, passwordHash string) boo
 	if err != nil {
 		return false
 	}
-	sum := sha256.Sum256([]byte(passwordHash + ":sp-auth"))
-	expected := hex.EncodeToString(sum[:])
-	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(expected)) == 1
+	return pageauth.VerifyCookie(c.Value, pageID, passwordHash, time.Now())
 }

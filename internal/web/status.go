@@ -1,10 +1,7 @@
 package web
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,19 +13,12 @@ import (
 	"github.com/y0f/asura/internal/web/views"
 )
 
-func spAuthCookieValue(passwordHash string) string {
-	h := sha256.New()
-	h.Write([]byte(passwordHash + ":sp-auth"))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func (h *Handler) checkStatusPageAuth(r *http.Request, pageID int64, passwordHash string) bool {
 	c, err := r.Cookie(fmt.Sprintf("sp_auth_%d", pageID))
 	if err != nil {
 		return false
 	}
-	expected := spAuthCookieValue(passwordHash)
-	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(expected)) == 1
+	return pageauth.VerifyCookie(c.Value, pageID, passwordHash, time.Now())
 }
 
 // requireStatusPageAuth redirects to the status page's password form and
@@ -137,6 +127,7 @@ func (h *Handler) StatusPageByID(w http.ResponseWriter, r *http.Request, pageID 
 }
 
 func (h *Handler) StatusPageAuthGet(w http.ResponseWriter, r *http.Request, pageID int64) {
+	w.Header().Set("Cache-Control", "no-store")
 	ctx := r.Context()
 	sp, err := h.store.GetStatusPage(ctx, pageID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -157,7 +148,7 @@ func (h *Handler) StatusPageAuthGet(w http.ResponseWriter, r *http.Request, page
 		return
 	}
 	h.renderComponent(w, r, views.StatusPageAuthPage(views.StatusPageAuthParams{
-		Title:    sp.Title,
+		Title:    "Protected status page",
 		BasePath: h.cfg.Server.BasePath,
 		Slug:     sp.Slug,
 		Error:    r.URL.Query().Get("error"),
@@ -165,6 +156,7 @@ func (h *Handler) StatusPageAuthGet(w http.ResponseWriter, r *http.Request, page
 }
 
 func (h *Handler) StatusPageAuthPost(w http.ResponseWriter, r *http.Request, pageID int64, slug string) {
+	w.Header().Set("Cache-Control", "no-store")
 	ctx := r.Context()
 	sp, err := h.store.GetStatusPage(ctx, pageID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -188,11 +180,17 @@ func (h *Handler) StatusPageAuthPost(w http.ResponseWriter, r *http.Request, pag
 		return
 	}
 
+	value, err := pageauth.IssueCookie(pageID, sp.PasswordHash, time.Now())
+	if err != nil {
+		h.logger.Error("web: issue status page cookie", "error", err)
+		http.Error(w, "Failed to authenticate status page", http.StatusInternalServerError)
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     fmt.Sprintf("sp_auth_%d", pageID),
-		Value:    spAuthCookieValue(sp.PasswordHash),
+		Value:    value,
 		Path:     h.cfg.Server.BasePath + "/",
-		MaxAge:   86400 * 7,
+		MaxAge:   int(pageauth.CookieLifetime / time.Second),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   h.cfg.Auth.Session.CookieSecure,
