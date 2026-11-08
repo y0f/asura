@@ -7,7 +7,7 @@ permalink: "/monitors.html"
 
 # Monitors {#monitors}
 
-Asura supports 19 monitor types: 17 active protocol checks, heartbeat monitors for incoming pings, and manually controlled monitors. Each monitor has its own interval, protocol settings and optional assertions.
+Asura supports 19 monitor types: 17 active checks, heartbeat monitors for incoming pings, and manually controlled monitors. Probe types have their own interval, protocol settings and optional assertions.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -23,27 +23,30 @@ Asura supports 19 monitor types: 17 active protocol checks, heartbeat monitors f
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `name` | string | yes | Display name |
-| `description` | string |  | Optional description, rendered as markdown on the detail page (max 5000 chars) |
+| `name` | string | yes | Display name, up to 255 UTF-8 bytes |
+| `description` | string |  | Optional description, rendered as markdown on the detail page (up to 5,000 UTF-8 bytes) |
 | `type` | string | yes | `http` `http_multi` `tcp` `dns` `icmp` `tls` `websocket` `command` `docker` `heartbeat` `domain` `grpc` `mqtt` `smtp` `ssh` `redis` `postgresql` `udp` `manual` |
-| `target` | string | for active checks | URL, host:port, domain, or command; not required for heartbeat or manual monitors |
-| `interval` | int |  | Seconds between checks (default: 60) |
-| `timeout` | int |  | Timeout in seconds (default: 10) |
+| `target` | string | for active checks | URL, host:port, domain or display target, up to 2,048 UTF-8 bytes; not required for heartbeat or manual monitors. Command executables come from `settings.command` |
+| `interval` | int |  | Seconds between checks, 5 to 86,400 (standard creation default: 60) |
+| `timeout` | int |  | Timeout in seconds, 1 to 300 (standard creation default: 10) |
+| `enabled` | bool |  | Enable monitoring (creation default: true) |
 | `tags` | string\[\] |  | Grouping tags |
 | `monitor_tags` | object\[\] |  | Managed tag assignments, e.g. `[{"tag_id":1,"value":"production"}]`; changes require `monitors.assign` and `tags.read`, and omission on update preserves assignments |
 | `group_id` | int |  | Monitor group ID (null if ungrouped) |
-| `proxy_id` | int |  | Proxy ID for routing checks through a proxy |
-| `notification_channel_ids` | int\[\] |  | Notification channels to route to (empty = all) |
+| `proxy_id` | int |  | Proxy ID; supported protocol/type pairs are listed under [Proxies](api.html#proxies). Proxy-routed checks run locally |
+| `notification_channel_ids` | int\[\] |  | Notification channels to route to (empty = all enabled channels whose event filter matches) |
 | `settings` | object |  | Protocol-specific (see below) |
 | `assertions` | object |  | Condition groups (see below) |
 | `track_changes` | bool |  | Enable content change detection |
-| `failure_threshold` | int |  | Failures before incident (default: 3) |
-| `success_threshold` | int |  | Successes before recovery (default: 1) |
+| `failure_threshold` | int |  | Consecutive non-up probes before opening an incident (standard creation default: 3) |
+| `success_threshold` | int |  | Consecutive up probes before recovery (standard creation default: 1) |
 | `upside_down` | bool |  | Inverted mode. "up" becomes "down" and vice versa |
 | `agent_enabled` | bool |  | Enable remote checks on explicitly assigned agents (API creation default: false). Empty assignments produce no remote jobs. Proxy assignments, typed authentication settings, mTLS material and server-only monitor types remain ineligible for delegation |
 | `agent_ids` | int\[\] |  | Existing trusted agent IDs. An omitted `PUT` field preserves current assignments; `[]` removes them. Changing delegation requires `monitors.assign` and `agents.read`. Newly enrolled agents receive no jobs until assigned |
-| `resend_interval` | int |  | Seconds between reminder notifications while an incident is open (0 = notify once only) |
+| `resend_interval` | int |  | Seconds between reminder notifications while an incident is open, 0 to 86,400 (0 disables reminders) |
 | `sla_target` | float |  | Scheduled-check SLA target percentage, from 0 to 100 (e.g. 99.9). Set to 0 to disable; unavailable for manual and heartbeat types |
+
+Creation defaults for interval, timeout and consecutive-check thresholds come from the server's `monitor` configuration; the table lists its standard values. Existing monitor updates require a complete configuration, while omitted relationships preserve their current assignments; see the [update example](sla.html#setting-an-sla-target).
 
 Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps proxy-routed checks, typed authentication and mTLS settings local. Upgrade the server and agents together; v2 jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
 
@@ -72,7 +75,7 @@ Agent assignment is a trust decision: eligible jobs include their target, custom
 | `mtls_ca_cert` | string | Custom CA certificate (PEM, optional) |
 | `expected_status` | int | Expected HTTP status code (0 = any 2xx/3xx) |
 | `follow_redirects` | bool | Follow redirects (default: true) |
-| `max_redirects` | int | Maximum redirect hops (0 = don't follow, default: 10) |
+| `max_redirects` | int | Positive redirect limit, up to 100; overrides `follow_redirects`. Zero or omission uses `follow_redirects`, with a default limit of 10 |
 | `skip_tls_verify` | bool | Skip TLS certificate verification |
 | `cache_buster` | bool | Append unique query param to bypass caches |
 
@@ -137,7 +140,7 @@ mTLS is independent of the auth method and can be combined with any authenticati
 {"warn_days_before": 30}
 ```
 
-Expiration uses the certificate's exact timestamp. The displayed days remaining and the warning window do not postpone expiration until the next whole day.
+`warn_days_before` defaults to 30 when omitted or zero. Expiration uses the certificate's exact timestamp. The displayed days remaining and the warning window do not postpone expiration until the next whole day.
 
 ### WebSocket {#websocket}
 
@@ -294,7 +297,7 @@ A multi-step edit that retains private inputs must preserve the ordered request 
 
 ## Assertions {#assertions}
 
-Assertions are evaluated after each check. A failed assertion marks a monitor `down` or, if `degraded` is set, `degraded` instead.
+Assertions are evaluated for scheduled probe results. A failed assertion marks a monitor `down` or, if `degraded` is set, `degraded` instead. Saved assertions on manual and heartbeat monitors remain inactive.
 
 Conditions are organized into groups. Each group has its own `and`/`or` operator, and the top-level `operator` controls how the groups themselves are combined. The web UI lets you build this visually. API consumers send the structured object directly.
 
@@ -365,13 +368,13 @@ Sends a PostgreSQL protocol v3 startup message and validates the bounded authent
 
 ### UDP {#udp}
 
-Sends a packet and optionally validates response content. Useful for DNS-over-UDP and custom UDP services.
+Sends `send_data` (a newline when empty). With `expect_data`, it waits for one reply of up to 4 KiB and requires that text to be present. Without `expect_data`, a successful send is enough: it does not wait for a reply or prove that the remote application is healthy.
 
 ### HTTP Multi-Step {#http-multi-step}
 
-Executes a sequence of up to 5 HTTP requests. Variables extracted from one step (via regex or JSON dot-path) can be interpolated into subsequent steps using `{% raw %}{{var}}{% endraw %}` syntax. The check fails if any step returns an unexpected status or errors. Response time is the sum of all steps.
+Executes a sequence of up to 5 HTTP requests. Variables extracted from one step (via regex or JSON dot-path) can be interpolated into subsequent steps using `{% raw %}{{var}}{% endraw %}` syntax. A transport error or a step status that differs from its positive `expected_status` fails the check. Unlike a single HTTP monitor, a step with `expected_status: 0` accepts any HTTP status. Response time is the sum of all steps.
 
-Interpolation runs once: extracted text is treated as data, even when it contains placeholder syntax. Unknown or unclosed placeholders remain literal. Each resolved request is limited to an 8 KiB URL, a 1 MiB body, and 64 KiB of combined header names and values. If expansion exceeds a limit, the check fails before sending that request. Settings remain limited to 1 MiB, and extraction reads at most 1 MiB of each response body.
+Interpolation runs once: extracted text is treated as data, even when it contains placeholder syntax. Unknown or unclosed placeholders in bodies and headers remain literal; URL placeholders must refer to variables defined by earlier steps. Each resolved request is limited to an 8 KiB URL, a 1 MiB body, and 64 KiB of combined header names and values. If expansion exceeds a limit, the check fails before sending that request. Settings remain limited to 1 MiB, and extraction reads at most 1 MiB of each response body.
 
 {% raw %}```
 {
@@ -408,7 +411,7 @@ Per-monitor anomaly sensitivity detects response time spikes by comparing agains
 | Medium | 2 standard deviations |
 | High | 1.5 standard deviations |
 
-Baselines recalculate every 6 hours. A minimum of 30 data points are required before detection activates. Set via the `anomaly_sensitivity` field or the monitor form.
+Baselines recalculate every 6 hours. At least 30 successful probe samples and a nonzero baseline deviation are needed for detection. Set via the `anomaly_sensitivity` field or the monitor form.
 
 ## Incident Severity {#incident-severity}
 

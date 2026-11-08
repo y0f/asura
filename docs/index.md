@@ -7,7 +7,7 @@ permalink: "/"
 
 # Self-hosted uptime monitoring for websites, APIs and network services {#self-hosted-uptime-monitoring-for-websites-apis-and-network-services}
 
-Asura v2 runs availability checks, records incidents and sends alerts from infrastructure you control. It runs as a single Go binary with SQLite storage and includes a web interface, an API and public status pages. Reusable roles and scoped permissions control what each API key or web session can see and change.
+Asura runs availability checks, records incidents and sends alerts from infrastructure you control. It runs as a single Go binary with SQLite storage and includes a web interface, an API and public status pages. Reusable roles and scoped permissions control what each API key or web session can see and change.
 
 ## Start with a guide {#start-with-a-guide}
 
@@ -29,4 +29,4 @@ The [configuration reference](configuration.html) covers server, storage, authen
 
 The web interface is rendered by Go and enhanced with HTMX and Alpine.js. Static assets are included in the binary; no separate frontend server is required.
 
-Asura is available under the [MIT license](https://github.com/y0f/Asura/blob/main/LICENSE). Source code and releases are on [GitHub](https://github.com/y0f/Asura).
+Asura is available under the [MIT license](https://github.com/y0f/asura/blob/main/LICENSE). Source code and releases are on [GitHub](https://github.com/y0f/asura).

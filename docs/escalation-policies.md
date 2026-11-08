@@ -21,7 +21,7 @@ Escalation policies define time-based notification chains for incidents. When an
 
 ## How it works {#how-it-works}
 
-1. A monitor goes down and an incident is created
+1. A monitor becomes down or degraded and an incident is created
 2. If the monitor has an escalation policy, Asura starts the escalation chain
 3. Due steps queue notifications to their enabled channels
 4. When the incident is acknowledged or resolved, the escalation stops
@@ -107,4 +107,4 @@ Escalation policies use dedicated permissions:
 - `escalation_policies.create`, `escalation_policies.update`, `escalation_policies.delete`: individual mutations
 - `escalation_policies.write`: all three mutations; does not grant read access
 
-Creating a policy or changing its steps also requires `notifications.read`, because it assigns notification channels. Explicitly unchanged steps do not need new assignment authority. A policy read without that permission uses channel IDs rather than names. Assigning a policy to a monitor requires `monitors.assign` on that monitor and `escalation_policies.read`.
+Creating a policy or changing its steps also requires `notifications.read`, because it assigns notification channels. Explicitly unchanged steps do not need new assignment authority. A policy read without that permission uses channel IDs rather than names. Assigning a policy to an existing monitor requires `monitors.update` and `monitors.assign` on that monitor, plus `escalation_policies.read`.

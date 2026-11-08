@@ -7,15 +7,13 @@ permalink: "/notifications.html"
 
 # Notifications {#notifications}
 
-Asura supports 13 notification channel types. Each channel can filter event types and receive events from selected monitors. Notification history records the final per-channel delivery outcome rather than a separate row for every retry.
+Asura supports 13 notification channel types, with event filters and per-monitor routing.
 
 Events: `incident.created`, `incident.acknowledged`, `incident.resolved`, `incident.reminder`, `incident.escalated`, `content.changed`, `cert.changed`, `sla.breach`, `maintenance.started`, `maintenance.ended`. Maintenance events are sent when a maintenance window is toggled manually in the web interface.
 
 The `incident.reminder` event fires when a monitor's `resend_interval` elapses while an incident is still open, re-alerting channels that subscribe to it.
 
-A channel with no event filter set receives **all** event types. To limit a channel to specific events, set its event list — only the listed events are then delivered.
-
-In the web form, choose **All events** explicitly or select at least one event. Editing a channel preserves its existing selection, including escalation and SLA alerts. Choosing all events also includes event types added in future versions.
+An empty event filter receives **all** event types, including future additions. In the web form, choose **All events** explicitly or select at least one event. Editing preserves the selection. Explicit escalation recipients bypass these filters.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -143,7 +141,7 @@ To verify a webhook delivery:
 }
 ```
 
-Sends Adaptive Cards with color-coded severity (Attention for alerts, Warning for acknowledged, Good for resolved).
+Sends Adaptive Cards containing the event type and a summary.
 
 ## PagerDuty {#pagerduty}
 
@@ -170,7 +168,7 @@ Uses the Events API v2. Incident lifecycle maps to PagerDuty actions: `incident.
 }
 ```
 
-`region` is optional. set to `"eu"` for the EU instance. Incident lifecycle maps to Opsgenie actions: create, acknowledge, and close. Priority is P1 for new incidents and P3 for reminders.
+`region` is optional; set it to `"eu"` for the EU instance. Incident lifecycle maps to Opsgenie actions: create, acknowledge, and close. Priority is P1 for new incidents and P3 for reminders.
 
 ## Pushover {#pushover}
 
@@ -226,7 +224,7 @@ An omitted or zero `priority` selects the event-derived priority (1=high for cre
 }
 ```
 
-`priority` is optional (default: 5). Higher values show as more urgent in Gotify.
+`priority` is optional (default: 5); an explicit `0` is preserved. Higher values show as more urgent in Gotify.
 
 ## Per-Monitor Routing {#per-monitor-routing}
 

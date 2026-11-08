@@ -54,8 +54,8 @@ Expand **Branding and access** to customise the public page. Public image loadin
 | --- | --- |
 | `logo_url` | Image above the status banner. Use HTTPS without embedded credentials, or a path starting with `/`. Protocol-relative URLs and wildcard hosts are rejected. |
 | `favicon_url` | Favicon with the same URL rules. Defaults to the Asura favicon. |
-| `custom_header_html` | Supported structural HTML, text, links and images before the banner, up to 5,000 characters. Scripts, forms, event handlers and unsupported attributes are removed, including when legacy content is rendered. |
-| `custom_css` | Presentation CSS capped at 10,000 characters. New saves keep allowlisted properties and remove external resources, comments, escapes and at-rules. Legacy CSS also has an HTML raw-text boundary guard when rendered. |
+| `custom_header_html` | Supported structural HTML, text, links and images before the banner, up to 5,000 UTF-8 bytes. Scripts, forms, event handlers and unsupported attributes are removed, including when legacy content is rendered. |
+| `custom_css` | Presentation CSS capped at 10,000 UTF-8 bytes. New saves keep allowlisted properties and remove external resources, comments, escapes and at-rules. Legacy CSS also has an HTML raw-text boundary guard when rendered. |
 | `analytics_script` | Only a super administrator may change this field. Supported external HTTPS script tags can be stored, but external script execution remains blocked by the current content policy. Inline script bodies are removed. Other editors preserve omitted or unchanged stored values. |
 
 ## Password Protection {#password-protection}
@@ -117,7 +117,7 @@ The `cause` field is always returned empty in the public payload — incident ca
 
 `overall_status` is `operational`, `degraded`, `major_outage` or `unknown`. Empty pages and sets containing pending checks are unknown unless a known degraded or down state takes priority. The page displays “Awaiting status data” for unknown status.
 
-In v2, a monitor with no samples has `uptime_90d: null` and `total_checks: 0`, rather than an assumed 100%. A measured uptime remains numeric. Query failures return HTTP 500 instead of a healthy or empty result. Public monitor queries do not load private targets, settings or credentials.
+A probe monitor with no verified samples has `uptime_90d: null` and `total_checks: 0`, rather than an assumed 100%. Manual and heartbeat monitors also return null uptime because their state changes are not periodic probes. A measured probe uptime remains numeric. Query failures return HTTP 500 instead of a healthy or empty result. Public monitor queries do not load private targets, settings or credentials.
 
 ## Admin REST API {#admin-rest-api}
 
@@ -181,7 +181,7 @@ up to 254 bytes and HTTPS webhook URLs up to 2,048 bytes. Private webhook target
 require the server's explicit private-target setting; delivery rechecks addresses
 when connecting. Token-result pages do not reveal private page branding.
 
-Enable subscriptions by adding an SMTP config to your `config.yaml`:
+For email subscriptions, enable subscriptions and configure SMTP in `config.yaml` (webhook subscriptions do not require SMTP):
 
 ```
 subscriptions:
