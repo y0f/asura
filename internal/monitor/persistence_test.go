@@ -42,6 +42,9 @@ func TestFailedCheckCommitDoesNotAdvanceState(t *testing.T) {
 			m := createTestMonitor(t, s, &storage.Monitor{FailureThreshold: 2, AgentEnabled: true})
 			agentID := assignTestAgents(t, s, m, 1)[0]
 			ctx := context.Background()
+			if err := s.UpsertMonitorStatus(ctx, &storage.MonitorStatus{MonitorID: m.ID, ConfigRevision: m.ConfigRevision, Status: "pending", LastCertFingerprint: "previous"}); err != nil {
+				t.Fatal(err)
+			}
 			now := time.Now()
 			apply := func(checkedAt time.Time, wantError bool) {
 				t.Helper()
@@ -74,8 +77,8 @@ func TestFailedCheckCommitDoesNotAdvanceState(t *testing.T) {
 			if err != nil || st.ConsecFails != 1 {
 				t.Fatalf("failed result counted or blocked retry: %+v %v", st, err)
 			}
-			if events := drainEvents(p); len(events) != 0 {
-				t.Fatalf("threshold reached before two commits: %v", events)
+			if events := drainEvents(p); len(events) != 1 || countEvents(events, "cert.changed") != 1 {
+				t.Fatalf("first commit should notify only the certificate change: %v", events)
 			}
 			apply(now, false)
 			if events := drainEvents(p); countEvents(events, "incident.created") != 1 {
