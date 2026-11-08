@@ -55,12 +55,6 @@ func MergeSecrets(updated, old json.RawMessage, keys []string, clear map[string]
 	return redact.MergeSecrets(updated, old, keys, clear)
 }
 
-// StoredSecrets reports which of the given secret keys hold a value in raw.
-func StoredSecrets(raw json.RawMessage, keys []string) map[string]bool {
-	_, set := RedactSettings(raw, keys)
-	return set
-}
-
 // ClearSet reads the "Remove saved value" checkboxes from a submitted form.
 func ClearSet(values []string) map[string]bool {
 	m := make(map[string]bool, len(values))

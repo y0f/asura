@@ -67,10 +67,6 @@ func StatusColor(status string) string {
 	return "text-muted"
 }
 
-func StatusBg(status string) string {
-	return StatusColor(status)
-}
-
 func StatusDot(status string) string {
 	if t := StatusTone(status); t != "neutral" {
 		return "bg-" + t
