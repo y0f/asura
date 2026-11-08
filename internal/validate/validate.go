@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/y0f/asura/internal/cron"
 
@@ -52,21 +53,34 @@ func NotificationEventTypes() []string {
 }
 
 func ValidateEscalationPolicy(ep *storage.EscalationPolicy) error {
-	if strings.TrimSpace(ep.Name) == "" {
+	if ep == nil || strings.TrimSpace(ep.Name) == "" {
 		return fmt.Errorf("name is required")
 	}
 	if len(ep.Name) > 255 {
 		return fmt.Errorf("name must be at most 255 characters")
 	}
+	if len(ep.Description) > 5000 {
+		return fmt.Errorf("description must be at most 5000 characters")
+	}
 	if len(ep.Steps) == 0 {
 		return fmt.Errorf("at least one step is required")
 	}
 	for i, step := range ep.Steps {
-		if step.DelayMinutes < 0 {
-			return fmt.Errorf("step %d: delay_minutes must be >= 0", i+1)
+		if step == nil {
+			return fmt.Errorf("step %d is required", i+1)
+		}
+		if step.DelayMinutes < 0 || int64(step.DelayMinutes) > int64(math.MaxInt64)/int64(time.Minute) {
+			return fmt.Errorf("step %d: delay_minutes must be nonnegative and fit a duration", i+1)
 		}
 		if len(step.NotificationChannelIDs) == 0 {
 			return fmt.Errorf("step %d: at least one notification channel is required", i+1)
+		}
+		seen := make(map[int64]bool, len(step.NotificationChannelIDs))
+		for _, id := range step.NotificationChannelIDs {
+			if id <= 0 || seen[id] {
+				return fmt.Errorf("step %d: channel IDs must be unique and positive", i+1)
+			}
+			seen[id] = true
 		}
 	}
 	return nil

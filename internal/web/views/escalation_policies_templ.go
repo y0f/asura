@@ -326,7 +326,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					if p.Can("notifications.read") {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div><div class=\"form-label\">Steps</div><div class=\"space-y-2\"><template x-for=\"(step, idx) in formData.steps\" :key=\"idx\"><fieldset class=\"rounded-control border border-line-light p-3 space-y-3\"><div class=\"flex items-center justify-between\"><legend class=\"text-sm font-medium text-white\" x-text=\"'Step ' + (idx + 1)\"></legend><div class=\"flex items-center gap-0.5\"><button type=\"button\" @click=\"moveStep(idx, -1)\" x-show=\"idx > 0\" aria-label=\"Move step up\" title=\"Move up\" class=\"row-action\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m18 15-6-6-6 6\"></path></svg></button> <button type=\"button\" @click=\"moveStep(idx, 1)\" x-show=\"idx < formData.steps.length - 1\" aria-label=\"Move step down\" title=\"Move down\" class=\"row-action\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m6 9 6 6 6-6\"></path></svg></button> <button type=\"button\" @click=\"removeStep(idx)\" aria-label=\"Remove step\" title=\"Remove\" class=\"row-action hover:text-crit!\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<input type=\"hidden\" name=\"steps_present\" value=\"1\"><div><div class=\"form-label\">Steps</div><div class=\"space-y-2\"><template x-for=\"(step, idx) in formData.steps\" :key=\"idx\"><fieldset class=\"rounded-control border border-line-light p-3 space-y-3\"><div class=\"flex items-center justify-between\"><legend class=\"text-sm font-medium text-white\" x-text=\"'Step ' + (idx + 1)\"></legend><div class=\"flex items-center gap-0.5\"><button type=\"button\" @click=\"moveStep(idx, -1)\" x-show=\"idx > 0\" aria-label=\"Move step up\" title=\"Move up\" class=\"row-action\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m18 15-6-6-6 6\"></path></svg></button> <button type=\"button\" @click=\"moveStep(idx, 1)\" x-show=\"idx < formData.steps.length - 1\" aria-label=\"Move step down\" title=\"Move down\" class=\"row-action\"><svg focusable=\"false\" aria-hidden=\"true\" class=\"w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m6 9 6 6 6-6\"></path></svg></button> <button type=\"button\" @click=\"removeStep(idx)\" aria-label=\"Remove step\" title=\"Remove\" class=\"row-action hover:text-crit!\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -346,7 +346,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 							var templ_7745c5c3_Var13 string
 							templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("step.channel_ids.includes(%d) && 'border-brand'", ch.ID)).Resolve(ctx)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 148, Col: 244}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 149, Col: 244}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 							if templ_7745c5c3_Err != nil {
@@ -359,7 +359,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 							var templ_7745c5c3_Var14 string
 							templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("step.channel_ids.includes(%d)", ch.ID)).Resolve(ctx)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 149, Col: 100}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 150, Col: 100}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 							if templ_7745c5c3_Err != nil {
@@ -372,7 +372,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 							var templ_7745c5c3_Var15 string
 							templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("toggleChannel(idx, %d)", ch.ID)).Resolve(ctx)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 149, Col: 157}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 150, Col: 157}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 							if templ_7745c5c3_Err != nil {
@@ -385,7 +385,7 @@ func EscalationPolicyListPage(p EscalationPolicyListParams) templ.Component {
 							var templ_7745c5c3_Var16 string
 							templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(ch.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 150, Col: 49}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/escalation_policies.templ`, Line: 151, Col: 49}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 							if templ_7745c5c3_Err != nil {

@@ -86,7 +86,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 		mux.Handle("POST "+s.p("/notifications/{id}/test"), webPerm(s.web.NotificationTest, "notifications.test"))
 
 		mux.Handle("GET "+s.p("/escalation-policies"), webPerm(s.web.EscalationPolicies, "escalation_policies.read"))
-		mux.Handle("POST "+s.p("/escalation-policies"), webPerm(s.web.EscalationPolicyCreate, "escalation_policies.create"))
+		mux.Handle("POST "+s.p("/escalation-policies"), webPerm(s.web.EscalationPolicyCreate, "escalation_policies.create", "notifications.read"))
 		mux.Handle("POST "+s.p("/escalation-policies/{id}"), webPerm(s.web.EscalationPolicyUpdate, "escalation_policies.update"))
 		mux.Handle("POST "+s.p("/escalation-policies/{id}/delete"), webPerm(s.web.EscalationPolicyDelete, "escalation_policies.delete"))
 
@@ -194,7 +194,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.Handle("GET "+s.p("/api/v1/escalation-policies"), apiPerm(s.api.ListEscalationPolicies, "escalation_policies.read"))
 	mux.Handle("GET "+s.p("/api/v1/escalation-policies/{id}"), apiPerm(s.api.GetEscalationPolicy, "escalation_policies.read"))
-	mux.Handle("POST "+s.p("/api/v1/escalation-policies"), apiPerm(s.api.CreateEscalationPolicy, "escalation_policies.create"))
+	mux.Handle("POST "+s.p("/api/v1/escalation-policies"), apiPerm(s.api.CreateEscalationPolicy, "escalation_policies.create", "notifications.read"))
 	mux.Handle("PUT "+s.p("/api/v1/escalation-policies/{id}"), apiPerm(s.api.UpdateEscalationPolicy, "escalation_policies.update"))
 	mux.Handle("DELETE "+s.p("/api/v1/escalation-policies/{id}"), apiPerm(s.api.DeleteEscalationPolicy, "escalation_policies.delete"))
 

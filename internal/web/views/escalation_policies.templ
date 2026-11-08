@@ -117,6 +117,7 @@ templ EscalationPolicyListPage(p EscalationPolicyListParams) {
 							</label>
 						</div>
 						if p.Can("notifications.read") {
+							<input type="hidden" name="steps_present" value="1"/>
 							<div>
 								<div class="form-label">Steps</div>
 								<div class="space-y-2">

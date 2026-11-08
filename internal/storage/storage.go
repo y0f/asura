@@ -198,6 +198,7 @@ type Store interface {
 
 	// Escalation policies
 	CreateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error
+	SaveEscalationPolicy(ctx context.Context, id int64, prepare EscalationPolicyPrepare) (*EscalationPolicy, error)
 	GetEscalationPolicy(ctx context.Context, id int64) (*EscalationPolicy, error)
 	ListEscalationPolicies(ctx context.Context) ([]*EscalationPolicy, error)
 	UpdateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error

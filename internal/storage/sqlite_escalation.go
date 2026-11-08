@@ -2,33 +2,49 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 )
 
-func (s *SQLiteStore) CreateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error {
+type escalationDB interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func writeEscalationPolicy(ctx context.Context, db escalationDB, ep *EscalationPolicy, create bool) error {
 	now := formatTime(time.Now())
-	id, err := insertID(ctx, s.writeDB,
-		`INSERT INTO escalation_policies (name, description, enabled, repeat, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		ep.Name, ep.Description, boolToInt(ep.Enabled), boolToInt(ep.Repeat), now, now)
-	if err != nil {
-		return fmt.Errorf("create escalation policy: %w", err)
+	if create {
+		err := db.QueryRowContext(ctx, `INSERT INTO escalation_policies (name,description,enabled,repeat,created_at,updated_at) VALUES (?,?,?,?,?,?) RETURNING id`, ep.Name, ep.Description, boolToInt(ep.Enabled), boolToInt(ep.Repeat), now, now).Scan(&ep.ID)
+		if err != nil {
+			return err
+		}
+		ep.CreatedAt = parseTime(now)
+	} else {
+		res, err := db.ExecContext(ctx, `UPDATE escalation_policies SET name=?,description=?,enabled=?,repeat=?,updated_at=? WHERE id=?`, ep.Name, ep.Description, boolToInt(ep.Enabled), boolToInt(ep.Repeat), now, ep.ID)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n != 1 {
+			return sql.ErrNoRows
+		}
 	}
-	ep.ID = id
-	ep.CreatedAt = parseTime(now)
 	ep.UpdatedAt = parseTime(now)
 	return nil
 }
 
-func (s *SQLiteStore) GetEscalationPolicy(ctx context.Context, id int64) (*EscalationPolicy, error) {
+func (s *SQLStore) CreateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error {
+	return writeEscalationPolicy(ctx, s.writeDB, ep, true)
+}
+
+func getEscalationPolicy(ctx context.Context, db escalationDB, id int64) (*EscalationPolicy, error) {
 	var ep EscalationPolicy
 	var createdAt, updatedAt string
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT id, name, description, enabled, repeat, created_at, updated_at
-		 FROM escalation_policies WHERE id=?`, id).
-		Scan(&ep.ID, &ep.Name, &ep.Description, &ep.Enabled, &ep.Repeat, &createdAt, &updatedAt)
+	err := db.QueryRowContext(ctx, `SELECT id,name,description,enabled,repeat,created_at,updated_at FROM escalation_policies WHERE id=?`, id).Scan(&ep.ID, &ep.Name, &ep.Description, &ep.Enabled, &ep.Repeat, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -36,106 +52,156 @@ func (s *SQLiteStore) GetEscalationPolicy(ctx context.Context, id int64) (*Escal
 	ep.UpdatedAt = parseTime(updatedAt)
 	return &ep, nil
 }
-
-func (s *SQLiteStore) ListEscalationPolicies(ctx context.Context) ([]*EscalationPolicy, error) {
-	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, description, enabled, repeat, created_at, updated_at
-		 FROM escalation_policies ORDER BY id`)
+func (s *SQLStore) GetEscalationPolicy(ctx context.Context, id int64) (*EscalationPolicy, error) {
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tx.Rollback()
+	return loadEscalationPolicy(ctx, tx, id)
+}
 
-	var policies []*EscalationPolicy
+func loadEscalationPolicy(ctx context.Context, db escalationDB, id int64) (*EscalationPolicy, error) {
+	policy, err := getEscalationPolicy(ctx, db, id)
+	if err != nil {
+		return nil, err
+	}
+	policy.Steps, err = getEscalationPolicySteps(ctx, db, &id)
+	if err != nil {
+		return nil, err
+	}
+	return policy, nil
+}
+
+func (s *SQLStore) ListEscalationPolicies(ctx context.Context) ([]*EscalationPolicy, error) {
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT id,name,description,enabled,repeat,created_at,updated_at FROM escalation_policies ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	policies := []*EscalationPolicy{}
+	byID := map[int64]*EscalationPolicy{}
 	for rows.Next() {
 		var ep EscalationPolicy
 		var createdAt, updatedAt string
 		if err := rows.Scan(&ep.ID, &ep.Name, &ep.Description, &ep.Enabled, &ep.Repeat, &createdAt, &updatedAt); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		ep.CreatedAt = parseTime(createdAt)
 		ep.UpdatedAt = parseTime(updatedAt)
+		ep.Steps = []*EscalationPolicyStep{}
 		policies = append(policies, &ep)
+		byID[ep.ID] = &ep
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return nil, err
 	}
-	if policies == nil {
-		policies = []*EscalationPolicy{}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if len(policies) == 0 {
+		return policies, nil
+	}
+	steps, err := getEscalationPolicySteps(ctx, tx, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, step := range steps {
+		if policy := byID[step.PolicyID]; policy != nil {
+			policy.Steps = append(policy.Steps, step)
+		}
 	}
 	return policies, nil
 }
 
-func (s *SQLiteStore) UpdateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error {
-	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE escalation_policies SET name=?, description=?, enabled=?, repeat=?, updated_at=? WHERE id=?`,
-		ep.Name, ep.Description, boolToInt(ep.Enabled), boolToInt(ep.Repeat), now, ep.ID)
-	return err
+func (s *SQLStore) UpdateEscalationPolicy(ctx context.Context, ep *EscalationPolicy) error {
+	return writeEscalationPolicy(ctx, s.writeDB, ep, false)
+}
+func (s *SQLStore) DeleteEscalationPolicy(ctx context.Context, id int64) error {
+	res, err := s.writeDB.ExecContext(ctx, "DELETE FROM escalation_policies WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
-func (s *SQLiteStore) DeleteEscalationPolicy(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM escalation_policies WHERE id=?", id)
-	return err
-}
-
-func (s *SQLiteStore) GetEscalationPolicySteps(ctx context.Context, policyID int64) ([]*EscalationPolicyStep, error) {
-	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, policy_id, step_order, delay_minutes, notification_channel_ids
-		 FROM escalation_policy_steps WHERE policy_id=? ORDER BY step_order`, policyID)
+func getEscalationPolicySteps(ctx context.Context, db escalationDB, policyID *int64) ([]*EscalationPolicyStep, error) {
+	query := `SELECT id,policy_id,step_order,delay_minutes,notification_channel_ids FROM escalation_policy_steps`
+	var args []any
+	if policyID != nil {
+		query += " WHERE policy_id=?"
+		args = append(args, *policyID)
+	}
+	rows, err := db.QueryContext(ctx, query+" ORDER BY policy_id,step_order,id", args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var steps []*EscalationPolicyStep
+	steps := []*EscalationPolicyStep{}
 	for rows.Next() {
 		var st EscalationPolicyStep
-		var channelIDsStr string
-		if err := rows.Scan(&st.ID, &st.PolicyID, &st.StepOrder, &st.DelayMinutes, &channelIDsStr); err != nil {
+		var channelIDs string
+		if err := rows.Scan(&st.ID, &st.PolicyID, &st.StepOrder, &st.DelayMinutes, &channelIDs); err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(channelIDsStr), &st.NotificationChannelIDs)
+		if err := json.Unmarshal([]byte(channelIDs), &st.NotificationChannelIDs); err != nil {
+			return nil, fmt.Errorf("invalid stored escalation channels: %w", err)
+		}
 		if st.NotificationChannelIDs == nil {
 			st.NotificationChannelIDs = []int64{}
 		}
 		steps = append(steps, &st)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if steps == nil {
-		steps = []*EscalationPolicyStep{}
-	}
-	return steps, nil
+	return steps, rows.Err()
+}
+func (s *SQLStore) GetEscalationPolicySteps(ctx context.Context, id int64) ([]*EscalationPolicyStep, error) {
+	return getEscalationPolicySteps(ctx, s.readDB, &id)
 }
 
-func (s *SQLiteStore) ReplaceEscalationPolicySteps(ctx context.Context, policyID int64, steps []*EscalationPolicyStep) error {
+func replaceEscalationPolicySteps(ctx context.Context, tx *sqlTransaction, id int64, steps []*EscalationPolicyStep) ([]*EscalationPolicyStep, error) {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM escalation_policy_steps WHERE policy_id=?`, id); err != nil {
+		return nil, err
+	}
+	saved := make([]*EscalationPolicyStep, 0, len(steps))
+	for i, step := range steps {
+		if step == nil {
+			return nil, ErrInvalidEscalationChannels
+		}
+		channels, err := json.Marshal(step.NotificationChannelIDs)
+		if err != nil {
+			return nil, err
+		}
+		copy := *step
+		err = tx.QueryRowContext(ctx, `INSERT INTO escalation_policy_steps (policy_id,step_order,delay_minutes,notification_channel_ids) VALUES (?,?,?,?) RETURNING id`, id, i, step.DelayMinutes, string(channels)).Scan(&copy.ID)
+		if err != nil {
+			return nil, err
+		}
+		copy.PolicyID = id
+		copy.StepOrder = i
+		saved = append(saved, &copy)
+	}
+	return saved, nil
+}
+func (s *SQLStore) ReplaceEscalationPolicySteps(ctx context.Context, id int64, steps []*EscalationPolicyStep) error {
 	tx, err := s.writeDB.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("replace escalation steps begin: %w", err)
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM escalation_policy_steps WHERE policy_id=?`, policyID); err != nil {
 		return err
 	}
-
-	if len(steps) > 0 {
-		stmt, err := tx.PrepareContext(ctx,
-			`INSERT INTO escalation_policy_steps (policy_id, step_order, delay_minutes, notification_channel_ids) VALUES (?, ?, ?, ?)`)
-		if err != nil {
-			return err
-		}
-		defer stmt.Close()
-		for _, st := range steps {
-			channelIDs, _ := json.Marshal(st.NotificationChannelIDs)
-			if _, err := stmt.ExecContext(ctx, policyID, st.StepOrder, st.DelayMinutes, string(channelIDs)); err != nil {
-				return err
-			}
-		}
+	defer tx.Rollback()
+	if _, err := replaceEscalationPolicySteps(ctx, tx, id, steps); err != nil {
+		return err
 	}
-
 	return tx.Commit()
 }
 

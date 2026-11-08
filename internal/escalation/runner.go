@@ -97,11 +97,7 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 		return
 	}
 
-	steps, err := r.store.GetEscalationPolicySteps(ctx, state.PolicyID)
-	if err != nil {
-		r.logger.Error("escalation: get steps", "error", err, "policy_id", state.PolicyID)
-		return
-	}
+	steps := policy.Steps
 
 	if state.CurrentStep >= len(steps) {
 		if policy.Repeat && len(steps) > 0 {
@@ -193,10 +189,7 @@ func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Moni
 		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
-	steps, err := store.GetEscalationPolicySteps(ctx, policy.ID)
-	if err != nil {
-		return err
-	}
+	steps := policy.Steps
 	if len(steps) == 0 {
 		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}

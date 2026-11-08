@@ -7,7 +7,6 @@ import (
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
 )
 
 func (h *Handler) ListEscalationPolicies(w http.ResponseWriter, r *http.Request) {
@@ -17,14 +16,7 @@ func (h *Handler) ListEscalationPolicies(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "failed to list escalation policies")
 		return
 	}
-	for _, ep := range policies {
-		steps, err := h.store.GetEscalationPolicySteps(r.Context(), ep.ID)
-		if err != nil {
-			h.logger.Error("get escalation steps", "error", err, "policy_id", ep.ID)
-			continue
-		}
-		ep.Steps = steps
-	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"data": policies})
 }
 
@@ -44,38 +36,12 @@ func (h *Handler) GetEscalationPolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get escalation policy")
 		return
 	}
-	ep.Steps, _ = h.store.GetEscalationPolicySteps(r.Context(), ep.ID)
+
 	writeJSON(w, http.StatusOK, ep)
 }
 
 func (h *Handler) CreateEscalationPolicy(w http.ResponseWriter, r *http.Request) {
-	var ep storage.EscalationPolicy
-	if err := h.readJSON(r, &ep); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := validate.ValidateEscalationPolicy(&ep); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.store.CreateEscalationPolicy(r.Context(), &ep); err != nil {
-		h.logger.Error("create escalation policy", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to create escalation policy")
-		return
-	}
-	if len(ep.Steps) > 0 {
-		for i := range ep.Steps {
-			ep.Steps[i].StepOrder = i
-		}
-		if err := h.store.ReplaceEscalationPolicySteps(r.Context(), ep.ID, ep.Steps); err != nil {
-			h.logger.Error("create escalation steps", "error", err)
-			writeError(w, http.StatusInternalServerError, "failed to create escalation steps")
-			return
-		}
-	}
-	ep.Steps, _ = h.store.GetEscalationPolicySteps(r.Context(), ep.ID)
-	h.audit(r, "create", "escalation_policy", ep.ID, "")
-	writeJSON(w, http.StatusCreated, ep)
+	h.saveEscalationPolicy(w, r, 0)
 }
 
 func (h *Handler) UpdateEscalationPolicy(w http.ResponseWriter, r *http.Request) {
@@ -84,41 +50,43 @@ func (h *Handler) UpdateEscalationPolicy(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, err := h.store.GetEscalationPolicy(r.Context(), id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	h.saveEscalationPolicy(w, r, id)
+}
+
+func (h *Handler) saveEscalationPolicy(w http.ResponseWriter, r *http.Request, id int64) {
+	var input httputil.EscalationPolicyInput
+	if err := h.readJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	key := httputil.GetAPIKey(r.Context())
+	saved, err := h.store.SaveEscalationPolicy(r.Context(), id, func(current *storage.EscalationPolicy) (*storage.EscalationPolicy, error) {
+		return input.Apply(current, key.HasPermission("notifications.read"))
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
 			writeError(w, http.StatusNotFound, "escalation policy not found")
-			return
+		case errors.Is(err, httputil.ErrEscalationChannelPermission):
+			writeError(w, http.StatusForbidden, err.Error())
+		case errors.Is(err, httputil.ErrInvalidEscalationPolicy), errors.Is(err, storage.ErrInvalidEscalationChannels):
+			writeError(w, http.StatusBadRequest, err.Error())
+		default:
+			h.logger.Error("save escalation policy", "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to save escalation policy")
 		}
-		h.logger.Error("get escalation policy for update", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get escalation policy")
 		return
 	}
-	var ep storage.EscalationPolicy
-	if err := h.readJSON(r, &ep); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	status, action := http.StatusOK, "update"
+	if id == 0 {
+		status, action = http.StatusCreated, "create"
+	}
+	h.audit(r, action, "escalation_policy", saved.ID, "")
+	if !key.HasPermission("escalation_policies.read") {
+		writeJSON(w, status, map[string]int64{"id": saved.ID})
 		return
 	}
-	ep.ID = id
-	if err := validate.ValidateEscalationPolicy(&ep); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.store.UpdateEscalationPolicy(r.Context(), &ep); err != nil {
-		h.logger.Error("update escalation policy", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to update escalation policy")
-		return
-	}
-	for i := range ep.Steps {
-		ep.Steps[i].StepOrder = i
-	}
-	if err := h.store.ReplaceEscalationPolicySteps(r.Context(), ep.ID, ep.Steps); err != nil {
-		h.logger.Error("replace escalation steps", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to update escalation steps")
-		return
-	}
-	ep.Steps, _ = h.store.GetEscalationPolicySteps(r.Context(), ep.ID)
-	h.audit(r, "update", "escalation_policy", ep.ID, "")
-	writeJSON(w, http.StatusOK, ep)
+	writeJSON(w, status, saved)
 }
 
 func (h *Handler) DeleteEscalationPolicy(w http.ResponseWriter, r *http.Request) {
@@ -127,16 +95,12 @@ func (h *Handler) DeleteEscalationPolicy(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, err := h.store.GetEscalationPolicy(r.Context(), id); err != nil {
+
+	if err := h.store.DeleteEscalationPolicy(r.Context(), id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "escalation policy not found")
 			return
 		}
-		h.logger.Error("get escalation policy for delete", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get escalation policy")
-		return
-	}
-	if err := h.store.DeleteEscalationPolicy(r.Context(), id); err != nil {
 		h.logger.Error("delete escalation policy", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete escalation policy")
 		return

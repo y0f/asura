@@ -41,7 +41,7 @@ func permissionRoutes() []permissionRoute {
 		{"status_pages", "status-pages"}, {"on_call", "on-call"}, {"agents", "agents"},
 	} {
 		createScopes := []string{resource.scope + ".create"}
-		if resource.scope == "on_call" {
+		if resource.scope == "on_call" || resource.scope == "escalation_policies" {
 			createScopes = append(createScopes, "notifications.read")
 		}
 		add(false, "POST", "/api/v1/"+resource.path, createScopes...)

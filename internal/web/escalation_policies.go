@@ -1,14 +1,15 @@
 package web
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/y0f/asura/internal/httputil"
 	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
 	"github.com/y0f/asura/internal/web/views"
 )
 
@@ -16,16 +17,19 @@ func (h *Handler) EscalationPolicies(w http.ResponseWriter, r *http.Request) {
 	policies, err := h.store.ListEscalationPolicies(r.Context())
 	if err != nil {
 		h.logger.Error("web: list escalation policies", "error", err)
+		http.Error(w, "Failed to load escalation policies", http.StatusInternalServerError)
+		return
 	}
-	for _, ep := range policies {
-		steps, err := h.store.GetEscalationPolicySteps(r.Context(), ep.ID)
+
+	var channels []*storage.NotificationChannel
+	if httputil.GetAPIKey(r.Context()).HasPermission("notifications.read") {
+		channels, err = h.store.ListNotificationChannels(r.Context())
 		if err != nil {
-			h.logger.Error("web: get escalation steps", "error", err, "policy_id", ep.ID)
-			continue
+			h.logger.Error("web: escalation channel choices", "error", err)
+			http.Error(w, "Failed to load notification channels", http.StatusInternalServerError)
+			return
 		}
-		ep.Steps = steps
 	}
-	channels, _ := h.store.ListNotificationChannels(r.Context())
 
 	lp := h.newLayoutParams(r, "Escalation Policies", "escalation-policies")
 	h.renderComponent(w, r, views.EscalationPolicyListPage(views.EscalationPolicyListParams{
@@ -36,103 +40,108 @@ func (h *Handler) EscalationPolicies(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) EscalationPolicyCreate(w http.ResponseWriter, r *http.Request) {
-	ep, steps := h.parseEscalationPolicyForm(r)
-
-	if err := validate.ValidateEscalationPolicy(ep); err != nil {
-		h.setError(w, err.Error())
-		h.redirect(w, r, "/escalation-policies")
-		return
-	}
-
-	if err := h.store.CreateEscalationPolicy(r.Context(), ep); err != nil {
-		h.logger.Error("web: create escalation policy", "error", err)
-		h.setError(w, "Failed to create escalation policy")
-		h.redirect(w, r, "/escalation-policies")
-		return
-	}
-
-	if err := h.store.ReplaceEscalationPolicySteps(r.Context(), ep.ID, steps); err != nil {
-		h.logger.Error("web: create escalation steps", "error", err)
-	}
-
-	h.setFlash(w, "Escalation policy created")
-	h.redirect(w, r, "/escalation-policies")
+	h.saveEscalationPolicy(w, r, 0)
 }
 
 func (h *Handler) EscalationPolicyUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/escalation-policies")
+		http.Error(w, "Invalid policy ID", http.StatusBadRequest)
 		return
 	}
+	h.saveEscalationPolicy(w, r, id)
+}
 
-	ep, steps := h.parseEscalationPolicyForm(r)
-	ep.ID = id
-
-	if err := validate.ValidateEscalationPolicy(ep); err != nil {
-		h.setError(w, err.Error())
-		h.redirect(w, r, "/escalation-policies")
+func (h *Handler) saveEscalationPolicy(w http.ResponseWriter, r *http.Request, id int64) {
+	input, err := parseEscalationPolicyForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	if err := h.store.UpdateEscalationPolicy(r.Context(), ep); err != nil {
-		h.logger.Error("web: update escalation policy", "error", err)
-		h.setError(w, "Failed to update escalation policy")
-		h.redirect(w, r, "/escalation-policies")
+	key := httputil.GetAPIKey(r.Context())
+	saved, err := h.store.SaveEscalationPolicy(r.Context(), id, func(current *storage.EscalationPolicy) (*storage.EscalationPolicy, error) {
+		return input.Apply(current, key.HasPermission("notifications.read"))
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			http.NotFound(w, r)
+		case errors.Is(err, httputil.ErrEscalationChannelPermission):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case errors.Is(err, httputil.ErrInvalidEscalationPolicy), errors.Is(err, storage.ErrInvalidEscalationChannels):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			h.logger.Error("web: save escalation policy", "error", err)
+			http.Error(w, "Failed to save escalation policy", http.StatusInternalServerError)
+		}
 		return
 	}
-
-	if err := h.store.ReplaceEscalationPolicySteps(r.Context(), ep.ID, steps); err != nil {
-		h.logger.Error("web: replace escalation steps", "error", err)
+	if id == 0 {
+		h.audit(r, "create", "escalation_policy", saved.ID, "")
+		h.setFlash(w, "Escalation policy created")
+	} else {
+		h.audit(r, "update", "escalation_policy", saved.ID, "")
+		h.setFlash(w, "Escalation policy updated")
 	}
-
-	h.setFlash(w, "Escalation policy updated")
-	h.redirect(w, r, "/escalation-policies")
+	h.escalationRedirect(w, r)
 }
 
 func (h *Handler) EscalationPolicyDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/escalation-policies")
+		http.Error(w, "Invalid policy ID", http.StatusBadRequest)
 		return
 	}
 	if err := h.store.DeleteEscalationPolicy(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete escalation policy", "error", err)
+		http.Error(w, "Failed to delete escalation policy", http.StatusInternalServerError)
+		return
 	}
+	h.audit(r, "delete", "escalation_policy", id, "")
 	h.setFlash(w, "Escalation policy deleted")
-	h.redirect(w, r, "/escalation-policies")
+	h.escalationRedirect(w, r)
 }
 
-func (h *Handler) parseEscalationPolicyForm(r *http.Request) (*storage.EscalationPolicy, []*storage.EscalationPolicyStep) {
-	r.ParseForm()
-
-	ep := &storage.EscalationPolicy{
-		Name:        strings.TrimSpace(r.FormValue("name")),
-		Description: strings.TrimSpace(r.FormValue("description")),
-		Enabled:     r.FormValue("enabled") == "on",
-		Repeat:      r.FormValue("repeat") == "on",
+func (h *Handler) escalationRedirect(w http.ResponseWriter, r *http.Request) {
+	lp := h.newLayoutParams(r, "", "")
+	if lp.Can("escalation_policies.read") {
+		h.redirect(w, r, "/escalation-policies")
+		return
 	}
+	lp.BasePath = ""
+	h.redirect(w, r, lp.HomePath())
+}
 
-	var steps []*storage.EscalationPolicyStep
-	delays := r.Form["step_delay_minutes[]"]
-	channelsJSON := r.Form["step_channels[]"]
-
-	for i := range delays {
-		delay, _ := strconv.Atoi(delays[i])
-		var channelIDs []int64
-		if i < len(channelsJSON) {
-			json.Unmarshal([]byte(channelsJSON[i]), &channelIDs)
-		}
-		if len(channelIDs) == 0 {
-			continue
-		}
-		steps = append(steps, &storage.EscalationPolicyStep{
-			StepOrder:              len(steps),
-			DelayMinutes:           delay,
-			NotificationChannelIDs: channelIDs,
-		})
+func parseEscalationPolicyForm(r *http.Request) (httputil.EscalationPolicyInput, error) {
+	var input httputil.EscalationPolicyInput
+	if err := r.ParseForm(); err != nil {
+		return input, fmt.Errorf("invalid form")
 	}
-
-	ep.Steps = steps
-	return ep, steps
+	name, description := r.FormValue("name"), r.FormValue("description")
+	enabled, repeat := r.FormValue("enabled") == "on", r.FormValue("repeat") == "on"
+	input.Name, input.Description, input.Enabled, input.Repeat = &name, &description, &enabled, &repeat
+	delays, channels := r.Form["step_delay_minutes[]"], r.Form["step_channels[]"]
+	if r.Form.Has("steps_present") || r.Form.Has("step_delay_minutes[]") || r.Form.Has("step_channels[]") {
+		if len(delays) != len(channels) {
+			return input, fmt.Errorf("each escalation step must include a delay and channel selection")
+		}
+		steps := make([]*storage.EscalationPolicyStep, len(delays))
+		for i, value := range delays {
+			delay, err := strconv.Atoi(value)
+			if err != nil {
+				return input, fmt.Errorf("step %d has an invalid delay", i+1)
+			}
+			var ids []int64
+			if err := json.Unmarshal([]byte(channels[i]), &ids); err != nil {
+				return input, fmt.Errorf("step %d has invalid channel IDs", i+1)
+			}
+			steps[i] = &storage.EscalationPolicyStep{DelayMinutes: delay, NotificationChannelIDs: ids}
+		}
+		input.Steps = &steps
+	}
+	return input, nil
 }
