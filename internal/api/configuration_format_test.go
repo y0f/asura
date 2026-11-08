@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/internal/validate"
 )
 
 func transferMonitor() *storage.Monitor {
@@ -173,11 +174,11 @@ func TestConfigurationMultiStepVariableURLsRemainPortable(t *testing.T) {
 	m := transferMonitor()
 	m.Type = "http_multi"
 	m.Settings = json.RawMessage(`{"steps":[{"url":"https://example.test","extract_var":"next","extract_json":"next"},{"url":"{{next}}/result"}]}`)
-	if err := validateImportedMonitor(m); err != nil {
+	if err := validate.ValidateMonitor(m); err != nil {
 		t.Fatal(err)
 	}
 	m.Settings = json.RawMessage(`{"steps":[{"url":"{{unknown}}/result"}]}`)
-	if err := validateImportedMonitor(m); err == nil {
+	if err := validate.ValidateMonitor(m); err == nil {
 		t.Fatal("undefined extracted variable accepted")
 	}
 }

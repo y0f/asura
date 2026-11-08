@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/y0f/asura/internal/assertion"
 	"github.com/y0f/asura/internal/cron"
 
 	"golang.org/x/net/html"
@@ -90,7 +89,7 @@ func ValidateMonitor(m *storage.Monitor) error {
 		return fmt.Errorf("sla_target must be a finite percentage between 0 and 100")
 	}
 	if m.Type == "heartbeat" || m.Type == "manual" {
-		return nil
+		return validateMonitorLimits(m)
 	}
 	if strings.TrimSpace(m.Target) == "" {
 		return fmt.Errorf("target is required")
@@ -136,44 +135,17 @@ func validateMonitorJSON(m *storage.Monitor) error {
 			return fmt.Errorf("settings must be a valid JSON object")
 		}
 	}
-	if err := validateAssertions(m.Assertions); err != nil {
-		return err
-	}
 	if m.Type == "docker" {
-		return validateDockerSettings(m)
-	}
-	if m.Type == "http" {
-		return validateHTTPSettings(m)
-	}
-	return nil
-}
-
-// validateAssertions validates the monitor assertions JSON. New input must be a
-// ConditionSet object ({operator, groups}); the legacy empty array form ([]) is
-// still accepted since migration v21 wraps non-empty arrays into a ConditionSet.
-func validateAssertions(raw json.RawMessage) error {
-	trimmed := strings.TrimSpace(string(raw))
-	if trimmed == "" || trimmed == "[]" || trimmed == "{}" || trimmed == "null" {
-		return nil
-	}
-	if trimmed[0] != '{' {
-		return fmt.Errorf("assertions must be a condition set object")
-	}
-	var cs assertion.ConditionSet
-	dec := json.NewDecoder(strings.NewReader(trimmed))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cs); err != nil {
-		return fmt.Errorf("assertions must be a valid condition set object")
-	}
-	if cs.Operator != "" && cs.Operator != "and" && cs.Operator != "or" {
-		return fmt.Errorf("assertions operator must be 'and' or 'or'")
-	}
-	for _, g := range cs.Groups {
-		if g.Operator != "" && g.Operator != "and" && g.Operator != "or" {
-			return fmt.Errorf("assertions group operator must be 'and' or 'or'")
+		if err := validateDockerSettings(m); err != nil {
+			return err
 		}
 	}
-	return nil
+	if m.Type == "http" {
+		if err := validateHTTPSettings(m); err != nil {
+			return err
+		}
+	}
+	return validateMonitorConfiguration(m)
 }
 
 func validateHTTPSettings(m *storage.Monitor) error {
@@ -276,7 +248,7 @@ func ValidateNotificationChannel(ch *storage.NotificationChannel) error {
 			return fmt.Errorf("invalid event: %s", ev)
 		}
 	}
-	return nil
+	return validateNotificationSettings(ch)
 }
 
 var _hexColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
