@@ -33,6 +33,11 @@ Automatic notification channels and public status-page subscriber deliveries use
 
 The original evidence remains stored and can be inspected through the authenticated API and web interface with the matching resource read permission and scoped `diagnostics.read`. There is no automatic raw-diagnostic delivery option. Notification history exposes a generic delivery failure instead of provider error text, which can contain credentials or private URLs.
 
+HTTP notification channels and subscriber webhooks require a successful 2xx response.
+They do not follow redirects: provider credentials and signed payloads stay at the
+configured endpoint. Configure the final HTTPS URL directly; a redirect response is
+recorded as a failed delivery.
+
 ## Webhook {#webhook}
 
 ```

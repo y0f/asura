@@ -335,7 +335,7 @@ func (n *SubscriberNotifier) sendSubscriberWebhook(ctx context.Context, sub *sto
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
 	return nil

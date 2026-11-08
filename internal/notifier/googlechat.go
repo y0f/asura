@@ -49,7 +49,7 @@ func (s *GoogleChatSender) Send(ctx context.Context, channel *storage.Notificati
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("googlechat returned status %d", resp.StatusCode)
 	}
 	return nil

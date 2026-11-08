@@ -1,6 +1,7 @@
 package notifier
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -33,6 +34,12 @@ func newHTTPClient(allowPrivate bool) *http.Client {
 func buildHTTPClient(allowPrivate bool) *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,
+		// Provider credentials and signed payloads belong to the configured
+		// endpoint. Redirects can forward custom authentication headers or turn
+		// a POST into a successful GET without delivering the notification.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return errors.New("notification redirects are not allowed")
+		},
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
 				Timeout: 10 * time.Second,

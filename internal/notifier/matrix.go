@@ -67,7 +67,7 @@ func (s *MatrixSender) Send(ctx context.Context, channel *storage.NotificationCh
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("matrix returned status %d", resp.StatusCode)
 	}
 	return nil

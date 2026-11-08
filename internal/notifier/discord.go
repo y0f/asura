@@ -73,7 +73,7 @@ func (s *DiscordSender) Send(ctx context.Context, channel *storage.NotificationC
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("discord returned status %d", resp.StatusCode)
 	}
 
