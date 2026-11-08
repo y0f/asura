@@ -349,7 +349,7 @@ With a 200 or 201 status and a JSON `status` field of `ok`, this example is up b
 
 ### SMTP {#smtp}
 
-Checks mail server availability via the EHLO handshake. If an expected banner is configured, the server's greeting must contain that string or the check fails. Supports STARTTLS. Configurable port (25, 465, 587).
+Checks mail server availability through a plaintext greeting and EHLO handshake, with optional STARTTLS. The port is configurable and defaults to 25. If an expected banner is configured, the greeting must contain it. Greeting lines are limited to 512 bytes and the complete greeting to 64 KiB; total incoming traffic, including STARTTLS records and later replies, is limited to 1 MiB per check. Exceeding a limit fails the check.
 
 ### SSH {#ssh}
 
@@ -357,7 +357,7 @@ Connects to an SSH server and requires a complete, syntactically valid identific
 
 ### Redis {#redis}
 
-Sends PING via the RESP protocol and expects PONG. Supports optional AUTH password. Default port 6379.
+Sends PING via the RESP protocol and requires the complete `+PONG` reply. Optional password authentication requires the complete `+OK` reply. Both use CRLF line endings and a 4 KiB reply limit. The default port is 6379.
 
 ### PostgreSQL {#postgresql}
 

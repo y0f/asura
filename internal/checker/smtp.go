@@ -6,11 +6,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/smtp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/y0f/asura/internal/model"
@@ -22,6 +24,49 @@ type SMTPChecker struct {
 }
 
 func (c *SMTPChecker) Type() string { return "smtp" }
+
+const maxSMTPResponseBytes = 1 << 20
+
+var errSMTPResponseLimit = errors.New("SMTP response traffic exceeds 1 MiB")
+
+// Bound real inbound traffic, including TLS records after STARTTLS. A limit
+// below net/smtp also covers its internal EHLO/HELO and post-upgrade readers.
+// Return an explicit error rather than EOF so a partial reply cannot succeed.
+type smtpResponseConn struct {
+	net.Conn
+	remaining int
+	exceeded  atomic.Bool
+}
+
+func (c *smtpResponseConn) Read(p []byte) (int, error) {
+	if c.remaining == 0 {
+		c.exceeded.Store(true)
+		return 0, errSMTPResponseLimit
+	}
+	if len(p) > c.remaining {
+		p = p[:c.remaining]
+	}
+	n, err := c.Conn.Read(p)
+	c.remaining -= n
+	return n, err
+}
+
+func (c *smtpResponseConn) Write(p []byte) (int, error) {
+	if err := c.check(nil); err != nil {
+		return 0, err
+	}
+	return c.Conn.Write(p)
+}
+
+// bufio.ReadLine can treat bytes before a read error as a complete final line.
+// Check the latched limit after each SMTP operation, including QUIT, so a
+// truncated "250 ..." or "221 ..." reply cannot turn exhaustion into success.
+func (c *smtpResponseConn) check(err error) error {
+	if c.exceeded.Load() {
+		return errSMTPResponseLimit
+	}
+	return err
+}
 
 func (c *SMTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
 	var settings model.SMTPSettings
@@ -50,8 +95,10 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Resul
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("connection failed: %v", err)}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 	conn.SetDeadline(time.Now().Add(timeout))
+	response := &smtpResponseConn{Conn: conn, remaining: maxSMTPResponseBytes}
+	conn = response
 
 	host, _, _ := net.SplitHostPort(target)
 
@@ -70,20 +117,21 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Resul
 	conn = &prefixedConn{Conn: conn, r: io.MultiReader(bytes.NewReader(greeting), reader)}
 
 	client, err := smtp.NewClient(conn, host)
+	err = response.check(err)
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("smtp handshake failed: %v", err)}, nil
 	}
 	defer client.Close()
 
 	ehloHost := "asura"
-	if err := client.Hello(ehloHost); err != nil {
+	if err := response.check(client.Hello(ehloHost)); err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("EHLO failed: %v", err)}, nil
 	}
 
 	if settings.STARTTLS {
 		ok, _ := client.Extension("STARTTLS")
 		if ok {
-			if err := client.StartTLS(&tls.Config{ServerName: host, InsecureSkipVerify: false}); err != nil {
+			if err := response.check(client.StartTLS(&tls.Config{ServerName: host, InsecureSkipVerify: false})); err != nil {
 				return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("STARTTLS failed: %v", err)}, nil
 			}
 		} else {
@@ -91,10 +139,11 @@ func (c *SMTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Resul
 		}
 	}
 
-	elapsed = time.Since(start).Milliseconds()
-	client.Quit()
+	if err := response.check(client.Quit()); err != nil {
+		return &Result{Status: "down", ResponseTime: time.Since(start).Milliseconds(), Message: fmt.Sprintf("QUIT failed: %v", err)}, nil
+	}
 
-	return &Result{Status: "up", ResponseTime: elapsed, Message: "SMTP OK"}, nil
+	return &Result{Status: "up", ResponseTime: time.Since(start).Milliseconds(), Message: "SMTP OK"}, nil
 }
 
 func readSMTPGreeting(reader *bufio.Reader) ([]byte, error) {
