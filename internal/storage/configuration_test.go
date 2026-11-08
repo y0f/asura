@@ -467,10 +467,13 @@ func TestConfigurationAgentJobEligibilitySurvivesFullRoundTrip(t *testing.T) {
 	for _, m := range c.Monitors {
 		m.AgentEnabled, m.AgentIDs = true, []int64{91}
 	}
-	for i, name := range []string{"eligible request data", "unassigned", "delegation disabled"} {
+	for i, name := range []string{"eligible request data", "unassigned", "delegation disabled", "server proxy"} {
 		m := copyMonitorSnapshot(c.Monitors[0])
 		m.ID, m.Name = int64(53+i), name
 		m.Settings = json.RawMessage(`{"headers":{"X-Token":"explicit request data"}}`)
+		if name != "server proxy" {
+			m.ProxyID = nil
+		}
 		if name == "unassigned" {
 			m.AgentIDs = nil
 		}
