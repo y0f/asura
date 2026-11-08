@@ -45,7 +45,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	landing := views.LandingPath(key.PermissionMap())
+	landing := views.LandingPath(key.CapabilityMap())
 	switch landing {
 	case "":
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -257,7 +257,7 @@ func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createSessionAndLogin(w http.ResponseWriter, r *http.Request, apiKey *config.APIKeyConfig, ip string) {
-	landing := views.LandingPath(apiKey.PermissionMap())
+	landing := views.LandingPath(apiKey.CapabilityMap())
 	if landing == "" {
 		h.renderComponent(w, r, views.LoginPage(views.LoginParams{
 			BasePath: h.cfg.Server.BasePath,
@@ -418,12 +418,13 @@ func (h *Handler) RequirePerm(perm string, next http.Handler) http.Handler {
 	return h.RequirePermissions(next, perm)
 }
 
-// RequirePermissions checks every scope and the origin of form submissions.
+// RequirePermissions admits every coarse capability and checks form origins.
+// Handlers must separately authorize each object and current affected targets.
 // With no scopes, the handler must authorize its operation itself.
 func (h *Handler) RequirePermissions(next http.Handler, scopes ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		k := httputil.GetAPIKey(r.Context())
-		if !k.HasAllPermissions(scopes...) {
+		if !k.HasAllCapabilities(scopes...) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
