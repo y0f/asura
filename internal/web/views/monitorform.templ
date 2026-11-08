@@ -127,6 +127,12 @@ func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSO
 	return `{
     monitorType: '` + JSEscapeString(monType) + `',
     dnsServer: '` + JSEscapeString(dnsServer) + `',
+    jsonDNSServer: '` + JSEscapeString(dnsServer) + `',
+    get proxyDNSServer() { return this.advancedSettings ? this.jsonDNSServer : this.dnsServer; },
+    readJSONDNS(text) {
+        try { const value = JSON.parse(text)?.server; this.jsonDNSServer = typeof value === 'string' ? value : ''; }
+        catch { this.jsonDNSServer = ''; }
+    },
     proxyInvalid: false,
     checkProxy(select) {
         this.proxyInvalid = Boolean(select.selectedOptions[0]?.disabled);
@@ -281,7 +287,24 @@ templ MonitorFormPage(p MonitorFormParams) {
 						</div>
 						<div x-show="monitorType !== 'heartbeat' && monitorType !== 'manual'" x-cloak>
 							<label class="form-label" for="target" x-text="monitorType === 'docker' ? 'Container Name / ID' : 'Target'">Target</label>
-							<input id="target" type="text" name="target" value={ p.Monitor.Target } :placeholder="{http:'https://example.com', http_multi:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883', smtp:'mail.example.com', ssh:'host:22', redis:'host:6379', postgresql:'host:5432', udp:'host:port'}[monitorType] || 'https://example.com'" class="form-input"/>
+							<input
+								id="target"
+								type="text"
+								name="target"
+								value={ p.Monitor.Target }
+								:placeholder="{http:'https://example.com', http_multi:'https://example.com', tcp:'host:port', dns:'example.com', icmp:'8.8.8.8', tls:'example.com:443', websocket:'wss://example.com/ws', command:'/usr/bin/check', docker:'container-name', domain:'example.com', grpc:'host:port', mqtt:'broker:1883', smtp:'mail.example.com', ssh:'host:22', redis:'host:6379', postgresql:'host:5432', udp:'host:port'}[monitorType] || 'https://example.com'"
+								class="form-input"
+								if p.SecretsStored["target"] {
+									aria-describedby="target-saved"
+								}
+							/>
+							if p.SecretsStored["target"] {
+								if p.Monitor.Type == "http" || p.Monitor.Type == "http_multi" || p.Monitor.Type == "websocket" {
+									@StoredURLControl("target", "target")
+								} else {
+									@StoredTargetControl()
+								}
+							}
 						</div>
 						<div>
 							<label class="form-label" for="description">Description <span class="text-muted font-normal">(optional)</span></label>
@@ -328,10 +351,29 @@ templ MonitorFormPage(p MonitorFormParams) {
 					<input type="hidden" name="settings_mode" :value="advancedSettings ? 'json' : 'form'"/>
 					<div x-show="advancedSettings" x-cloak>
 						<label class="sr-only" for="settings_json">Settings (JSON)</label>
-						<textarea id="settings_json" name="settings_json" rows="8" placeholder="{}" class="form-input font-mono text-xs resize-y">{ p.SettingsJSON }</textarea>
+						<textarea id="settings_json" name="settings_json" rows="8" placeholder="{}" class="form-input font-mono text-xs resize-y" @input="readJSONDNS($el.value)">{ p.SettingsJSON }</textarea>
+						if len(p.settingsSecretPaths()) > 0 {
+							<fieldset :disabled="!advancedSettings" class="mt-3 space-y-2">
+								<legend class="form-label">Saved settings</legend>
+								<p class="form-hint">Blank payloads and unchanged URL origins keep saved content. A blank header entry keeps its value; removing the entry deletes it. Paths below refer to the submitted JSON. Step indexes start at 0; recheck them after reordering.</p>
+								for _, key := range p.settingsSecretPaths() {
+									<label class="flex items-start gap-2 text-xs text-muted-light">
+										<input type="checkbox" name="clear_secrets" value={ key } class="form-checkbox mt-0.5"/>
+										<span>
+											if secretPathIsURL(key) {
+												Replace URL from entered JSON:
+											} else {
+												Remove saved value:
+											}
+											<code class="font-mono wrap-anywhere">{ key }</code>
+										</span>
+									</label>
+								}
+							</fieldset>
+						}
 						<p x-show="monitorType === 'http_multi'" class="form-hint">Multi-step HTTP checks are configured as JSON: a <code class="font-mono">steps</code> array of requests run in order.</p>
 					</div>
-					<div x-show="!advancedSettings" class="space-y-4">
+					<fieldset x-show="!advancedSettings" :disabled="advancedSettings" class="min-w-0 space-y-4">
 						@monitorHTTPSettings(p)
 						@monitorTCPSettings(p)
 						@monitorDNSSettings(p)
@@ -347,7 +389,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 						@monitorRedisSettings(p)
 						@monitorPostgreSQLSettings(p)
 						@monitorUDPSettings(p)
-					</div>
+					</fieldset>
 				</div>
 				@monitorAssertions(p)
 				<div x-data={ advancedSectionData(p) }>
@@ -434,7 +476,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 								if p.canAssign("proxies") && len(p.Proxies) > 0 {
 									<div>
 										<label class="form-label" for="proxy_id">Proxy</label>
-										<select id="proxy_id" name="proxy_id" class="form-select" aria-describedby="proxy-help proxy-error" :aria-invalid="proxyInvalid" @change="checkProxy($el)" x-effect="monitorType; dnsServer; $nextTick(() => checkProxy($el))">
+										<select id="proxy_id" name="proxy_id" class="form-select" aria-describedby="proxy-help proxy-error" :aria-invalid="proxyInvalid" @change="checkProxy($el)" x-effect="monitorType; proxyDNSServer; $nextTick(() => checkProxy($el))">
 											<option value="">No proxy</option>
 											for _, px := range p.Proxies {
 												<option
@@ -636,7 +678,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 }
 
 templ monitorHTTPSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'http'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'http'" :disabled="monitorType !== 'http'" x-cloak class="min-w-0 space-y-4">
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
 				<label class="form-label" for="settings_method">Method</label>
@@ -676,7 +718,19 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 			</div>
 			<div>
 				<label class="form-label" for="settings_body">Body</label>
-				<textarea id="settings_body" name="settings_body" rows="3" placeholder="Request body" class="form-input font-mono resize-y">{ p.HTTP.Body }</textarea>
+				<textarea
+					id="settings_body"
+					name="settings_body"
+					rows="3"
+					placeholder="Request body"
+					class="form-input font-mono resize-y"
+					if p.storedSecret("http", "body") {
+						aria-describedby="settings_body-saved"
+					}
+				>{ p.HTTP.Body }</textarea>
+				if p.storedSecret("http", "body") {
+					@StoredPayloadControl("settings_body", "body")
+				}
 			</div>
 		</div>
 		@HeaderListEditor("httpHeaders", "settings_header_key[]", "settings_header_value[]")
@@ -690,7 +744,7 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 					<option value="oauth2">OAuth2 Client Credentials</option>
 				</select>
 			</div>
-			<div x-show="authMethod === 'basic'" x-cloak class="grid grid-cols-2 gap-4">
+			<div x-show="authMethod === 'basic'" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				@SettingText("Username", "settings_basic_auth_user", p.HTTP.BasicAuthUser, "", "text")
 				@SettingPassword("Password", "settings_basic_auth_pass", "basic_auth_pass", p.HTTP.BasicAuthPass, p.storedSecret("http", "basic_auth_pass"), "")
 			</div>
@@ -698,7 +752,7 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 				@SettingPassword("Token", "settings_bearer_token", "bearer_token", p.HTTP.BearerToken, p.storedSecret("http", "bearer_token"), "")
 			</div>
 			<div x-show="authMethod === 'oauth2'" x-cloak class="space-y-3">
-				@SettingText("Token URL", "settings_oauth2_token_url", p.HTTP.OAuth2TokenURL, "https://auth.example.com/oauth/token", "url")
+				@SettingPrivateURL("Token URL", "settings_oauth2_token_url", "oauth2_token_url", p.HTTP.OAuth2TokenURL, "https://auth.example.com/oauth/token", p.storedSecret("http", "oauth2_token_url"))
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					@SettingText("Client ID", "settings_oauth2_client_id", p.HTTP.OAuth2ClientID, "", "text")
 					@SettingPassword("Client Secret", "settings_oauth2_client_secret", "oauth2_client_secret", p.HTTP.OAuth2ClientSecret, p.storedSecret("http", "oauth2_client_secret"), "")
@@ -766,18 +820,18 @@ templ monitorHTTPSettings(p MonitorFormParams) {
 			@SettingCheckbox("Ignore TLS/SSL errors", "settings_skip_tls_verify", p.HTTP.SkipTLSVerify)
 			@SettingCheckbox("Cache buster", "settings_cache_buster", p.HTTP.CacheBuster)
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorTCPSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'tcp'" x-cloak class="space-y-4">
-		@SettingText("Send Data", "settings_send_data", p.TCP.SendData, "Optional data to send", "text")
-		@SettingText("Expect Data", "settings_expect_data", p.TCP.ExpectData, "Expected response", "text")
-	</div>
+	<fieldset x-show="monitorType === 'tcp'" :disabled="monitorType !== 'tcp'" x-cloak class="min-w-0 space-y-4">
+		@SettingPrivateText("Send Data", "settings_send_data", "send_data", p.TCP.SendData, "Optional data to send", p.storedSecret("tcp", "send_data"))
+		@SettingPrivateText("Expect Data", "settings_expect_data", "expect_data", p.TCP.ExpectData, "Expected response", p.storedSecret("tcp", "expect_data"))
+	</fieldset>
 }
 
 templ monitorDNSSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'dns'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'dns'" :disabled="monitorType !== 'dns'" x-cloak class="min-w-0 space-y-4">
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
 				<label class="form-label" for="settings_record_type">Record Type</label>
@@ -796,36 +850,35 @@ templ monitorDNSSettings(p MonitorFormParams) {
 				<input id="settings_dns_server" type="text" name="settings_dns_server" value={ p.DNS.Server } x-model="dnsServer" placeholder="Optional (e.g. 8.8.8.8)" class="form-input"/>
 			</div>
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorTLSSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'tls'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'tls'" :disabled="monitorType !== 'tls'" x-cloak class="min-w-0 space-y-4">
 		@SettingNumber("Warning Days Before Expiry", "settings_warn_days_before", intOrDefault(p.TLS.WarnDaysBefore, 30), "", "1", "365", "sm:max-w-[200px]")
-	</div>
+	</fieldset>
 }
 
 templ monitorWSSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'websocket'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'websocket'" :disabled="monitorType !== 'websocket'" x-cloak class="min-w-0 space-y-4">
 		@HeaderListEditor("wsHeaders", "settings_ws_header_key[]", "settings_ws_header_value[]")
-		@SettingText("Send Message", "settings_send_message", p.WS.SendMessage, "Optional message to send", "text")
-		@SettingText("Expect Reply", "settings_expect_reply", p.WS.ExpectReply, "Expected reply", "text")
-	</div>
+		@SettingPrivateText("Send Message", "settings_send_message", "send_message", p.WS.SendMessage, "Optional message to send", p.storedSecret("websocket", "send_message"))
+		@SettingPrivateText("Expect Reply", "settings_expect_reply", "expect_reply", p.WS.ExpectReply, "Expected reply", p.storedSecret("websocket", "expect_reply"))
+	</fieldset>
 }
 
 templ monitorCommandSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'command'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'command'" :disabled="monitorType !== 'command'" x-cloak class="min-w-0 space-y-4">
 		@SettingText("Command", "settings_command", p.Cmd.Command, "/usr/bin/check-health", "text")
 		<div>
-			<label class="form-label" for="settings_args">Arguments</label>
-			<input id="settings_args" type="text" name="settings_args" value={ p.cmdArgsStr() } placeholder="--verbose, --timeout=5" class="form-input"/>
+			@SettingPrivateText("Arguments", "settings_args", "args", p.cmdArgsStr(), "--verbose, --timeout=5", p.storedSecret("command", "args"))
 			<p class="form-hint">Comma-separated</p>
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorDockerSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'docker'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'docker'" :disabled="monitorType !== 'docker'" x-cloak class="min-w-0 space-y-4">
 		<div>
 			<label class="form-label" for="settings_container_name">Container Name / ID</label>
 			<input id="settings_container_name" type="text" name="settings_container_name" value={ p.Docker.ContainerName } placeholder="my-container or abc123def" class="form-input"/>
@@ -839,21 +892,21 @@ templ monitorDockerSettings(p MonitorFormParams) {
 		<div class="flex items-center flex-wrap gap-5">
 			@SettingCheckbox("Check container health status", "settings_check_health", p.Docker.CheckHealth)
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorDomainSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'domain'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'domain'" :disabled="monitorType !== 'domain'" x-cloak class="min-w-0 space-y-4">
 		<div>
 			<label class="form-label" for="settings_domain_warn_days">Warning Days Before Expiry</label>
 			<input id="settings_domain_warn_days" type="number" name="settings_domain_warn_days" value={ intOrDefault(p.Domain.WarnDaysBefore, 30) } min="1" max="365" class="form-input sm:max-w-[200px] tabular-nums"/>
 			<p class="form-hint">Mark as degraded when domain expires within this many days</p>
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorGRPCSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'grpc'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'grpc'" :disabled="monitorType !== 'grpc'" x-cloak class="min-w-0 space-y-4">
 		<div>
 			<label class="form-label" for="settings_grpc_service">Service Name</label>
 			<input id="settings_grpc_service" type="text" name="settings_grpc_service" value={ p.GRPC.ServiceName } placeholder="Leave empty for overall health" class="form-input"/>
@@ -863,11 +916,11 @@ templ monitorGRPCSettings(p MonitorFormParams) {
 			@SettingCheckbox("Use TLS", "settings_grpc_tls", p.GRPC.UseTLS)
 			@SettingCheckbox("Skip TLS verification", "settings_grpc_skip_verify", p.GRPC.SkipTLSVerify)
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorMQTTSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'mqtt'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'mqtt'" :disabled="monitorType !== 'mqtt'" x-cloak class="min-w-0 space-y-4">
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			@SettingText("Client ID", "settings_mqtt_client_id", p.MQTT.ClientID, "asura-monitor", "text")
 			@SettingText("Topic", "settings_mqtt_topic", p.MQTT.Topic, "Optional subscribe topic", "text")
@@ -876,11 +929,11 @@ templ monitorMQTTSettings(p MonitorFormParams) {
 			@SettingText("Username", "settings_mqtt_username", p.MQTT.Username, "Optional", "text")
 			@SettingPassword("Password", "settings_mqtt_password", "password", p.MQTT.Password, p.storedSecret("mqtt", "password"), "Optional")
 		</div>
-		@SettingText("Expected Message", "settings_mqtt_expect", p.MQTT.ExpectMessage, "Optional message content to expect", "text")
+		@SettingPrivateText("Expected Message", "settings_mqtt_expect", "expect_message", p.MQTT.ExpectMessage, "Optional message content to expect", p.storedSecret("mqtt", "expect_message"))
 		<div class="flex items-center flex-wrap gap-5">
 			@SettingCheckbox("Use TLS", "settings_mqtt_tls", p.MQTT.UseTLS)
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorAssertions(p MonitorFormParams) {
@@ -981,7 +1034,7 @@ templ monitorAssertions(p MonitorFormParams) {
 }
 
 templ monitorSMTPSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'smtp'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'smtp'" :disabled="monitorType !== 'smtp'" x-cloak class="min-w-0 space-y-4">
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
 				<label class="form-label" for="settings_smtp_port">Port</label>
@@ -1000,43 +1053,42 @@ templ monitorSMTPSettings(p MonitorFormParams) {
 				<p class="form-hint">25 (plain), 465 (SMTPS), 587 (submission)</p>
 			</div>
 			<div>
-				<label class="form-label" for="settings_smtp_expect_banner">Expected Banner</label>
-				<input id="settings_smtp_expect_banner" type="text" name="settings_smtp_expect_banner" value={ p.SMTP.ExpectBanner } placeholder="Optional" class="form-input"/>
+				@SettingPrivateText("Expected Banner", "settings_smtp_expect_banner", "expect_banner", p.SMTP.ExpectBanner, "Optional", p.storedSecret("smtp", "expect_banner"))
 			</div>
 		</div>
 		@SettingCheckbox("Require STARTTLS", "settings_smtp_starttls", p.SMTP.STARTTLS)
-	</div>
+	</fieldset>
 }
 
 templ monitorSSHSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'ssh'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'ssh'" :disabled="monitorType !== 'ssh'" x-cloak class="min-w-0 space-y-4">
 		<div>
 			<label class="form-label" for="settings_ssh_fingerprint">Expected Banner Fingerprint (SHA-256)</label>
 			<input id="settings_ssh_fingerprint" type="text" name="settings_ssh_fingerprint" value={ p.SSH.ExpectedFingerprint } placeholder="Optional SHA-256 hex fingerprint" class="form-input font-mono"/>
 			<p class="form-hint">Hashes the SSH identification banner, not the host key — this is not MITM/host-identity verification. Leave empty to skip.</p>
 		</div>
-	</div>
+	</fieldset>
 }
 
 templ monitorRedisSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'redis'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'redis'" :disabled="monitorType !== 'redis'" x-cloak class="min-w-0 space-y-4">
 		@SettingPassword("Password", "settings_redis_password", "password", p.Redis.Password, p.storedSecret("redis", "password"), "Optional")
-	</div>
+	</fieldset>
 }
 
 templ monitorPostgreSQLSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'postgresql'" x-cloak class="space-y-4">
+	<fieldset x-show="monitorType === 'postgresql'" :disabled="monitorType !== 'postgresql'" x-cloak class="min-w-0 space-y-4">
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			@SettingText("Username", "settings_pg_username", p.PostgreSQL.Username, "postgres", "text")
 			@SettingText("Database", "settings_pg_database", p.PostgreSQL.Database, "postgres", "text")
 		</div>
 		<p class="form-hint">Checks if PostgreSQL accepts connections (startup handshake). No authentication performed.</p>
-	</div>
+	</fieldset>
 }
 
 templ monitorUDPSettings(p MonitorFormParams) {
-	<div x-show="monitorType === 'udp'" x-cloak class="space-y-4">
-		@SettingText("Send Data", "settings_udp_send", p.UDP.SendData, "Data to send", "text")
-		@SettingText("Expect Data", "settings_udp_expect", p.UDP.ExpectData, "Expected in response (optional)", "text")
-	</div>
+	<fieldset x-show="monitorType === 'udp'" :disabled="monitorType !== 'udp'" x-cloak class="min-w-0 space-y-4">
+		@SettingPrivateText("Send Data", "settings_udp_send", "send_data", p.UDP.SendData, "Data to send", p.storedSecret("udp", "send_data"))
+		@SettingPrivateText("Expect Data", "settings_udp_expect", "expect_data", p.UDP.ExpectData, "Expected in response (optional)", p.storedSecret("udp", "expect_data"))
+	</fieldset>
 }

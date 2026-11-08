@@ -416,6 +416,75 @@ templ SettingText(label, name, value, placeholder, inputType string) {
 	</div>
 }
 
+// Stored payloads can contain credentials. The handler supplies only a blank
+// value or the user's current retry input; these controls never load secrets.
+templ SettingPrivateText(label, name, key, value, placeholder string, stored bool) {
+	<div>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input
+			id={ name }
+			type="text"
+			name={ name }
+			value={ value }
+			autocomplete="off"
+			spellcheck="false"
+			class="form-input"
+			if stored {
+				placeholder="Saved. Leave blank to keep it."
+				aria-describedby={ name + "-saved" }
+			} else {
+				placeholder={ placeholder }
+			}
+		/>
+		if stored {
+			@StoredPayloadControl(name, key)
+		}
+	</div>
+}
+
+templ StoredPayloadControl(name, key string) {
+	<p id={ name + "-saved" } class="form-hint">Saved content stays hidden. Leave this blank to keep it, or enter replacement content. Selecting Remove saved value also discards any replacement entered here.</p>
+	@ClearSecretCheckbox(key)
+}
+
+templ StoredURLControl(name, key string) {
+	<p id={ name + "-saved" } class="form-hint">The saved URL's path and credentials stay hidden. Leave this blank or at the shown origin to keep the full URL. A different URL replaces it.</p>
+	<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+		<input type="checkbox" name="clear_secrets" value={ key } class="form-checkbox"/>
+		Use the entered URL as a replacement, including when it is only an origin
+	</label>
+}
+
+templ SettingPrivateURL(label, name, key, value, placeholder string, stored bool) {
+	<div>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input
+			id={ name }
+			type="url"
+			name={ name }
+			value={ value }
+			placeholder={ placeholder }
+			autocomplete="off"
+			spellcheck="false"
+			class="form-input"
+			if stored {
+				aria-describedby={ name + "-saved" }
+			}
+		/>
+		if stored {
+			@StoredURLControl(name, key)
+		}
+	</div>
+}
+
+templ StoredTargetControl() {
+	<p id="target-saved" class="form-hint">The saved target stays hidden. Leave this blank to keep it, or enter a replacement.</p>
+	<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+		<input type="checkbox" name="clear_secrets" value="target" class="form-checkbox"/>
+		Use the entered target as a replacement, including when it is blank
+	</label>
+}
+
 // SettingPassword renders a labelled secret input. A value already stored on
 // the server is never written into the page: the field shows a "saved" hint,
 // submitting it blank keeps the stored value, and a checkbox removes it. value

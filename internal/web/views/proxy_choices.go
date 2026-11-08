@@ -21,7 +21,7 @@ func proxyChoiceDisabledExpression(protocol string) string {
 	}
 	slices.Sort(types)
 	encoded, _ := json.Marshal(types)
-	return "!" + string(encoded) + ".includes(monitorType) || (monitorType === 'dns' && !dnsServer.trim())"
+	return "!" + string(encoded) + ".includes(monitorType) || (monitorType === 'dns' && !proxyDNSServer.trim())"
 }
 
 func (p MonitorFormParams) proxyChoiceDisabled(proxy *storage.Proxy) bool {
