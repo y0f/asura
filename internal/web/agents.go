@@ -136,6 +136,9 @@ func (h *Handler) AgentDelete(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/agents")
 		return
 	}
+	if h.pipeline != nil {
+		h.pipeline.ReloadMonitors()
+	}
 	h.audit(r, "delete", "agent", id, "")
 	for _, monID := range disabled {
 		h.logger.Warn("monitor disabled for agents: its only assigned agent was deleted", "monitor_id", monID, "agent_id", id)

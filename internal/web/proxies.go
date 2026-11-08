@@ -135,6 +135,9 @@ func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to update proxy", http.StatusInternalServerError)
 		return
 	}
+	if h.pipeline != nil {
+		h.pipeline.ReloadMonitors()
+	}
 
 	h.audit(r, "update", "proxy", p.ID, "")
 	h.setFlash(w, "Proxy updated")

@@ -87,6 +87,9 @@ func (h *Handler) UpdateProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to update proxy")
 		return
 	}
+	if h.pipeline != nil {
+		h.pipeline.ReloadMonitors()
+	}
 
 	h.audit(r, "update", "proxy", p.ID, "")
 	writeJSON(w, http.StatusOK, proxyResponse(r, p))

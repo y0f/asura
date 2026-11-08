@@ -68,6 +68,9 @@ func (h *Handler) DeleteAgentAPI(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete agent")
 		return
 	}
+	if h.pipeline != nil {
+		h.pipeline.ReloadMonitors()
+	}
 	h.audit(r, "delete", "agent", id, "")
 	for _, monID := range disabled {
 		h.logger.Warn("monitor disabled for agents: its only assigned agent was deleted", "monitor_id", monID, "agent_id", id)
