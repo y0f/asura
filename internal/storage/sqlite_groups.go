@@ -35,7 +35,7 @@ func (s *SQLiteStore) GetMonitorGroup(ctx context.Context, id int64) (*MonitorGr
 
 func (s *SQLiteStore) ListMonitorGroups(ctx context.Context) ([]*MonitorGroup, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, sort_order, created_at, updated_at FROM monitor_groups ORDER BY sort_order, name COLLATE NOCASE`)
+		`SELECT id, name, sort_order, created_at, updated_at FROM monitor_groups ORDER BY sort_order, `+s.readDB.dialect.noCase("name"))
 	if err != nil {
 		return nil, err
 	}

@@ -87,7 +87,7 @@ func monitorDestinationSQL(destination *monitorDestination, access []MonitorAcce
 	if destination == nil || allowedMonitorDestination(0, destination.groupID, access) {
 		return "", nil
 	}
-	return " AND group_id IS ?", []any{destination.groupID}
+	return " AND group_id IS NOT DISTINCT FROM ?", []any{destination.groupID}
 }
 
 func scopedMutationResult(result sql.Result, err error, access []MonitorAccess) error {

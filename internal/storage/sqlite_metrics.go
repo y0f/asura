@@ -113,7 +113,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 		}
 		rows, err = reader.QueryContext(ctx,
 			`SELECT MIN(created_at) as created_at,
-			        CAST(AVG(response_time) AS INTEGER) as response_time,
+			        `+s.readDB.dialect.integer("AVG(response_time)")+` as response_time,
 			        CASE
 			            WHEN SUM(CASE WHEN status='down' THEN 1 ELSE 0 END) > 0 THEN 'down'
 			            WHEN SUM(CASE WHEN status='degraded' THEN 1 ELSE 0 END) > 0 THEN 'degraded'
@@ -121,7 +121,7 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 			        END as status
 			 FROM check_results
 			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-			 GROUP BY (CAST(strftime('%s', created_at) AS INTEGER) / ?)
+			 GROUP BY (`+s.readDB.dialect.epochSeconds("created_at")+` / ?)
 			 ORDER BY created_at ASC`,
 			monitorID, fromStr, toStr, bucketSecs)
 	}

@@ -182,7 +182,7 @@ func (s *SQLiteStore) ListStatusPages(ctx context.Context) ([]*StatusPage, error
 		        sp.created_at, sp.updated_at, COALESCE(cnt.c, 0)
 		 FROM status_pages sp
 		 LEFT JOIN (SELECT page_id, COUNT(*) as c FROM status_page_monitors GROUP BY page_id) cnt ON cnt.page_id = sp.id
-		 ORDER BY sp.sort_order, sp.title COLLATE NOCASE`)
+		 ORDER BY sp.sort_order, `+s.readDB.dialect.noCase("sp.title"))
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (s *SQLiteStore) ListStatusPageMonitorsWithStatus(ctx context.Context, page
 	rows, err := s.readDB.QueryContext(ctx, `SELECT m.id,m.name,m.type,COALESCE(ms.status,'pending'),spm.sort_order,spm.group_name
 		FROM status_page_monitors spm JOIN monitors m ON m.id=spm.monitor_id
 		LEFT JOIN monitor_status ms ON ms.monitor_id=m.id
-		WHERE spm.page_id=? AND m.enabled=1 ORDER BY spm.sort_order,m.name COLLATE NOCASE`, pageID)
+		WHERE spm.page_id=? AND m.enabled=1 ORDER BY spm.sort_order,`+s.readDB.dialect.noCase("m.name")+``, pageID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list status page monitors with status: %w", err)
 	}

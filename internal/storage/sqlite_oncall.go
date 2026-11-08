@@ -76,7 +76,7 @@ func scanRotation(row scanner, now time.Time) (*OnCallRotation, error) {
 
 func (s *SQLiteStore) ListOnCallRotations(ctx context.Context) ([]*OnCallRotation, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT `+rotationColumns+` FROM on_call_rotations ORDER BY name COLLATE NOCASE, id`)
+		`SELECT `+rotationColumns+` FROM on_call_rotations ORDER BY `+s.readDB.dialect.noCase("name")+`, id`)
 	if err != nil {
 		return nil, err
 	}

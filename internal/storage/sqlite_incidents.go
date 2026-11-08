@@ -75,7 +75,7 @@ func (s *SQLiteStore) ListIncidentsFiltered(ctx context.Context, f IncidentListF
 		args = append(args, f.Status)
 	}
 	if f.Search != "" {
-		where += " AND (((1=1" + nameClause + ") AND COALESCE(m.name, '') LIKE '%' || ? || '%') OR i.cause LIKE '%' || ? || '%')"
+		where += " AND (((1=1" + nameClause + ") AND " + s.readDB.dialect.like("COALESCE(m.name, '')", "'%' || ? || '%'") + ") OR " + s.readDB.dialect.like("i.cause", "'%' || ? || '%'") + ")"
 		args = append(args, nameArgs...)
 		args = append(args, f.Search, f.Search)
 	}

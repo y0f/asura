@@ -139,7 +139,7 @@ func hashLegacyTokens(db *sql.DB) error {
 		}
 	}
 
-	if _, err := tx.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('tokens_hashed', '1')"); err != nil {
+	if _, err := tx.Exec("INSERT INTO meta (key, value) VALUES ('tokens_hashed', '1') ON CONFLICT(key) DO UPDATE SET value=excluded.value"); err != nil {
 		return fmt.Errorf("set tokens_hashed: %w", err)
 	}
 	return tx.Commit()

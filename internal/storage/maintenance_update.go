@@ -36,7 +36,7 @@ func (s *SQLiteStore) UpdateMaintenanceWindowWithActions(ctx context.Context, id
 		return nil, err
 	}
 	defer tx.Rollback()
-	clause, args := maintenanceAccessSQL(access.Update)
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access.Update)
 	current, err := scanMaintenanceWindow(tx.QueryRowContext(ctx, "SELECT "+mwColumns+" FROM maintenance_windows WHERE id=?"+clause, append([]any{id}, args...)...).Scan)
 	if err != nil {
 		return nil, err

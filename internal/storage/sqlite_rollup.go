@@ -6,9 +6,13 @@ import (
 	"time"
 )
 
+const rollupReplacement = `sum_rt=excluded.sum_rt, avg_rt=excluded.avg_rt, min_rt=excluded.min_rt,
+	max_rt=excluded.max_rt, p95_rt=excluded.p95_rt, up_count=excluded.up_count,
+	down_count=excluded.down_count, total=excluded.total`
+
 func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 	_, err := s.writeDB.ExecContext(ctx,
-		`INSERT OR REPLACE INTO check_result_hourly (monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
+		`INSERT INTO check_result_hourly (monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
 		 WITH windowed AS (
 		   SELECT monitor_id, response_time,
 		          ROW_NUMBER() OVER (PARTITION BY monitor_id ORDER BY response_time) AS rn,
@@ -23,7 +27,7 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 		 agg AS (
 		   SELECT monitor_id,
 		          SUM(response_time) AS sum_rt,
-		          CAST(AVG(response_time) AS INTEGER) AS avg_rt,
+		          `+s.writeDB.dialect.integer("AVG(response_time)")+` AS avg_rt,
 		          MIN(response_time) AS min_rt,
 		          MAX(response_time) AS max_rt,
 		          SUM(CASE WHEN status='up' THEN 1 ELSE 0 END) AS up_count,
@@ -39,7 +43,8 @@ func (s *SQLiteStore) RollupHourly(ctx context.Context, hour string) error {
 		        agg.up_count, agg.down_count, agg.total
 		 FROM agg LEFT JOIN p95 ON p95.monitor_id = agg.monitor_id
 		 WHERE ? >= COALESCE((SELECT value FROM meta WHERE key='raw_purged_before'), '')
-		 OR NOT EXISTS (SELECT 1 FROM check_result_hourly h WHERE h.monitor_id=agg.monitor_id AND h.hour=?)`,
+		 OR NOT EXISTS (SELECT 1 FROM check_result_hourly h WHERE h.monitor_id=agg.monitor_id AND h.hour=?)
+		 ON CONFLICT(monitor_id, hour) DO UPDATE SET `+rollupReplacement,
 		hour+":00:00Z",
 		hourEnd(hour)+":00:00Z",
 		hour+":00:00Z",
@@ -52,10 +57,10 @@ func (s *SQLiteStore) RollupDaily(ctx context.Context, day string) error {
 	// Old hourly rows have only rounded means; weight those by their sample count.
 	// New rows retain the exact sum so daily means do not compound rounding loss.
 	_, err := s.writeDB.ExecContext(ctx,
-		`INSERT OR REPLACE INTO check_result_daily (monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
+		`INSERT INTO check_result_daily (monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total)
 		 SELECT monitor_id, ? AS day,
 		        SUM(COALESCE(sum_rt, avg_rt * total)),
-		        COALESCE(CAST(SUM(COALESCE(sum_rt, avg_rt * total)) / NULLIF(SUM(total), 0) AS INTEGER), 0),
+		        COALESCE(`+s.writeDB.dialect.integer("SUM(COALESCE(sum_rt, avg_rt * total)) / NULLIF(SUM(total), 0)")+`, 0),
 		        MIN(min_rt),
 		        MAX(max_rt),
 		        MAX(p95_rt),
@@ -66,7 +71,8 @@ func (s *SQLiteStore) RollupDaily(ctx context.Context, day string) error {
 		 WHERE hour >= ? AND hour < ?
 		 AND (? >= COALESCE((SELECT value FROM meta WHERE key='hourly_purged_before'), '')
 		      OR NOT EXISTS (SELECT 1 FROM check_result_daily d WHERE d.monitor_id=h.monitor_id AND d.day=?))
-		 GROUP BY monitor_id`,
+		 GROUP BY monitor_id
+		 ON CONFLICT(monitor_id, day) DO UPDATE SET `+rollupReplacement,
 		day,
 		day+"T00",
 		day+"T24", day+"T00", day)

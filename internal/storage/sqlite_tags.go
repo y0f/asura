@@ -47,7 +47,7 @@ func (s *SQLiteStore) GetTagByName(ctx context.Context, name string) (*Tag, erro
 
 func (s *SQLiteStore) ListTags(ctx context.Context) ([]*Tag, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, color, created_at FROM tags ORDER BY name COLLATE NOCASE ASC`)
+		`SELECT id, name, color, created_at FROM tags ORDER BY `+s.readDB.dialect.noCase("name")+` ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64, acces
 		 FROM monitor_tags mt
 		 JOIN tags t ON t.id = mt.tag_id
 		 WHERE mt.monitor_id = ?
-		 ORDER BY t.name COLLATE NOCASE ASC`, monitorID)
+		 ORDER BY `+s.readDB.dialect.noCase("t.name")+` ASC`, monitorID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (s *SQLiteStore) GetMonitorTagsBatch(ctx context.Context, monitorIDs []int6
 		 FROM monitor_tags mt
 		 JOIN tags t ON t.id = mt.tag_id
 		 WHERE mt.monitor_id IN (`+placeholders+`)`+clause+`
-		 ORDER BY t.name COLLATE NOCASE ASC`, args...)
+		 ORDER BY `+s.readDB.dialect.noCase("t.name")+` ASC`, args...)
 	if err != nil {
 		return nil, err
 	}

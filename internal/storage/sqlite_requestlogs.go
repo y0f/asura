@@ -44,7 +44,7 @@ func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*Request
 	return tx.Commit()
 }
 
-func buildRequestLogWhere(f RequestLogFilter) (string, []any) {
+func (s *SQLiteStore) buildRequestLogWhere(f RequestLogFilter) (string, []any) {
 	where := "1=1"
 	clause, args := monitorOwnerAccessSQL("monitor_id", f.Access)
 	where += clause
@@ -54,7 +54,7 @@ func buildRequestLogWhere(f RequestLogFilter) (string, []any) {
 		args = append(args, f.Method)
 	}
 	if f.Path != "" {
-		where += " AND path LIKE ?"
+		where += " AND " + s.readDB.dialect.like("path", "?")
 		args = append(args, "%"+f.Path+"%")
 	}
 	if f.StatusCode > 0 {
@@ -85,7 +85,7 @@ func buildRequestLogWhere(f RequestLogFilter) (string, []any) {
 }
 
 func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p Pagination) (*PaginatedResult, error) {
-	where, args := buildRequestLogWhere(f)
+	where, args := s.buildRequestLogWhere(f)
 
 	var total int64
 	countArgs := make([]any, len(args))
@@ -140,7 +140,7 @@ func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p
 }
 
 func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, limit int, access ...MonitorAccess) ([]string, error) {
-	where, args := buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
+	where, args := s.buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT client_ip FROM request_logs
 		 WHERE `+where+` AND client_ip != ''
@@ -162,11 +162,11 @@ func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, 
 }
 
 func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time, access ...MonitorAccess) (*RequestLogStats, error) {
-	where, args := buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
+	where, args := s.buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
 
 	var stats RequestLogStats
 	err := s.readDB.QueryRowContext(ctx,
-		`SELECT COUNT(*), COUNT(DISTINCT client_ip), CAST(COALESCE(AVG(latency_ms), 0) AS INTEGER)
+		`SELECT COUNT(*), COUNT(DISTINCT client_ip), `+s.readDB.dialect.integer("COALESCE(AVG(latency_ms), 0)")+`
 		 FROM request_logs WHERE `+where, args...).Scan(&stats.TotalRequests, &stats.UniqueVisitors, &stats.AvgLatencyMs)
 	if err != nil {
 		return nil, err
@@ -248,7 +248,7 @@ func (s *SQLiteStore) RollupRequestLogs(ctx context.Context, date string) error 
 		   monitor_id,
 		   COUNT(*) AS requests,
 		   COUNT(DISTINCT client_ip) AS unique_visitors,
-		   CAST(COALESCE(AVG(latency_ms), 0) AS INTEGER) AS avg_latency_ms
+		   `+s.readDB.dialect.integer("COALESCE(AVG(latency_ms), 0)")+` AS avg_latency_ms
 		 FROM request_logs
 		 WHERE created_at >= ? AND created_at < ?
 		 GROUP BY route_group, monitor_id`,

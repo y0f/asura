@@ -35,7 +35,7 @@ func (s *SQLiteStore) GetProxy(ctx context.Context, id int64) (*Proxy, error) {
 
 func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		"SELECT "+proxyColumns+" FROM proxies ORDER BY name COLLATE NOCASE")
+		"SELECT "+proxyColumns+" FROM proxies ORDER BY "+s.readDB.dialect.noCase("name"))
 	if err != nil {
 		return nil, err
 	}

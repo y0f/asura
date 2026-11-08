@@ -55,14 +55,14 @@ func scanMaintenanceWindow(scan func(dest ...any) error) (*MaintenanceWindow, er
 const mwColumns = `id, name, monitor_ids, start_time, end_time, recurring, cron_expr, active, created_at, updated_at`
 
 func (s *SQLiteStore) GetMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) (*MaintenanceWindow, error) {
-	clause, args := maintenanceAccessSQL(access)
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
 	row := s.readDB.QueryRowContext(ctx,
 		`SELECT `+mwColumns+` FROM maintenance_windows WHERE id=?`+clause, append([]any{id}, args...)...)
 	return scanMaintenanceWindow(row.Scan)
 }
 
 func (s *SQLiteStore) ListMaintenanceWindows(ctx context.Context, access ...MonitorAccess) ([]*MaintenanceWindow, error) {
-	clause, args := maintenanceAccessSQL(access)
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT `+mwColumns+` FROM maintenance_windows WHERE 1=1`+clause+` ORDER BY start_time DESC`, args...)
 	if err != nil {
@@ -98,14 +98,14 @@ func (s *SQLiteStore) UpdateMaintenanceWindow(ctx context.Context, mw *Maintenan
 }
 
 func (s *SQLiteStore) DeleteMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) error {
-	clause, args := maintenanceAccessSQL(access)
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
 	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM maintenance_windows WHERE id=?"+clause, append([]any{id}, args...)...)
 	return scopedMutationResult(result, err, access)
 }
 
 func (s *SQLiteStore) ToggleMaintenanceWindow(ctx context.Context, id int64, active bool, access ...MonitorAccess) error {
 	now := formatTime(time.Now())
-	clause, args := maintenanceAccessSQL(access)
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
 	result, err := s.writeDB.ExecContext(ctx,
 		`UPDATE maintenance_windows SET active=?, updated_at=? WHERE id=?`+clause,
 		append([]any{boolToInt(active), now, id}, args...)...)

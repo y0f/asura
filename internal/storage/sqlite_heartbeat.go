@@ -90,7 +90,7 @@ func (s *SQLiteStore) ExpireHeartbeat(ctx context.Context, monitorID int64) (boo
 	res, err := tx.ExecContext(ctx, `UPDATE heartbeats SET status='down'
 		WHERE monitor_id=? AND status!='down' AND last_ping_at IS NOT NULL
 		AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=heartbeats.monitor_id AND m.enabled=1 AND m.type='heartbeat'
-			AND datetime(heartbeats.last_ping_at, '+' || (m.interval_secs + heartbeats.grace) || ' seconds') < datetime(?))`,
+			AND `+tx.dialect.heartbeatExpired("heartbeats.last_ping_at", "m.interval_secs + heartbeats.grace", "?")+`)`,
 		monitorID, now)
 	if err != nil {
 		return false, err
@@ -115,7 +115,7 @@ func (s *SQLiteStore) ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, 
 		 JOIN monitors m ON m.id = h.monitor_id
 		 WHERE m.enabled = 1 AND m.type = 'heartbeat'
 		   AND h.last_ping_at IS NOT NULL
-		   AND datetime(h.last_ping_at, '+' || (m.interval_secs + h.grace) || ' seconds') < datetime('now')`)
+		   AND `+s.readDB.dialect.heartbeatExpired("h.last_ping_at", "m.interval_secs + h.grace", "?"), formatTime(time.Now()))
 	if err != nil {
 		return nil, err
 	}

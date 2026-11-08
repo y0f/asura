@@ -172,8 +172,8 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 		args = append(args, f.Type)
 	}
 	if f.Search != "" {
-		where += " AND (m.name LIKE ? || '%' OR m.target LIKE ? || '%')"
-		args = append(args, f.Search, f.Search)
+		where += " AND " + s.readDB.dialect.like("m.name", "? || '%'")
+		args = append(args, f.Search)
 	}
 	if f.GroupID != nil {
 		where += " AND m.group_id=?"
@@ -190,14 +190,15 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 		args = append(args, f.Status)
 	}
 
-	orderBy := "m.name COLLATE NOCASE ASC"
+	nameOrder := s.readDB.dialect.noCase("m.name") + " ASC"
+	orderBy := nameOrder
 	switch f.Sort {
 	case "status":
-		orderBy = "COALESCE(ms.status, 'pending') ASC, m.name COLLATE NOCASE ASC"
+		orderBy = "COALESCE(ms.status, 'pending') ASC, " + nameOrder
 	case "last_check":
-		orderBy = "ms.last_check_at DESC, m.name COLLATE NOCASE ASC"
+		orderBy = "ms.last_check_at DESC NULLS LAST, " + nameOrder
 	case "response_time":
-		orderBy = "ms.last_response_time DESC, m.name COLLATE NOCASE ASC"
+		orderBy = "ms.last_response_time DESC NULLS LAST, " + nameOrder
 	}
 
 	var total int64

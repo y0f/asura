@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -23,7 +24,7 @@ func (s *SQLiteStore) RollupPending(ctx context.Context, now time.Time) error {
 	var lastID, maxID int64
 	var previous string
 	if err := s.readDB.QueryRowContext(ctx, `SELECT
-		COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key='rollup_scan_id'), 0),
+		COALESCE((SELECT CAST(value AS BIGINT) FROM meta WHERE key='rollup_scan_id'), 0),
 		COALESCE((SELECT value FROM meta WHERE key='rollup_before'), ''),
 		COALESCE((SELECT MAX(id) FROM check_results), 0)`).Scan(&lastID, &previous, &maxID); err != nil {
 		return err
@@ -77,7 +78,7 @@ func (s *SQLiteStore) RollupPending(ctx context.Context, now time.Time) error {
 	// pass safely repeats completed buckets instead of skipping unfinished ones.
 	_, err = s.writeDB.ExecContext(ctx, `INSERT INTO meta (key, value) VALUES
 		('rollup_scan_id', ?), ('rollup_before', ?)
-		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, max(lastID, maxID), formatTime(end))
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, strconv.FormatInt(max(lastID, maxID), 10), formatTime(end))
 	return err
 }
 
@@ -153,13 +154,13 @@ func (s *SQLiteStore) initializeRollupFloors(ctx context.Context) error {
 			hourlyFloor = t.Add(24 * time.Hour).Format("2006-01-02T15")
 		}
 	}
-	_, err := s.writeDB.ExecContext(ctx, `INSERT OR IGNORE INTO meta (key, value)
-		VALUES ('raw_purged_before', ?), ('hourly_purged_before', ?)`, rawFloor, hourlyFloor)
+	_, err := s.writeDB.ExecContext(ctx, `INSERT INTO meta (key, value)
+		VALUES ('raw_purged_before', ?), ('hourly_purged_before', ?) ON CONFLICT(key) DO NOTHING`, rawFloor, hourlyFloor)
 	return err
 }
 
 func (s *SQLiteStore) advancePurgeFloor(ctx context.Context, key, before string) error {
 	_, err := s.writeDB.ExecContext(ctx, `INSERT INTO meta (key, value) VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value=MAX(meta.value, excluded.value)`, key, before)
+		ON CONFLICT(key) DO UPDATE SET value=CASE WHEN meta.value > excluded.value THEN meta.value ELSE excluded.value END`, key, before)
 	return err
 }

@@ -65,7 +65,7 @@ func (s *SQLiteStore) GetAgentByToken(ctx context.Context, token string) (*Agent
 func (s *SQLiteStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT id, name, location, token, last_heartbeat, enabled, created_at
-		 FROM agents ORDER BY name COLLATE NOCASE`)
+		 FROM agents ORDER BY `+s.readDB.dialect.noCase("name"))
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +252,7 @@ func (s *SQLiteStore) SetMonitorAgentIDs(ctx context.Context, monitorID int64, a
 	}
 	for _, id := range agentIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO monitor_agents (monitor_id, agent_id) VALUES (?, ?)`, monitorID, id); err != nil {
+			`INSERT INTO monitor_agents (monitor_id, agent_id) VALUES (?, ?) ON CONFLICT(monitor_id, agent_id) DO NOTHING`, monitorID, id); err != nil {
 			return err
 		}
 	}
