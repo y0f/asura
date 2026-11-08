@@ -2,6 +2,7 @@ package sla
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -15,6 +16,12 @@ type fixedUptimeStore struct {
 
 func (f fixedUptimeStore) GetUptimePercent(context.Context, int64, time.Time, time.Time) (float64, error) {
 	return f.pct, nil
+}
+
+func (f fixedUptimeStore) GetDailyUptime(context.Context, int64, time.Time, time.Time) ([]*storage.DailyUptime, error) {
+	// Preserve two decimal places in the fixture's percentage using exact counts.
+	up := int64(math.Round(f.pct * 100))
+	return []*storage.DailyUptime{{TotalChecks: 10000, UpChecks: up, DownChecks: 10000 - up}}, nil
 }
 
 func TestComputeBreachedUsesMonthlyBudget(t *testing.T) {

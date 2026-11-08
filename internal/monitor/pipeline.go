@@ -17,7 +17,6 @@ import (
 	"github.com/y0f/asura/internal/diff"
 	"github.com/y0f/asura/internal/escalation"
 	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/sla"
 	"github.com/y0f/asura/internal/storage"
 )
 
@@ -36,7 +35,7 @@ type Pipeline struct {
 	adaptiveIntervals    bool
 	droppedNotifications atomic.Int64
 	lastNotified         sync.Map // map[int64]time.Time — tracks last resend per monitor
-	lastSLABreach        sync.Map // map[int64]time.Time — tracks last SLA breach alert per monitor
+	slaStates            sync.Map // map[int64]slaAlertState — guarded by each monitor's status lock
 	statusLocks          sync.Map // map[int64]*sync.Mutex — serializes status read-modify-write per monitor
 	sources              sync.Map // map[int64]monitorSources — per-location result streaks (guarded by statusLocks)
 	sourceCheckedAt      sync.Map // map[int64]map[string]time.Time — newest applied checked_at per location (guarded by statusLocks)
@@ -107,6 +106,7 @@ func (p *Pipeline) Run(ctx context.Context) {
 	var running sync.WaitGroup
 	running.Go(func() { p.scheduler.Run(runCtx) })
 	running.Go(func() { p.reconcilePendingAnnouncements(runCtx) })
+	running.Go(func() { p.reconcileSLABudgets(runCtx) })
 
 	pool := NewPool(p.workers, p.registry, p.jobs, p.results, p.logger)
 	running.Go(func() { pool.Run(runCtx) })
@@ -396,6 +396,7 @@ func (p *Pipeline) processFailure(ctx context.Context, mon *storage.Monitor, mon
 			p.lastNotified.Store(mon.ID, time.Now())
 		}
 	}
+	p.checkSLABreach(ctx, mon)
 	return nil
 }
 
@@ -453,25 +454,6 @@ func (p *Pipeline) shouldResend(mon *storage.Monitor) bool {
 		return true
 	}
 	return time.Since(v.(time.Time)) >= time.Duration(mon.ResendInterval)*time.Second
-}
-
-func (p *Pipeline) checkSLABreach(ctx context.Context, mon *storage.Monitor) {
-	if mon.SLATarget <= 0 {
-		return
-	}
-	if v, ok := p.lastSLABreach.Load(mon.ID); ok {
-		if time.Since(v.(time.Time)) < time.Hour {
-			return
-		}
-	}
-	status, err := sla.Compute(ctx, p.store, mon.ID, mon.SLATarget)
-	if err != nil {
-		return
-	}
-	if status.Breached || status.BudgetRemainPct <= 10 {
-		p.emitNotification(ctx, "sla.breach", nil, mon, nil)
-		p.lastSLABreach.Store(mon.ID, time.Now())
-	}
 }
 
 func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor, oldHash, newHash, oldBody, newBody string, status *storage.MonitorStatus) {

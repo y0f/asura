@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"slices"
@@ -84,6 +85,9 @@ func ValidateMonitor(m *storage.Monitor) error {
 	}
 	if !ValidMonitorTypes[m.Type] {
 		return fmt.Errorf("type must be one of: http, http_multi, tcp, dns, icmp, tls, websocket, command, heartbeat, docker, domain, grpc, mqtt, smtp, ssh, redis, postgresql, udp, manual")
+	}
+	if math.IsNaN(m.SLATarget) || math.IsInf(m.SLATarget, 0) || m.SLATarget < 0 || m.SLATarget > 100 {
+		return fmt.Errorf("sla_target must be a finite percentage between 0 and 100")
 	}
 	if m.Type == "heartbeat" || m.Type == "manual" {
 		return nil

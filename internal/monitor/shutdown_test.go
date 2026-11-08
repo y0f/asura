@@ -125,3 +125,7 @@ func TestPipelineRunJoinsScheduler(t *testing.T) {
 func (s *shutdownSchedulerStore) ListPendingIncidentIDs(context.Context, int64, int) ([]int64, error) {
 	return nil, nil
 }
+
+func (s *shutdownSchedulerStore) ListSLAMonitorIDs(context.Context, int64, int) ([]int64, error) {
+	return nil, nil
+}

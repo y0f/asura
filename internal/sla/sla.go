@@ -28,19 +28,10 @@ func ParsePeriod(value string, now time.Time) (int, time.Month, error) {
 	return period.Year(), period.Month(), nil
 }
 
-func monthlyBudget(target, uptime float64, totalSecs, elapsedSecs int64) (total, used, remain int64, breached bool) {
-	total = ErrorBudgetSecs(target, totalSecs)
-	used = DowntimeSecs(uptime, elapsedSecs)
-	remain = max(total-used, 0)
-	// Compare before whole-second display rounding. The allowance always
-	// covers the full month, while usage covers only elapsed time.
-	breached = target > 0 && float64(elapsedSecs)*(100-uptime) > float64(totalSecs)*(100-min(target, 100))
-	return
-}
-
 // Status represents the current SLA compliance state.
 type Status struct {
 	Target            float64 `json:"target"`
+	TotalChecks       int64   `json:"total_checks"`
 	UptimePctMonth    float64 `json:"uptime_pct_month"`
 	UptimePct30d      float64 `json:"uptime_pct_30d"`
 	MonthStart        string  `json:"month_start"`
@@ -50,23 +41,26 @@ type Status struct {
 	BudgetUsedSecs    int64   `json:"budget_used_secs"`
 	BudgetRemainSecs  int64   `json:"budget_remain_secs"`
 	BudgetRemainPct   float64 `json:"budget_remain_pct"`
+	BudgetAtRisk      bool    `json:"budget_at_risk"`
 	BudgetRemainHuman string  `json:"budget_remain_human"`
 	Breached          bool    `json:"breached"`
 }
 
 // ReportEntry holds SLA data for one monitor in a monthly report.
 type ReportEntry struct {
-	MonitorID   int64   `json:"monitor_id"`
-	MonitorName string  `json:"monitor_name"`
-	Target      float64 `json:"target"`
-	UptimePct   float64 `json:"uptime_pct"`
-	TotalChecks int64   `json:"total_checks"`
-	UpChecks    int64   `json:"up_checks"`
-	DownChecks  int64   `json:"down_checks"`
-	BudgetSecs  int64   `json:"budget_secs"`
-	UsedSecs    int64   `json:"used_secs"`
-	RemainSecs  int64   `json:"remain_secs"`
-	Breached    bool    `json:"breached"`
+	MonitorID       int64   `json:"monitor_id"`
+	MonitorName     string  `json:"monitor_name"`
+	Target          float64 `json:"target"`
+	UptimePct       float64 `json:"uptime_pct"`
+	TotalChecks     int64   `json:"total_checks"`
+	UpChecks        int64   `json:"up_checks"`
+	DownChecks      int64   `json:"down_checks"`
+	BudgetSecs      int64   `json:"budget_secs"`
+	UsedSecs        int64   `json:"used_secs"`
+	RemainSecs      int64   `json:"remain_secs"`
+	BudgetRemainPct float64 `json:"budget_remain_pct"`
+	BudgetAtRisk    bool    `json:"budget_at_risk"`
+	Breached        bool    `json:"breached"`
 }
 
 // Compute calculates the SLA status for a monitor.
@@ -75,41 +69,57 @@ func Compute(ctx context.Context, store storage.Store, monitorID int64, target f
 }
 
 func computeAt(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time) (*Status, error) {
+	status, err := ComputeMonthly(ctx, store, monitorID, target, now)
+	if err != nil {
+		return nil, err
+	}
+	status.UptimePct30d, err = store.GetUptimePercent(ctx, monitorID, now.Add(-30*24*time.Hour), now)
+	if err != nil {
+		return nil, fmt.Errorf("get 30d uptime: %w", err)
+	}
+	return status, nil
+}
+
+// ComputeMonthly reads one rollup-aware snapshot for the current month's SLA.
+// Alert evaluation does not need the additional rolling-30-day chart query.
+func ComputeMonthly(ctx context.Context, store storage.Store, monitorID int64, target float64, now time.Time) (*Status, error) {
+	now = now.UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0)
 
-	uptimeMonth, err := store.GetUptimePercent(ctx, monitorID, monthStart, now)
+	days, err := store.GetDailyUptime(ctx, monitorID, monthStart, now)
 	if err != nil {
 		return nil, fmt.Errorf("get monthly uptime: %w", err)
 	}
 
-	uptime30d, err := store.GetUptimePercent(ctx, monitorID, now.Add(-30*24*time.Hour), now)
-	if err != nil {
-		return nil, fmt.Errorf("get 30d uptime: %w", err)
+	var totalChecks, upChecks int64
+	for _, day := range days {
+		totalChecks += day.TotalChecks
+		upChecks += day.UpChecks
+	}
+	uptimeMonth := 100.0
+	if totalChecks > 0 {
+		uptimeMonth = float64(upChecks) / float64(totalChecks) * 100
 	}
 
 	totalSecsMonth := int64(monthEnd.Sub(monthStart).Seconds())
 	elapsedSecs := int64(now.Sub(monthStart).Seconds())
-	budgetTotal, budgetUsed, budgetRemain, breached := monthlyBudget(target, uptimeMonth, totalSecsMonth, elapsedSecs)
-
-	var budgetRemainPct float64
-	if budgetTotal > 0 {
-		budgetRemainPct = float64(budgetRemain) / float64(budgetTotal) * 100
-	}
+	budget := monthlyBudget(target, totalChecks, upChecks, totalSecsMonth, elapsedSecs)
 
 	return &Status{
 		Target:            target,
+		TotalChecks:       totalChecks,
 		UptimePctMonth:    uptimeMonth,
-		UptimePct30d:      uptime30d,
 		MonthStart:        monthStart.Format("2006-01-02"),
 		MonthEnd:          monthEnd.Format("2006-01-02"),
 		TotalSecsMonth:    totalSecsMonth,
-		BudgetTotalSecs:   budgetTotal,
-		BudgetUsedSecs:    budgetUsed,
-		BudgetRemainSecs:  budgetRemain,
-		BudgetRemainPct:   budgetRemainPct,
-		BudgetRemainHuman: FormatDuration(budgetRemain),
-		Breached:          breached,
+		BudgetTotalSecs:   budget.Total,
+		BudgetUsedSecs:    budget.Used,
+		BudgetRemainSecs:  budget.Remain,
+		BudgetRemainPct:   budget.RemainingPercent,
+		BudgetAtRisk:      budget.AtRisk,
+		BudgetRemainHuman: FormatDuration(budget.Remain),
+		Breached:          budget.Breached,
 	}, nil
 }
 
@@ -163,20 +173,22 @@ func computeReportAt(ctx context.Context, store storage.Store, year int, month t
 			if total > 0 {
 				uptimePct = float64(up) / float64(total) * 100
 			}
-			budgetSecs, usedSecs, remainSecs, breached := monthlyBudget(m.SLATarget, uptimePct, totalSecs, elapsedSecs)
+			budget := monthlyBudget(m.SLATarget, total, up, totalSecs, elapsedSecs)
 
 			entries = append(entries, &ReportEntry{
-				MonitorID:   m.ID,
-				MonitorName: m.Name,
-				Target:      m.SLATarget,
-				UptimePct:   uptimePct,
-				TotalChecks: total,
-				UpChecks:    up,
-				DownChecks:  down,
-				BudgetSecs:  budgetSecs,
-				UsedSecs:    usedSecs,
-				RemainSecs:  remainSecs,
-				Breached:    breached,
+				MonitorID:       m.ID,
+				MonitorName:     m.Name,
+				Target:          m.SLATarget,
+				UptimePct:       uptimePct,
+				TotalChecks:     total,
+				UpChecks:        up,
+				DownChecks:      down,
+				BudgetSecs:      budget.Total,
+				UsedSecs:        budget.Used,
+				RemainSecs:      budget.Remain,
+				BudgetRemainPct: budget.RemainingPercent,
+				BudgetAtRisk:    budget.AtRisk,
+				Breached:        budget.Breached,
 			})
 		}
 		if page >= monitors.TotalPages {
@@ -184,22 +196,6 @@ func computeReportAt(ctx context.Context, store storage.Store, year int, month t
 		}
 	}
 	return entries, nil
-}
-
-// ErrorBudgetSecs returns the total allowed downtime seconds for a given SLA target.
-func ErrorBudgetSecs(target float64, totalSecs int64) int64 {
-	if target <= 0 || target >= 100 {
-		return 0
-	}
-	return int64(float64(totalSecs) * (100 - target) / 100)
-}
-
-// DowntimeSecs returns the estimated downtime seconds based on uptime percentage and elapsed time.
-func DowntimeSecs(uptimePct float64, elapsedSecs int64) int64 {
-	if uptimePct >= 100 || elapsedSecs <= 0 {
-		return 0
-	}
-	return int64(float64(elapsedSecs) * (100 - uptimePct) / 100)
 }
 
 // FormatDuration formats seconds into a human-readable string like "4m 23s" or "2h 15m".

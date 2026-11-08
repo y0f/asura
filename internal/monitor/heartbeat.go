@@ -106,6 +106,7 @@ func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heart
 		w.logger.Error("heartbeat watcher: get open incident", "monitor_id", mon.ID, "error", err)
 		return
 	}
+	w.pipeline.checkSLABreach(ctx, mon)
 	if inc.AnnouncementPending {
 		if !w.pipeline.inMaintenance(ctx, mon.ID) {
 			w.pipeline.announceIncident(ctx, mon, inc)

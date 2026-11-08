@@ -20,6 +20,7 @@ type Store interface {
 	BulkDeleteMonitors(ctx context.Context, ids []int64, access ...MonitorAccess) (int64, error)
 	BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64, access ...MonitorAccess) (int64, error)
 	GetAllEnabledMonitors(ctx context.Context) ([]*Monitor, error)
+	ListSLAMonitorIDs(ctx context.Context, afterID int64, limit int) ([]int64, error)
 
 	// Monitor status (runtime state)
 	GetMonitorStatus(ctx context.Context, monitorID int64) (*MonitorStatus, error)
