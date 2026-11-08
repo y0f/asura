@@ -7,7 +7,7 @@ permalink: "/configuration.html"
 
 # Configuration {#configuration}
 
-Everything lives in `config.yaml`. See [config.example.yaml](https://github.com/y0f/Asura/blob/main/config.example.yaml) for the full reference. Environment variables expand via `${VAR_NAME}`.
+Server, runtime and authentication settings live in `config.yaml`. Monitor, notification-channel and status-page definitions are stored in the application database. See [config.example.yaml](https://github.com/y0f/Asura/blob/main/config.example.yaml) for the full reference. Environment variables expand via `${VAR_NAME}`.
 
 <details class="contents">
 <summary>On this page</summary>
