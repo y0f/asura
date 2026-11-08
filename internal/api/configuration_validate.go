@@ -1,12 +1,12 @@
 package api
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
+	"github.com/y0f/asura/internal/pageauth"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 )
@@ -101,11 +101,8 @@ func validateImportedConfiguration(c *storage.ConfigurationSnapshot) error {
 		if p.Slug != original.Slug || p.CustomCSS != original.CustomCSS || p.CustomHeaderHTML != original.CustomHeaderHTML || p.AnalyticsScript != original.AnalyticsScript {
 			return fmt.Errorf("status page %d contains an invalid slug or unsafe/noncanonical markup; save it through the status page editor first", p.ID)
 		}
-		if p.PasswordHash != "" {
-			decoded, err := hex.DecodeString(p.PasswordHash)
-			if err != nil || len(decoded) != 32 || strings.ToLower(p.PasswordHash) != p.PasswordHash {
-				return fmt.Errorf("status page %d password_hash must be a lowercase SHA-256 digest", p.ID)
-			}
+		if p.PasswordHash != "" && !pageauth.ValidHash(p.PasswordHash) {
+			return fmt.Errorf("status page %d password_hash has an unsupported or invalid format", p.ID)
 		}
 	}
 	for _, relation := range c.StatusPageMonitors {

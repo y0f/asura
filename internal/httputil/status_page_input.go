@@ -1,11 +1,10 @@
 package httputil
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
+	"github.com/y0f/asura/internal/pageauth"
 	"github.com/y0f/asura/internal/storage"
 	"github.com/y0f/asura/internal/validate"
 )
@@ -33,6 +32,30 @@ type StatusPageInput struct {
 	AnalyticsScript  *string                      `json:"analytics_script"`
 	Password         *string                      `json:"password"`
 	Monitors         *[]storage.StatusPageMonitor `json:"monitors"`
+
+	passwordPrepared bool
+	preparedPassword string
+	preparedHash     string
+}
+
+// PreparePassword performs bounded password hashing before entering the writer
+// transaction. Omission preserves protection; an empty password removes it.
+func (in *StatusPageInput) PreparePassword() error {
+	in.passwordPrepared = false
+	in.preparedPassword, in.preparedHash = "", ""
+	if in.Password == nil {
+		return nil
+	}
+	if *in.Password != "" {
+		hash, err := pageauth.Hash(*in.Password)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidStatusPage, err)
+		}
+		in.preparedHash = hash
+	}
+	in.preparedPassword = *in.Password
+	in.passwordPrepared = true
+	return nil
 }
 
 func (in StatusPageInput) Apply(current *storage.StatusPage, superAdmin bool) (*storage.StatusPage, *[]storage.StatusPageMonitor, error) {
@@ -80,11 +103,14 @@ func (in StatusPageInput) Apply(current *storage.StatusPage, superAdmin bool) (*
 		next.AnalyticsScript = *in.AnalyticsScript
 	}
 	if in.Password != nil {
-		next.PasswordHash = ""
-		if *in.Password != "" {
-			hash := sha256.Sum256([]byte(*in.Password))
-			next.PasswordHash = hex.EncodeToString(hash[:])
+		// Trusted direct callers remain safe, and a changed input never reuses
+		// a hash prepared for a different password.
+		if !in.passwordPrepared || in.preparedPassword != *in.Password {
+			if err := in.PreparePassword(); err != nil {
+				return nil, nil, err
+			}
 		}
+		next.PasswordHash = in.preparedHash
 	}
 	// Preserve omitted legacy branding byte-for-byte. Runtime rendering has its
 	// own sanitizer; an unrelated edit must not silently rewrite stored scripts.
