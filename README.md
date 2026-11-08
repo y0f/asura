@@ -21,9 +21,19 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-Asura monitors websites, APIs and network services from a single Go binary. It includes an embedded web interface and SQLite storage, with distributed probe agents and an optional PostgreSQL build.
+Asura monitors websites, APIs and network services from a single Go binary, with alerts, distributed probes and public status pages.
 
 ![Asura dashboard in dark mode with monitor health, response times and open incidents](assets/webpanel.png)
+
+## Why Asura?
+
+| Aspect | Asura |
+|---|---|
+| **Install** | A single binary, Docker container or Linux service. |
+| **Database** | SQLite built in; PostgreSQL available as an optional build. |
+| **Runtime** | Embedded web interface and assets; no Node runtime or separate frontend server. |
+| **API** | REST API and web interface share the same scoped access controls. |
+| **Scale** | Configurable check concurrency and distributed probes. |
 
 ## Features
 
@@ -66,9 +76,9 @@ For Linux services, binaries or source builds, see [installation options](https:
 
 ![Asura monitor detail with response times, availability history and SLA metrics in dark mode](assets/monitorview.png)
 
-**Custom status page:** your logo, header, colours and CSS, with grouped services and incident updates. This example uses the built-in [status-page branding settings](https://y0f.github.io/asura/status-pages.html#branding).
+**Public status page:** grouped service health, availability history and incident updates. Add your own logo, header and CSS through the [branding settings](https://y0f.github.io/asura/status-pages.html#branding).
 
-![Custom Asura status page with branded header, grouped services and incident updates](assets/statuspage.png)
+![Public status page with grouped services, availability history and incident updates](assets/statuspage.png)
 
 ## Upgrading
 
