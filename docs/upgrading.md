@@ -26,7 +26,9 @@ Plan an upgrade around the database, configuration and credentials together. V2 
 3. Choose the server artifact for the operating system and architecture, verify its published checksum, and review the release notes. Use the [installation guide](getting-started.html) for the supported commands and artifact names.
 4. Try the new version against a backup in an isolated environment. Prevent duplicate checks, notifications and agent connections while reviewing the restored configuration.
 
-Asura applies database migrations during startup. A JSON configuration export is useful for transferring supported definitions, but does not preserve history or every resource needed for rollback.
+Asura applies database migrations during startup. A JSON configuration export transfers definitions, not a complete rollback state. Very old SQLite schemas may require an intermediate Asura release; follow the startup error rather than manually changing the schema version.
+
+The v2 upgrade rehearsal used the published v1.3.1 binary with a populated SQLite schema 35 database, migrated it to schema 41, restarted v2, and restored the untouched backup under v1.3.1. It checked history, encrypted settings, legacy API roles, agents, heartbeats and password-protected pages. This covers that starting version and fixture; rehearse your own configuration before upgrading.
 
 ## Review historical metrics {#review-historical-metrics}
 

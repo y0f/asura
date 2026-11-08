@@ -1,32 +1,12 @@
 # Contributing to Asura
 
-Start with a focused change, test its behavior, and include the evidence needed to review it. The workflow below adapts the clear ownership and repeatable checks used in [Gophling](https://github.com/y0f/gophling/blob/main/.github/CONTRIBUTING.md) to Asura's server, storage and embedded interface.
+Start with a focused change, test its behavior, and report the checks actually run. This workflow adapts the ownership and repeatable checks used in [Gophling](https://github.com/y0f/gophling/blob/main/.github/CONTRIBUTING.md).
 
 ## Local setup
 
 Use Go 1.27.3 (the minimum supported patch is 1.26.10) and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your operating system. Save the CLI as `tailwindcss` (`tailwindcss.exe` on Windows) in the repository root; on Unix, run `chmod +x tailwindcss`. No Node installation is needed. The build commands run the exact templ version recorded in `go.mod`.
 
-```bash
-go run ./cmd/asura --setup
-```
-
-Save the generated API Key, then create `config.yaml` using its Hash value:
-
-```yaml
-server:
-  listen: "127.0.0.1:8090"
-database:
-  path: "asura.db"
-auth:
-  api_keys:
-    - name: admin
-      hash: "PASTE_HASH_FROM_SETUP"
-      super_admin: true
-  session:
-    cookie_secure: false
-```
-
-`config.yaml` is gitignored - it won't be committed.
+Run `go run ./cmd/asura --setup`, save the generated API Key, and create the minimal local `config.yaml` from [getting started](docs/getting-started.md#build-and-run-locally) using its Hash. The configuration file is gitignored. Disable secure cookies only for local HTTP development.
 
 ## Development workflow
 
@@ -46,13 +26,13 @@ This watches application sources, stylesheets and embedded assets. It finishes t
 
 Open http://localhost:8090 and log in with the API key from `--setup`.
 
-### Manual workflow (if you prefer)
+### Manual workflow
 
 Build generated assets before embedding them in the binary, then restart after edits:
 
 ```bash
-make generate css
-go build -o asura ./cmd/asura && ./asura -config config.yaml
+make build
+./asura -config config.yaml
 ```
 
 ## Check the change
@@ -79,7 +59,7 @@ go test ./...
 go build ./cmd/asura ./cmd/asura-agent
 ```
 
-Before merging, run the full race suite and the checks relevant to scripts or release tooling:
+Before merging, run the full race suite. Run the additional fixtures when their scripts or build contracts change:
 
 ```bash
 make test                         # go test -race -count=1 ./... after generation
@@ -116,51 +96,19 @@ CI runs these contracts against both supported Go patches. They reuse storage be
 
 Before committing generated application output, run `make generate css`. Run it again and verify `git diff` stays unchanged. CI verifies generation without writing back to the branch, and gates release binaries and container publication on tests, documentation checks, formatting, static checks and clean generated output.
 
-The public documentation uses the same Jekyll, kramdown and plain CSS approach as Gophling. Edit the Markdown pages, `_layouts/default.html`, `_data/navigation.yml` and `assets/site.css` under `docs`. Preserve existing page permalinks and heading IDs when changing content. Internal plans and audits are excluded from the published artifact.
-
-Documentation development uses Ruby 3.4.12 and Bundler 4.0.24. Dependencies and checksums are locked in `docs/Gemfile.lock`; Ruby is only needed to build or preview the documentation:
-
-```bash
-gem install bundler -v 4.0.24
-cd docs
-bundle install
-cd ..
-make docs-check
-```
-
-`make docs-check` builds production HTML into `.build/docs` and checks local links, anchors, unique titles and descriptions, canonical URLs, the sitemap and the public file catalog. Build output is ignored by Git. CI and Pages use this same locked build and artifact check. To preview, run `bundle exec jekyll serve --strict_front_matter --destination ../.build/docs` from `docs`, then open `http://127.0.0.1:4000/asura/`. On PowerShell without Make, build and check directly:
-
-```powershell
-$env:JEKYLL_ENV = 'production'
-Push-Location docs
-bundle exec jekyll build --strict_front_matter --destination ../.build/docs
-Pop-Location
-go run ./cmd/docscheck -dir .build/docs
-```
-
-For a fork or another host, set the HTTPS origin in `docs/_config.yml` as `url` and the deployment path as `baseurl` (empty for the origin root). The build derives navigation, canonical links, social metadata and the sitemap from that configuration. Local compilation does not publish the site or submit it to search engines.
+Documentation uses Jekyll, kramdown and plain CSS. Follow [docs/README.md](docs/README.md) for the locked Ruby setup, preview and `make docs-check`. Edit Markdown, layouts, navigation and styles under `docs`; preserve permalinks and heading IDs. The checker validates links, anchors, titles, descriptions, canonical URLs, the sitemap and the public file catalog. CI and Pages use the same locked build and checker; local builds do not publish anything.
 
 `make release` verifies the reviewed dependency notices, builds the server and agent for Linux amd64 and arm64, and copies `LICENSE` and `THIRD_PARTY_NOTICES.txt` beside the four binaries. `dist/checksums.txt` covers all six files. It uses the committed generated assets, so run `make generate css` before preparing a local release. CI retains a coverage profile for each Go version for 14 days.
 
 Dependency or toolchain changes require reviewing the applicable upstream license texts and generated-source notices in [licenses/README.md](licenses/README.md). Run `make notices` to assemble the combined notice and `make notices-check` to verify it against the audited runtime module graph. These files accompany release binaries; Docker images place them in `/usr/share/licenses/asura/`.
 
-The release workflow requires the reusable CI checks before publishing binaries or images. CI scans source on both supported Go patches and scans the four built binaries with pinned govulncheck. Publication generates GitHub build attestations for the binaries, checksum manifest and image digest; container builds also request BuildKit provenance. These publish steps run only for release tags. Action revisions, Go patches, base-image digests and the downloaded Tailwind checksum are pinned. Hosted runner images and package repositories can change; these controls do not imply a reproducible build or a SLSA level. Local `make release` creates binaries and checksums without publishing or signing them.
+CI scans source on both supported Go patches and all four release binaries with pinned govulncheck. Release tags publish only after reusable CI passes. Publication generates GitHub build attestations for the release files and image digest; container builds also request BuildKit provenance. Action revisions, Go patches, base-image digests and the Tailwind checksum are pinned, but hosted runners and package repositories can change: these controls do not establish reproducible builds or a SLSA level. Local `make release` neither publishes nor signs artifacts.
 
 Release tags must be valid `v`-prefixed semantic versions matching the Go module's major version, such as `v2.0.0` or `v2.0.0-rc.1` for `github.com/y0f/asura/v2`. Prereleases are marked as such on GitHub and publish only their full container version tag; stable releases also update `major.minor` and `latest`. Build metadata is retained in image tags with `+` replaced by `_`, and container tags must fit the 128-character limit. Missing listed release artifacts fail publication.
 
 ## Ownership and parallel work
 
-Use a separate branch and worktree for each worker. Give each task a common base commit, owned paths, expected behavior, dependencies and a focused test command. Workers hand off source changes, exact check outcomes and unresolved issues; one integration owner reviews and combines them.
-
-| Area | Shared contract to coordinate |
-| --- | --- |
-| Checks and probe agents | Pure types in `internal/model`, agent job/result protocol |
-| Storage and permissions | `storage.Store`, transaction boundaries, scopes and migration versions |
-| API and web handlers | Route registration, request validation, response and secret policy |
-| Interface and docs | Shared templ components, design tokens, generator inputs |
-| Runtime and delivery | Startup/shutdown, configuration, CI and release wiring |
-
-Integrate dependent sources in order and regenerate on the combined tree. Resolve generated conflicts from their source files. Never renumber a migration that has been applied. Keep private configuration and test data separate between worktrees; sharing the Go caches is fine. Run focused checks in each worker, then broader checks after integration when the combined change warrants them.
+Use separate branches/worktrees with a common base, owned paths, dependencies and focused checks. Coordinate shared types, storage contracts, migration versions, routes and generators through one integration owner. Hand off exact outcomes and unresolved issues. Integrate dependencies in order, regenerate on the combined tree, and resolve generated conflicts from their sources. Never renumber an applied migration. Keep private configuration and test data separate; Go caches can be shared.
 
 ## Pull requests and review
 
@@ -180,8 +128,7 @@ The contributor is responsible for understanding and reviewing the whole change,
 - Keep dependencies and runtime work small. Explain additions; measure changes before claiming lower memory use, faster responses or better scale.
 - Enforce permissions in request and persistence paths, including nested reads, counts, bulk operations and current ownership. Hidden controls alone are not access control.
 - Keep stored credentials out of ordinary responses, logs and examples. Preserve omitted credentials on edits and test explicit replacement or clearing.
-- Keep checker and agent dependencies independent of server storage. Preserve the dependency guard in `scripts/test-agent-deps.sh`.
-- Edit `.templ` and CSS, then regenerate. Use the templ version in `go.mod` and the pinned standalone Tailwind CLI. Check Markdown documentation with the locked Jekyll build.
+- Keep checker and agent dependencies independent of server storage; preserve `scripts/test-agent-deps.sh`.
 
 ## Issues
 

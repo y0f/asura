@@ -61,7 +61,7 @@ State locks serialize competing transitions for a monitor. Persistence failures 
 
 ## Dispatcher {#dispatcher}
 
-Routes events to notification channels. Each channel type has its own sender behind the `Sender` interface. 13 implementations: Webhook, Email, Telegram, Discord, Slack, ntfy, Microsoft Teams, PagerDuty, Opsgenie, Pushover, Google Chat, Matrix, and Gotify. If a monitor has `notification_channel_ids` set, only those channels fire. Otherwise all matching channels get the event.
+Routes events through 13 channel senders implementing the `Sender` interface; see [Notifications](notifications.html) for providers and settings. A monitor's `notification_channel_ids` restrict delivery to those channels; otherwise all matching channels receive the event.
 
 Each notifier owns a bounded 100-job queue and 10 delivery workers. Admission and sends are cancelable, retries are bounded, and shutdown joins delivery before closing storage. The queue is not durable across process failure. See [delivery behavior](notifications.html#delivery-and-shutdown) for exact limits.
 
@@ -85,53 +85,19 @@ The optional `postgres` build adds pgx and an independently authored PostgreSQL 
 
 ## Checker Registry {#checker-registry}
 
-Each checker implements `Checker` with a `Check(ctx, monitor)` method and gets registered at startup. 17 implementations:
-
-| Checker | Protocol |
-| --- | --- |
-| HTTP | HTTP/HTTPS with auth, redirects, TLS verify |
-| TCP | TCP connect with send/expect |
-| DNS | DNS record queries |
-| ICMP | Ping (raw socket or unprivileged) |
-| TLS | Certificate expiry checking |
-| WebSocket | WS connect with send/expect |
-| Command | Execute a configured process and arguments |
-| Docker | Container state via Docker socket |
-| Domain | WHOIS expiry lookups |
-| gRPC | gRPC health check protocol |
-| MQTT | MQTT 3.1.1 connect + subscribe |
-| HTTP Multi-Step | Chained HTTP requests with variable extraction |
-| SMTP | Mail server connect (optional STARTTLS) |
-| SSH | Validate an SSH identification banner |
-| Redis | Redis PING |
-| PostgreSQL | Validate a PostgreSQL startup response |
-| UDP | UDP send/expect |
+Startup registers 17 protocol checkers implementing `Check(ctx, monitor)`. The worker supplies the monitor's timeout context. Shared registry checks reject unsupported proxy combinations before executing a check; private-target restrictions also apply inside supported dialers. Commands require an explicit executable allowlist. See [Monitors](monitors.html) for each protocol's settings and success criteria.
 
 ## Project Structure {#project-structure}
 
-```
-asura/
-├── cmd/asura/         # Server entry point and setup
-├── cmd/asura-agent/   # Remote probe agent
-├── internal/
-│   ├── analytics/     # Request log analytics and rollups
-│   ├── api/           # API handlers (JSON endpoints)
-│   ├── assertion/     # Assertion engine for check results
-│   ├── checker/       # 17 protocol checkers
-│   ├── config/        # YAML configuration loading
-│   ├── diff/          # Content change diff computation
-│   ├── httputil/      # HTTP utilities (ID parsing, JSON helpers)
-│   ├── incident/      # Incident lifecycle management
-│   ├── monitor/       # Scheduler, workers, result processor
-│   ├── notifier/      # 13 notification channel senders
-│   ├── safenet/       # SSRF protection (private IP blocking)
-│   ├── server/        # HTTP server, routes, middleware
-│   ├── storage/       # SQLite store, migrations
-│   ├── totp/          # TOTP two-factor authentication
-│   ├── validate/      # Input validation
-│   └── web/           # Web handlers and views/*.templ components
-├── web/
-│   └── static/        # Embedded CSS, JavaScript and images
-├── deploy/            # nginx.conf, Dockerfile, docker-compose
-└── docs/              # Jekyll/kramdown documentation source
-```
+| Area | Source |
+| --- | --- |
+| Executables | `cmd/asura` server/setup; `cmd/asura-agent` remote probe |
+| Shared probe types | `internal/model`, independent of server and database packages |
+| Check runtime | `internal/monitor`, `checker`, `assertion`, `incident`, `escalation`, `notifier` and `sla` |
+| Persistence | `internal/storage`: shared SQL operations, explicit SQLite/PostgreSQL schemas and migrations |
+| HTTP and permissions | `internal/server`, `api`, `web`, `config` and `httputil` |
+| Credential boundaries | `internal/redact`, `logsafe`, `pageauth`, `totp` and `safenet` |
+| Interface | `internal/web/views/*.templ`, `web/tailwind.input.css`, `web/css` and embedded `web/static` |
+| Build and deployment | Root `Makefile`, `Dockerfile`, `docker-compose.yml`, `install.sh`, `asura.service`; `deploy/nginx.conf` |
+| Verification tools | `cmd/docscheck`, `cmd/notices` and `scripts` fixtures/dependency guards |
+| Documentation | `docs`: Markdown, Jekyll layouts and plain CSS; generated site in `.build/docs` |

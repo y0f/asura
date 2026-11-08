@@ -15,6 +15,8 @@ A recoverable Asura backup includes a consistent database backup, the configurat
 
 ## Back up the database and configuration {#back-up-the-database-and-configuration}
 
+For the default SQLite backend:
+
 1. Find the database file from `database.path` in your active configuration. For Docker, use the persistent data volume, not the container's disposable filesystem.
 2. Create a consistent database snapshot with SQLite's backup command, or stop Asura cleanly before copying its database files.
 3. Save `config.yaml`, environment or secret files, and any referenced TLS certificates or keys. Preserve `database.encryption_key` when configured: restoring the database without the matching key will not recover encrypted credentials.
@@ -48,7 +50,7 @@ Review the [pg_restore options](https://www.postgresql.org/docs/18/app-pgrestore
 
 ## Verify and restore {#verify-and-restore}
 
-Test the backup in a separate directory with a copy of the matching configuration and key. Keep the test instance isolated from production check targets, agents and notification destinations until you have reviewed its configuration. Confirm that the database opens, expected monitors and history are present, and stored credentials can be read.
+Test the backup in a separate SQLite directory or PostgreSQL database with a copy of the matching configuration and key. Keep the test instance isolated from production check targets, agents and notification destinations until you have reviewed its configuration. Confirm that the database opens, expected monitors and history are present, and stored credentials can be read.
 
 For a production restore, stop Asura first and preserve the current database and configuration separately. For SQLite, restore into a clean data directory with the correct file ownership and encryption key; do not mix the restored database with WAL or shared-memory files from another database. For PostgreSQL, use the restored dedicated database and its intended owner. Start the matching Asura version and verify its logs and state before resuming normal operation.
 
@@ -83,7 +85,7 @@ Add your configured `server.base_path` before `/api/v1` when Asura is hosted bel
 
 ## JSON configuration import {#json-configuration-import}
 
-Import transfers supported configuration into an instance. It does not restore historical database state. Test the file on an isolated instance and take a database backup before replacing existing configuration.
+Import transfers supported configuration, not historical database state. Export and import JSON are limited to 32 MiB. Test the file on an isolated instance and take a database backup before replacing existing configuration.
 
 | Mode | Purpose |
 | --- | --- |
@@ -104,7 +106,7 @@ Each newly imported heartbeat monitor receives a fresh credential. The web impor
 
 ### Agent references {#agent-references}
 
-Agent references resolve to already enrolled destination agents with unique matching names, or to an explicit source-to-destination agent mapping supplied with the import. Import never creates or enables agents or transfers agent tokens. Review every mapping before importing: assignment delegates eligible monitor data to that agent.
+Agent references resolve to already enrolled destination agents with unique matching names, or to an explicit source-to-destination `agent_mapping` supplied with the import; see [configuration transfer](api.html#export-import) for the request format. Import never creates or enables agents or transfers agent tokens. Review every mapping: assignment delegates eligible monitor data to that agent.
 
 ### Older export files {#older-export-files}
 

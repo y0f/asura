@@ -23,7 +23,7 @@ the actual commands and outcomes, including failures or checks that could not ru
   `*_templ.go` or compiled CSS. Documentation sources are Markdown, Jekyll layouts
   and plain CSS under `docs`; build output belongs in `.build/docs`, not Git.
 - Keep pure monitor types in `internal/model`. The probe agent and checkers must
-  not import server storage or link the SQLite driver.
+  not import server storage or link either database driver.
 - Enforce each required action against the current object or destination scope.
   Filter before pagination/counts; check authority and related writes within the
   same transaction. Navigation visibility is not authorization.

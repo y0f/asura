@@ -7,7 +7,7 @@ permalink: "/configuration.html"
 
 # Configuration {#configuration}
 
-Server, runtime and authentication settings live in `config.yaml`. Monitor, notification-channel and status-page definitions are stored in the application database. See [config.example.yaml](https://github.com/y0f/Asura/blob/main/config.example.yaml) for the full reference. Environment variables expand via `${VAR_NAME}`.
+Server, runtime and authentication settings live in `config.yaml`. Monitor, notification-channel and status-page definitions are stored in the application database. See [config.example.yaml](https://github.com/y0f/asura/blob/main/config.example.yaml) for additional settings. Environment variables expand via `${VAR_NAME}` before YAML parsing; missing variables expand to an empty string. Restart Asura after changing this file or its environment.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -25,9 +25,11 @@ Server, runtime and authentication settings live in `config.yaml`. Monitor, noti
 | --- | --- | --- |
 | `listen` | `127.0.0.1:8090` | Address to bind. Keep this localhost-only and put a reverse proxy in front |
 | `base_path` | `""` | URL prefix for all routes (e.g. `/asura`) |
-| `external_url` | auto | Public URL used in notification links |
+| `external_url` | `http://{listen}{base_path}` | Public URL used in notification links; set the HTTPS URL explicitly behind a proxy |
 | `trusted_proxies` | `[]` | IPs/CIDRs whose `X-Real-IP`/`X-Forwarded-For` headers are trusted |
 | `rate_limit_per_sec` | `30` | Per-IP request rate limit |
+| `rate_limit_burst` | `60` | Burst allowance for that limiter |
+| `max_body_size` | `1048576` | Ordinary request-body limit in bytes; authenticated configuration transfer has its own 32 MiB limit |
 | `web_ui_enabled` | `true` | Serve the web dashboard. Set `false` for API-only operation; REST endpoints retain their authorization requirements |
 
 ## Database backend {#database-backend}
@@ -174,8 +176,15 @@ curl -H "X-API-Key: ak_a8f3e7b2c1d9..." https://example.com/asura/api/v1/monitor
 | --- | --- | --- |
 | `workers` | `10` | Concurrent check workers |
 | `default_interval` | `60s` | Default check interval for new monitors |
-| `default_timeout` | `10s` | Default check timeout |
+| `default_timeout` | `10s` | Default per-monitor check timeout, including command checks |
 | `adaptive_intervals` | `true` | Dynamically adjust check frequency based on monitor stability |
+| `failure_threshold` | `3` | Consecutive failures before opening an incident |
+| `success_threshold` | `1` | Consecutive successes before resolving an incident |
+| `heartbeat_check_interval` | `30s` | Scan interval for expired heartbeat deadlines |
+| `allow_private_targets` | `false` | Permit private/reserved target addresses for server checks |
+| `command_allowlist` | `[]` | Allowed command executable paths; empty blocks all command checks |
+
+These keys are under `monitor`. Each monitor can override its interval, timeout and incident thresholds. There is no separate command timeout: the worker applies the monitor's timeout to the command's context. Older `command_timeout` and `max_concurrent_dns` YAML keys had no runtime effect and remain ignored.
 
 ### Adaptive Intervals {#adaptive-intervals}
 
@@ -207,7 +216,15 @@ Check results are automatically aggregated into hourly and daily rollups by the 
 - Over 7 days through 90 days: hourly aggregates (response-time statistics and status counts)
 - Over 90 days: daily aggregates
 
-Hourly rollups are retained for 90 days and daily rollups for one calendar year. Raw-history and request-log retention are configured separately. A failed rollup pass retains its source history rather than deleting unsummarized checks.
+Hourly rollups are retained for 90 days and daily rollups for one calendar year. A failed rollup pass retains its source history rather than deleting unsummarized checks. Raw-history and request-log retention use these separate settings:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `database.retention_days` | `90` | Retain raw checks, resolved incidents and their events, content changes, audit records and notification history |
+| `database.request_log_retention_days` | `7` | Retain request history |
+| `database.retention_period` | `1h` | Interval between rollup and retention passes; one also runs at startup |
+
+Metrics use verified probe observations. Existing history classified as `unknown` during the v2 upgrade remains available as history but does not enter those calculations; see [historical metrics](upgrading.html#review-historical-metrics).
 
 ## Keyboard Shortcuts {#keyboard-shortcuts}
 

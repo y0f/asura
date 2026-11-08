@@ -42,7 +42,7 @@ curl --fail http://127.0.0.1:8090/api/v1/health
 
 Open `http://127.0.0.1:8090` and sign in with the API Key. The example provides one super administrator. It listens on all container interfaces while Compose publishes only on the host's loopback address. The non-root process writes its SQLite database to the named `asura-data` volume. Container replacement and `docker compose down` preserve this volume; `docker compose down --volumes` deletes it.
 
-If startup fails, check `docker compose logs asura`. An empty or incorrect hash prevents authentication setup. The local example uses HTTP cookies; configure HTTPS and `auth.session.cookie_secure: true` before public access, following [deployment](deployment.html).
+If startup fails, check `docker compose logs asura`. A missing or malformed hash fails configuration validation; a valid hash for a different key allows startup but rejects your login. The local example uses HTTP cookies; configure HTTPS and `auth.session.cookie_secure: true` before public access, following [deployment](deployment.html).
 
 ## Linux service {#linux-service}
 
@@ -66,7 +66,7 @@ The service listens on `127.0.0.1:8090`. Its generated configuration requires HT
 
 ## Build and run locally {#build-and-run-locally}
 
-Use Go 1.27.3 and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your system. Save the CLI as `tailwindcss` in the repository root (`tailwindcss.exe` on Windows), and make it executable on Unix. Build commands use the templ version in `go.mod`; Node and a separately installed templ CLI are unnecessary. CI also tests Go 1.26.10.
+From a cloned repository, use Go 1.27.3 and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your system. Save the CLI as `tailwindcss` in the repository root (`tailwindcss.exe` on Windows), and make it executable on Unix. Build commands use the templ version in `go.mod`; Node and a separately installed templ CLI are unnecessary. CI also tests Go 1.26.10.
 
 ```
 make build
@@ -107,15 +107,7 @@ make dev
 
 The watcher finishes template and CSS generation before rebuilding embedded assets and restarting. It detects Go, template, stylesheet and embedded-asset changes. If generation or compilation fails, the previous server keeps running.
 
-```
-make generate css
-go test -race -count=1 ./...
-bash scripts/test-install.sh
-bash scripts/test-dev.sh
-bash scripts/test-release-tag.sh
-```
-
-Race detection requires a supported C compiler. Network tests run in Linux CI; Windows development does not require Docker. See [CONTRIBUTING.md](https://github.com/y0f/asura/blob/main/CONTRIBUTING.md) for generated-output checks and release preparation.
+See [CONTRIBUTING.md](https://github.com/y0f/asura/blob/main/CONTRIBUTING.md) for source checks, race-test prerequisites, Windows commands and release preparation.
 
 ## Release binaries and probe agents {#release-binaries-and-probe-agents}
 
@@ -140,4 +132,4 @@ chmod +x asura-agent-linux-amd64
 ./asura-agent-linux-amd64 --server https://monitor.example.com --token YOUR_AGENT_TOKEN
 ```
 
-Include the configured base path in the server URL when needed. Private-network targets are denied by default; `--allow-private` enables them for a trusted probe. The agent supports `--interval`, `--concurrency` and `--version`. See [the API reference](api.html) for agent administration.
+Include the configured base path in the final server URL; agent control requests do not follow redirects. Private-network targets are denied by default; `--allow-private` enables them for a trusted probe. `--interval` defaults to `30s`, and `--concurrency` to `10`; both must be positive. Use `--version` to inspect the installed agent. See [the API reference](api.html) for agent administration.

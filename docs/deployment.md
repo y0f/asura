@@ -32,7 +32,7 @@ The target regenerates the embedded interface and writes `asura-postgres`. For u
 
 Provision a dedicated empty database owned by Asura's login role. The role needs ownership to create and migrate its tables, indexes, functions and triggers; it does not need superuser, role-creation or database-creation privileges. Asura uses the `public` schema and rejects unrelated existing objects during first initialization. Configure the [database driver and DSN](configuration.html#database-backend) before starting. Keep PostgreSQL autovacuum enabled.
 
-Run one Asura server per database. Its persistent writer connection holds an advisory ownership lock, while separate read-only connections serve queries and consistent snapshots. A second server fails startup. Loss of the writer session or ownership stops the running server; investigate database availability and restart explicitly. Do not route these connections through a transaction-pooling proxy: ownership requires a persistent database session. The server uses up to `max_read_conns + 2` database connections, including its writer and ownership observer.
+Run one Asura server per database. Its persistent writer connection holds an advisory ownership lock, while separate read-only connections serve queries and consistent snapshots. A second server fails startup. Loss of the writer session or ownership stops the process instead of reconnecting silently; a configured service supervisor may then restart it. Investigate repeated ownership failures. Do not use a transaction-pooling proxy: ownership requires a persistent database session. The server uses up to `max_read_conns + 2` database connections, including its writer and ownership observer.
 
 Changing `database.driver` does not convert a SQLite file. Transfer portable configuration into the new backend with [v2 export/import](backup.html#json-configuration-export), then re-enroll imported heartbeats and review explicit agent mappings. Historical data, sessions and subscriptions are not transferred. Keep the original database, configuration and encryption key for rollback.
 
@@ -111,6 +111,6 @@ If the service fails, inspect `journalctl -u asura` or `docker compose logs asur
 
 ## Data and upgrades {#data-and-upgrades}
 
-Keep the database on persistent local storage and preserve its encryption key. The default systemd unit permits writes under `/var/lib/asura`; changing the database path requires matching directory ownership and service write permissions. Docker stores the default database in its named data volume.
+Keep the SQLite database on persistent local storage and preserve its encryption key. The default systemd unit permits writes under `/var/lib/asura`; changing the database path requires matching directory ownership and service write permissions. Docker stores the default SQLite database in its named data volume. PostgreSQL persistence and backups are managed by its database service.
 
 Use the [backup and restore guide](backup.html) and test a restore before upgrading. A configuration export does not include all database state. Keep the old binary or image together with its matching database backup for rollback.
