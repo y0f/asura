@@ -26,7 +26,9 @@ const defaultBaseURL = "https://y0f.github.io/asura/"
 var pages = []page{
 	{"home", "Overview", "Open-source uptime monitoring with alerts, incident tracking, SLA reports and public status pages. Self-host Asura as a single Go binary."},
 	{"getting-started", "Getting started", "Install Asura, create your first uptime monitor and configure alerts. Start with Docker Compose or build the Go server from source."},
+	{"upgrading", "Upgrading to v2", "Upgrade Asura with a consistent backup, review v2 permissions and update probe agents. Includes verification steps and database rollback guidance."},
 	{"configuration", "Configuration", "Configure Asura's server, SQLite storage, API keys, sessions and monitoring settings. Includes environment variables and deployment options."},
+	{"access-control", "Access control", "Manage Asura API keys, reusable roles and fine-grained permissions. Scope access to monitors and groups, preserve credentials and migrate legacy grants."},
 	{"monitors", "Monitors", "Monitor websites, APIs and network services with Asura. Configure HTTP, DNS, TLS, heartbeat and other checks, assertions and remote probes."},
 	{"notifications", "Notifications", "Send Asura uptime alerts through email, webhooks and messaging services. Configure notification channels, event filters and delivery settings."},
 	{"escalation-policies", "Escalation policies", "Escalate unresolved Asura incidents with timed notification steps. Configure policy delays, repeats and monitor assignments."},
