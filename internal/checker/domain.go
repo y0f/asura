@@ -84,7 +84,7 @@ func queryWhois(ctx context.Context, domain, server string, timeout time.Duratio
 	if err != nil {
 		return "", time.Since(start).Milliseconds(), fmt.Errorf("WHOIS connection failed: %w", err)
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 
 	conn.SetDeadline(time.Now().Add(timeout))
 

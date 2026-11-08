@@ -44,7 +44,7 @@ func (c *SSHChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("connection failed: %v", err)}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 	conn.SetDeadline(time.Now().Add(timeout))
 
 	banner, err := readSSHIdentification(conn)

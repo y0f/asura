@@ -59,7 +59,7 @@ func (c *MQTTChecker) Check(ctx context.Context, monitor *model.Monitor) (*Resul
 			Message:      fmt.Sprintf("MQTT connection failed: %v", err),
 		}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 
 	if settings.UseTLS {
 		conn, err = mqttTLSUpgrade(ctx, conn, target)

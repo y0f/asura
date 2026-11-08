@@ -88,7 +88,7 @@ func probeICMP(ctx context.Context, dst net.IP, isIPv6 bool, start time.Time, ti
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: time.Since(start).Milliseconds(), Message: fmt.Sprintf("ICMP listen failed: %v", err)}
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 
 	seq := int(icmpSeq.Add(1) & 0xffff)
 	sent := time.Now()

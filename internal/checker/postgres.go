@@ -43,7 +43,7 @@ func (c *PostgreSQLChecker) Check(ctx context.Context, monitor *model.Monitor) (
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("connection failed: %v", err)}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 	conn.SetDeadline(time.Now().Add(timeout))
 
 	user := settings.Username

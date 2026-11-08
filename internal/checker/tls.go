@@ -61,9 +61,9 @@ func (c *TLSChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result
 		}, nil
 	}
 
+	defer closeConnOnCancel(ctx, rawConn)()
 	tlsConn := tls.Client(rawConn, &tls.Config{ServerName: host})
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		rawConn.Close()
 		return &Result{
 			Status:       "down",
 			ResponseTime: time.Since(start).Milliseconds(),

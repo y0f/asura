@@ -35,7 +35,7 @@ func (c *UDPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("dial failed: %v", err)}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 	conn.SetDeadline(time.Now().Add(timeout))
 
 	sendData := settings.SendData
