@@ -23,7 +23,7 @@ function monitorChart() {
             const failed = this.points.filter(p => p.s === 'down').length;
             const degraded = this.points.filter(p => p.s === 'degraded').length;
             return 'Response time for ' + this.loadedRange + ': ' + this.points.length +
-                ' samples, ' + failed + ' down, ' + degraded + ' degraded.';
+                ' data points, ' + failed + ' down points, ' + degraded + ' degraded points.';
         },
         async fetchData() {
             if (this.request) this.request.abort();

@@ -4,6 +4,7 @@ function notifChannels(basePath, eventTypes) {
         showForm: false,
         editId: 0,
         secretsSet: [],
+        clearSecrets: [],
         originalType: '',
         advancedNotifSettings: false,
         formData: { name: '', type: 'webhook', enabled: true, settings_json: '{}' },
@@ -36,6 +37,7 @@ function notifChannels(basePath, eventTypes) {
         resetForm() {
             this.editId = 0;
             this.secretsSet = [];
+            this.clearSecrets = [];
             this.originalType = '';
             this.advancedNotifSettings = false;
             this.formData = { name: '', type: 'webhook', enabled: true, settings_json: '{}' };
@@ -80,7 +82,7 @@ function notifChannels(basePath, eventTypes) {
                 case 'pushover': this.pushover = { user_key: s.user_key || '', app_token: s.app_token || '', priority: String(s.priority || 0), sound: s.sound || '', device: s.device || '' }; break;
                 case 'googlechat': this.googlechat = { webhook_url: s.webhook_url || '' }; break;
                 case 'matrix': this.matrix = { homeserver: s.homeserver || '', access_token: s.access_token || '', room_id: s.room_id || '' }; break;
-                case 'gotify': this.gotify = { server_url: s.server_url || '', app_token: s.app_token || '', priority: String(s.priority || 5) }; break;
+                case 'gotify': this.gotify = { server_url: s.server_url || '', app_token: s.app_token || '', priority: String(s.priority ?? 5) }; break;
             }
             this.showForm = true;
         }

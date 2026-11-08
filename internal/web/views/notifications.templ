@@ -237,9 +237,10 @@ templ notifWebhookFields() {
 			<label class="form-label" for="notif_webhook_secret">Secret</label>
 			<input id="notif_webhook_secret" type="password" autocomplete="off" name="notif_webhook_secret" x-model="webhook.secret" :placeholder="kept('secret') ? 'Saved. Leave blank to keep it.' : 'Optional HMAC-SHA256 secret'" class="form-input"/>
 			<label x-show="kept('secret')" class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
-				<input type="checkbox" name="clear_secrets" value="secret" :disabled="!kept('secret')" class="form-checkbox"/>
+				<input type="checkbox" name="clear_secrets" value="secret" x-model="clearSecrets" :disabled="advancedNotifSettings || !kept('secret')" class="form-checkbox"/>
 				Remove saved value
 			</label>
+			<p x-show="kept('secret') && clearSecrets.includes('secret')" x-cloak role="status" class="form-hint">Removal also discards an entered replacement secret.</p>
 		</div>
 	</div>
 }
@@ -300,9 +301,10 @@ templ notifEmailFields() {
 				<label class="form-label" for="notif_email_password">Password</label>
 				<input id="notif_email_password" type="password" name="notif_email_password" x-model="email.password" :placeholder="kept('password') ? 'Saved. Leave blank to keep it.' : 'SMTP password'" class="form-input"/>
 				<label x-show="kept('password')" class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
-					<input type="checkbox" name="clear_secrets" value="password" :disabled="!kept('password')" class="form-checkbox"/>
+					<input type="checkbox" name="clear_secrets" value="password" x-model="clearSecrets" :disabled="advancedNotifSettings || !kept('password')" class="form-checkbox"/>
 					Remove saved value
 				</label>
+				<p x-show="kept('password') && clearSecrets.includes('password')" x-cloak role="status" class="form-hint">Removal also discards an entered replacement password.</p>
 			</div>
 		</div>
 		<div>
@@ -474,12 +476,9 @@ templ notifGotifyFields() {
 		</div>
 		<div>
 			<label class="form-label" for="notif_gotify_priority">Priority</label>
-			<select id="notif_gotify_priority" name="notif_gotify_priority" x-model="gotify.priority" class="form-select">
-				<option value="1">1 — Low</option>
-				<option value="5">5 — Normal (default)</option>
-				<option value="8">8 — High</option>
-				<option value="10">10 — Max</option>
-			</select>
+			<input id="notif_gotify_priority" type="number" name="notif_gotify_priority" x-model="gotify.priority" min="0" step="1" list="gotify-priorities" aria-describedby="gotify-priority-help" class="form-input"/>
+			<datalist id="gotify-priorities"><option value="0"></option><option value="1"></option><option value="5"></option><option value="8"></option><option value="10"></option></datalist>
+			<p id="gotify-priority-help" class="form-hint">A nonnegative whole number. Higher values are more urgent. New channels start at 5.</p>
 		</div>
 	</div>
 }

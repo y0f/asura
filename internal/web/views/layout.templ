@@ -90,12 +90,18 @@ templ Layout(p LayoutParams) {
 templ shellScript() {
 	<script>
 		document.addEventListener("alpine:init", () => {
+			function readPreference(key, fallback) {
+				try { return localStorage.getItem(key) ?? fallback; } catch (_) { return fallback; }
+			}
+			function savePreference(key, value) {
+				try { localStorage.setItem(key, value); } catch (_) { /* Preferences remain usable for this page. */ }
+			}
 			Alpine.data("shell", () => ({
 				nav: false,
 				mobile: window.matchMedia("(max-width: 767px)").matches,
-				collapsed: localStorage.getItem("navc") === "1",
+				collapsed: readPreference("navc", "0") === "1",
 				get navCollapsed() { return !this.mobile && this.collapsed; },
-				theme: localStorage.getItem("theme") || "dark",
+				theme: readPreference("theme", "dark"),
 				ready: false,
 				init() {
 					const mq = window.matchMedia("(max-width: 767px)");
@@ -164,10 +170,10 @@ templ shellScript() {
 					document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
 					window.dispatchEvent(new CustomEvent("theme-changed"));
 				},
-				setTheme(t) { this.theme = t; localStorage.setItem("theme", t); this.applyTheme(); },
+				setTheme(t) { this.theme = t; savePreference("theme", t); this.applyTheme(); },
 				toggleCollapse() {
 					this.collapsed = !this.collapsed;
-					localStorage.setItem("navc", this.collapsed ? "1" : "0");
+					savePreference("navc", this.collapsed ? "1" : "0");
 					document.documentElement.classList.toggle("nav-collapsed", this.collapsed);
 				},
 			}));
@@ -240,7 +246,8 @@ templ navScrollScript() {
 			function nav() { return document.getElementById("sidenav"); }
 			function restore() {
 				var n = nav(); if (!n) return;
-				var v = sessionStorage.getItem(KEY); if (v === null) return;
+				var v; try { v = sessionStorage.getItem(KEY); } catch (_) { return; }
+				if (v === null) return;
 				var top = parseInt(v, 10) || 0;
 				if (n.scrollTop !== top) n.scrollTop = top;
 			}
@@ -250,7 +257,8 @@ templ navScrollScript() {
 				var n = nav(); if (!n) return;
 				bound = true;
 				n.addEventListener("scroll", function () { clearTimeout(t); t = setTimeout(function () {
-					var nn = nav(); if (nn) sessionStorage.setItem(KEY, String(nn.scrollTop));
+					var nn = nav();
+					try { if (nn) sessionStorage.setItem(KEY, String(nn.scrollTop)); } catch (_) { /* Scroll position is optional. */ }
 				}, 100); }, { passive: true });
 			}
 			function init() { restore(); bind(); }
