@@ -1,6 +1,8 @@
 package web
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -14,6 +16,8 @@ func (h *Handler) Groups(w http.ResponseWriter, r *http.Request) {
 	groups, err := h.store.ListMonitorGroups(r.Context())
 	if err != nil {
 		h.logger.Error("web: list groups", "error", err)
+		http.Error(w, "Failed to load groups", http.StatusInternalServerError)
+		return
 	}
 
 	lp := h.newLayoutParams(r, "Groups", "groups")
@@ -33,7 +37,12 @@ func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	group, err := h.store.GetMonitorGroup(ctx, id)
 	if err != nil {
-		h.redirect(w, r, "/groups")
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			h.logger.Error("web: get group", "error", err)
+			http.Error(w, "Failed to load group", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -41,9 +50,11 @@ func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
-	result, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{GroupID: &id}, storage.Pagination{Page: page, PerPage: 50})
+	result, err := h.store.ListMonitors(ctx, storage.MonitorListFilter{GroupID: &id, Access: httputil.MonitorAccess(ctx, "monitors.read")}, storage.Pagination{Page: page, PerPage: 50})
 	if err != nil {
 		h.logger.Error("web: list group monitors", "error", err)
+		http.Error(w, "Failed to load group monitors", http.StatusInternalServerError)
+		return
 	}
 
 	lp := h.newLayoutParams(r, group.Name, "groups")
@@ -118,8 +129,18 @@ func (h *Handler) GroupDelete(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/groups")
 		return
 	}
-	if err := h.store.DeleteMonitorGroup(r.Context(), id); err != nil {
+	if err := h.store.DeleteEmptyMonitorGroup(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrGroupNotEmpty) {
+			http.Error(w, "Move this group's monitors before deleting it", http.StatusConflict)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete group", "error", err)
+		http.Error(w, "Failed to delete group", http.StatusInternalServerError)
+		return
 	}
 	h.setFlash(w, "Group deleted")
 	h.redirect(w, r, "/groups")

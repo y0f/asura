@@ -100,7 +100,15 @@ func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.DeleteMonitorGroup(r.Context(), id); err != nil {
+	if err := h.store.DeleteEmptyMonitorGroup(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrGroupNotEmpty) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "group not found")
+			return
+		}
 		h.logger.Error("delete group", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete group")
 		return

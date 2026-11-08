@@ -110,6 +110,7 @@ type Store interface {
 	ListMonitorGroups(ctx context.Context) ([]*MonitorGroup, error)
 	UpdateMonitorGroup(ctx context.Context, g *MonitorGroup) error
 	DeleteMonitorGroup(ctx context.Context, id int64) error
+	DeleteEmptyMonitorGroup(ctx context.Context, id int64) error
 
 	// Tags
 	CreateTag(ctx context.Context, t *Tag) error

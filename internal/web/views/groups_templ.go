@@ -199,7 +199,7 @@ func GroupListPage(p GroupListParams) templ.Component {
 							}
 						}
 						if p.Can("groups.delete") {
-							templ_7745c5c3_Err = DeleteButton(fmt.Sprintf("%s/groups/%d/delete", p.BasePath, g.ID), "Delete this group? Its monitors are kept and become ungrouped.").Render(ctx, templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = DeleteButton(fmt.Sprintf("%s/groups/%d/delete", p.BasePath, g.ID), "Delete this group? Move its monitors to another group or ungroup them first.").Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -292,9 +292,9 @@ func groupAlpineData(basePath string) string {
 
 func (p GroupDetailParams) subtitle() string {
 	if p.Monitors == nil {
-		return "0 monitors"
+		return "0 visible monitors"
 	}
-	return fmt.Sprintf("%d monitor%s", p.Monitors.Total, plural(p.Monitors.Total))
+	return fmt.Sprintf("%d visible monitor%s", p.Monitors.Total, plural(p.Monitors.Total))
 }
 
 func (p GroupDetailParams) pageHref(page int) string {
@@ -443,7 +443,7 @@ func GroupDetailPage(p GroupDetailParams) templ.Component {
 					}
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div class=\"px-4 py-12 text-center\"><p class=\"text-sm text-muted-light\">No monitors in this group yet.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div class=\"px-4 py-12 text-center\"><p class=\"text-sm text-muted-light\">No monitors visible in this group.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
