@@ -28,6 +28,7 @@ jobs:
           chmod +x tailwindcss
       - name: Check generated templates and CSS
         run: |
+          make notices-check
           make generate css
           git diff --exit-code
           if [ -n "$(git ls-files --others --exclude-standard)" ]; then

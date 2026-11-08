@@ -7,6 +7,7 @@ set -euo pipefail
 GO_VERSION="1.27.3"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/usr/local/bin"
+LICENSE_DIR="/usr/share/licenses/asura"
 CONFIG_DIR="/etc/asura"
 DATA_DIR="/var/lib/asura"
 SERVICE_USER="asura"
@@ -123,7 +124,20 @@ install_go() {
 
 build_asura() {
     # Use the same executable and local toolchain that select_go verified.
-    GOTOOLCHAIN=local CGO_ENABLED=0 "$GO_BIN" build -trimpath -ldflags="-s -w -X main.version=$1" -o asura ./cmd/asura
+    GOTOOLCHAIN=local GOWORK=off GOFLAGS= GOEXPERIMENT= CGO_ENABLED=0 GOAMD64=v1 GOARM64=v8.0 GOOS=linux GOARCH="$GOARCH" \
+        "$GO_BIN" build -trimpath -ldflags="-s -w -X main.version=$1" -o asura ./cmd/asura
+}
+
+verify_notices() {
+    # Child go commands must use the executable selected above, even when an
+    # obsolete installation or relative PATH entry originally shadowed it.
+    GOTOOLCHAIN=local GOWORK=off GOFLAGS= GOEXPERIMENT= CGO_ENABLED=0 GOAMD64=v1 GOARM64=v8.0 \
+        PATH="$(dirname "$GO_BIN"):$PATH" "$GO_BIN" run ./cmd/notices -check -verify
+}
+
+install_notices() {
+    install -d -m 755 "$LICENSE_DIR"
+    install -m 644 "$SCRIPT_DIR/LICENSE" "$SCRIPT_DIR/THIRD_PARTY_NOTICES.txt" "$LICENSE_DIR/"
 }
 
 # Sourcing exposes the toolchain helpers without installing a service.
@@ -149,7 +163,9 @@ VERSION=$(git -C "$SCRIPT_DIR" describe --tags --always --dirty 2>/dev/null || e
 
 info "Building asura ${VERSION} from ${SCRIPT_DIR}..."
 cd "$SCRIPT_DIR"
+verify_notices
 build_asura "$VERSION"
+install_notices
 install -m 755 asura "${INSTALL_DIR}/asura"
 rm -f asura
 info "Binary installed to ${INSTALL_DIR}/asura"

@@ -8,7 +8,7 @@ TEST_DIR=$(mktemp -d)
 trap 'rm -rf "$TEST_DIR"' EXIT
 TEST_TOOLS="$TEST_DIR/tools"
 mkdir -p "$TEST_TOOLS"
-for name in awk basename bash cat chmod dirname grep mkdir sort; do
+for name in awk basename bash cat chmod dirname grep install mkdir sort; do
     ln -s "$(type -P "$name")" "$TEST_TOOLS/$name"
 done
 
@@ -23,8 +23,16 @@ printf '%s %s %s\n' "\$0" "\$GOTOOLCHAIN" "\$*" >> "\$INSTALL_TEST_LOG"
 if [[ \$1 == version ]]; then
     echo 'go version $2 linux/amd64'
 else
-    [[ \$1 == build && \$CGO_ENABLED == 0 ]] || exit 92
-    printf '%s\n' "\$0" > "\$INSTALL_TEST_BUILT_WITH"
+    [[ \$CGO_ENABLED == 0 && \$GOWORK == off && -z \$GOFLAGS && -z \$GOEXPERIMENT ]] || exit 92
+    [[ \$GOAMD64 == v1 && \$GOARM64 == v8.0 ]] || exit 92
+    if [[ \$1 == run ]]; then
+        [[ "\$*" == 'run ./cmd/notices -check -verify' ]] || exit 92
+        [[ "\$(type -P go)" == "\$0" ]] || exit 92
+        printf '%s\n' "\$0" > "\$INSTALL_TEST_VERIFIED_WITH"
+    else
+        [[ \$1 == build && \$GOOS == linux && \$GOARCH == amd64 ]] || exit 92
+        printf '%s\n' "\$0" > "\$INSTALL_TEST_BUILT_WITH"
+    fi
 fi
 EOF
     chmod +x "$1/go"
@@ -38,6 +46,7 @@ selection_case() (
     SCRIPT_DIR="$case_dir/project"
     export INSTALL_TEST_LOG="$case_dir/go.log"
     export INSTALL_TEST_BUILT_WITH="$case_dir/built-with"
+    export INSTALL_TEST_VERIFIED_WITH="$case_dir/verified-with"
     export GOTOOLCHAIN=go1.99.0+auto
     export PATH="$case_dir/first:$case_dir/shadow:$TEST_TOOLS"
     if [[ "$version" != missing ]]; then
@@ -70,7 +79,11 @@ selection_case() (
     write_go "$case_dir/later-shadow" go1.25.0
     cd "$case_dir/other"
     export PATH="$case_dir/later-shadow:$TEST_TOOLS"
+    export GOFLAGS='-tags unreviewed' GOWORK='/unreviewed/workspace' GOEXPERIMENT='unreviewed' CGO_ENABLED=1
+    GOARCH=amd64
+    verify_notices
     build_asura fixture
+    [[ "$(cat "$INSTALL_TEST_VERIFIED_WITH")" == "$GO_BIN" ]]
     [[ "$(cat "$INSTALL_TEST_BUILT_WITH")" == "$GO_BIN" ]]
     echo "PASS $name"
 )
@@ -195,3 +208,19 @@ set -e
 [[ "$code" -ne 0 ]]
 grep -q 'is not supported' "$TEST_DIR/recheck.output"
 echo 'PASS replacement-recheck'
+
+# Exercise only the copy helper against a synthetic private destination.
+(
+    SCRIPT_DIR="$TEST_DIR/notice-source"
+    LICENSE_DIR="$TEST_DIR/notice-install"
+    mkdir -p "$SCRIPT_DIR"
+    printf 'Project license fixture\n' > "$SCRIPT_DIR/LICENSE"
+    printf 'Dependency notice fixture\n' > "$SCRIPT_DIR/THIRD_PARTY_NOTICES.txt"
+    install_notices
+    cmp "$SCRIPT_DIR/LICENSE" "$LICENSE_DIR/LICENSE"
+    cmp "$SCRIPT_DIR/THIRD_PARTY_NOTICES.txt" "$LICENSE_DIR/THIRD_PARTY_NOTICES.txt"
+    [[ "$(stat -c %a "$LICENSE_DIR/LICENSE")" == 644 ]]
+    [[ "$(stat -c %a "$LICENSE_DIR/THIRD_PARTY_NOTICES.txt")" == 644 ]]
+    [[ "$(stat -c %a "$LICENSE_DIR")" == 755 ]]
+    echo 'PASS installed-notices'
+)

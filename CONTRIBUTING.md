@@ -140,7 +140,9 @@ go run ./cmd/docscheck -dir .build/docs
 
 For a fork or another host, set the HTTPS origin in `docs/_config.yml` as `url` and the deployment path as `baseurl` (empty for the origin root). The build derives navigation, canonical links, social metadata and the sitemap from that configuration. Local compilation does not publish the site or submit it to search engines.
 
-`make release` builds the server and agent for Linux amd64 and arm64 and writes all four checksums to `dist/checksums.txt`. It uses the committed generated assets, so run `make generate css` before preparing a local release. CI retains a coverage profile for each Go version for 14 days.
+`make release` verifies the reviewed dependency notices, builds the server and agent for Linux amd64 and arm64, and copies `LICENSE` and `THIRD_PARTY_NOTICES.txt` beside the four binaries. `dist/checksums.txt` covers all six files. It uses the committed generated assets, so run `make generate css` before preparing a local release. CI retains a coverage profile for each Go version for 14 days.
+
+Dependency or toolchain changes require reviewing the applicable upstream license texts and generated-source notices in [licenses/README.md](licenses/README.md). Run `make notices` to assemble the combined notice and `make notices-check` to verify it against the audited runtime module graph. These files accompany release binaries; Docker images place them in `/usr/share/licenses/asura/`.
 
 The release workflow requires the reusable CI checks before publishing binaries or images. CI scans source on both supported Go patches and scans the four built binaries with pinned govulncheck. Publication generates GitHub build attestations for the binaries, checksum manifest and image digest; container builds also request BuildKit provenance. These publish steps run only for release tags. Action revisions, Go patches, base-image digests and the downloaded Tailwind checksum are pinned. Hosted runner images and package repositories can change; these controls do not imply a reproducible build or a SLSA level. Local `make release` creates binaries and checksums without publishing or signing them.
 

@@ -119,7 +119,7 @@ Race detection requires a supported C compiler. Network tests run in Linux CI; W
 
 ## Release binaries and probe agents {#release-binaries-and-probe-agents}
 
-The v2 release workflow produces server and probe-agent binaries for Linux amd64 and arm64. Download the required files and `checksums.txt` from the same release, then verify them:
+The v2 release workflow produces server and probe-agent binaries for Linux amd64 and arm64. Download the required binaries, `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `checksums.txt` from the same release. Keep both license files with the binaries, then verify the downloaded files:
 
 ```
 sha256sum --check --ignore-missing checksums.txt
@@ -131,7 +131,7 @@ When build attestations are available, also verify the artifact's repository ide
 gh attestation verify ./asura-linux-amd64 --repo y0f/asura
 ```
 
-For a local release build, run `make generate css` followed by `make release`. This creates all four binaries and their checksum manifest under `dist/` without publishing them. Preserve configuration, encryption keys and database backups when replacing a deployed binary.
+For a local release build, run `make generate css` followed by `make release`. This creates all four binaries, both license files and a checksum manifest covering those six files under `dist/` without publishing them. Preserve configuration, encryption keys and database backups when replacing a deployed binary.
 
 Probe agents use a separate agent token created in Asura. After enabling agent checks and choosing monitor assignments, run the binary for the probe's architecture:
 

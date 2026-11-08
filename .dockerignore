@@ -24,9 +24,17 @@ dist/
 /asura.exe
 /asura-agent
 /asura-agent.exe
+/asura-postgres
+/asura-postgres.exe
 /asura-dev*
 /tailwindcss
 /tailwindcss.exe
 coverage.out
+postgres-coverage.out
+/.build/
+/docs/vendor/
+/docs/.bundle/
+/docs/_site/
+/docs/.jekyll-cache/
 *.cover
 *.prof

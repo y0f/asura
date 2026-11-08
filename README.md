@@ -82,7 +82,7 @@ The v2 release workflow builds these assets from sources that pass CI:
 | Linux amd64 | `asura-linux-amd64` | `asura-agent-linux-amd64` |
 | Linux arm64 | `asura-linux-arm64` | `asura-agent-linux-arm64` |
 
-Download the binaries you need and `checksums.txt` from the same [release](https://github.com/y0f/asura/releases), then verify the downloaded files before installation:
+Download the binaries you need, `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `checksums.txt` from the same [release](https://github.com/y0f/asura/releases). Keep both license files with the binaries and verify the downloaded files before installation:
 
 ```bash
 sha256sum --check --ignore-missing checksums.txt
