@@ -1,6 +1,39 @@
 package storage
 
-const schemaVersion = 39
+const schemaVersion = 40
+
+// Database triggers also invalidate queued checks after trusted setters,
+// assignment cascades and proxy edits. Advancing a revision itself cannot
+// recurse; there is no wall-clock granularity or process-local counter.
+const monitorRevisionTriggers = `
+CREATE TRIGGER monitor_config_revision AFTER UPDATE ON monitors
+WHEN NEW.config_revision = OLD.config_revision
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id=NEW.id;
+END;
+CREATE TRIGGER monitor_agent_revision_insert AFTER INSERT ON monitor_agents
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id=NEW.monitor_id;
+END;
+CREATE TRIGGER monitor_agent_revision_delete AFTER DELETE ON monitor_agents
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id=OLD.monitor_id;
+END;
+CREATE TRIGGER monitor_agent_revision_update AFTER UPDATE ON monitor_agents
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id IN (OLD.monitor_id, NEW.monitor_id);
+END;
+CREATE TRIGGER agent_enabled_revision AFTER UPDATE OF enabled ON agents
+WHEN NEW.enabled != OLD.enabled
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1
+ WHERE id IN (SELECT monitor_id FROM monitor_agents WHERE agent_id=NEW.id);
+END;
+CREATE TRIGGER proxy_config_revision AFTER UPDATE ON proxies
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE proxy_id=NEW.id;
+END;
+`
 
 const legacyAgentAssignmentsSchema = `CREATE TABLE IF NOT EXISTS legacy_agent_assignments (
 	kind TEXT NOT NULL CHECK (kind IN ('monitor', 'agent')),
@@ -70,6 +103,7 @@ CREATE TABLE IF NOT EXISTS monitors (
 	group_id        INTEGER DEFAULT NULL,
 	proxy_id              INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL,
 	escalation_policy_id  INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL,
+	config_revision       INTEGER NOT NULL DEFAULT 1 CHECK (config_revision > 0),
 	created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
@@ -86,6 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_monitor_notif_channel ON monitor_notifications(ch
 
 CREATE TABLE IF NOT EXISTS monitor_status (
 	monitor_id             INTEGER PRIMARY KEY REFERENCES monitors(id) ON DELETE CASCADE,
+	config_revision        INTEGER NOT NULL DEFAULT 0,
 	status                 TEXT    NOT NULL DEFAULT 'pending',
 	last_check_at          TEXT,
 	consec_fails           INTEGER NOT NULL DEFAULT 0,
@@ -413,7 +448,7 @@ CREATE TABLE IF NOT EXISTS notification_history (
 );
 CREATE INDEX IF NOT EXISTS idx_notif_history_channel ON notification_history(channel_id, sent_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notif_history_sent_at ON notification_history(sent_at DESC);
-`
+` + monitorRevisionTriggers
 
 // migrations holds incremental schema changes after the baseline.
 // Consolidated at v1.0.0: all pre-v15 migrations are folded into the
@@ -683,5 +718,11 @@ WHERE m.agent_enabled=1 AND m.type NOT IN ('heartbeat','manual','docker','comman
 AND NOT EXISTS (SELECT 1 FROM monitor_agents ma WHERE ma.monitor_id=m.id);
 INSERT INTO legacy_agent_assignments (kind, id)
 SELECT 'agent', id FROM agents WHERE enabled=1;`,
+	},
+	{
+		version: 40,
+		sql: `ALTER TABLE monitors ADD COLUMN config_revision INTEGER NOT NULL DEFAULT 1 CHECK (config_revision > 0);
+ALTER TABLE monitor_status ADD COLUMN config_revision INTEGER NOT NULL DEFAULT 0;
+UPDATE monitor_status SET config_revision=(SELECT config_revision FROM monitors WHERE monitors.id=monitor_status.monitor_id);` + monitorRevisionTriggers,
 	},
 }

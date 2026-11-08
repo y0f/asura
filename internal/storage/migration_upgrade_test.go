@@ -26,6 +26,13 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 	if err != nil {
 		t.Fatal(err)
 	}
+	if v < 40 {
+		for _, trigger := range []string{"monitor_config_revision", "monitor_agent_revision_insert", "monitor_agent_revision_delete", "monitor_agent_revision_update", "agent_enabled_revision", "proxy_config_revision"} {
+			if _, err := s.writeDB.Exec("DROP TRIGGER " + trigger); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if v < 36 {
 		for _, table := range []string{"check_result_hourly", "check_result_daily"} {
 			if _, err := s.writeDB.Exec("ALTER TABLE " + table + " DROP COLUMN sum_rt"); err != nil {
@@ -55,6 +62,15 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 	}
 	if downgrade != nil {
 		downgrade(s)
+	}
+	// Fixtures may use current storage helpers to prepare their legacy data.
+	// Drop the new columns after that preparation, before running upgrades.
+	if v < 40 {
+		for _, table := range []string{"monitors", "monitor_status"} {
+			if _, err := s.writeDB.Exec("ALTER TABLE " + table + " DROP COLUMN config_revision"); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if _, err := s.writeDB.Exec("UPDATE schema_version SET version = ?", v); err != nil {
 		t.Fatal(err)

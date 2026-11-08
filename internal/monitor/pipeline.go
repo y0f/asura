@@ -3,8 +3,10 @@ package monitor
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -39,6 +41,7 @@ type Pipeline struct {
 	statusLocks          sync.Map // map[int64]*sync.Mutex — serializes status read-modify-write per monitor
 	sources              sync.Map // map[int64]monitorSources — per-location result streaks (guarded by statusLocks)
 	sourceCheckedAt      sync.Map // map[int64]map[string]time.Time — newest applied checked_at per location (guarded by statusLocks)
+	sourceRevision       sync.Map // map[int64]int64 — configuration shared by source caches (guarded by statusLocks)
 	incidentOpen         sync.Map // map[int64]bool — false once a recovery pass found no open incident; absent = unknown
 }
 
@@ -149,7 +152,11 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 	unlock := p.lockMonitorStatus(mon.ID)
 	defer unlock()
 
-	status := p.loadMonitorStatus(ctx, mon.ID)
+	status, err := p.loadMonitorStatus(ctx, mon)
+	if err != nil {
+		p.logger.Error("read monitor status", "monitor_id", mon.ID, "error", err)
+		return
+	}
 
 	// The anomaly downgrade must happen before the check result is stored so
 	// history, uptime and incident counting all see the same status.
@@ -174,26 +181,27 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 		}
 	}
 
-	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
-		p.logger.Error("insert check result", "error", err)
-		return
-	}
-
-	message := p.recordSourceResult(mon, status, localSource, finalStatus, cr.Message, now, now)
+	prepared := p.prepareSourceResult(mon, status, localSource, finalStatus, cr.Message, now, now)
 	status.LastCheckAt = &now
 	status.ResponseTime = cr.ResponseTime
 
-	if bodyChanged {
-		p.handleContentChange(ctx, mon, status.LastBodyHash, result.BodyHash, prevBody, result.Body, status)
-	}
+	oldBodyHash := status.LastBodyHash
 	if result.BodyHash != "" {
 		status.LastBodyHash = result.BodyHash
 	}
-
-	p.updateCertFingerprint(ctx, mon, status, result.CertFingerprint)
-
-	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
-		p.logger.Error("upsert monitor status", "error", err)
+	certChanged := updateCertFingerprint(status, result.CertFingerprint)
+	if err := p.store.RecordMonitorCheck(ctx, mon, cr, status); err != nil {
+		if !errors.Is(err, storage.ErrStaleMonitorCheck) {
+			p.logger.Error("record monitor check", "monitor_id", mon.ID, "error", err)
+		}
+		return
+	}
+	p.commitSourceResult(mon, prepared)
+	if bodyChanged {
+		p.handleContentChange(ctx, mon, oldBodyHash, result.BodyHash, prevBody, result.Body)
+	}
+	if certChanged {
+		p.emitNotification(ctx, "cert.changed", nil, mon, nil)
 	}
 
 	if p.adaptiveIntervals {
@@ -203,7 +211,7 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 		p.scheduler.UpdateInterval(mon.ID, newInterval)
 	}
 
-	p.processIncidents(ctx, mon, status.Status, status, message)
+	p.processIncidents(ctx, mon, status.Status, status, prepared.message)
 }
 
 // ProcessAgentResult handles a check result submitted by a remote agent.
@@ -219,6 +227,9 @@ func (p *Pipeline) handleResult(ctx context.Context, wr WorkerResult) {
 // There is no absolute age limit, so an agent with a long cycle that posts
 // minutes after checking is still applied.
 func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor, cr *storage.CheckResult) error {
+	if mon == nil || cr == nil || cr.AgentID == nil || *cr.AgentID <= 0 {
+		return storage.ErrStaleMonitorCheck
+	}
 	unlock := p.lockMonitorStatus(mon.ID)
 	defer unlock()
 	now := time.Now()
@@ -227,49 +238,66 @@ func (p *Pipeline) ProcessAgentResult(ctx context.Context, mon *storage.Monitor,
 		checkedAt = now
 	}
 
-	status := p.loadMonitorStatus(ctx, mon.ID)
-	finalStatus := evaluateAgentResult(mon, cr, status)
-
-	if err := p.store.InsertCheckResult(ctx, cr); err != nil {
+	status, err := p.loadMonitorStatus(ctx, mon)
+	if err != nil {
 		return err
 	}
+	// Assertions and anomaly evaluation must not mutate caller-owned output
+	// when the commit is rejected or any database write fails.
+	saved := *cr
+	finalStatus := evaluateAgentResult(mon, &saved, status)
 
 	source := agentSource(cr)
 	if p.staleSourceResult(mon, source, checkedAt) {
+		if err := p.store.RecordMonitorCheck(ctx, mon, &saved, nil); err != nil {
+			return err
+		}
+		*cr = saved
 		return nil
 	}
 
-	message := p.recordSourceResult(mon, status, source, finalStatus, cr.Message, checkedAt, now)
+	prepared := p.prepareSourceResult(mon, status, source, finalStatus, saved.Message, checkedAt, now)
 	status.LastCheckAt = &now
-	status.ResponseTime = cr.ResponseTime
-
-	p.updateCertFingerprint(ctx, mon, status, cr.CertFingerprint)
-
-	if err := p.store.UpsertMonitorStatus(ctx, status); err != nil {
-		p.logger.Error("agent result: upsert status", "error", err)
+	status.ResponseTime = saved.ResponseTime
+	certChanged := updateCertFingerprint(status, saved.CertFingerprint)
+	if err := p.store.RecordMonitorCheck(ctx, mon, &saved, status); err != nil {
+		return err
 	}
-
-	p.processIncidents(ctx, mon, status.Status, status, message)
+	*cr = saved
+	p.commitSourceResult(mon, prepared)
+	if certChanged {
+		p.emitNotification(ctx, "cert.changed", nil, mon, nil)
+	}
+	p.processIncidents(ctx, mon, status.Status, status, prepared.message)
 	return nil
 }
 
-func (p *Pipeline) loadMonitorStatus(ctx context.Context, monitorID int64) *storage.MonitorStatus {
-	status, err := p.store.GetMonitorStatus(ctx, monitorID)
-	if err != nil || status == nil {
-		p.logger.Warn("get monitor status, using defaults", "monitor_id", monitorID, "error", err)
-		return &storage.MonitorStatus{MonitorID: monitorID}
+func (p *Pipeline) loadMonitorStatus(ctx context.Context, mon *storage.Monitor) (*storage.MonitorStatus, error) {
+	status, err := p.store.GetMonitorStatus(ctx, mon.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &storage.MonitorStatus{MonitorID: mon.ID, ConfigRevision: mon.ConfigRevision}, nil
 	}
-	return status
+	if err != nil {
+		return nil, err
+	}
+	if status == nil {
+		return nil, errors.New("monitor status returned no row without an error")
+	}
+	copy := *status
+	if copy.ConfigRevision > 0 && copy.ConfigRevision != mon.ConfigRevision {
+		copy.ConsecFails, copy.ConsecSuccesses = 0, 0
+	}
+	copy.ConfigRevision = mon.ConfigRevision
+	return &copy, nil
 }
 
-func (p *Pipeline) updateCertFingerprint(ctx context.Context, mon *storage.Monitor, status *storage.MonitorStatus, fp string) {
+func updateCertFingerprint(status *storage.MonitorStatus, fp string) bool {
 	if fp == "" {
-		return
+		return false
 	}
-	if old := status.LastCertFingerprint; old != "" && old != fp {
-		p.emitNotification(ctx, "cert.changed", nil, mon, nil)
-	}
+	changed := status.LastCertFingerprint != "" && status.LastCertFingerprint != fp
 	status.LastCertFingerprint = fp
+	return changed
 }
 
 // applyUpsideDown inverts the status of upside-down monitors.
@@ -457,7 +485,7 @@ func (p *Pipeline) shouldResend(mon *storage.Monitor) bool {
 	return time.Since(v.(time.Time)) >= time.Duration(mon.ResendInterval)*time.Second
 }
 
-func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor, oldHash, newHash, oldBody, newBody string, status *storage.MonitorStatus) {
+func (p *Pipeline) handleContentChange(ctx context.Context, mon *storage.Monitor, oldHash, newHash, oldBody, newBody string) {
 	diffText := diff.Compute(oldBody, newBody)
 
 	change := &storage.ContentChange{

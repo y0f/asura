@@ -32,6 +32,9 @@ type Monitor struct {
 	EscalationPolicyID *int64          `json:"escalation_policy_id,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
+	// ConfigRevision identifies the persisted configuration used for a check.
+	// It is server-owned and is never accepted through monitor JSON writes.
+	ConfigRevision int64 `json:"-"`
 
 	// Transient fields (not stored in monitors table)
 	NotificationChannelIDs []int64      `json:"notification_channel_ids,omitempty"`

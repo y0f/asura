@@ -158,6 +158,7 @@ type ContentChange struct {
 // MonitorStatus holds the runtime state of a monitor.
 type MonitorStatus struct {
 	MonitorID           int64      `json:"monitor_id"`
+	ConfigRevision      int64      `json:"-"`
 	Status              string     `json:"status"` // up, down, degraded, pending
 	LastCheckAt         *time.Time `json:"last_check_at,omitempty"`
 	ConsecFails         int        `json:"consec_fails"`

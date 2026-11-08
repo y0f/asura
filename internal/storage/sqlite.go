@@ -321,7 +321,7 @@ func (s *SQLiteStore) scanMonitor(row scanner) (*Monitor, error) {
 	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.Type, &m.Target, &m.Interval, &m.Timeout, &m.Enabled,
 		&tagsStr, &settingsStr, &assertionsStr, &m.TrackChanges, &m.FailureThreshold, &m.SuccessThreshold,
 		&m.UpsideDown, &m.AgentEnabled, &m.ResendInterval, &m.SLATarget, &m.AnomalySensitivity, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
-		&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses)
+		&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses, &m.ConfigRevision)
 	if err != nil {
 		return nil, err
 	}
