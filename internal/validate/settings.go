@@ -13,6 +13,7 @@ import (
 
 	"github.com/y0f/asura/v2/internal/assertion"
 	"github.com/y0f/asura/v2/internal/jsonutil"
+	"github.com/y0f/asura/v2/internal/model"
 	"github.com/y0f/asura/v2/internal/notifier"
 	"github.com/y0f/asura/v2/internal/storage"
 )
@@ -123,6 +124,10 @@ func validateMonitorConfiguration(m *storage.Monitor) error {
 	case *storage.SMTPSettings:
 		if s.Port < 0 || s.Port > 65535 {
 			return fmt.Errorf("invalid SMTP port")
+		}
+	case *storage.MQTTSettings:
+		if err := model.ValidateMQTTSettings(*s); err != nil {
+			return err
 		}
 	case *storage.WebSocketSettings:
 		if !validURL(m.Target, "ws", "wss") {

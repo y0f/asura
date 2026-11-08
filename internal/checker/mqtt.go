@@ -1,14 +1,18 @@
 package checker
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/y0f/asura/v2/internal/model"
 	"github.com/y0f/asura/v2/internal/safenet"
@@ -21,11 +25,17 @@ type MQTTChecker struct {
 func (c *MQTTChecker) Type() string { return "mqtt" }
 
 func (c *MQTTChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	if len(monitor.Settings) > 1<<20 {
+		return &Result{Status: "down", Message: "MQTT settings exceed 1 MiB"}, nil
+	}
 	var settings model.MQTTSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
 		}
+	}
+	if err := model.ValidateMQTTSettings(settings); err != nil {
+		return &Result{Status: "down", Message: err.Error()}, nil
 	}
 
 	target := monitor.Target
@@ -83,7 +93,7 @@ func (c *MQTTChecker) Check(ctx context.Context, monitor *model.Monitor) (*Resul
 	}
 
 	if settings.Topic != "" {
-		if err := mqttSubscribe(conn, settings.Topic); err != nil {
+		if err := mqttSubscribe(conn, settings.Topic, settings.ExpectMessage); err != nil {
 			return &Result{
 				Status:       "down",
 				ResponseTime: time.Since(start).Milliseconds(),
@@ -132,28 +142,128 @@ func mqttHandshake(conn net.Conn, clientID string, settings model.MQTTSettings) 
 	return nil
 }
 
-func mqttSubscribe(conn net.Conn, topic string) error {
+const (
+	mqttMaxPacketBytes         = 256 << 10
+	mqttMaxSubscriptionBytes   = 1 << 20
+	mqttMaxSubscriptionPackets = 64
+)
+
+func mqttSubscribe(conn net.Conn, topic, expected string) error {
 	if _, err := conn.Write(buildSubscribePacket(1, topic)); err != nil {
 		return fmt.Errorf("MQTT SUBSCRIBE send failed: %w", err)
 	}
 
-	subackBuf := make([]byte, 5)
-	if _, err := readFull(conn, subackBuf); err != nil {
-		return fmt.Errorf("MQTT SUBACK read failed: %w", err)
+	budget := mqttMaxSubscriptionBytes
+	acknowledged, matched := false, expected == ""
+	needle := []byte(expected)
+	for count := 0; count < mqttMaxSubscriptionPackets; count++ {
+		header, body, err := mqttReadPacket(conn, &budget)
+		if err != nil {
+			if acknowledged && !matched {
+				return fmt.Errorf("MQTT expected message not received: %w", err)
+			}
+			return fmt.Errorf("MQTT subscription failed: %w", err)
+		}
+		switch header {
+		case 0x90:
+			// One subscription, packet ID 1, maximum QoS 0.
+			if acknowledged || len(body) != 3 || binary.BigEndian.Uint16(body[:2]) != 1 {
+				return fmt.Errorf("invalid MQTT SUBACK framing or packet identifier")
+			}
+			if body[2] == 0x80 {
+				return fmt.Errorf("MQTT subscription rejected")
+			}
+			if body[2] != 0 {
+				return fmt.Errorf("invalid MQTT SUBACK return code for requested QoS 0")
+			}
+			acknowledged = true
+		case 0x30, 0x31:
+			// MQTT 3.1.1 permits PUBLISH before SUBACK. QoS 0 has no
+			// packet identifier or DUP flag; RETAIN is allowed.
+			if len(body) < 2 {
+				return fmt.Errorf("invalid MQTT PUBLISH topic length")
+			}
+			n := int(binary.BigEndian.Uint16(body[:2]))
+			if n == 0 || n > len(body)-2 {
+				return fmt.Errorf("invalid MQTT PUBLISH topic length")
+			}
+			name := string(body[2 : 2+n])
+			if !utf8.ValidString(name) || strings.ContainsAny(name, "\x00+#") || !mqttTopicMatches(topic, name) {
+				return fmt.Errorf("invalid MQTT PUBLISH topic for subscription")
+			}
+			matched = matched || bytes.Contains(body[2+n:], needle)
+		default:
+			return fmt.Errorf("unexpected MQTT packet or flags for QoS 0 subscription")
+		}
+		if acknowledged && matched {
+			return nil
+		}
 	}
+	return fmt.Errorf("MQTT subscription exceeded 64 packets without completion")
+}
 
-	// This probe subscribes once, with packet ID 1 and maximum QoS 0.
-	if subackBuf[0] != 0x90 || subackBuf[1] != 3 || binary.BigEndian.Uint16(subackBuf[2:4]) != 1 {
-		return fmt.Errorf("invalid MQTT SUBACK framing or packet identifier")
+func mqttReadPacket(conn net.Conn, budget *int) (byte, []byte, error) {
+	var b [1]byte
+	readByte := func() (byte, error) {
+		if *budget <= 0 {
+			return 0, fmt.Errorf("MQTT subscription exceeded 1 MiB")
+		}
+		*budget--
+		_, err := io.ReadFull(conn, b[:])
+		return b[0], err
 	}
+	header, err := readByte()
+	if err != nil {
+		return 0, nil, err
+	}
+	length := 0
+	for i := 0; i < 4; i++ {
+		value, err := readByte()
+		if err != nil {
+			return 0, nil, err
+		}
+		length |= int(value&127) << (7 * i)
+		if value&128 != 0 {
+			continue
+		}
+		if i > 0 && value == 0 {
+			return 0, nil, fmt.Errorf("invalid MQTT remaining length encoding")
+		}
+		if length > mqttMaxPacketBytes {
+			return 0, nil, fmt.Errorf("MQTT packet exceeded 256 KiB")
+		}
+		if length > *budget {
+			return 0, nil, fmt.Errorf("MQTT subscription exceeded 1 MiB")
+		}
+		*budget -= length
+		body := make([]byte, length)
+		_, err = io.ReadFull(conn, body)
+		return header, body, err
+	}
+	return 0, nil, fmt.Errorf("invalid MQTT remaining length encoding")
+}
 
-	if subackBuf[4] == 0x80 {
-		return fmt.Errorf("MQTT subscription rejected")
+func mqttTopicMatches(filter, topic string) bool {
+	if strings.HasPrefix(topic, "$") && (strings.HasPrefix(filter, "+") || strings.HasPrefix(filter, "#")) {
+		return false
 	}
-	if subackBuf[4] != 0 {
-		return fmt.Errorf("invalid MQTT SUBACK return code for requested QoS 0")
+	for {
+		if filter == "#" {
+			return true
+		}
+		f, remainingFilter, moreFilter := strings.Cut(filter, "/")
+		t, remainingTopic, moreTopic := strings.Cut(topic, "/")
+		if f != "+" && f != t {
+			return false
+		}
+		if !moreFilter {
+			return !moreTopic
+		}
+		if !moreTopic {
+			return remainingFilter == "#"
+		}
+		filter, topic = remainingFilter, remainingTopic
 	}
-	return nil
 }
 
 func readFull(conn net.Conn, buf []byte) (int, error) {
@@ -199,7 +309,7 @@ func buildConnectPacket(clientID, username, password string) []byte {
 	var connectFlags byte
 	connectFlags |= 0x02 // clean session
 
-	if username != "" {
+	if username != "" || password != "" {
 		connectFlags |= 0x80
 	}
 	if password != "" {
@@ -207,10 +317,12 @@ func buildConnectPacket(clientID, username, password string) []byte {
 	}
 
 	payload = append(payload, connectFlags)
-	payload = append(payload, 0, 30) // keepalive 30 seconds
+	// The probe has a bounded connection deadline. Disable MQTT keepalive so
+	// waiting for an expected message does not require a separate ping loop.
+	payload = append(payload, 0, 0)
 	payload = append(payload, encodeMQTTString(clientID)...)
 
-	if username != "" {
+	if username != "" || password != "" {
 		payload = append(payload, encodeMQTTString(username)...)
 	}
 	if password != "" {
@@ -253,20 +365,4 @@ func mqttConnackError(code byte) string {
 	default:
 		return "unknown"
 	}
-}
-
-func decodeRemainingLength(data []byte) (int, int) {
-	multiplier := 1
-	value := 0
-	for i, b := range data {
-		value += int(b&0x7f) * multiplier
-		multiplier *= 128
-		if b&0x80 == 0 {
-			return value, i + 1
-		}
-		if i >= 3 {
-			break
-		}
-	}
-	return value, len(data)
 }

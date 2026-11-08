@@ -51,7 +51,7 @@ func TestMQTTRejectsInvalidAcknowledgements(t *testing.T) {
 			}()
 			var err error
 			if tc.subscribe {
-				err = mqttSubscribe(client, "fixture/status")
+				err = mqttSubscribe(client, "fixture/status", "")
 			} else {
 				err = mqttHandshake(client, "fixture", model.MQTTSettings{})
 			}

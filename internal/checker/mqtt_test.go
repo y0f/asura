@@ -57,25 +57,6 @@ func TestEncodeRemainingLength(t *testing.T) {
 	}
 }
 
-func TestDecodeRemainingLength(t *testing.T) {
-	tests := []struct {
-		input     []byte
-		wantValue int
-		wantBytes int
-	}{
-		{[]byte{0}, 0, 1},
-		{[]byte{127}, 127, 1},
-		{[]byte{0x80, 0x01}, 128, 2},
-		{[]byte{0xff, 0x7f}, 16383, 2},
-	}
-	for _, tt := range tests {
-		value, n := decodeRemainingLength(tt.input)
-		if value != tt.wantValue || n != tt.wantBytes {
-			t.Errorf("decodeRemainingLength(%v) = (%d, %d), want (%d, %d)", tt.input, value, n, tt.wantValue, tt.wantBytes)
-		}
-	}
-}
-
 func TestBuildConnectPacket(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		pkt := buildConnectPacket("test-client", "", "")
