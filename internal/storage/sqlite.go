@@ -21,11 +21,14 @@ import (
 
 // SQLStore shares transactional queries across the supported SQL dialects.
 type SQLStore struct {
-	readDB   *sqlPool
-	writeDB  *sqlPool
-	dbPath   string
-	enc      *Encryptor
-	rollupMu sync.Mutex
+	readDB      *sqlPool
+	writeDB     *sqlPool
+	dbPath      string
+	enc         *Encryptor
+	rollupMu    sync.Mutex
+	beforeClose func() error
+	closeOnce   sync.Once
+	closeErr    error
 }
 
 // SQLiteStore preserves the existing constructor and concrete-type API.
@@ -221,6 +224,11 @@ func (s *SQLiteStore) Vacuum(ctx context.Context) error {
 // IncrementalVacuum reclaims free pages without rewriting the whole database.
 // It only has an effect when the database uses auto_vacuum=INCREMENTAL.
 func (s *SQLiteStore) IncrementalVacuum(ctx context.Context) error {
+	if s.writeDB.dialect == postgresDialect {
+		// PostgreSQL manages dead tuples through autovacuum; it has no SQLite
+		// page-reclamation operation to perform on the periodic timer.
+		return nil
+	}
 	_, err := s.writeDB.ExecContext(ctx, "PRAGMA incremental_vacuum")
 	return err
 }
@@ -268,6 +276,13 @@ func sha256Hex(s string) string {
 }
 
 func (s *SQLiteStore) DBSize() (int64, error) {
+	if s.readDB.dialect == postgresDialect {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var size int64
+		err := s.readDB.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&size)
+		return size, err
+	}
 	info, err := os.Stat(s.dbPath)
 	if err != nil {
 		return 0, err
@@ -276,12 +291,22 @@ func (s *SQLiteStore) DBSize() (int64, error) {
 }
 
 func (s *SQLiteStore) Close() error {
+	s.closeOnce.Do(func() { s.closeErr = s.close() })
+	return s.closeErr
+}
+
+func (s *SQLiteStore) close() error {
 	var firstErr error
+	if s.beforeClose != nil {
+		firstErr = s.beforeClose()
+	}
 	if err := s.readDB.Close(); err != nil && firstErr == nil {
 		firstErr = fmt.Errorf("close read db: %w", err)
 	}
-	if _, err := s.writeDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil && firstErr == nil {
-		firstErr = fmt.Errorf("wal checkpoint: %w", err)
+	if s.writeDB.dialect == sqliteDialect {
+		if _, err := s.writeDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("wal checkpoint: %w", err)
+		}
 	}
 	if err := s.writeDB.Close(); err != nil && firstErr == nil {
 		firstErr = fmt.Errorf("close write db: %w", err)

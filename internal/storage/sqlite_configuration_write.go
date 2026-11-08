@@ -126,7 +126,7 @@ func (ic *configurationImport) write(s *SQLiteStore) error {
 		if ic.catalogs["proxies"].ids[p.ID] != 0 {
 			continue
 		}
-		if err := ic.insert("proxies", p.ID, "INSERT INTO proxies (name,protocol,host,port,auth_user,auth_pass,enabled,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)", p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, ic.proxyPasswords[p.ID], p.Enabled, now, now); err != nil {
+		if err := ic.insert("proxies", p.ID, "INSERT INTO proxies (name,protocol,host,port,auth_user,auth_pass,enabled,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)", p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, ic.proxyPasswords[p.ID], boolToInt(p.Enabled), now, now); err != nil {
 			return err
 		}
 	}
@@ -134,7 +134,7 @@ func (ic *configurationImport) write(s *SQLiteStore) error {
 		if ic.catalogs["notification_channels"].ids[ch.ID] != 0 {
 			continue
 		}
-		if err := ic.insert("notification_channels", ch.ID, "INSERT INTO notification_channels (name,type,enabled,settings,events,created_at,updated_at) VALUES (?,?,?,?,?,?,?)", ch.Name, ch.Type, ch.Enabled, ic.channelSettings[ch.ID], configurationJSON(ch.Events), now, now); err != nil {
+		if err := ic.insert("notification_channels", ch.ID, "INSERT INTO notification_channels (name,type,enabled,settings,events,created_at,updated_at) VALUES (?,?,?,?,?,?,?)", ch.Name, ch.Type, boolToInt(ch.Enabled), ic.channelSettings[ch.ID], configurationJSON(ch.Events), now, now); err != nil {
 			return err
 		}
 	}
@@ -142,7 +142,7 @@ func (ic *configurationImport) write(s *SQLiteStore) error {
 		if ic.catalogs["escalation_policies"].ids[p.ID] != 0 {
 			continue
 		}
-		if err := ic.insert("escalation_policies", p.ID, "INSERT INTO escalation_policies (name,description,enabled,repeat,created_at,updated_at) VALUES (?,?,?,?,?,?)", p.Name, p.Description, p.Enabled, p.Repeat, now, now); err != nil {
+		if err := ic.insert("escalation_policies", p.ID, "INSERT INTO escalation_policies (name,description,enabled,repeat,created_at,updated_at) VALUES (?,?,?,?,?,?)", p.Name, p.Description, boolToInt(p.Enabled), boolToInt(p.Repeat), now, now); err != nil {
 			return err
 		}
 		for _, step := range p.Steps {
@@ -192,7 +192,7 @@ func (ic *configurationImport) write(s *SQLiteStore) error {
 		if ic.catalogs["maintenance_windows"].ids[m.ID] != 0 {
 			continue
 		}
-		if err := ic.insert("maintenance_windows", m.ID, `INSERT INTO maintenance_windows (name,monitor_ids,start_time,end_time,recurring,cron_expr,active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`, m.Name, configurationJSON(ic.mapIDs("monitors", m.MonitorIDs)), formatTime(m.StartTime), formatTime(m.EndTime), m.Recurring, m.CronExpr, m.Active, now, now); err != nil {
+		if err := ic.insert("maintenance_windows", m.ID, `INSERT INTO maintenance_windows (name,monitor_ids,start_time,end_time,recurring,cron_expr,active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`, m.Name, configurationJSON(ic.mapIDs("monitors", m.MonitorIDs)), formatTime(m.StartTime), formatTime(m.EndTime), m.Recurring, m.CronExpr, boolToInt(m.Active), now, now); err != nil {
 			return err
 		}
 	}
@@ -201,7 +201,7 @@ func (ic *configurationImport) write(s *SQLiteStore) error {
 		if ic.catalogs["status_pages"].ids[p.ID] != 0 {
 			continue
 		}
-		if err := ic.insert("status_pages", p.ID, `INSERT INTO status_pages (slug,title,description,custom_css,show_incidents,enabled,api_enabled,sort_order,logo_url,favicon_url,custom_header_html,password_hash,analytics_script,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.Slug, p.Title, p.Description, p.CustomCSS, p.ShowIncidents, p.Enabled, p.APIEnabled, p.SortOrder, p.LogoURL, p.FaviconURL, p.CustomHeaderHTML, p.PasswordHash, p.AnalyticsScript, now, now); err != nil {
+		if err := ic.insert("status_pages", p.ID, `INSERT INTO status_pages (slug,title,description,custom_css,show_incidents,enabled,api_enabled,sort_order,logo_url,favicon_url,custom_header_html,password_hash,analytics_script,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.Slug, p.Title, p.Description, p.CustomCSS, boolToInt(p.ShowIncidents), boolToInt(p.Enabled), boolToInt(p.APIEnabled), p.SortOrder, p.LogoURL, p.FaviconURL, p.CustomHeaderHTML, p.PasswordHash, p.AnalyticsScript, now, now); err != nil {
 			return err
 		}
 		newPages[p.ID] = true

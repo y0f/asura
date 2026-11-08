@@ -42,7 +42,10 @@ func TestMonitorRevisionInvalidatesQueuedChecks(t *testing.T) {
 			return err
 		}},
 		{"agent disabled enabled", func(ctx context.Context, s *SQLiteStore, _ *Monitor, a *Agent, _ *Proxy) error {
-			_, err := s.writeDB.ExecContext(ctx, "UPDATE agents SET enabled=0 WHERE id=?; UPDATE agents SET enabled=1 WHERE id=?", a.ID, a.ID)
+			if _, err := s.writeDB.ExecContext(ctx, "UPDATE agents SET enabled=0 WHERE id=?", a.ID); err != nil {
+				return err
+			}
+			_, err := s.writeDB.ExecContext(ctx, "UPDATE agents SET enabled=1 WHERE id=?", a.ID)
 			return err
 		}},
 		{"proxy changed", func(ctx context.Context, s *SQLiteStore, _ *Monitor, _ *Agent, p *Proxy) error {

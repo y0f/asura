@@ -14,9 +14,12 @@ func (dialect sqlDialect) maintenanceAccessSQL(access []MonitorAccess) (string, 
 		return "", nil
 	}
 	if dialect == postgresDialect {
-		return ` AND json_typeof(CAST(monitor_ids AS json))='array'
-		 AND json_array_length(CAST(monitor_ids AS json))>0 AND NOT EXISTS (
-		   SELECT 1 FROM json_array_elements(CAST(maintenance_windows.monitor_ids AS json)) target(value)
+		// PostgreSQL may evaluate predicates in any order. Normalize non-array
+		// JSON before calling array functions, including legacy JSON null lists.
+		array := `CASE WHEN json_typeof(CAST(maintenance_windows.monitor_ids AS json))='array'
+		 THEN CAST(maintenance_windows.monitor_ids AS json) ELSE CAST('[]' AS json) END`
+		return ` AND json_array_length(` + array + `)>0 AND NOT EXISTS (
+		   SELECT 1 FROM json_array_elements(` + array + `) target(value)
 		   LEFT JOIN monitors access_monitor ON access_monitor.id = CASE
 		     WHEN json_typeof(target.value)='number' AND CAST(target.value AS text) ~ '^-?[0-9]+$'
 		     THEN CAST(CAST(target.value AS text) AS numeric) END

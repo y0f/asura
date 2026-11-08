@@ -15,9 +15,20 @@ type Options struct {
 	DSN           string
 	MaxReadConns  int
 	EncryptionKey string
+	// RuntimeOwner is set by the server, not by offline account-maintenance
+	// commands. PostgreSQL then requires exclusive runtime ownership.
+	RuntimeOwner bool
+	// OnOwnershipLoss must be nonblocking and must not call Close; the server
+	// uses its cancel function so shutdown joins the observer from another goroutine.
+	OnOwnershipLoss func()
 }
 
 var ErrBackendUnavailable = errors.New("database backend is not included in this build")
+
+var (
+	ErrDatabaseOwned         = errors.New("another Asura server owns this database")
+	ErrDatabaseOwnershipLost = errors.New("database ownership was lost; restart Asura")
+)
 
 type initializableStore interface {
 	Store

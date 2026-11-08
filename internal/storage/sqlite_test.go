@@ -9,8 +9,15 @@ import (
 	"time"
 )
 
+// Alternate backends reuse these behavior contracts in a serial integration
+// suite. The optional PostgreSQL test file scopes this hook to that suite only.
+var contractStoreFactory func(*testing.T) *SQLStore
+
 func testStore(t *testing.T) *SQLiteStore {
 	t.Helper()
+	if contractStoreFactory != nil {
+		return contractStoreFactory(t)
+	}
 	tmpFile, err := os.CreateTemp("", "asura-test-*.db")
 	if err != nil {
 		t.Fatal(err)

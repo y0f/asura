@@ -84,6 +84,11 @@ func main() {
 	store, err := storage.Open(ctx, storage.Options{
 		Driver: cfg.Database.Driver, Path: cfg.Database.Path, DSN: cfg.Database.DSN,
 		MaxReadConns: cfg.Database.MaxReadConns, EncryptionKey: cfg.Database.EncryptionKey,
+		RuntimeOwner: true,
+		OnOwnershipLoss: func() {
+			logger.Error("database ownership lost; stopping server")
+			cancel()
+		},
 	})
 	if err != nil {
 		logger.Error("failed to open database", "error", err)

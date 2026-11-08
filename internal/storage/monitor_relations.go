@@ -23,6 +23,10 @@ func monitorRelationError(err error) error {
 	if errors.As(err, &coded) && coded.Code() == 787 {
 		return fmt.Errorf("%w: %w", ErrInvalidMonitorRelation, err)
 	}
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) && state.SQLState() == "23503" {
+		return fmt.Errorf("%w: %w", ErrInvalidMonitorRelation, err)
+	}
 	return err
 }
 

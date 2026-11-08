@@ -35,7 +35,7 @@ func monitorAccessSQL(alias string, access []MonitorAccess) (string, []any) {
 			continue
 		}
 		if len(filter.MonitorIDs) == 0 && len(filter.GroupIDs) == 0 {
-			clauses.WriteString(" AND 0")
+			clauses.WriteString(" AND FALSE")
 			continue
 		}
 		clauses.WriteString(" AND (")

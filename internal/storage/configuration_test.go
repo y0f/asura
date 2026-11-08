@@ -116,9 +116,7 @@ func TestConfigurationReplacementRollbackIncludesCascades(t *testing.T) {
 			if _, err := s.writeDB.ExecContext(ctx, "INSERT INTO check_results (monitor_id,status,created_at) VALUES (?, 'up', ?)", before.Monitors[0].ID, formatTime(time.Now())); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.writeDB.ExecContext(ctx, "CREATE TRIGGER reject_import_page BEFORE INSERT ON status_pages BEGIN SELECT RAISE(ABORT,'injected final write failure'); END"); err != nil {
-				t.Fatal(err)
-			}
+			rejectConfigurationInsert(t, s, "status_pages")
 			incoming := configurationFixture()
 			incoming.StatusPages[0].Slug = "new-page"
 			result, err := s.ApplyConfiguration(ctx, incoming, configurationOptions(mode))
@@ -169,9 +167,7 @@ func TestConfigurationPreflightRejectsInvalidReferencesBeforeWrites(t *testing.T
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)
-			if _, err := s.writeDB.Exec("CREATE TRIGGER no_writes BEFORE INSERT ON monitor_groups BEGIN SELECT RAISE(ABORT,'preflight wrote before validation'); END"); err != nil {
-				t.Fatal(err)
-			}
+			rejectConfigurationInsert(t, s, "monitor_groups")
 			c := configurationFixture()
 			tc.edit(c)
 			result, err := s.ApplyConfiguration(context.Background(), c, configurationOptions("replace"))
@@ -541,5 +537,24 @@ func TestConfigurationCatalogsFollowValidatedIdentityNormalization(t *testing.T)
 	}
 	if c.Groups[0].ID != 11 || *c.Monitors[0].GroupID != 11 {
 		t.Fatal("normalization changed caller-owned identities")
+	}
+}
+
+// Only test-owned table identifiers are accepted here. Both fixtures reject the
+// actual write in the database, rather than mocking preflight or transaction code.
+func rejectConfigurationInsert(t *testing.T, s *SQLStore, table string) {
+	t.Helper()
+	if table != "monitor_groups" && table != "status_pages" {
+		t.Fatal("unsupported fixture table")
+	}
+	query := "CREATE TRIGGER reject_configuration_insert BEFORE INSERT ON " + table + " BEGIN SELECT RAISE(ABORT,'injected configuration write failure'); END"
+	if s.writeDB.dialect == postgresDialect {
+		query = `CREATE FUNCTION reject_configuration_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected configuration write failure'; END; $$;
+        CREATE TRIGGER reject_configuration_insert BEFORE INSERT ON ` + table + `
+        FOR EACH ROW EXECUTE FUNCTION reject_configuration_insert()`
+	}
+	if _, err := s.writeDB.ExecContext(context.Background(), query); err != nil {
+		t.Fatal(err)
 	}
 }
