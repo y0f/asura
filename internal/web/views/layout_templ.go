@@ -224,7 +224,7 @@ func Layout(p LayoutParams) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</head><body class=\"bg-surface text-muted-light font-sans antialiased\"><div x-data=\"shell\" class=\"flex min-h-screen\" @keydown.escape=\"if (!document.querySelector('dialog[open]')) nav=false\" @cmdk-open.window=\"nav=false\"><a href=\"#content\" :inert=\"mobile && nav\" class=\"sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary\">Skip to content</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</head><body class=\"bg-surface text-muted-light font-sans antialiased\"><div x-data=\"shell\" class=\"flex min-h-screen\" @keydown.escape=\"if (!document.querySelector('dialog[open]')) nav=false\" @cmdk-open.window=\"nav=false\" @focusin=\"revealEditorField($event)\"><a href=\"#content\" :inert=\"mobile && nav\" class=\"sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary\">Skip to content</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -322,7 +322,7 @@ func shellScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<script>\n\t\tdocument.addEventListener(\"alpine:init\", () => {\n\t\t\tAlpine.data(\"shell\", () => ({\n\t\t\t\tnav: false,\n\t\t\t\tmobile: window.matchMedia(\"(max-width: 767px)\").matches,\n\t\t\t\tcollapsed: localStorage.getItem(\"navc\") === \"1\",\n\t\t\t\tget navCollapsed() { return !this.mobile && this.collapsed; },\n\t\t\t\ttheme: localStorage.getItem(\"theme\") || \"dark\",\n\t\t\t\tready: false,\n\t\t\t\tinit() {\n\t\t\t\t\tconst mq = window.matchMedia(\"(max-width: 767px)\");\n\t\t\t\t\tthis._mobileQuery = mq;\n\t\t\t\t\tthis._mobileChange = () => {\n\t\t\t\t\t\tthis.mobile = mq.matches;\n\t\t\t\t\t\tif (!mq.matches) this.nav = false;\n\t\t\t\t\t\telse if (this.$refs.sidebar.contains(document.activeElement)) this.$nextTick(() => this.$refs.navOpen.focus());\n\t\t\t\t\t};\n\t\t\t\t\tmq.addEventListener(\"change\", this._mobileChange);\n\t\t\t\t\tthis._mql = window.matchMedia(\"(prefers-color-scheme: dark)\");\n\t\t\t\t\tthis._themeChange = () => { if (this.theme === \"system\") this.applyTheme(); };\n\t\t\t\t\tthis._mql.addEventListener(\"change\", this._themeChange);\n\t\t\t\t\tthis.$watch(\"nav\", open => this.syncNav(open));\n\t\t\t\t\trequestAnimationFrame(() => requestAnimationFrame(() => { this.ready = true; }));\n\t\t\t\t},\n\t\t\t\tdestroy() {\n\t\t\t\t\tthis._mobileQuery.removeEventListener(\"change\", this._mobileChange);\n\t\t\t\t\tthis._mql.removeEventListener(\"change\", this._themeChange);\n\t\t\t\t\tdocument.documentElement.classList.remove(\"nav-open\");\n\t\t\t\t},\n\t\t\t\tsyncNav(open) {\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-open\", this.mobile && open);\n\t\t\t\t\tif (this.mobile && open) {\n\t\t\t\t\t\tthis.$nextTick(() => this.$refs.navClose.focus());\n\t\t\t\t\t} else {\n\t\t\t\t\t\tthis.$nextTick(() => {\n\t\t\t\t\t\t\tif (document.querySelector(\"dialog[open]\")) return;\n\t\t\t\t\t\t\tif (!this.mobile) {\n\t\t\t\t\t\t\t\tif (!document.activeElement.getClientRects().length) {\n\t\t\t\t\t\t\t\t\tconst link = this.$refs.sidebar.querySelector('[aria-current=\"page\"]');\n\t\t\t\t\t\t\t\t\tif (link) link.focus({ preventScroll: true });\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tconst opener = this._navOpener;\n\t\t\t\t\t\t\tif (opener && opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t\topenNav(opener) { this._navOpener = opener; this.nav = true; },\n\t\t\t\ttrapNav(event) {\n\t\t\t\t\tif (!this.mobile || !this.nav || document.querySelector(\"dialog[open]\")) return;\n\t\t\t\t\tconst controls = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button, input, select, textarea, [tabindex=\"0\"]')).filter(el => !el.disabled && el.getClientRects().length);\n\t\t\t\t\tconst first = controls[0], last = controls[controls.length - 1];\n\t\t\t\t\tif (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }\n\t\t\t\t\telse if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }\n\t\t\t\t},\n\t\t\t\tapplyTheme() {\n\t\t\t\t\tconst dark = this.theme === \"dark\" || (this.theme === \"system\" && this._mql.matches);\n\t\t\t\t\tdocument.documentElement.setAttribute(\"data-theme\", dark ? \"dark\" : \"light\");\n\t\t\t\t\twindow.dispatchEvent(new CustomEvent(\"theme-changed\"));\n\t\t\t\t},\n\t\t\t\tsetTheme(t) { this.theme = t; localStorage.setItem(\"theme\", t); this.applyTheme(); },\n\t\t\t\ttoggleCollapse() {\n\t\t\t\t\tthis.collapsed = !this.collapsed;\n\t\t\t\t\tlocalStorage.setItem(\"navc\", this.collapsed ? \"1\" : \"0\");\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-collapsed\", this.collapsed);\n\t\t\t\t},\n\t\t\t}));\n\t\t});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<script>\n\t\tdocument.addEventListener(\"alpine:init\", () => {\n\t\t\tAlpine.data(\"shell\", () => ({\n\t\t\t\tnav: false,\n\t\t\t\tmobile: window.matchMedia(\"(max-width: 767px)\").matches,\n\t\t\t\tcollapsed: localStorage.getItem(\"navc\") === \"1\",\n\t\t\t\tget navCollapsed() { return !this.mobile && this.collapsed; },\n\t\t\t\ttheme: localStorage.getItem(\"theme\") || \"dark\",\n\t\t\t\tready: false,\n\t\t\t\tinit() {\n\t\t\t\t\tconst mq = window.matchMedia(\"(max-width: 767px)\");\n\t\t\t\t\tthis._mobileQuery = mq;\n\t\t\t\t\tthis._mobileChange = () => {\n\t\t\t\t\t\tthis.mobile = mq.matches;\n\t\t\t\t\t\tif (!mq.matches) this.nav = false;\n\t\t\t\t\t\telse if (this.$refs.sidebar.contains(document.activeElement)) this.$nextTick(() => this.$refs.navOpen.focus());\n\t\t\t\t\t};\n\t\t\t\t\tmq.addEventListener(\"change\", this._mobileChange);\n\t\t\t\t\tthis._mql = window.matchMedia(\"(prefers-color-scheme: dark)\");\n\t\t\t\t\tthis._themeChange = () => { if (this.theme === \"system\") this.applyTheme(); };\n\t\t\t\t\tthis._mql.addEventListener(\"change\", this._themeChange);\n\t\t\t\t\tthis.$watch(\"nav\", open => this.syncNav(open));\n\t\t\t\t\trequestAnimationFrame(() => requestAnimationFrame(() => { this.ready = true; }));\n\t\t\t\t},\n\t\t\t\tdestroy() {\n\t\t\t\t\tthis._mobileQuery.removeEventListener(\"change\", this._mobileChange);\n\t\t\t\t\tthis._mql.removeEventListener(\"change\", this._themeChange);\n\t\t\t\t\tdocument.documentElement.classList.remove(\"nav-open\");\n\t\t\t\t},\n\t\t\t\tsyncNav(open) {\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-open\", this.mobile && open);\n\t\t\t\t\tif (this.mobile && open) {\n\t\t\t\t\t\tthis.$nextTick(() => this.$refs.navClose.focus());\n\t\t\t\t\t} else {\n\t\t\t\t\t\tthis.$nextTick(() => {\n\t\t\t\t\t\t\tif (document.querySelector(\"dialog[open]\")) return;\n\t\t\t\t\t\t\tif (!this.mobile) {\n\t\t\t\t\t\t\t\tif (!document.activeElement.getClientRects().length) {\n\t\t\t\t\t\t\t\t\tconst link = this.$refs.sidebar.querySelector('[aria-current=\"page\"]');\n\t\t\t\t\t\t\t\t\tif (link) link.focus({ preventScroll: true });\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tconst opener = this._navOpener;\n\t\t\t\t\t\t\tif (opener && opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t\topenNav(opener) { this._navOpener = opener; this.nav = true; },\n\t\t\t\trevealEditorField(event) {\n\t\t\t\t\tconst field = event.target;\n\t\t\t\t\tif (!field.matches(\"input, select, textarea\")) return;\n\t\t\t\t\tconst form = field.closest(\".monitor-editor\");\n\t\t\t\t\tif (!form) return;\n\t\t\t\t\trequestAnimationFrame(() => {\n\t\t\t\t\t\tif (!field.isConnected || document.activeElement !== field) return;\n\t\t\t\t\t\tconst actions = form.querySelector(\":scope > .form-actions\");\n\t\t\t\t\t\tif (!actions || !actions.getClientRects().length || getComputedStyle(actions).position !== \"sticky\") return;\n\t\t\t\t\t\tconst rect = field.getBoundingClientRect(), bar = actions.getBoundingClientRect();\n\t\t\t\t\t\tif (bar.top < innerHeight && rect.bottom > bar.top && rect.top < bar.bottom) {\n\t\t\t\t\t\t\twindow.scrollBy({ top: rect.bottom - bar.top + 16, behavior: \"instant\" });\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t},\n\t\t\t\ttrapNav(event) {\n\t\t\t\t\tif (!this.mobile || !this.nav || document.querySelector(\"dialog[open]\")) return;\n\t\t\t\t\tconst controls = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button, input, select, textarea, [tabindex=\"0\"]')).filter(el => !el.disabled && el.getClientRects().length);\n\t\t\t\t\tconst first = controls[0], last = controls[controls.length - 1];\n\t\t\t\t\tif (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }\n\t\t\t\t\telse if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }\n\t\t\t\t},\n\t\t\t\tapplyTheme() {\n\t\t\t\t\tconst dark = this.theme === \"dark\" || (this.theme === \"system\" && this._mql.matches);\n\t\t\t\t\tdocument.documentElement.setAttribute(\"data-theme\", dark ? \"dark\" : \"light\");\n\t\t\t\t\twindow.dispatchEvent(new CustomEvent(\"theme-changed\"));\n\t\t\t\t},\n\t\t\t\tsetTheme(t) { this.theme = t; localStorage.setItem(\"theme\", t); this.applyTheme(); },\n\t\t\t\ttoggleCollapse() {\n\t\t\t\t\tthis.collapsed = !this.collapsed;\n\t\t\t\t\tlocalStorage.setItem(\"navc\", this.collapsed ? \"1\" : \"0\");\n\t\t\t\t\tdocument.documentElement.classList.toggle(\"nav-collapsed\", this.collapsed);\n\t\t\t\t},\n\t\t\t}));\n\t\t});\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -418,7 +418,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.HomePath())).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 261, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 276, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -436,7 +436,7 @@ func Sidebar(p LayoutParams) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(p.Version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 264, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 279, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -454,7 +454,7 @@ func Sidebar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.HomePath())).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 267, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 282, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -972,7 +972,7 @@ func navGroup(title string, visible bool) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 368, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 383, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -1025,7 +1025,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + href)).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 381, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 396, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 			if templ_7745c5c3_Err != nil {
@@ -1038,7 +1038,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var46 string
 			templ_7745c5c3_Var46, templ_7745c5c3_Err = templruntime.NewAttributeExpression(key).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 382, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 397, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 			if templ_7745c5c3_Err != nil {
@@ -1051,7 +1051,7 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 385, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 400, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 			if templ_7745c5c3_Err != nil {
@@ -1075,14 +1075,14 @@ func navLink(p LayoutParams, href, key, label string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<span class=\"flex-1 truncate\" x-show=\"!navCollapsed\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<span class=\"flex-1 min-w-0 wrap-break-word\" x-show=\"!navCollapsed\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 393, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 408, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 			if templ_7745c5c3_Err != nil {
@@ -1123,7 +1123,7 @@ func topbar(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 406, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 421, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -1164,7 +1164,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(initial(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 424, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 439, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
@@ -1177,7 +1177,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 425, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 440, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1190,7 +1190,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var54 string
 		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(username(p.Username))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 437, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 452, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 		if templ_7745c5c3_Err != nil {
@@ -1203,7 +1203,7 @@ func sidebarUser(p LayoutParams) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(p.BasePath + "/logout")).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 457, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 472, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
@@ -1255,7 +1255,7 @@ func PrevPageBtn(href string) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 481, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 496, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 		if templ_7745c5c3_Err != nil {
@@ -1293,7 +1293,7 @@ func NextPageBtn(href string) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 487, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 502, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {

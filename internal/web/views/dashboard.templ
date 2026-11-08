@@ -132,10 +132,10 @@ templ DashboardPage(p DashboardParams) {
 									<li>
 										<a
 											href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) }
-											class="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-200 group"
+											class="dashboard-monitor-row flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-200 group"
 										>
 											<div class="min-w-0">
-												<div class="text-sm font-medium text-white truncate">{ m.Name }</div>
+												<div class="text-sm font-medium text-white wrap-break-word">{ m.Name }</div>
 												<div class="text-xs text-muted truncate mt-0.5">
 													{ TypeLabel(m.Type) }
 													if m.Target != "" {
@@ -144,7 +144,7 @@ templ DashboardPage(p DashboardParams) {
 												</div>
 											</div>
 											<div class="flex items-center gap-3 shrink-0">
-												<span class="hidden sm:block w-14 text-right text-xs text-muted tabular-nums font-mono">
+												<span class="hidden sm:block min-w-14 text-right text-xs text-muted tabular-nums font-mono">
 													if rt := p.ResponseTimes[m.ID]; rt > 0 && m.Type != "manual" && m.Type != "heartbeat" {
 														{ FormatMs(rt) }
 													}
@@ -154,7 +154,7 @@ templ DashboardPage(p DashboardParams) {
 														@templ.Raw(sparklineSVG(pts))
 													}
 												</span>
-												<span class="w-24 flex justify-end">
+												<span class="dashboard-status min-w-24 shrink-0 flex justify-end">
 													@StatusPill(m.Status)
 												</span>
 											</div>

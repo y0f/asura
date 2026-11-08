@@ -51,7 +51,7 @@ templ Layout(p LayoutParams) {
 			@shellScript()
 		</head>
 		<body class="bg-surface text-muted-light font-sans antialiased">
-			<div x-data="shell" class="flex min-h-screen" @keydown.escape="if (!document.querySelector('dialog[open]')) nav=false" @cmdk-open.window="nav=false">
+			<div x-data="shell" class="flex min-h-screen" @keydown.escape="if (!document.querySelector('dialog[open]')) nav=false" @cmdk-open.window="nav=false" @focusin="revealEditorField($event)">
 				<a href="#content" :inert="mobile && nav" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
 				@Sidebar(p)
 				<div x-show="nav" x-cloak @click="nav=false" class="modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden"></div>
@@ -137,6 +137,21 @@ templ shellScript() {
 					}
 				},
 				openNav(opener) { this._navOpener = opener; this.nav = true; },
+				revealEditorField(event) {
+					const field = event.target;
+					if (!field.matches("input, select, textarea")) return;
+					const form = field.closest(".monitor-editor");
+					if (!form) return;
+					requestAnimationFrame(() => {
+						if (!field.isConnected || document.activeElement !== field) return;
+						const actions = form.querySelector(":scope > .form-actions");
+						if (!actions || !actions.getClientRects().length || getComputedStyle(actions).position !== "sticky") return;
+						const rect = field.getBoundingClientRect(), bar = actions.getBoundingClientRect();
+						if (bar.top < innerHeight && rect.bottom > bar.top && rect.top < bar.bottom) {
+							window.scrollBy({ top: rect.bottom - bar.top + 16, behavior: "instant" });
+						}
+					});
+				},
 				trapNav(event) {
 					if (!this.mobile || !this.nav || document.querySelector("dialog[open]")) return;
 					const controls = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button, input, select, textarea, [tabindex="0"]')).filter(el => !el.disabled && el.getClientRects().length);
@@ -390,7 +405,7 @@ templ navLink(p LayoutParams, href, key, label string) {
 			:class="collapsed && 'md:justify-center md:px-0'"
 		>
 			{ children... }
-			<span class="flex-1 truncate" x-show="!navCollapsed">{ label }</span>
+			<span class="flex-1 min-w-0 wrap-break-word" x-show="!navCollapsed">{ label }</span>
 		</a>
 	}
 }
