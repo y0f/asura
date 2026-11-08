@@ -145,12 +145,12 @@ templ DashboardPage(p DashboardParams) {
 											</div>
 											<div class="flex items-center gap-3 shrink-0">
 												<span class="hidden sm:block min-w-14 text-right text-xs text-muted tabular-nums font-mono">
-													if rt := p.ResponseTimes[m.ID]; rt > 0 && m.Type != "manual" && m.Type != "heartbeat" {
+													if rt, measured := p.ResponseTimes[m.ID]; measured && m.HasSampledMetrics() {
 														{ FormatMs(rt) }
 													}
 												</span>
 												<span class="dashboard-sparkline w-[79px] justify-end items-center">
-													if pts := p.Sparklines[m.ID]; len(pts) > 0 {
+													if pts := p.Sparklines[m.ID]; m.HasSampledMetrics() && len(pts) > 0 {
 														@templ.Raw(sparklineSVG(pts))
 													}
 												</span>

@@ -324,7 +324,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if rt := p.ResponseTimes[m.ID]; rt > 0 && m.Type != "manual" && m.Type != "heartbeat" {
+					if rt, measured := p.ResponseTimes[m.ID]; measured && m.HasSampledMetrics() {
 						var templ_7745c5c3_Var12 string
 						templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(FormatMs(rt))
 						if templ_7745c5c3_Err != nil {
@@ -339,7 +339,7 @@ func DashboardPage(p DashboardParams) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if pts := p.Sparklines[m.ID]; len(pts) > 0 {
+					if pts := p.Sparklines[m.ID]; m.HasSampledMetrics() && len(pts) > 0 {
 						templ_7745c5c3_Err = templ.Raw(sparklineSVG(pts)).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err

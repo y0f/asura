@@ -24,7 +24,7 @@ func TestPassiveMonitorDetailsOmitResponseMeasurements(t *testing.T) {
 
 func TestMonitorUptimeWindowsKeepIndependentEvidence(t *testing.T) {
 	p := MonitorDetailParams{
-		Monitor:   &storage.Monitor{ID: 7, Type: "manual"},
+		Monitor:   &storage.Monitor{ID: 7, Type: "http"},
 		Uptime24h: 100, Uptime7d: 87.5, Uptime30d: 100,
 		Uptime7dHasData: true,
 	}

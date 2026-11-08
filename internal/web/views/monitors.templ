@@ -49,6 +49,7 @@ type MonitorDetailParams struct {
 	SLA              *SLAData
 	Heatmap          []HeatmapDay
 	CloneAllowed     bool
+	Heartbeat        *HeartbeatData
 }
 
 type SLAData struct {
@@ -212,7 +213,7 @@ func (p MonitorDetailParams) showPercentiles() bool {
 }
 
 func (p MonitorDetailParams) hasResponseTimes() bool {
-	return p.Monitor.Type != "manual" && p.Monitor.Type != "heartbeat"
+	return p.Monitor.HasSampledMetrics()
 }
 
 templ uptimeStat(label string, percent float64, hasData bool) {
@@ -654,18 +655,55 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="ml-auto text-white underline underline-offset-2">View incident</a>
 				</div>
 			}
-			<div class="summary-strip">
-				@uptimeStat("Uptime 24h", p.Uptime24h, p.Uptime24hHasData)
-				@uptimeStat("Uptime 7d", p.Uptime7d, p.Uptime7dHasData)
-				@uptimeStat("Uptime 30d", p.Uptime30d, p.Uptime30dHasData)
-				@StatCard("Checks 24h", fmt.Sprint(p.TotalChecks), "") {
-					if p.DownChecks > 0 {
-						<div class="text-xs text-crit mt-0.5">{ fmt.Sprint(p.DownChecks) } failed</div>
-					} else if p.TotalChecks > 0 {
-						<div class="text-xs text-muted mt-0.5">none failed</div>
+			if p.Monitor.HasSampledMetrics() {
+				<div class="summary-strip">
+					@uptimeStat("Uptime 24h", p.Uptime24h, p.Uptime24hHasData)
+					@uptimeStat("Uptime 7d", p.Uptime7d, p.Uptime7dHasData)
+					@uptimeStat("Uptime 30d", p.Uptime30d, p.Uptime30dHasData)
+					@StatCard("Checks 24h", fmt.Sprint(p.TotalChecks), "") {
+						if p.DownChecks > 0 {
+							<div class="text-xs text-crit mt-0.5">{ fmt.Sprint(p.DownChecks) } failed</div>
+						} else if p.TotalChecks > 0 {
+							<div class="text-xs text-muted mt-0.5">none failed</div>
+						}
 					}
-				}
-			</div>
+				</div>
+			} else {
+				<section class="card card-pad mb-6" aria-labelledby="reported-state-title">
+					<h2 id="reported-state-title" class="text-md font-semibold mb-3">Reported state</h2>
+					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+						<div><dt class="stat-label">Current status</dt><dd>@StatusPill(p.Monitor.Status)</dd></div>
+						if p.Monitor.Type == "heartbeat" {
+							<div>
+								<dt class="stat-label">Last ping</dt>
+								<dd>
+									if p.Heartbeat != nil && p.Heartbeat.LastPingAt != nil {
+										@RelTime(*p.Heartbeat.LastPingAt)
+									} else {
+										No ping received
+									}
+								</dd>
+							</div>
+							<div><dt class="stat-label">Expected every</dt><dd>{ fmt.Sprintf("%d seconds", p.Monitor.Interval) }</dd></div>
+							if p.Heartbeat != nil {
+								<div><dt class="stat-label">Grace period</dt><dd>{ fmt.Sprintf("%d seconds", p.Heartbeat.GraceSecs) }</dd></div>
+							}
+						} else {
+							<div>
+								<dt class="stat-label">Last state update</dt>
+								<dd>
+									if p.Monitor.LastCheckAt != nil {
+										@RelTime(*p.Monitor.LastCheckAt)
+									} else {
+										No update recorded
+									}
+								</dd>
+							</div>
+						}
+					</dl>
+					<p class="form-hint mt-4">This monitor tracks reported state. Uptime percentages and SLA budgets are not calculated.</p>
+				</section>
+			}
 			if p.hasResponseTimes() {
 				<div
 					id={ fmt.Sprintf("response-chart-%d", p.Monitor.ID) }
@@ -715,7 +753,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					@StatCard("p99", durationPercentile(p.P99, p.UpChecks), "")
 				</div>
 			}
-			if p.SLA != nil && p.CanMonitor("sla.read", p.Monitor.ID, p.Monitor.GroupID) {
+			if p.Monitor.HasSampledMetrics() && p.SLA != nil && p.CanMonitor("sla.read", p.Monitor.ID, p.Monitor.GroupID) {
 				<div class="card card-pad mb-6">
 					<div class="flex items-center gap-3 mb-3">
 						<h2 class="text-md font-semibold">{ fmt.Sprintf("SLA target %.2f%%", p.SLA.Target) }</h2>
@@ -742,7 +780,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 				</div>
 			}
-			if len(p.Heatmap) > 0 {
+			if p.Monitor.HasSampledMetrics() && len(p.Heatmap) > 0 {
 				<div class="card card-pad mb-6">
 					<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
 						<h2 class="text-md font-semibold">Uptime, last 365 days</h2>
@@ -784,7 +822,13 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 				<section class="lg:col-span-2 panel min-w-0" aria-labelledby="checks-title">
 					<div class="px-4 py-3 border-b border-line flex items-center justify-between">
-						<h2 id="checks-title" class="text-md font-semibold">Recent checks</h2>
+						<h2 id="checks-title" class="text-md font-semibold">
+							if p.Monitor.HasSampledMetrics() {
+								Recent checks
+							} else {
+								Recorded state history
+							}
+						</h2>
 						if p.Checks != nil && p.Checks.Total > 0 {
 							<span class="text-xs text-muted tabular-nums">{ fmt.Sprint(p.Checks.Total) } total</span>
 						}
@@ -846,7 +890,15 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 							@Pager(p.Checks.Page, p.Checks.TotalPages, fmt.Sprintf("Page %d of %d", p.Checks.Page, p.Checks.TotalPages), p.checksPageHref(p.Checks.Page-1), p.checksPageHref(p.Checks.Page+1))
 						}
 					} else {
-						<div class="px-4 py-10 text-center text-sm text-muted">No checks yet.</div>
+						<div class="px-4 py-10 text-center text-sm text-muted">
+							if p.Monitor.HasSampledMetrics() {
+								No checks yet.
+							} else if p.Monitor.Type == "heartbeat" {
+								Heartbeat pings update the current state; individual pings are not stored as checks.
+							} else {
+								No state changes recorded.
+							}
+						</div>
 					}
 				</section>
 				<section class="card card-pad min-w-0" aria-labelledby="config-title">
@@ -860,11 +912,13 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 								{ fmt.Sprint(p.Monitor.Timeout) }s
 							}
 						}
-						@configRow("Failures before alert") {
-							{ fmt.Sprint(p.Monitor.FailureThreshold) }
-						}
-						@configRow("Successes to recover") {
-							{ fmt.Sprint(p.Monitor.SuccessThreshold) }
+						if p.Monitor.HasSampledMetrics() {
+							@configRow("Failures before alert") {
+								{ fmt.Sprint(p.Monitor.FailureThreshold) }
+							}
+							@configRow("Successes to recover") {
+								{ fmt.Sprint(p.Monitor.SuccessThreshold) }
+							}
 						}
 						if p.Monitor.TrackChanges {
 							@configRow("Track changes") {

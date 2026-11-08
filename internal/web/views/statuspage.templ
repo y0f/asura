@@ -342,28 +342,34 @@ templ statusMonitorRow(mwu MonitorWithUptime) {
 		<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-3">
 			<span class="text-md font-medium text-white break-words min-w-0">{ mwu.Monitor.Name }</span>
 			<div class="flex items-center justify-between sm:justify-start gap-4 shrink-0">
-				<span class="text-sm text-muted tabular-nums">{ mwu.UptimeLabel }</span>
+				if mwu.Monitor.HasSampledMetrics() {
+					<span class="text-sm text-muted tabular-nums">{ mwu.UptimeLabel }</span>
+				}
 				<span class={ "inline-flex items-center gap-1.5 text-sm", toneTextClass(tone) }><span class={ "dot", toneDotClass(tone) }></span>{ label }</span>
 			</div>
 		</div>
-		<div x-data="{tooltip: '', show: false, mx: 0, my: 0}">
-			<div class="rounded-[3px] overflow-hidden" aria-hidden="true">
-				@templ.Raw(UptimeBarsSVG(mwu.DailyBars))
+		if mwu.Monitor.HasSampledMetrics() {
+			<div x-data="{tooltip: '', show: false, mx: 0, my: 0}">
+				<div class="rounded-[3px] overflow-hidden" aria-hidden="true">
+					@templ.Raw(UptimeBarsSVG(mwu.DailyBars))
+				</div>
+				<p class="sr-only">{ uptimeSummary(mwu) }</p>
+				<div
+					x-show="show"
+					x-cloak
+					class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-white shadow-lg pointer-events-none whitespace-nowrap"
+					:style="`top: ${my - 40}px; left: ${mx}px`"
+					x-text="tooltip"
+				></div>
 			</div>
-			<p class="sr-only">{ uptimeSummary(mwu) }</p>
-			<div
-				x-show="show"
-				x-cloak
-				class="fixed z-50 px-2.5 py-1.5 bg-surface-100 border border-line-light rounded-control text-xs text-white shadow-lg pointer-events-none whitespace-nowrap"
-				:style="`top: ${my - 40}px; left: ${mx}px`"
-				x-text="tooltip"
-			></div>
-		</div>
-		<div class="flex items-center justify-between mt-2 text-xs text-muted">
-			<span>90 days ago</span>
-			<span>Today</span>
-		</div>
-		@DailyUptimeData(mwu.Monitor.Name+": daily uptime", mwu.DailyBars)
+			<div class="flex items-center justify-between mt-2 text-xs text-muted">
+				<span>90 days ago</span>
+				<span>Today</span>
+			</div>
+			@DailyUptimeData(mwu.Monitor.Name+": daily uptime", mwu.DailyBars)
+		} else {
+			<p class="text-xs text-muted">Reported status; uptime is not calculated for this monitor.</p>
+		}
 	</div>
 }
 

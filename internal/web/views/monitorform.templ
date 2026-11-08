@@ -119,13 +119,14 @@ func (p MonitorFormParams) mtlsEnabled() bool {
 	return p.HTTP.MTLSEnabled
 }
 
-func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSON, conditionsJSON string, mtlsEnabled bool, dnsServer string) string {
+func monitorFormXData(monType, httpMethod, authMethod, headersJSON, wsHeadersJSON, conditionsJSON string, mtlsEnabled bool, dnsServer, slaTarget string) string {
 	mtlsVal := "false"
 	if mtlsEnabled {
 		mtlsVal = "true"
 	}
 	return `{
     monitorType: '` + JSEscapeString(monType) + `',
+    slaTarget: '` + JSEscapeString(slaTarget) + `',
     dnsServer: '` + JSEscapeString(dnsServer) + `',
     jsonDNSServer: '` + JSEscapeString(dnsServer) + `',
     get proxyDNSServer() { return this.advancedSettings ? this.jsonDNSServer : this.dnsServer; },
@@ -230,7 +231,7 @@ templ MonitorFormPage(p MonitorFormParams) {
 		@PageHeader(p.header())
 		<div
 			x-cloak
-			x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled(), p.DNS.Server) }
+			x-data={ monitorFormXData(p.monitorTypeOrDefault(), p.httpMethodOrDefault(), p.HTTP.AuthMethod, p.HeadersJSON, p.WsHeadersJSON, p.AssertionsJSON, p.mtlsEnabled(), p.DNS.Server, p.slaTargetValue()) }
 			x-effect="if (monitorType === 'http_multi') advancedSettings = true"
 		>
 			<form
@@ -539,45 +540,25 @@ templ MonitorFormPage(p MonitorFormParams) {
 									</div>
 								}
 								<div>
-									<label class="form-label" for="sla_target">SLA Target (%)</label>
-									<select id="sla_target" name="sla_target" class="form-select">
-										<option
-											value="0"
-											if p.Monitor.SLATarget == 0 {
-												selected
-											}
-										>None</option>
-										<option
-											value="99"
-											if p.Monitor.SLATarget == 99 {
-												selected
-											}
-										>99%</option>
-										<option
-											value="99.5"
-											if p.Monitor.SLATarget == 99.5 {
-												selected
-											}
-										>99.5%</option>
-										<option
-											value="99.9"
-											if p.Monitor.SLATarget == 99.9 {
-												selected
-											}
-										>99.9%</option>
-										<option
-											value="99.95"
-											if p.Monitor.SLATarget == 99.95 {
-												selected
-											}
-										>99.95%</option>
-										<option
-											value="99.99"
-											if p.Monitor.SLATarget == 99.99 {
-												selected
-											}
-										>99.99%</option>
-									</select>
+									<label class="form-label" for="sla_target">SLA target (%)</label>
+									<input
+										id="sla_target"
+										type="number"
+										name="sla_target"
+										min="0"
+										max="100"
+										step="any"
+										value={ p.slaTargetValue() }
+										x-model="slaTarget"
+										:disabled={ p.inactiveSLADisabledExpression() }
+										aria-describedby="sla-target-help sla-target-inactive"
+										list="sla-target-presets"
+										class="form-input tabular-nums"
+										x-effect="monitorType; slaTarget; $nextTick(() => $el.setCustomValidity(!$el.disabled && (monitorType === 'manual' || monitorType === 'heartbeat') && Number(slaTarget) > 0 ? 'Set the SLA target to 0 before changing to a manual or heartbeat monitor.' : ''))"
+									/>
+									<datalist id="sla-target-presets"><option value="0"></option><option value="99"></option><option value="99.5"></option><option value="99.9"></option><option value="99.95"></option><option value="99.99"></option><option value="100"></option></datalist>
+									<p id="sla-target-help" class="form-hint">A value from 0 to 100, including custom decimals. Use 0 to disable SLA tracking.</p>
+									<p id="sla-target-inactive" x-show="monitorType === 'manual' || monitorType === 'heartbeat'" x-cloak class="form-hint">SLA tracking is unavailable for manual and heartbeat monitors. An unchanged saved target remains inactive. When changing an active monitor to either type, first set its SLA target to 0.</p>
 								</div>
 								<div>
 									<label class="form-label" for="anomaly_sensitivity">Anomaly Detection</label>
