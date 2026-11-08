@@ -219,14 +219,17 @@ Uses the standard `grpc.health.v1.Health/Check` protocol. Default port: 50051 (p
 | `client_id` | string | MQTT client ID (auto-generated if empty) |
 | `username` | string | Authentication username |
 | `password` | string | Authentication password |
-| `topic` | string | Topic to subscribe to (optional) |
+| `topic` | string | Subscription filter; supports `+` and `#`. Required with `expect_message` |
+| `expect_message` | string | Optional literal, case-sensitive payload substring (maximum 64 KiB) |
 | `use_tls` | bool | Use TLS (default: false) |
 
-```
-{"username": "monitor", "password": "secret", "topic": "health/status", "use_tls": true}
+```json
+{"topic": "health/status", "expect_message": "ready", "use_tls": true}
 ```
 
-Connects using MQTT 3.1.1. Default port: 1883 (plaintext), 8883 (TLS). Optionally subscribes to a topic to verify permissions.
+Connects using MQTT 3.1.1. Default port: 1883 (plaintext), 8883 (TLS). Without an expectation, it verifies the connection and any configured subscription. With `expect_message`, it requires an accepted QoS 0 subscription and a retained or live message whose payload contains that text before the monitor timeout. This is a literal match, not a regular expression.
+
+Subscription reads are limited to 64 packets, 256 KiB per packet body and 1 MiB total including framing. A timeout, missing match, malformed packet or exceeded limit reports the monitor down. Errors never include the expected or received payload. On edits, a blank hidden expectation preserves its saved value; use **Remove saved value** or `clear_secrets: ["expect_message"]` to remove it.
 
 ## Heartbeat Monitoring {#heartbeat-monitoring}
 

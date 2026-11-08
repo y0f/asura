@@ -913,7 +913,8 @@ templ monitorMQTTSettings(p MonitorFormParams) {
 			@SettingText("Username", "settings_mqtt_username", p.MQTT.Username, "Optional", "text")
 			@SettingPassword("Password", "settings_mqtt_password", "password", p.MQTT.Password, p.storedSecret("mqtt", "password"), "Optional")
 		</div>
-		@SettingPrivateText("Expected Message", "settings_mqtt_expect", "expect_message", p.MQTT.ExpectMessage, "Optional message content to expect", p.storedSecret("mqtt", "expect_message"))
+		@SettingPrivateText("Expected Message", "settings_mqtt_expect", "expect_message", p.MQTT.ExpectMessage, "Optional literal text to match", p.storedSecret("mqtt", "expect_message"))
+		<p class="form-hint">Case-sensitive. Requires a topic and a matching message before the monitor timeout.</p>
 		<div class="flex items-center flex-wrap gap-5">
 			@SettingCheckbox("Use TLS", "settings_mqtt_tls", p.MQTT.UseTLS)
 		</div>
