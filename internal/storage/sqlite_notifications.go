@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -28,24 +29,7 @@ func (s *SQLiteStore) CreateNotificationChannel(ctx context.Context, ch *Notific
 }
 
 func (s *SQLiteStore) GetNotificationChannel(ctx context.Context, id int64) (*NotificationChannel, error) {
-	var ch NotificationChannel
-	var settingsStr, eventsStr, createdAt, updatedAt string
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT id, name, type, enabled, settings, events, created_at, updated_at
-		 FROM notification_channels WHERE id=?`, id).
-		Scan(&ch.ID, &ch.Name, &ch.Type, &ch.Enabled, &settingsStr, &eventsStr, &createdAt, &updatedAt)
-	if err != nil {
-		return nil, err
-	}
-	decrypted, err := s.decryptSettings(settingsStr)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt settings: %w", err)
-	}
-	ch.Settings = json.RawMessage(decrypted)
-	ch.CreatedAt = parseTime(createdAt)
-	ch.UpdatedAt = parseTime(updatedAt)
-	json.Unmarshal([]byte(eventsStr), &ch.Events)
-	return &ch, nil
+	return s.scanNotificationChannel(s.readDB.QueryRowContext(ctx, "SELECT "+notificationColumns+" FROM notification_channels WHERE id=?", id).Scan)
 }
 
 func (s *SQLiteStore) ListNotificationChannels(ctx context.Context) ([]*NotificationChannel, error) {
@@ -59,20 +43,11 @@ func (s *SQLiteStore) ListNotificationChannels(ctx context.Context) ([]*Notifica
 
 	var channels []*NotificationChannel
 	for rows.Next() {
-		var ch NotificationChannel
-		var settingsStr, eventsStr, createdAt, updatedAt string
-		if err := rows.Scan(&ch.ID, &ch.Name, &ch.Type, &ch.Enabled, &settingsStr, &eventsStr, &createdAt, &updatedAt); err != nil {
+		ch, err := s.scanNotificationChannel(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		decrypted, err := s.decryptSettings(settingsStr)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt settings: %w", err)
-		}
-		ch.Settings = json.RawMessage(decrypted)
-		ch.CreatedAt = parseTime(createdAt)
-		ch.UpdatedAt = parseTime(updatedAt)
-		json.Unmarshal([]byte(eventsStr), &ch.Events)
-		channels = append(channels, &ch)
+		channels = append(channels, ch)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -84,21 +59,21 @@ func (s *SQLiteStore) ListNotificationChannels(ctx context.Context) ([]*Notifica
 }
 
 func (s *SQLiteStore) UpdateNotificationChannel(ctx context.Context, ch *NotificationChannel) error {
-	events, _ := json.Marshal(ch.Events)
-	now := formatTime(time.Now())
-	settings, err := s.encryptSettings(string(ch.Settings))
-	if err != nil {
-		return fmt.Errorf("encrypt settings: %w", err)
-	}
-	_, err = s.writeDB.ExecContext(ctx,
-		`UPDATE notification_channels SET name=?, type=?, enabled=?, settings=?, events=?, updated_at=? WHERE id=?`,
-		ch.Name, ch.Type, boolToInt(ch.Enabled), settings, string(events), now, ch.ID)
+	_, err := s.UpdateNotificationChannelWith(ctx, ch.ID, func(*NotificationChannel) (*NotificationChannel, error) { return ch, nil })
 	return err
 }
 
 func (s *SQLiteStore) DeleteNotificationChannel(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM notification_channels WHERE id=?", id)
-	return err
+	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM notification_channels WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	if count, err := result.RowsAffected(); err != nil {
+		return err
+	} else if count != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *SQLiteStore) encryptSettings(settings string) (string, error) {

@@ -67,6 +67,7 @@ type Store interface {
 	GetNotificationChannel(ctx context.Context, id int64) (*NotificationChannel, error)
 	ListNotificationChannels(ctx context.Context) ([]*NotificationChannel, error)
 	UpdateNotificationChannel(ctx context.Context, ch *NotificationChannel) error
+	UpdateNotificationChannelWith(ctx context.Context, id int64, prepare NotificationUpdate) (*NotificationChannel, error)
 	DeleteNotificationChannel(ctx context.Context, id int64) error
 
 	// Notification history

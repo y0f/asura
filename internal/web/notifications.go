@@ -21,6 +21,8 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 	channels, err := h.store.ListNotificationChannels(r.Context())
 	if err != nil {
 		h.logger.Error("web: list notifications", "error", err)
+		http.Error(w, "Failed to load notification channels", http.StatusInternalServerError)
+		return
 	}
 
 	lp := h.newLayoutParams(r, "Notifications", "notifications")
@@ -31,46 +33,55 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid notification form", http.StatusBadRequest)
+		return
+	}
 	ch := h.parseNotificationForm(r)
 	if err := notificationEventSelectionError(r, ch.Events); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
 	if err := notificationJSONError(r); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 	if err := validateChannelForm(ch); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
 	if err := h.store.CreateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("web: create notification", "error", err)
 		h.setError(w, "Failed to create channel")
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
 	h.setFlash(w, "Notification channel created")
-	h.redirect(w, r, "/notifications")
+	h.audit(r, "create", "notification_channel", ch.ID, "")
+	h.notificationRedirect(w, r)
 }
 
 func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/notifications")
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid notification form", http.StatusBadRequest)
 		return
 	}
 	ch := h.parseNotificationForm(r)
 	ch.ID = id
 	if err := notificationEventSelectionError(r, ch.Events); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
@@ -78,46 +89,37 @@ func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	// secrets alone would pass "settings is required" and wipe everything else.
 	if err := notificationJSONError(r); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
-	// Secret fields are sent to the browser blank: a blank field keeps the
-	// stored value (only while the type is unchanged) and "Remove saved value"
-	// clears it.
-	existing, err := h.store.GetNotificationChannel(r.Context(), id)
+	events, _ := json.Marshal(ch.Events)
+	input := httputil.NotificationInput{Name: &ch.Name, Type: &ch.Type, Enabled: &ch.Enabled, Settings: ch.Settings, Events: events, ClearSecrets: r.Form["clear_secrets"]}
+	_, err = h.store.UpdateNotificationChannelWith(r.Context(), id, func(current *storage.NotificationChannel) (*storage.NotificationChannel, error) {
+		next, err := input.Apply(current, httputil.GetAPIKey(r.Context()).SuperAdmin)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateChannelForm(next); err != nil {
+			return nil, fmt.Errorf("%w: %v", httputil.ErrInvalidNotification, err)
+		}
+		return next, nil
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
-		} else {
-			http.Error(w, "Failed to read notification channel", http.StatusInternalServerError)
-		}
-		return
-	}
-	if existing.Type == ch.Type {
-		ch.Settings, err = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type], views.ClearSet(r.Form["clear_secrets"]))
-		if err != nil {
+		} else if errors.Is(err, httputil.ErrInvalidNotification) {
 			h.setError(w, err.Error())
-			h.redirect(w, r, "/notifications")
-			return
+			h.notificationRedirect(w, r)
+		} else {
+			h.logger.Error("web: update notification", "error", err)
+			http.Error(w, "Failed to update notification channel", http.StatusInternalServerError)
 		}
-	}
-
-	if err := validateChannelForm(ch); err != nil {
-		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
 		return
 	}
-
-	if err := h.store.UpdateNotificationChannel(r.Context(), ch); err != nil {
-		h.logger.Error("web: update notification", "error", err)
-		h.setError(w, "Failed to update channel")
-		h.redirect(w, r, "/notifications")
-		return
-	}
-
+	h.audit(r, "update", "notification_channel", id, "")
 	h.setFlash(w, "Notification channel updated")
-	h.redirect(w, r, "/notifications")
+	h.notificationRedirect(w, r)
 }
 
 // notificationJSONError rejects an empty or invalid "Edit as JSON" submission,
@@ -152,26 +154,41 @@ func validateChannelForm(ch *storage.NotificationChannel) error {
 func (h *Handler) NotificationDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 	if err := h.store.DeleteNotificationChannel(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete notification", "error", err)
+		http.Error(w, "Failed to delete notification channel", http.StatusInternalServerError)
+		return
 	}
+	h.audit(r, "delete", "notification_channel", id, "")
 	h.setFlash(w, "Notification channel deleted")
-	h.redirect(w, r, "/notifications")
+	h.notificationRedirect(w, r)
 }
 
 func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 	ch, err := h.store.GetNotificationChannel(r.Context(), id)
 	if err != nil {
-		h.setError(w, "Channel not found")
-		h.redirect(w, r, "/notifications")
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			h.logger.Error("web: notification test read", "error", err)
+			http.Error(w, "Failed to load notification channel", http.StatusInternalServerError)
+		}
+		return
+	}
+	if h.notifier == nil {
+		http.Error(w, "Notification system is unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -188,7 +205,17 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.setFlash(w, "Test notification sent")
 	}
-	h.redirect(w, r, "/notifications")
+	h.notificationRedirect(w, r)
+}
+
+func (h *Handler) notificationRedirect(w http.ResponseWriter, r *http.Request) {
+	lp := h.newLayoutParams(r, "", "")
+	if lp.Can("notifications.read") {
+		h.redirect(w, r, "/notifications")
+		return
+	}
+	lp.BasePath = ""
+	h.redirect(w, r, lp.HomePath())
 }
 
 func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
