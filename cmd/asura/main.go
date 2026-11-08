@@ -79,28 +79,21 @@ func main() {
 	logger := setupLogger(cfg.Logging)
 	logger.Info("starting asura", "version", version, "listen", cfg.Server.Listen)
 
-	store, err := storage.NewSQLiteStore(cfg.Database.Path, cfg.Database.MaxReadConns)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store, err := storage.Open(ctx, storage.Options{
+		Driver: cfg.Database.Driver, Path: cfg.Database.Path, DSN: cfg.Database.DSN,
+		MaxReadConns: cfg.Database.MaxReadConns, EncryptionKey: cfg.Database.EncryptionKey,
+	})
 	if err != nil {
 		logger.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
 	defer store.Close()
-	logger.Info("database opened", "path", cfg.Database.Path)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	logger.Info("database opened", "driver", cfg.Database.Driver)
 
 	if cfg.Database.EncryptionKey != "" {
-		if err := enableEncryption(ctx, store, cfg.Database.EncryptionKey); err != nil {
-			logger.Error("failed to enable encryption at rest", "error", err)
-			os.Exit(1)
-		}
 		logger.Info("encryption at rest enabled")
-	}
-
-	if err := store.FinalizeLegacyAgentAssignments(ctx); err != nil {
-		logger.Error("failed to migrate explicit agent assignments", "error", err)
-		os.Exit(1)
 	}
 
 	purgeStaleSessionsOnStartup(ctx, store, cfg, logger)

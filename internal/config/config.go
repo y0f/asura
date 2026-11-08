@@ -58,7 +58,9 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
+	Driver                  string        `yaml:"driver"`
 	Path                    string        `yaml:"path"`
+	DSN                     string        `yaml:"dsn"`
 	MaxReadConns            int           `yaml:"max_read_conns"`
 	RetentionDays           int           `yaml:"retention_days"`
 	RetentionPeriod         time.Duration `yaml:"retention_period"`
@@ -132,6 +134,7 @@ func Defaults() *Config {
 			RateLimitBurst:  60,
 		},
 		Database: DatabaseConfig{
+			Driver:                  "sqlite",
 			Path:                    "asura.db",
 			MaxReadConns:            4,
 			RetentionDays:           90,
@@ -258,8 +261,20 @@ func (c *Config) validateServer() error {
 }
 
 func (c *Config) validateDatabase() error {
-	if c.Database.Path == "" {
-		return fmt.Errorf("database.path is required")
+	switch c.Database.Driver {
+	case "", "sqlite":
+		if c.Database.Path == "" {
+			return fmt.Errorf("database.path is required for SQLite")
+		}
+		if c.Database.DSN != "" {
+			return fmt.Errorf("database.dsn is only supported by PostgreSQL")
+		}
+	case "postgres":
+		if strings.TrimSpace(c.Database.DSN) == "" {
+			return fmt.Errorf("database.dsn is required for PostgreSQL")
+		}
+	default:
+		return fmt.Errorf("database.driver must be sqlite or postgres")
 	}
 	if c.Database.MaxReadConns <= 0 {
 		return fmt.Errorf("database.max_read_conns must be positive")
