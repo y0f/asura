@@ -211,10 +211,24 @@ func (s *SQLiteStore) InsertIncidentEvent(ctx context.Context, e *IncidentEvent)
 	return nil
 }
 
-func (s *SQLiteStore) ListIncidentEvents(ctx context.Context, incidentID int64) ([]*IncidentEvent, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) ListIncidentEvents(ctx context.Context, incidentID int64, access ...MonitorAccess) ([]*IncidentEvent, error) {
+	var reader monitorReadQuery = s.readDB
+	if len(access) > 0 {
+		tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+		clause, args := monitorAccessSQL("m", access)
+		var present int
+		if err := tx.QueryRowContext(ctx, `SELECT 1 FROM incidents i JOIN monitors m ON m.id=i.monitor_id WHERE i.id=?`+clause, append([]any{incidentID}, args...)...).Scan(&present); err != nil {
+			return nil, err
+		}
+		reader = tx
+	}
+	rows, err := reader.QueryContext(ctx,
 		`SELECT id, incident_id, type, message, created_at
-		 FROM incident_events WHERE incident_id=? ORDER BY created_at`, incidentID)
+		 FROM incident_events WHERE incident_id=? ORDER BY created_at,id`, incidentID)
 	if err != nil {
 		return nil, err
 	}

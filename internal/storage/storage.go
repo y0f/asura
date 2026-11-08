@@ -41,6 +41,9 @@ type Store interface {
 
 	// Incidents
 	CreateIncident(ctx context.Context, inc *Incident) error
+	TransitionIncident(ctx context.Context, id int64, change IncidentTransition, access ...MonitorAccess) (*Incident, error)
+	RecordIncidentFailure(ctx context.Context, monitorID int64, severity, cause string) (*Incident, bool, error)
+	RecordIncidentRecovery(ctx context.Context, monitorID int64) (*Incident, bool, error)
 	GetIncident(ctx context.Context, id int64, access ...MonitorAccess) (*Incident, error)
 	ListIncidents(ctx context.Context, monitorID int64, status string, search string, p Pagination) (*PaginatedResult, error)
 	ListIncidentsFiltered(ctx context.Context, f IncidentListFilter, p Pagination) (*PaginatedResult, error)
@@ -56,7 +59,7 @@ type Store interface {
 
 	// Incident events
 	InsertIncidentEvent(ctx context.Context, e *IncidentEvent) error
-	ListIncidentEvents(ctx context.Context, incidentID int64) ([]*IncidentEvent, error)
+	ListIncidentEvents(ctx context.Context, incidentID int64, access ...MonitorAccess) ([]*IncidentEvent, error)
 
 	// Notification channels
 	CreateNotificationChannel(ctx context.Context, ch *NotificationChannel) error

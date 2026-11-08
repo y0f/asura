@@ -21,17 +21,16 @@ type heldIncidentReadStore struct {
 	release chan struct{}
 }
 
-func (s *heldIncidentReadStore) GetOpenIncident(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.Incident, error) {
-	inc, err := s.SQLiteStore.GetOpenIncident(ctx, id, access...)
+func (s *heldIncidentReadStore) RecordIncidentFailure(ctx context.Context, id int64, severity, cause string) (*storage.Incident, bool, error) {
 	if s.reads.Add(1) <= 2 {
 		s.entered <- struct{}{}
 		select {
 		case <-s.release:
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, false, ctx.Err()
 		}
 	}
-	return inc, err
+	return s.SQLiteStore.RecordIncidentFailure(ctx, id, severity, cause)
 }
 
 func TestConcurrentManualFailureCreatesOneIncident(t *testing.T) {
@@ -50,7 +49,7 @@ func TestConcurrentManualFailureCreatesOneIncident(t *testing.T) {
 		t.Fatal("first failure never reached incident lookup")
 	}
 	go func() { p.ProcessManualStatus(ctx, mon, "down", "second"); done <- struct{}{} }()
-	// Allow an unsynchronized second writer to read the same absent incident.
+	// Hold the complete incident transaction so a second caller can reach it.
 	// Correct serialization keeps it waiting until the first transition finishes.
 	select {
 	case <-s.entered:
@@ -166,12 +165,12 @@ type failingIncidentStore struct {
 	failures int
 }
 
-func (s *failingIncidentStore) CreateIncident(ctx context.Context, inc *storage.Incident) error {
+func (s *failingIncidentStore) RecordIncidentFailure(ctx context.Context, id int64, severity, cause string) (*storage.Incident, bool, error) {
 	if s.failures > 0 {
 		s.failures--
-		return errors.New("injected incident creation failure")
+		return nil, false, errors.New("injected incident creation failure")
 	}
-	return s.SQLiteStore.CreateIncident(ctx, inc)
+	return s.SQLiteStore.RecordIncidentFailure(ctx, id, severity, cause)
 }
 
 func TestHeartbeatReminderSkipsChangedMonitorType(t *testing.T) {

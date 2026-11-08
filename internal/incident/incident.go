@@ -24,21 +24,6 @@ func SeverityForStatus(monitorStatus string) string {
 	}
 }
 
-// severityRank orders severities from least (warning) to most (critical) severe.
-func severityRank(s string) int {
-	switch s {
-	case SeverityWarning:
-		return 1
-	case SeverityMinor:
-		return 2
-	case SeverityMajor:
-		return 3
-	case SeverityCritical:
-		return 4
-	}
-	return 0
-}
-
 func ValidSeverity(s string) bool {
 	switch s {
 	case SeverityCritical, SeverityMajor, SeverityMinor, SeverityWarning:

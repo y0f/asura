@@ -47,6 +47,16 @@ func (s *countingStore) GetOpenIncident(ctx context.Context, id int64, access ..
 	return s.SQLiteStore.GetOpenIncident(ctx, id, access...)
 }
 
+func (s *countingStore) RecordIncidentFailure(ctx context.Context, id int64, severity, cause string) (*storage.Incident, bool, error) {
+	s.openIncCalls.Add(1)
+	return s.SQLiteStore.RecordIncidentFailure(ctx, id, severity, cause)
+}
+
+func (s *countingStore) RecordIncidentRecovery(ctx context.Context, id int64) (*storage.Incident, bool, error) {
+	s.openIncCalls.Add(1)
+	return s.SQLiteStore.RecordIncidentRecovery(ctx, id)
+}
+
 func (s *countingStore) GetLatestCheckResult(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.CheckResult, error) {
 	s.latestCRCalls.Add(1)
 	cr, err := s.SQLiteStore.GetLatestCheckResult(ctx, id, access...)
@@ -352,7 +362,7 @@ func TestHealthyCheckAvoidsExtraQueries(t *testing.T) {
 	for i := 0; i < n; i++ {
 		p.handleResult(ctx, WorkerResult{Monitor: mon, Result: &checker.Result{Status: "up", StatusCode: 200, Body: body, BodyHash: hash}})
 	}
-	t.Logf("%d steady up checks: IsMonitorInMaintenance=%d GetOpenIncident=%d GetMonitorStatus=%d GetLatestCheckResult=%d (%d MB body read)",
+	t.Logf("%d steady up checks: IsMonitorInMaintenance=%d Open-incident lookup=%d GetMonitorStatus=%d GetLatestCheckResult=%d (%d MB body read)",
 		n, ps.maintCalls.Load(), ps.openIncCalls.Load(), ps.getStatusCalls.Load(), ps.latestCRCalls.Load(), ps.latestCRBytes.Load()>>20)
 	if ps.maintCalls.Load() >= n || ps.openIncCalls.Load() >= n || ps.latestCRCalls.Load() >= n-1 || ps.getStatusCalls.Load() > n {
 		t.Fatalf("steady healthy monitor (no status change, no open incident, unchanged hash) still does per-check maintenance/open-incident/latest-body/status re-reads")
