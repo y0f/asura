@@ -1,0 +1,64 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/y0f/asura/v2/internal/storage"
+)
+
+type ImportResultParams struct {
+	LayoutParams
+	Stats      storage.ConfigurationImportResult
+	Heartbeats []ImportedHeartbeatEnrollment
+}
+
+type ImportedHeartbeatEnrollment struct {
+	MonitorID   int64
+	MonitorName string
+	PingURL     string
+}
+
+templ ImportResultPage(p ImportResultParams) {
+	@Layout(p.LayoutParams) {
+		@PageHeader(PageHeaderParams{Title: "Configuration imported", Subtitle: "The imported configuration has been saved."})
+		<div class="max-w-3xl space-y-6">
+			if len(p.Heartbeats) > 0 {
+				<section aria-labelledby="import-heartbeats">
+					<h2 id="import-heartbeats" class="text-lg font-semibold">Save the new heartbeat URLs</h2>
+					<p class="subtitle mt-1 mb-4">These URLs are shown once. Update each job to use its new URL. Anyone with a URL can report a heartbeat, so keep it private.</p>
+					<div class="space-y-3">
+						for _, heartbeat := range p.Heartbeats {
+							<div class="card card-pad">
+								<h3 class="text-md font-semibold mb-3">{ heartbeat.MonitorName }</h3>
+								@OneTimePingURL(fmt.Sprintf("import-heartbeat-%d", heartbeat.MonitorID), heartbeat.PingURL)
+							</div>
+						}
+					</div>
+				</section>
+			}
+			<section class="card card-pad" aria-labelledby="import-summary">
+				<h2 id="import-summary" class="text-lg font-semibold mb-3">Import summary</h2>
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+					@importCount("Monitors", p.Stats.Monitors)
+					@importCount("Groups", p.Stats.Groups)
+					@importCount("Tags", p.Stats.Tags)
+					@importCount("Notification channels", p.Stats.Channels)
+					@importCount("Escalation policies", p.Stats.Escalations)
+					@importCount("On-call rotations", p.Stats.Rotations)
+					@importCount("Maintenance windows", p.Stats.Maintenance)
+					@importCount("Status pages", p.Stats.StatusPages)
+					@importCount("Proxies", p.Stats.Proxies)
+					@importCount("Skipped existing entries", p.Stats.Skipped)
+				</dl>
+			</section>
+			<a href={ templ.SafeURL(p.HomePath()) } class="btn-primary">Continue</a>
+		</div>
+	}
+}
+
+templ importCount(label string, count int) {
+	<div class="flex items-center justify-between gap-4 py-2 border-b border-line">
+		<dt class="text-sm text-muted-light">{ label }</dt>
+		<dd class="text-sm font-medium text-white tabular-nums">{ fmt.Sprint(count) }</dd>
+	</div>
+}

@@ -17,18 +17,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 const maxBodyRead = 1 << 20 // 1MB
 
-var oauth2TokenCache sync.Map // map[int64]*oauth2CachedToken
+var oauth2TokenCache oauthTokenCache
 
 type oauth2CachedToken struct {
-	mu        sync.Mutex
-	token     string
-	expiresAt time.Time
+	mu            sync.Mutex
+	token         string
+	expiresAt     time.Time
+	configuration [32]byte
 }
 
 type HTTPChecker struct {
@@ -37,8 +38,8 @@ type HTTPChecker struct {
 
 func (c *HTTPChecker) Type() string { return "http" }
 
-func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.HTTPSettings
+func (c *HTTPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.HTTPSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -68,7 +69,7 @@ func (c *HTTPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Res
 	applyBodyAndHeaders(req, settings)
 
 	if settings.AuthMethod == "oauth2" {
-		token, err := fetchOAuth2Token(ctx, monitor.ID, settings, c.AllowPrivate)
+		token, err := fetchOAuth2Token(ctx, monitor, settings, c.AllowPrivate)
 		if err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("oauth2 token fetch failed: %v", err)}, nil
 		}
@@ -150,7 +151,9 @@ func redirectPolicy(maxRedirects int) func(*http.Request, []*http.Request) error
 		}
 	}
 	return func(_ *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
+		// via includes the initial request. Its length is the number of
+		// redirects including the candidate hop, which may reach the limit.
+		if len(via) > maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
 		}
 		return nil
@@ -168,8 +171,16 @@ func proxiedRedirectPolicy(next func(*http.Request, []*http.Request) error, allo
 	}
 }
 
-func buildHTTPResult(resp *http.Response, elapsed int64, settings storage.HTTPSettings) (*Result, error) {
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
+func buildHTTPResult(resp *http.Response, elapsed int64, settings model.HTTPSettings) (*Result, error) {
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
+	if err != nil {
+		return &Result{
+			Status:       "down",
+			ResponseTime: elapsed,
+			StatusCode:   resp.StatusCode,
+			Message:      fmt.Sprintf("response body read failed: %v", err),
+		}, nil
+	}
 
 	h := sha256.Sum256(bodyBytes)
 	headers := make(map[string]string)
@@ -212,7 +223,7 @@ func cacheBustURL(target string) string {
 	return target + sep + "_=" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
-func applyBodyAndHeaders(req *http.Request, settings storage.HTTPSettings) {
+func applyBodyAndHeaders(req *http.Request, settings model.HTTPSettings) {
 	if settings.Body != "" {
 		switch settings.BodyEncoding {
 		case "xml":
@@ -228,7 +239,7 @@ func applyBodyAndHeaders(req *http.Request, settings storage.HTTPSettings) {
 	}
 }
 
-func applyAuthentication(req *http.Request, settings storage.HTTPSettings) {
+func applyAuthentication(req *http.Request, settings model.HTTPSettings) {
 	switch settings.AuthMethod {
 	case "basic":
 		if settings.BasicAuthUser != "" {
@@ -245,14 +256,17 @@ func applyAuthentication(req *http.Request, settings storage.HTTPSettings) {
 	}
 }
 
-func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTTPSettings, allowPrivate bool) (string, error) {
-	val, _ := oauth2TokenCache.LoadOrStore(monitorID, &oauth2CachedToken{})
-	cached := val.(*oauth2CachedToken)
+func fetchOAuth2Token(ctx context.Context, monitor *model.Monitor, settings model.HTTPSettings, allowPrivate bool) (string, error) {
+	cached := oauth2TokenCache.get(monitor.ID)
 
 	cached.mu.Lock()
 	defer cached.mu.Unlock()
 
-	if cached.token != "" && time.Now().Before(cached.expiresAt.Add(-30*time.Second)) {
+	// Jobs may outlive configuration reloads, and agents do not receive the web
+	// cache-invalidation signal. Bind reuse to credentials, recipient and route.
+	key, _ := json.Marshal([]string{monitor.Target, monitor.ProxyURL, settings.OAuth2TokenURL, settings.OAuth2ClientID, settings.OAuth2ClientSecret, settings.OAuth2Scopes, settings.OAuth2Audience, strconv.FormatBool(allowPrivate)})
+	fingerprint := sha256.Sum256(key)
+	if cached.configuration == fingerprint && cached.token != "" && time.Now().Before(cached.expiresAt.Add(-30*time.Second)) {
 		return cached.token, nil
 	}
 
@@ -270,45 +284,55 @@ func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTT
 
 	req, err := http.NewRequestWithContext(ctx, "POST", settings.OAuth2TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return "", fmt.Errorf("invalid token endpoint request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: 10 * time.Second,
-				Control: safenet.MaybeDialControl(allowPrivate),
-			}).DialContext,
-			DisableKeepAlives: true,
-		},
+	baseDial := (&net.Dialer{Timeout: 10 * time.Second, Control: safenet.MaybeDialControl(allowPrivate)}).DialContext
+	transport := &http.Transport{DialContext: baseDial, DisableKeepAlives: true}
+	applyHTTPProxy(transport, monitor.ProxyURL, baseDial, allowPrivate)
+	if HTTPProxyURL(monitor.ProxyURL) != nil {
+		if err := validateProxyTarget(ctx, req.URL.Host, allowPrivate); err != nil {
+			return "", fmt.Errorf("token endpoint is not allowed through the proxy")
+		}
+	}
+	client := &http.Client{Timeout: 10 * time.Second, Transport: transport,
+		// A redirect must not forward client credentials to another recipient.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("request: %w", err)
+		return "", fmt.Errorf("token endpoint request failed")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("token endpoint returned status %d", resp.StatusCode)
 	}
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBodyRead)).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("invalid token endpoint response")
 	}
 	if tokenResp.AccessToken == "" {
 		return "", fmt.Errorf("empty access_token in response")
 	}
 
+	// Oversized tokens remain usable for this request without retaining an
+	// arbitrary payload in the process-wide cache.
+	if len(tokenResp.AccessToken) > maxCachedOAuthTokenBytes {
+		cached.token = ""
+		return tokenResp.AccessToken, nil
+	}
 	cached.token = tokenResp.AccessToken
+	cached.configuration = fingerprint
 	if tokenResp.ExpiresIn > 0 {
-		cached.expiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		// Bound the duration before conversion, avoiding integer overflow for
+		// malformed servers and periodically refreshing long-lived tokens.
+		cached.expiresAt = time.Now().Add(time.Duration(min(tokenResp.ExpiresIn, 86400)) * time.Second)
 	} else {
 		cached.expiresAt = time.Now().Add(time.Hour)
 	}
@@ -316,7 +340,7 @@ func fetchOAuth2Token(ctx context.Context, monitorID int64, settings storage.HTT
 	return cached.token, nil
 }
 
-func applyMTLS(tlsCfg *tls.Config, settings storage.HTTPSettings) error {
+func applyMTLS(tlsCfg *tls.Config, settings model.HTTPSettings) error {
 	cert, err := tls.X509KeyPair([]byte(settings.MTLSClientCert), []byte(settings.MTLSClientKey))
 	if err != nil {
 		return fmt.Errorf("parse client cert/key: %w", err)
@@ -335,10 +359,10 @@ func applyMTLS(tlsCfg *tls.Config, settings storage.HTTPSettings) error {
 
 // ClearOAuth2TokenCache removes the cached token for a monitor (used when settings change).
 func ClearOAuth2TokenCache(monitorID int64) {
-	oauth2TokenCache.Delete(monitorID)
+	oauth2TokenCache.remove(monitorID)
 }
 
-func resolveMaxRedirects(s storage.HTTPSettings) int {
+func resolveMaxRedirects(s model.HTTPSettings) int {
 	if s.MaxRedirects > 0 {
 		return s.MaxRedirects
 	}

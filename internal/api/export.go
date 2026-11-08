@@ -3,16 +3,16 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
-// ExportData is the top-level export format.
+// ExportData is the legacy v1 format, retained only for importing old files.
 type ExportData struct {
 	Version              int                            `json:"version"`
 	ExportedAt           time.Time                      `json:"exported_at"`
@@ -45,7 +45,8 @@ type ExportMonitor struct {
 	ProxyName                string             `json:"proxy_name,omitempty"`
 	NotificationChannelNames []string           `json:"notification_channel_names,omitempty"`
 	AgentEnabled             bool               `json:"agent_enabled,omitempty"`
-	// AgentNames restricts the monitor to these agents; empty means every agent.
+	// Legacy files used an empty list for implicit delegation. Importing into
+	// v2 preserves an empty assignment; it never grants jobs to all agents.
 	AgentNames []string `json:"agent_names,omitempty"`
 }
 
@@ -83,628 +84,109 @@ type ExportStatusPageMon struct {
 	GroupName   string `json:"group_name,omitempty"`
 }
 
-type ImportStats struct {
-	Groups      int `json:"groups_created"`
-	Proxies     int `json:"proxies_created"`
-	Channels    int `json:"channels_created"`
-	Monitors    int `json:"monitors_created"`
-	Maintenance int `json:"maintenance_created"`
-	StatusPages int `json:"status_pages_created"`
-	Skipped     int `json:"skipped"`
-	Errors      int `json:"errors"`
-}
+type ImportStats = storage.ConfigurationImportResult
 
-// BuildExportData assembles a full configuration export from the store.
-func BuildExportData(ctx context.Context, store storage.Store, redact bool) (*ExportData, error) {
-	groups, err := store.ListMonitorGroups(ctx)
+// BuildExportData reads a single consistent configuration snapshot without UI
+// pagination limits. Complete JSON encoding happens before response headers.
+func BuildExportData(ctx context.Context, store storage.Store, redact bool) (*ConfigurationFile, error) {
+	snapshot, err := store.SnapshotConfiguration(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list groups: %w", err)
+		return nil, err
 	}
-	groupMap := make(map[int64]string, len(groups))
-	for _, g := range groups {
-		groupMap[g.ID] = g.Name
-	}
+	return configurationFile(snapshot, redact), nil
+}
 
-	proxies, err := store.ListProxies(ctx)
+func EncodeConfigurationExport(data *ConfigurationFile) ([]byte, error) {
+	body, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("list proxies: %w", err)
+		return nil, fmt.Errorf("encode configuration: %w", err)
 	}
-	proxyMap := make(map[int64]string, len(proxies))
-	for _, p := range proxies {
-		proxyMap[p.ID] = p.Name
+	if int64(len(body)) > MaxConfigurationBytes {
+		return nil, fmt.Errorf("%w: portable configuration exceeds 32 MiB; use a full database backup", storage.ErrInvalidConfiguration)
 	}
-
-	channels, err := store.ListNotificationChannels(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list notification channels: %w", err)
-	}
-	channelMap := make(map[int64]string, len(channels))
-	for _, ch := range channels {
-		channelMap[ch.ID] = ch.Name
-	}
-
-	agents, err := store.ListAgents(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list agents: %w", err)
-	}
-	agentMap := make(map[int64]string, len(agents))
-	for _, a := range agents {
-		agentMap[a.ID] = a.Name
-	}
-
-	result, err := store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 10000})
-	if err != nil {
-		return nil, fmt.Errorf("list monitors: %w", err)
-	}
-	monitors := result.Data.([]*storage.Monitor)
-
-	exportMonitors := buildExportMonitors(ctx, store, monitors, groupMap, proxyMap, channelMap, agentMap, redact)
-	exportPages := buildExportStatusPages(ctx, store, monitors)
-	exportProxies := buildExportProxies(proxies, redact)
-	exportChannels := buildExportChannels(channels, redact)
-	exportGroups := buildExportGroups(groups)
-
-	mw, _ := store.ListMaintenanceWindows(ctx)
-	exportMW := buildExportMaintenance(mw)
-
-	return &ExportData{
-		Version:              1,
-		ExportedAt:           time.Now().UTC(),
-		Monitors:             exportMonitors,
-		NotificationChannels: exportChannels,
-		MonitorGroups:        exportGroups,
-		MaintenanceWindows:   exportMW,
-		Proxies:              exportProxies,
-		StatusPages:          exportPages,
-	}, nil
+	return body, nil
 }
 
-func buildExportMonitors(ctx context.Context, store storage.Store, monitors []*storage.Monitor,
-	groupMap, proxyMap, channelMap, agentMap map[int64]string, redact bool) []ExportMonitor {
-	monIDs := make([]int64, len(monitors))
-	for i, m := range monitors {
-		monIDs[i] = m.ID
-	}
-	tagMap, _ := store.GetMonitorTagsBatch(ctx, monIDs)
-
-	var out []ExportMonitor
-	for _, m := range monitors {
-		settings := m.Settings
-		if redact {
-			settings = redactMonitorSettings(settings)
-		}
-		em := ExportMonitor{
-			Name:             m.Name,
-			Description:      m.Description,
-			Type:             m.Type,
-			Target:           m.Target,
-			Interval:         m.Interval,
-			Timeout:          m.Timeout,
-			Enabled:          m.Enabled,
-			Settings:         settings,
-			Assertions:       m.Assertions,
-			TrackChanges:     m.TrackChanges,
-			FailureThreshold: m.FailureThreshold,
-			SuccessThreshold: m.SuccessThreshold,
-			UpsideDown:       m.UpsideDown,
-			ResendInterval:   m.ResendInterval,
-			SLATarget:        m.SLATarget,
-			AgentEnabled:     m.AgentEnabled,
-		}
-		if m.GroupID != nil {
-			em.GroupName = groupMap[*m.GroupID]
-		}
-		if m.ProxyID != nil {
-			em.ProxyName = proxyMap[*m.ProxyID]
-		}
-		chIDs, _ := store.GetMonitorNotificationChannelIDs(ctx, m.ID)
-		for _, chID := range chIDs {
-			if name, ok := channelMap[chID]; ok {
-				em.NotificationChannelNames = append(em.NotificationChannelNames, name)
-			}
-		}
-		agentIDs, _ := store.GetMonitorAgentIDs(ctx, m.ID)
-		for _, aID := range agentIDs {
-			if name, ok := agentMap[aID]; ok {
-				em.AgentNames = append(em.AgentNames, name)
-			}
-		}
-		for _, mt := range tagMap[m.ID] {
-			em.Tags = append(em.Tags, ExportMonitorTag{
-				TagName: mt.Name,
-				Color:   mt.Color,
-				Value:   mt.Value,
-			})
-		}
-		out = append(out, em)
-	}
-	return out
-}
-
-var monitorSettingSecrets = []string{
-	"basic_auth_pass", "bearer_token", "oauth2_client_secret",
-	"mtls_client_key", "mtls_client_cert", "mtls_ca_cert", "password",
-}
-
-func redactMonitorSettings(raw json.RawMessage) json.RawMessage {
-	if len(raw) == 0 {
-		return raw
-	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return raw
-	}
-	for _, secret := range monitorSettingSecrets {
-		if _, ok := m[secret]; ok {
-			m[secret] = ""
-		}
-	}
-	// Custom request headers are applied verbatim by the HTTP/WebSocket checkers
-	// and are user-supplied, so any of them may carry credentials. Blank every
-	// header value (the names are kept so an import round-trips structurally).
-	if hdrs, ok := m["headers"].(map[string]any); ok {
-		for hk := range hdrs {
-			hdrs[hk] = ""
-		}
-	}
-	out, err := json.Marshal(m)
-	if err != nil {
-		return raw
-	}
-	return out
-}
-
-func buildExportStatusPages(ctx context.Context, store storage.Store, monitors []*storage.Monitor) []ExportStatusPage {
-	monIDToName := make(map[int64]string, len(monitors))
-	for _, m := range monitors {
-		monIDToName[m.ID] = m.Name
-	}
-
-	statusPages, _ := store.ListStatusPages(ctx)
-	var out []ExportStatusPage
-	for _, sp := range statusPages {
-		ep := ExportStatusPage{
-			Slug:          sp.Slug,
-			Title:         sp.Title,
-			Description:   sp.Description,
-			CustomCSS:     sp.CustomCSS,
-			ShowIncidents: sp.ShowIncidents,
-			Enabled:       sp.Enabled,
-			APIEnabled:    sp.APIEnabled,
-			SortOrder:     sp.SortOrder,
-		}
-		spMons, _ := store.ListStatusPageMonitors(ctx, sp.ID)
-		for _, spm := range spMons {
-			ep.Monitors = append(ep.Monitors, ExportStatusPageMon{
-				MonitorName: monIDToName[spm.MonitorID],
-				SortOrder:   spm.SortOrder,
-				GroupName:   spm.GroupName,
-			})
-		}
-		out = append(out, ep)
-	}
-	return out
-}
-
-func buildExportProxies(proxies []*storage.Proxy, redact bool) []ExportProxy {
-	var out []ExportProxy
-	for _, p := range proxies {
-		ep := ExportProxy{
-			Name:     p.Name,
-			Protocol: p.Protocol,
-			Host:     p.Host,
-			Port:     p.Port,
-			Enabled:  p.Enabled,
-		}
-		if !redact {
-			ep.AuthUser = p.AuthUser
-			ep.AuthPass = p.AuthPass
-		}
-		out = append(out, ep)
-	}
-	return out
-}
-
-func buildExportChannels(channels []*storage.NotificationChannel, redact bool) []*storage.NotificationChannel {
-	out := make([]*storage.NotificationChannel, len(channels))
-	for i, ch := range channels {
-		settings := ch.Settings
-		if redact {
-			settings = json.RawMessage(`{}`)
-		}
-		out[i] = &storage.NotificationChannel{
-			Name:     ch.Name,
-			Type:     ch.Type,
-			Enabled:  ch.Enabled,
-			Settings: settings,
-			Events:   ch.Events,
-		}
-	}
-	return out
-}
-
-func buildExportGroups(groups []*storage.MonitorGroup) []*storage.MonitorGroup {
-	out := make([]*storage.MonitorGroup, len(groups))
-	for i, g := range groups {
-		out[i] = &storage.MonitorGroup{
-			Name:      g.Name,
-			SortOrder: g.SortOrder,
-		}
-	}
-	return out
-}
-
-func buildExportMaintenance(mw []*storage.MaintenanceWindow) []*storage.MaintenanceWindow {
-	out := make([]*storage.MaintenanceWindow, len(mw))
-	for i, m := range mw {
-		out[i] = &storage.MaintenanceWindow{
-			Name:       m.Name,
-			MonitorIDs: m.MonitorIDs,
-			StartTime:  m.StartTime,
-			EndTime:    m.EndTime,
-			Recurring:  m.Recurring,
-		}
-	}
-	return out
-}
-
-// importCtx holds name-to-ID maps used during import to resolve references.
-type importCtx struct {
-	store           storage.Store
-	logger          *slog.Logger
-	mode            string
-	groupNameToID   map[string]int64
-	proxyNameToID   map[string]int64
-	channelNameToID map[string]int64
-	monitorNameToID map[string]int64
-	// agentNameToIDs maps agent names to IDs; names need not be unique.
-	agentNameToIDs map[string][]int64
-}
-
-// RunImport imports configuration data into the store.
-func RunImport(ctx context.Context, store storage.Store, logger *slog.Logger, data *ExportData, mode string) *ImportStats {
-	stats := &ImportStats{}
-	ic := &importCtx{
-		store:           store,
-		logger:          logger,
-		mode:            mode,
-		groupNameToID:   make(map[string]int64),
-		proxyNameToID:   make(map[string]int64),
-		channelNameToID: make(map[string]int64),
-		monitorNameToID: make(map[string]int64),
-		agentNameToIDs:  make(map[string][]int64),
-	}
-
-	importGroups(ctx, ic, data.MonitorGroups, stats)
-	importProxies(ctx, ic, data.Proxies, stats)
-	importChannels(ctx, ic, data.NotificationChannels, stats)
-	importMonitors(ctx, ic, data.Monitors, stats)
-	importMaintenance(ctx, ic, data.MaintenanceWindows, stats)
-	importStatusPages(ctx, ic, data.StatusPages, stats)
-
-	return stats
-}
-
-func importGroups(ctx context.Context, ic *importCtx, groups []*storage.MonitorGroup, stats *ImportStats) {
-	existing, err := ic.store.ListMonitorGroups(ctx)
-	if err != nil {
-		ic.logger.Error("import: list groups", "error", err)
-		stats.Errors += len(groups)
-		return
-	}
-	for _, g := range existing {
-		ic.groupNameToID[g.Name] = g.ID
-	}
-	for _, g := range groups {
-		if _, exists := ic.groupNameToID[g.Name]; exists && ic.mode == "merge" {
-			stats.Skipped++
-			continue
-		}
-		ng := &storage.MonitorGroup{Name: g.Name, SortOrder: g.SortOrder}
-		if err := ic.store.CreateMonitorGroup(ctx, ng); err != nil {
-			stats.Errors++
-			continue
-		}
-		ic.groupNameToID[ng.Name] = ng.ID
-		stats.Groups++
-	}
-}
-
-func importProxies(ctx context.Context, ic *importCtx, proxies []ExportProxy, stats *ImportStats) {
-	existing, err := ic.store.ListProxies(ctx)
-	if err != nil {
-		ic.logger.Error("import: list proxies", "error", err)
-		stats.Errors += len(proxies)
-		return
-	}
-	for _, p := range existing {
-		ic.proxyNameToID[p.Name] = p.ID
-	}
-	for _, p := range proxies {
-		if _, exists := ic.proxyNameToID[p.Name]; exists && ic.mode == "merge" {
-			stats.Skipped++
-			continue
-		}
-		np := &storage.Proxy{
-			Name: p.Name, Protocol: p.Protocol, Host: p.Host, Port: p.Port,
-			AuthUser: p.AuthUser, AuthPass: p.AuthPass, Enabled: p.Enabled,
-		}
-		if err := validate.ValidateProxy(np); err != nil {
-			stats.Errors++
-			continue
-		}
-		if err := ic.store.CreateProxy(ctx, np); err != nil {
-			stats.Errors++
-			continue
-		}
-		ic.proxyNameToID[np.Name] = np.ID
-		stats.Proxies++
-	}
-}
-
-func importChannels(ctx context.Context, ic *importCtx, channels []*storage.NotificationChannel, stats *ImportStats) {
-	existing, err := ic.store.ListNotificationChannels(ctx)
-	if err != nil {
-		ic.logger.Error("import: list channels", "error", err)
-		stats.Errors += len(channels)
-		return
-	}
-	for _, ch := range existing {
-		ic.channelNameToID[ch.Name] = ch.ID
-	}
-	for _, ch := range channels {
-		if _, exists := ic.channelNameToID[ch.Name]; exists && ic.mode == "merge" {
-			stats.Skipped++
-			continue
-		}
-		nch := &storage.NotificationChannel{
-			Name: ch.Name, Type: ch.Type, Enabled: ch.Enabled,
-			Settings: ch.Settings, Events: ch.Events,
-		}
-		if err := ic.store.CreateNotificationChannel(ctx, nch); err != nil {
-			stats.Errors++
-			continue
-		}
-		ic.channelNameToID[nch.Name] = nch.ID
-		stats.Channels++
-	}
-}
-
-func importMonitors(ctx context.Context, ic *importCtx, monitors []ExportMonitor, stats *ImportStats) {
-	existing, err := ic.store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 10000})
-	if err != nil {
-		ic.logger.Error("import: list monitors", "error", err)
-		stats.Errors += len(monitors)
-		return
-	}
-	if existing != nil {
-		for _, m := range existing.Data.([]*storage.Monitor) {
-			ic.monitorNameToID[m.Name] = m.ID
-		}
-	}
-	agents, err := ic.store.ListAgents(ctx)
-	if err != nil {
-		ic.logger.Error("import: list agents", "error", err)
-	}
-	for _, a := range agents {
-		ic.agentNameToIDs[a.Name] = append(ic.agentNameToIDs[a.Name], a.ID)
-	}
-	for _, em := range monitors {
-		if _, exists := ic.monitorNameToID[em.Name]; exists && ic.mode == "merge" {
-			stats.Skipped++
-			continue
-		}
-		if importSingleMonitor(ctx, ic, &em, stats) {
-			stats.Monitors++
-		} else {
-			stats.Errors++
-		}
-	}
-}
-
-func importSingleMonitor(ctx context.Context, ic *importCtx, em *ExportMonitor, stats *ImportStats) bool {
-	m := &storage.Monitor{
-		Name: em.Name, Description: em.Description, Type: em.Type, Target: em.Target,
-		Interval: em.Interval, Timeout: em.Timeout, Enabled: em.Enabled,
-		Settings: em.Settings, Assertions: em.Assertions,
-		TrackChanges: em.TrackChanges, FailureThreshold: em.FailureThreshold,
-		SuccessThreshold: em.SuccessThreshold, UpsideDown: em.UpsideDown,
-		ResendInterval: em.ResendInterval, SLATarget: em.SLATarget,
-		AgentEnabled: em.AgentEnabled,
-	}
-	var agentIDs []int64
-	for _, name := range em.AgentNames {
-		ids, ok := ic.agentNameToIDs[name]
-		if !ok {
-			ic.logger.Warn("import: unknown agent", "monitor", em.Name, "agent", name)
-			stats.Errors++
-			continue
-		}
-		agentIDs = append(agentIDs, ids...)
-	}
-	if len(em.AgentNames) > 0 && len(agentIDs) == 0 {
-		// None of its agents exist here: an empty assignment would run the
-		// monitor on every agent, so keep it off the agents instead.
-		m.AgentEnabled = false
-	}
-	if em.GroupName != "" {
-		if gid, ok := ic.groupNameToID[em.GroupName]; ok {
-			m.GroupID = &gid
-		}
-	}
-	if em.ProxyName != "" {
-		if pid, ok := ic.proxyNameToID[em.ProxyName]; ok {
-			m.ProxyID = &pid
-		}
-	}
-	if err := validate.ValidateMonitor(m); err != nil {
-		return false
-	}
-	if err := ic.store.CreateMonitor(ctx, m); err != nil {
-		return false
-	}
-	ic.monitorNameToID[m.Name] = m.ID
-
-	var chIDs []int64
-	for _, chName := range em.NotificationChannelNames {
-		if chID, ok := ic.channelNameToID[chName]; ok {
-			chIDs = append(chIDs, chID)
-		}
-	}
-	if len(chIDs) > 0 {
-		if err := ic.store.SetMonitorNotificationChannels(ctx, m.ID, chIDs); err != nil {
-			ic.logger.Error("import: set monitor channels", "monitor", m.Name, "error", err)
-		}
-	}
-
-	if len(agentIDs) > 0 {
-		if err := ic.store.SetMonitorAgentIDs(ctx, m.ID, agentIDs); err != nil {
-			ic.logger.Error("import: set monitor agents", "monitor", m.Name, "error", err)
-			stats.Errors++
-			if m.AgentEnabled {
-				m.AgentEnabled = false
-				if err := ic.store.UpdateMonitor(ctx, m); err != nil {
-					ic.logger.Error("import: disable agents", "monitor", m.Name, "error", err)
-				}
-			}
-		}
-	}
-
-	if len(em.Tags) > 0 {
-		importMonitorTags(ctx, ic, m.ID, em.Tags)
-	}
-	return true
-}
-
-func importMonitorTags(ctx context.Context, ic *importCtx, monitorID int64, tags []ExportMonitorTag) {
-	allTags, err := ic.store.ListTags(ctx)
-	if err != nil {
-		ic.logger.Error("import: list tags", "error", err)
-		return
-	}
-	tagNameToID := make(map[string]int64, len(allTags))
-	for _, t := range allTags {
-		tagNameToID[t.Name] = t.ID
-	}
-
-	var monTags []storage.MonitorTag
-	for _, et := range tags {
-		tid, ok := tagNameToID[et.TagName]
-		if !ok {
-			newTag := &storage.Tag{Name: et.TagName, Color: et.Color}
-			if newTag.Color == "" {
-				newTag.Color = "#808080"
-			}
-			if err := ic.store.CreateTag(ctx, newTag); err != nil {
-				continue
-			}
-			tid = newTag.ID
-			tagNameToID[et.TagName] = tid
-		}
-		monTags = append(monTags, storage.MonitorTag{TagID: tid, Value: et.Value})
-	}
-	if len(monTags) > 0 {
-		if err := ic.store.SetMonitorTags(ctx, monitorID, monTags); err != nil {
-			ic.logger.Error("import: set monitor tags", "monitor_id", monitorID, "error", err)
-		}
-	}
-}
-
-func importMaintenance(ctx context.Context, ic *importCtx, windows []*storage.MaintenanceWindow, stats *ImportStats) {
-	for _, mw := range windows {
-		nmw := &storage.MaintenanceWindow{
-			Name: mw.Name, MonitorIDs: mw.MonitorIDs,
-			StartTime: mw.StartTime, EndTime: mw.EndTime, Recurring: mw.Recurring,
-		}
-		if err := ic.store.CreateMaintenanceWindow(ctx, nmw); err != nil {
-			stats.Errors++
-			continue
-		}
-		stats.Maintenance++
-	}
-}
-
-func importStatusPages(ctx context.Context, ic *importCtx, pages []ExportStatusPage, stats *ImportStats) {
-	for _, esp := range pages {
-		nsp := &storage.StatusPage{
-			Slug: esp.Slug, Title: esp.Title, Description: esp.Description,
-			CustomCSS: esp.CustomCSS, ShowIncidents: esp.ShowIncidents,
-			Enabled: esp.Enabled, APIEnabled: esp.APIEnabled, SortOrder: esp.SortOrder,
-		}
-		if err := validate.ValidateStatusPage(nsp); err != nil {
-			stats.Errors++
-			continue
-		}
-		if err := ic.store.CreateStatusPage(ctx, nsp); err != nil {
-			stats.Errors++
-			continue
-		}
-		var spMons []storage.StatusPageMonitor
-		for _, spm := range esp.Monitors {
-			if mid, ok := ic.monitorNameToID[spm.MonitorName]; ok {
-				spMons = append(spMons, storage.StatusPageMonitor{
-					PageID: nsp.ID, MonitorID: mid,
-					SortOrder: spm.SortOrder, GroupName: spm.GroupName,
-				})
-			}
-		}
-		if len(spMons) > 0 {
-			if err := ic.store.SetStatusPageMonitors(ctx, nsp.ID, spMons); err != nil {
-				ic.logger.Error("import: set status page monitors", "page", nsp.Slug, "error", err)
-			}
-		}
-		stats.StatusPages++
-	}
+func RunImport(ctx context.Context, store storage.Store, data *storage.ConfigurationSnapshot, mode string, agentIDs map[int64]int64) (*ImportStats, error) {
+	return store.ApplyConfiguration(ctx, data, storage.ConfigurationImportOptions{
+		Mode: mode, AgentIDs: agentIDs, Validate: validateImportedConfiguration,
+	})
 }
 
 func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
-	// A plain export is a full backup, secrets included; redaction is opt-in.
-	redact := r.URL.Query().Get("redact_secrets") == "true"
-
-	data, err := BuildExportData(r.Context(), h.store, redact)
-	if err != nil {
-		writeError(w, 500, "failed to build export data")
+	w.Header().Set("Cache-Control", "no-store")
+	k := httputil.GetAPIKey(r.Context())
+	if k == nil || !k.SuperAdmin {
+		writeError(w, http.StatusForbidden, "configuration transfer requires super admin access")
 		return
 	}
-
+	data, err := BuildExportData(r.Context(), h.store, r.URL.Query().Get("redact_secrets") == "true")
+	if err != nil {
+		h.logger.Error("snapshot configuration", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to read complete configuration")
+		return
+	}
+	body, err := EncodeConfigurationExport(data)
+	if err != nil {
+		if errors.Is(err, storage.ErrInvalidConfiguration) {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+		} else {
+			h.logger.Error("encode configuration", "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to encode complete configuration")
+		}
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", `attachment; filename="asura-export.json"`)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.Encode(data)
-
+	if _, err := w.Write(body); err != nil {
+		return
+	}
 	h.audit(r, "export", "config", 0, "")
 }
 
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	k := httputil.GetAPIKey(r.Context())
+	if k == nil || !k.SuperAdmin {
+		writeError(w, http.StatusForbidden, "configuration transfer requires super admin access")
+		return
+	}
 	mode := r.URL.Query().Get("mode")
 	if mode == "" {
 		mode = "merge"
 	}
 	if mode != "merge" && mode != "replace" {
-		writeError(w, 400, "mode must be 'merge' or 'replace'")
+		writeError(w, http.StatusBadRequest, "mode must be merge or replace")
 		return
 	}
-
-	var data ExportData
-	if err := h.readJSON(r, &data); err != nil {
-		writeError(w, 400, err.Error())
+	agentIDs, err := ParseConfigurationAgentMapping(r.URL.Query().Get("agent_mapping"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if data.Version != 1 {
-		writeError(w, 400, "unsupported export version")
+	r.Body = http.MaxBytesReader(w, r.Body, MaxConfigurationBytes)
+	defer r.Body.Close()
+	data, err := DecodeConfiguration(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	stats := RunImport(r.Context(), h.store, h.logger, &data, mode)
-
+	stats, err := RunImport(r.Context(), h.store, data, mode, agentIDs)
+	if err != nil {
+		if errors.Is(err, storage.ErrInvalidConfiguration) {
+			writeError(w, http.StatusBadRequest, err.Error())
+		} else {
+			h.logger.Error("import configuration rolled back", "error", err)
+			writeError(w, http.StatusInternalServerError, "configuration import failed; no changes were saved")
+		}
+		return
+	}
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
 	}
 	if h.OnStatusPageChange != nil {
 		h.OnStatusPageChange()
 	}
-
 	h.audit(r, "import", "config", 0, fmt.Sprintf("mode=%s", mode))
-	writeJSON(w, 200, stats)
+	writeJSON(w, http.StatusOK, stats)
 }

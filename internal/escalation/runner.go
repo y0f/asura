@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // minRepeatInterval is the shortest pause before a repeating policy restarts
@@ -97,11 +97,7 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 		return
 	}
 
-	steps, err := r.store.GetEscalationPolicySteps(ctx, state.PolicyID)
-	if err != nil {
-		r.logger.Error("escalation: get steps", "error", err, "policy_id", state.PolicyID)
-		return
-	}
+	steps := policy.Steps
 
 	if state.CurrentStep >= len(steps) {
 		if policy.Repeat && len(steps) > 0 {
@@ -116,6 +112,7 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 	// notification; it fires on the first tick after the window ends.
 	if inMaint, err := r.store.IsMonitorInMaintenance(ctx, inc.MonitorID, time.Now()); err != nil {
 		r.logger.Error("escalation: check maintenance", "error", err, "monitor_id", inc.MonitorID)
+		return
 	} else if inMaint {
 		return
 	}
@@ -136,7 +133,12 @@ func (r *Runner) processState(ctx context.Context, state *storage.EscalationStat
 		EscalationTotal: len(steps),
 	}
 
-	r.dispatcher.NotifyChannels(step.NotificationChannelIDs, payload)
+	if err := r.dispatcher.NotifyChannels(ctx, step.NotificationChannelIDs, payload); err != nil {
+		// A partial admission may retry an already accepted recipient. Keeping
+		// the step pending is preferable to silently losing the other recipients.
+		r.logger.Error("escalation: queue notification", "incident_id", inc.ID, "error", err)
+		return
+	}
 
 	r.logger.Info("escalation step fired",
 		"incident_id", state.IncidentID,
@@ -172,19 +174,25 @@ func (r *Runner) deleteState(ctx context.Context, incidentID int64) {
 }
 
 // StartEscalation creates an escalation state for a new incident if the monitor has an escalation policy.
-func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Monitor, incidentID int64, logger *slog.Logger) {
+func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Monitor, incidentID int64, logger *slog.Logger) error {
 	if mon.EscalationPolicyID == nil {
-		return
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
 	policy, err := store.GetEscalationPolicy(ctx, *mon.EscalationPolicyID)
-	if err != nil || !policy.Enabled {
-		return
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
+	}
+	if err != nil {
+		return err
+	}
+	if !policy.Enabled {
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
-	steps, err := store.GetEscalationPolicySteps(ctx, policy.ID)
-	if err != nil || len(steps) == 0 {
-		return
+	steps := policy.Steps
+	if len(steps) == 0 {
+		return store.PrepareIncidentEscalation(ctx, incidentID, nil)
 	}
 
 	state := &storage.EscalationState{
@@ -193,9 +201,11 @@ func StartEscalation(ctx context.Context, store storage.Store, mon *storage.Moni
 		CurrentStep: 0,
 		NextFireAt:  time.Now().Add(time.Duration(steps[0].DelayMinutes) * time.Minute),
 	}
-	if err := store.CreateEscalationState(ctx, state); err != nil {
+	if err := store.PrepareIncidentEscalation(ctx, incidentID, state); err != nil {
 		logger.Error("escalation: create state", "error", err, "incident_id", incidentID)
+		return err
 	}
+	return nil
 }
 
 // CancelEscalation removes the escalation state for an incident.

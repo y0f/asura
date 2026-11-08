@@ -9,8 +9,15 @@ import (
 	"time"
 )
 
+// Alternate backends reuse these behavior contracts in a serial integration
+// suite. The optional PostgreSQL test file scopes this hook to that suite only.
+var contractStoreFactory func(*testing.T) *SQLStore
+
 func testStore(t *testing.T) *SQLiteStore {
 	t.Helper()
+	if contractStoreFactory != nil {
+		return contractStoreFactory(t)
+	}
 	tmpFile, err := os.CreateTemp("", "asura-test-*.db")
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +276,7 @@ func TestHeartbeatCRUD(t *testing.T) {
 	})
 
 	t.Run("UpdatePing", func(t *testing.T) {
-		if err := store.UpdateHeartbeatPing(ctx, "abc123def456"); err != nil {
+		if err := store.UpdateHeartbeatPing(ctx, m.ID, "abc123def456"); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := store.GetHeartbeatByToken(ctx, "abc123def456")

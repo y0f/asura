@@ -2,19 +2,34 @@ package storage
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
 
+var ErrTagNameConflict = errors.New("tag name already in use")
+
+func tagWriteError(err error) error {
+	// Match only the database's unique-constraint classification. The tags
+	// insert/update statements have a single caller-controlled unique field.
+	var sqliteCode interface{ Code() int }
+	var postgresCode interface{ SQLState() string }
+	if (errors.As(err, &sqliteCode) && sqliteCode.Code() == 2067) ||
+		(errors.As(err, &postgresCode) && postgresCode.SQLState() == "23505") {
+		return fmt.Errorf("%w: %w", ErrTagNameConflict, err)
+	}
+	return err
+}
+
 func (s *SQLiteStore) CreateTag(ctx context.Context, t *Tag) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO tags (name, color, created_at) VALUES (?, ?, ?)`,
 		t.Name, t.Color, now)
 	if err != nil {
-		return fmt.Errorf("create tag: %w", err)
+		return fmt.Errorf("create tag: %w", tagWriteError(err))
 	}
-	id, _ := res.LastInsertId()
 	t.ID = id
 	t.CreatedAt = parseTime(now)
 	return nil
@@ -48,7 +63,7 @@ func (s *SQLiteStore) GetTagByName(ctx context.Context, name string) (*Tag, erro
 
 func (s *SQLiteStore) ListTags(ctx context.Context) ([]*Tag, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, color, created_at FROM tags ORDER BY name COLLATE NOCASE ASC`)
+		`SELECT id, name, color, created_at FROM tags ORDER BY `+s.readDB.dialect.noCase("name")+` ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -71,15 +86,28 @@ func (s *SQLiteStore) ListTags(ctx context.Context) ([]*Tag, error) {
 }
 
 func (s *SQLiteStore) UpdateTag(ctx context.Context, t *Tag) error {
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE tags SET name = ?, color = ? WHERE id = ?`,
-		t.Name, t.Color, t.ID)
-	return err
+	var createdAt string
+	err := s.writeDB.QueryRowContext(ctx,
+		`UPDATE tags SET name = ?, color = ? WHERE id = ? RETURNING created_at`,
+		t.Name, t.Color, t.ID).Scan(&createdAt)
+	if err != nil {
+		return tagWriteError(err)
+	}
+	t.CreatedAt = parseTime(createdAt)
+	return nil
 }
 
 func (s *SQLiteStore) DeleteTag(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, `DELETE FROM tags WHERE id = ?`, id)
-	return err
+	result, err := s.writeDB.ExecContext(ctx, `DELETE FROM tags WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if count, err := result.RowsAffected(); err != nil {
+		return err
+	} else if count != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *SQLiteStore) SetMonitorTags(ctx context.Context, monitorID int64, tags []MonitorTag) error {
@@ -109,13 +137,18 @@ func (s *SQLiteStore) SetMonitorTags(ctx context.Context, monitorID int64, tags 
 	return tx.Commit()
 }
 
-func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64) ([]MonitorTag, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]MonitorTag, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT mt.tag_id, t.name, t.color, mt.value
 		 FROM monitor_tags mt
 		 JOIN tags t ON t.id = mt.tag_id
 		 WHERE mt.monitor_id = ?
-		 ORDER BY t.name COLLATE NOCASE ASC`, monitorID)
+		 ORDER BY `+s.readDB.dialect.noCase("t.name")+` ASC`, monitorID)
 	if err != nil {
 		return nil, err
 	}
@@ -135,18 +168,20 @@ func (s *SQLiteStore) GetMonitorTags(ctx context.Context, monitorID int64) ([]Mo
 	return tags, rows.Err()
 }
 
-func (s *SQLiteStore) GetMonitorTagsBatch(ctx context.Context, monitorIDs []int64) (map[int64][]MonitorTag, error) {
+func (s *SQLiteStore) GetMonitorTagsBatch(ctx context.Context, monitorIDs []int64, access ...MonitorAccess) (map[int64][]MonitorTag, error) {
 	if len(monitorIDs) == 0 {
 		return map[int64][]MonitorTag{}, nil
 	}
 
 	placeholders, args := bulkArgs(monitorIDs)
+	clause, accessArgs := monitorOwnerAccessSQL("mt.monitor_id", access)
+	args = append(args, accessArgs...)
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT mt.monitor_id, mt.tag_id, t.name, t.color, mt.value
 		 FROM monitor_tags mt
 		 JOIN tags t ON t.id = mt.tag_id
-		 WHERE mt.monitor_id IN (`+placeholders+`)
-		 ORDER BY t.name COLLATE NOCASE ASC`, args...)
+		 WHERE mt.monitor_id IN (`+placeholders+`)`+clause+`
+		 ORDER BY `+s.readDB.dialect.noCase("t.name")+` ASC`, args...)
 	if err != nil {
 		return nil, err
 	}

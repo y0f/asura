@@ -8,21 +8,31 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-// SQLiteStore implements Store using SQLite with WAL mode.
-type SQLiteStore struct {
-	readDB  *sql.DB
-	writeDB *sql.DB
-	dbPath  string
-	enc     *Encryptor
+// SQLStore shares transactional queries across the supported SQL dialects.
+type SQLStore struct {
+	readDB      *sqlPool
+	writeDB     *sqlPool
+	dbPath      string
+	enc         *Encryptor
+	rollupMu    sync.Mutex
+	beforeClose func() error
+	closeOnce   sync.Once
+	closeErr    error
 }
+
+// SQLiteStore preserves the existing constructor and concrete-type API.
+type SQLiteStore = SQLStore
 
 func (s *SQLiteStore) SetEncryptor(enc *Encryptor) {
 	s.enc = enc
@@ -37,11 +47,14 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 	// modernc.org/sqlite expects PRAGMAs via the _pragma DSN parameter; the
 	// mattn-style _journal_mode/_busy_timeout keys are silently ignored.
 	pragmas := "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)"
+	// path is a filesystem name, not a caller-supplied SQLite URI. Escape
+	// reserved characters so '#' cannot truncate it and '?' cannot add options.
+	fileURI := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), OmitHost: true}).String()
 
 	// auto_vacuum is a write operation and must be set before any table is
 	// created, so it goes only on the write connection and only takes effect on
 	// a fresh database. The read-only pool must not set it.
-	writeDB, err := sql.Open("sqlite", "file:"+path+pragmas+"&_pragma=auto_vacuum(INCREMENTAL)")
+	writeDB, err := sql.Open("sqlite", fileURI+pragmas+"&_pragma=auto_vacuum(INCREMENTAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open write db: %w", err)
 	}
@@ -49,7 +62,7 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 	writeDB.SetMaxIdleConns(1)
 
 	// Read pool: multiple connections
-	readDB, err := sql.Open("sqlite", "file:"+path+pragmas+"&mode=ro")
+	readDB, err := sql.Open("sqlite", fileURI+pragmas+"&mode=ro")
 	if err != nil {
 		writeDB.Close()
 		return nil, fmt.Errorf("open read db: %w", err)
@@ -70,7 +83,7 @@ func NewSQLiteStore(path string, maxReadConns int) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("hash legacy tokens: %w", err)
 	}
 
-	return &SQLiteStore{readDB: readDB, writeDB: writeDB, dbPath: path}, nil
+	return &SQLiteStore{readDB: &sqlPool{DB: readDB}, writeDB: &sqlPool{DB: writeDB}, dbPath: path}, nil
 }
 
 // hashLegacyTokens is a one-time data migration that rewrites any agent or
@@ -129,7 +142,7 @@ func hashLegacyTokens(db *sql.DB) error {
 		}
 	}
 
-	if _, err := tx.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('tokens_hashed', '1')"); err != nil {
+	if _, err := tx.Exec("INSERT INTO meta (key, value) VALUES ('tokens_hashed', '1') ON CONFLICT(key) DO UPDATE SET value=excluded.value"); err != nil {
 		return fmt.Errorf("set tokens_hashed: %w", err)
 	}
 	return tx.Commit()
@@ -142,11 +155,19 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	if hasSchemaTbl == 0 {
-		if _, err := db.Exec(schema); err != nil {
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin base schema: %w", err)
+		}
+		defer tx.Rollback()
+		if _, err := tx.Exec(schema); err != nil {
 			return fmt.Errorf("apply base schema: %w", err)
 		}
-		if _, err := db.Exec("INSERT INTO schema_version (version) VALUES (?)", schemaVersion); err != nil {
+		if _, err := tx.Exec("INSERT INTO schema_version (version) VALUES (?)", schemaVersion); err != nil {
 			return fmt.Errorf("stamp schema version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit base schema: %w", err)
 		}
 		return nil
 	}
@@ -154,6 +175,9 @@ func runMigrations(db *sql.DB) error {
 	var currentVersion int
 	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&currentVersion); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
+	}
+	if currentVersion > schemaVersion {
+		return fmt.Errorf("database schema v%d is newer than supported v%d; use a newer Asura binary", currentVersion, schemaVersion)
 	}
 
 	if len(migrations) > 0 {
@@ -200,6 +224,11 @@ func (s *SQLiteStore) Vacuum(ctx context.Context) error {
 // IncrementalVacuum reclaims free pages without rewriting the whole database.
 // It only has an effect when the database uses auto_vacuum=INCREMENTAL.
 func (s *SQLiteStore) IncrementalVacuum(ctx context.Context) error {
+	if s.writeDB.dialect == postgresDialect {
+		// PostgreSQL manages dead tuples through autovacuum; it has no SQLite
+		// page-reclamation operation to perform on the periodic timer.
+		return nil
+	}
 	_, err := s.writeDB.ExecContext(ctx, "PRAGMA incremental_vacuum")
 	return err
 }
@@ -210,12 +239,8 @@ func (s *SQLiteStore) IncrementalVacuum(ctx context.Context) error {
 func (s *SQLiteStore) EnsureKDFSalt(ctx context.Context) ([]byte, error) {
 	var stored string
 	err := s.writeDB.QueryRowContext(ctx, "SELECT value FROM meta WHERE key='kdf_salt'").Scan(&stored)
-	if err == nil && stored != "" {
-		salt, decErr := hex.DecodeString(stored)
-		if decErr != nil {
-			return nil, fmt.Errorf("decode kdf salt: %w", decErr)
-		}
-		return salt, nil
+	if err == nil {
+		return decodeKDFSalt(stored)
 	}
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("read kdf salt: %w", err)
@@ -226,8 +251,21 @@ func (s *SQLiteStore) EnsureKDFSalt(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("generate kdf salt: %w", err)
 	}
 	if _, err := s.writeDB.ExecContext(ctx,
-		"INSERT OR REPLACE INTO meta (key, value) VALUES ('kdf_salt', ?)", hex.EncodeToString(salt)); err != nil {
+		"INSERT INTO meta (key, value) VALUES ('kdf_salt', ?) ON CONFLICT(key) DO NOTHING", hex.EncodeToString(salt)); err != nil {
 		return nil, fmt.Errorf("persist kdf salt: %w", err)
+	}
+	// A concurrent opener may have inserted first. Always return the persisted
+	// winner; replacing it would make either process encrypt with a lost key.
+	if err := s.writeDB.QueryRowContext(ctx, "SELECT value FROM meta WHERE key='kdf_salt'").Scan(&stored); err != nil {
+		return nil, fmt.Errorf("read persisted kdf salt: %w", err)
+	}
+	return decodeKDFSalt(stored)
+}
+
+func decodeKDFSalt(stored string) ([]byte, error) {
+	salt, err := hex.DecodeString(stored)
+	if err != nil || len(salt) != 16 {
+		return nil, fmt.Errorf("persisted encryption salt must be exactly 16 bytes of hexadecimal")
 	}
 	return salt, nil
 }
@@ -238,6 +276,13 @@ func sha256Hex(s string) string {
 }
 
 func (s *SQLiteStore) DBSize() (int64, error) {
+	if s.readDB.dialect == postgresDialect {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var size int64
+		err := s.readDB.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&size)
+		return size, err
+	}
 	info, err := os.Stat(s.dbPath)
 	if err != nil {
 		return 0, err
@@ -246,12 +291,22 @@ func (s *SQLiteStore) DBSize() (int64, error) {
 }
 
 func (s *SQLiteStore) Close() error {
+	s.closeOnce.Do(func() { s.closeErr = s.close() })
+	return s.closeErr
+}
+
+func (s *SQLiteStore) close() error {
 	var firstErr error
+	if s.beforeClose != nil {
+		firstErr = s.beforeClose()
+	}
 	if err := s.readDB.Close(); err != nil && firstErr == nil {
 		firstErr = fmt.Errorf("close read db: %w", err)
 	}
-	if _, err := s.writeDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil && firstErr == nil {
-		firstErr = fmt.Errorf("wal checkpoint: %w", err)
+	if s.writeDB.dialect == sqliteDialect {
+		if _, err := s.writeDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("wal checkpoint: %w", err)
+		}
 	}
 	if err := s.writeDB.Close(); err != nil && firstErr == nil {
 		firstErr = fmt.Errorf("close write db: %w", err)
@@ -308,7 +363,7 @@ func (s *SQLiteStore) scanMonitor(row scanner) (*Monitor, error) {
 	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.Type, &m.Target, &m.Interval, &m.Timeout, &m.Enabled,
 		&tagsStr, &settingsStr, &assertionsStr, &m.TrackChanges, &m.FailureThreshold, &m.SuccessThreshold,
 		&m.UpsideDown, &m.AgentEnabled, &m.ResendInterval, &m.SLATarget, &m.AnomalySensitivity, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
-		&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses)
+		&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses, &m.ConfigRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +381,9 @@ func (s *SQLiteStore) scanMonitor(row scanner) (*Monitor, error) {
 	}
 	m.CreatedAt = parseTime(createdAt)
 	m.UpdatedAt = parseTime(updatedAt)
-	json.Unmarshal([]byte(tagsStr), &m.Tags)
+	if err := json.Unmarshal([]byte(tagsStr), &m.Tags); err != nil {
+		return nil, fmt.Errorf("decode monitor tags: %w", err)
+	}
 	settingsStr, err = s.decryptSettings(settingsStr)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt settings: %w", err)

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // Agents before v1.3.1 never report DNS records. A dns_record condition must
@@ -36,7 +36,7 @@ func applyAgent(p *Pipeline, mon *storage.Monitor, st *storage.MonitorStatus, so
 	if p.staleSourceResult(mon, source, checkedAt) {
 		return false
 	}
-	p.recordSourceResult(mon, st, source, result, "", checkedAt, now)
+	p.commitSourceResult(mon, p.prepareSourceResult(mon, st, source, result, "", checkedAt, now))
 	return true
 }
 
@@ -86,7 +86,7 @@ func TestAgentResultOlderThanSameAgentDropped(t *testing.T) {
 	// Other locations keep reporting while agent:1 is quiet for an hour, so
 	// its streak is pruned; its ordering is not forgotten.
 	later := now.Add(time.Hour)
-	p.recordSourceResult(mon, st, localSource, "up", "", later, later)
+	p.commitSourceResult(mon, p.prepareSourceResult(mon, st, localSource, "up", "", later, later))
 	if applyAgent(p, mon, st, "agent:1", "down", now.Add(-3*time.Minute), later) {
 		t.Error("result older than the agent's newest applied one was applied after its streak was pruned")
 	}
@@ -103,7 +103,7 @@ func TestAgentResultNotStaleFromOtherSources(t *testing.T) {
 	st := &storage.MonitorStatus{MonitorID: 1, Status: "up"}
 	now := time.Now()
 
-	p.recordSourceResult(mon, st, localSource, "up", "", now, now)
+	p.commitSourceResult(mon, p.prepareSourceResult(mon, st, localSource, "up", "", now, now))
 	applyAgent(p, mon, st, "agent:2", "up", now, now)
 	if !applyAgent(p, mon, st, "agent:1", "down", now.Add(-5*time.Minute), now) {
 		t.Fatal("agent result was dropped because other locations reported more recently")

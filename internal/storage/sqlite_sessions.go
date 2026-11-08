@@ -102,13 +102,12 @@ func (s *SQLiteStore) CreateTOTPKey(ctx context.Context, key *TOTPKey) error {
 	if err != nil {
 		return fmt.Errorf("encrypt totp secret: %w", err)
 	}
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO totp_keys (api_key_name, secret, created_at) VALUES (?, ?, ?)`,
 		key.APIKeyName, secret, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	key.ID = id
 	key.CreatedAt = parseTime(now)
 	return nil
@@ -173,14 +172,13 @@ func (s *SQLiteStore) AdvanceTOTPCounter(ctx context.Context, apiKeyName string,
 
 func (s *SQLiteStore) CreateSession(ctx context.Context, sess *Session) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO sessions (token_hash, api_key_name, key_hash, ip_address, created_at, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		sess.TokenHash, sess.APIKeyName, sess.KeyHash, sess.IPAddress, now, formatTime(sess.ExpiresAt))
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	sess.ID = id
 	sess.CreatedAt = parseTime(now)
 	return nil
@@ -255,12 +253,26 @@ func (s *SQLiteStore) DeleteExpiredSessions(ctx context.Context) (int64, error) 
 // --- Retention ---
 
 func (s *SQLiteStore) PurgeOldData(ctx context.Context, before time.Time) (int64, error) {
+	now := time.Now().UTC()
+	if err := s.RollupPending(ctx, now); err != nil {
+		return 0, err
+	}
 	ts := formatTime(before)
 	var totalDeleted int64
 
-	n, err := s.deleteInBatches(ctx, "check_results", "created_at < ?", ts)
-	if err != nil {
+	// Keep complete hours; persist the protection before the first batch so
+	// cancellation or process termination cannot expose partial source data.
+	rawBefore := before.UTC()
+	if rawBefore.After(now) {
+		rawBefore = now
+	}
+	cutoff := formatTime(rawBefore.Truncate(time.Hour))
+	if err := s.advancePurgeFloor(ctx, "raw_purged_before", cutoff); err != nil {
 		return 0, err
+	}
+	n, err := s.deleteInBatches(ctx, "check_results", "created_at < ?", cutoff)
+	if err != nil {
+		return n, err
 	}
 	totalDeleted += n
 

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -21,8 +21,8 @@ type DomainChecker struct {
 
 func (c *DomainChecker) Type() string { return "domain" }
 
-func (c *DomainChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.DomainSettings
+func (c *DomainChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.DomainSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -84,7 +84,7 @@ func queryWhois(ctx context.Context, domain, server string, timeout time.Duratio
 	if err != nil {
 		return "", time.Since(start).Milliseconds(), fmt.Errorf("WHOIS connection failed: %w", err)
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 
 	conn.SetDeadline(time.Now().Add(timeout))
 
@@ -125,19 +125,17 @@ func evaluateDomainExpiry(body string, elapsed int64, warnDays int) (*Result, er
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("could not parse expiry date: %v", err), Body: body}, nil
 	}
 
-	days := int(time.Until(expiry).Hours() / 24)
+	status, days := expiryStatus(expiry, time.Now(), warnDays)
 	result := &Result{
-		Status:       "up",
+		Status:       status,
 		ResponseTime: elapsed,
 		Message:      fmt.Sprintf("domain expires in %d days (%s)", days, expiry.Format("2006-01-02")),
 		Body:         body,
 	}
 
-	if days <= 0 {
-		result.Status = "down"
+	if status == "down" {
 		result.Message = fmt.Sprintf("domain expired on %s", expiry.Format("2006-01-02"))
-	} else if days <= warnDays {
-		result.Status = "degraded"
+	} else if status == "degraded" {
 		result.Message = fmt.Sprintf("domain expires in %d days (warning threshold: %d)", days, warnDays)
 	}
 	return result, nil

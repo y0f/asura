@@ -2,13 +2,31 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
+
+func assertBadgeResponse(t *testing.T, w *httptest.ResponseRecorder, status int, value string) {
+	t.Helper()
+	if w.Code != status {
+		t.Fatalf("badge status = %d, want %d: %s", w.Code, status, w.Body.String())
+	}
+	if w.Header().Get("Content-Type") != "image/svg+xml" || !strings.Contains(w.Body.String(), "<svg") || !strings.Contains(w.Body.String(), ">"+value+"</text>") {
+		t.Fatalf("badge lost its SVG value: %v %s", w.Header(), w.Body.String())
+	}
+	cache := "max-age=300"
+	if status != http.StatusOK {
+		cache = "no-store"
+	}
+	if w.Header().Get("Cache-Control") != cache {
+		t.Fatalf("badge cache policy = %q, want %q", w.Header().Get("Cache-Control"), cache)
+	}
+}
 
 func createMonitorOnStatusPage(t *testing.T, srv *Server, adminKey string) int64 {
 	t.Helper()
@@ -55,30 +73,17 @@ func TestBadgeStatus(t *testing.T) {
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", w.Code)
-		}
-		if !strings.Contains(w.Body.String(), "not found") {
-			t.Error("expected 'not found' in badge SVG")
-		}
+		assertBadgeResponse(t, w, http.StatusNotFound, "not found")
 	})
 
 	t.Run("returns SVG for visible monitor", func(t *testing.T) {
-		createMonitorOnStatusPage(t, srv, adminKey)
+		id := createMonitorOnStatusPage(t, srv, adminKey)
 
-		req := httptest.NewRequest("GET", "/api/v1/badge/1/status", nil)
+		req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/badge/%d/status", id), nil)
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", w.Code)
-		}
-		if ct := w.Header().Get("Content-Type"); ct != "image/svg+xml" {
-			t.Errorf("content-type = %q, want image/svg+xml", ct)
-		}
-		if !strings.Contains(w.Body.String(), "<svg") {
-			t.Error("expected SVG content")
-		}
+		assertBadgeResponse(t, w, http.StatusOK, "pending")
 	})
 
 	t.Run("not found for monitor not on status page", func(t *testing.T) {
@@ -93,14 +98,17 @@ func TestBadgeStatus(t *testing.T) {
 			SuccessThreshold: 1,
 			Enabled:          true,
 		}
-		srv.store.CreateMonitor(ctx, mon)
+		if err := srv.store.CreateMonitor(ctx, mon); err != nil {
+			t.Fatal(err)
+		}
 
-		req := httptest.NewRequest("GET", "/api/v1/badge/2/status", nil)
+		req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/badge/%d/status", mon.ID), nil)
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 
-		if !strings.Contains(w.Body.String(), "not found") {
-			t.Error("expected 'not found' for monitor not on any status page")
+		assertBadgeResponse(t, w, http.StatusNotFound, "not found")
+		if strings.Contains(w.Body.String(), mon.Name) || strings.Contains(w.Body.String(), mon.Target) {
+			t.Error("unpublished monitor metadata leaked in badge")
 		}
 	})
 }
@@ -113,12 +121,7 @@ func TestBadgeUptime(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if ct := w.Header().Get("Content-Type"); ct != "image/svg+xml" {
-		t.Errorf("content-type = %q, want image/svg+xml", ct)
-	}
+	assertBadgeResponse(t, w, http.StatusOK, "no checks")
 }
 
 func TestBadgeResponseTime(t *testing.T) {
@@ -129,29 +132,19 @@ func TestBadgeResponseTime(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if ct := w.Header().Get("Content-Type"); ct != "image/svg+xml" {
-		t.Errorf("content-type = %q, want image/svg+xml", ct)
-	}
+	assertBadgeResponse(t, w, http.StatusOK, "no samples")
 }
 
 func TestBadgeInvalidID(t *testing.T) {
 	srv, _ := testServer(t)
 
-	for _, path := range []string{"/api/v1/badge/abc/status", "/api/v1/badge/abc/uptime", "/api/v1/badge/abc/response"} {
+	for _, path := range []string{"/api/v1/badge/abc/status", "/api/v1/badge/abc/uptime", "/api/v1/badge/abc/response", "/api/v1/badge/abc/cert"} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest("GET", path, nil)
 			w := httptest.NewRecorder()
 			srv.ServeHTTP(w, req)
 
-			if w.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d", w.Code)
-			}
-			if !strings.Contains(w.Body.String(), "error") {
-				t.Error("expected 'error' in badge SVG for invalid ID")
-			}
+			assertBadgeResponse(t, w, http.StatusBadRequest, "error")
 		})
 	}
 }

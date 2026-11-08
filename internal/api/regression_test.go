@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/monitor"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/server"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/monitor"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/server"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 const testAdminKey = "regression-admin-key"
@@ -75,7 +75,16 @@ func newTestEnv(t *testing.T, mutate func(*config.Config), withPipeline bool, su
 	if subNotifier != nil {
 		sn = subNotifier(store, cfg)
 	}
-	srv := server.NewServer(cfg, store, p, notifier.NewDispatcher(store, logger, true), sn, logger, "test")
+	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		dispatcher.Shutdown(ctx)
+		if sn != nil {
+			sn.Shutdown(ctx)
+		}
+	})
+	srv := server.NewServer(cfg, store, p, dispatcher, sn, logger, "test")
 	t.Cleanup(srv.Close)
 	return &testEnv{srv: srv, store: store, dbPath: f.Name()}
 }
@@ -150,7 +159,7 @@ func TestAPIEmailSubscribeSendsConfirmation(t *testing.T) {
 	sp := env.createStatusPage(t, `{"slug":"s1","title":"S1","enabled":true,"api_enabled":true}`)
 
 	w := env.do("POST", "/api/v1/status-pages/"+strconv.FormatInt(sp.ID, 10)+"/subscribe", `{"type":"email","email":"a@example.com"}`, nil)
-	if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), "confirmation email sent") {
+	if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), "confirmation email queued") {
 		t.Fatalf("subscribe: %d %s", w.Code, w.Body.String())
 	}
 	deadline := time.Now().Add(3 * time.Second)
@@ -236,12 +245,11 @@ func TestStatusPagePasswordViaAPI(t *testing.T) {
 	}
 }
 
-// API subscribing is gated as in v1.3.0: the page must be enabled and have
-// api_enabled on; whether subscriptions are configured does not matter, and an
-// email subscription without a subscriber notifier must not crash.
+// Enabled subscriptions require both page gates. Webhooks need no SMTP;
+// email registration fails visibly when confirmation transport is unavailable.
 func TestSubscribeAPIGating(t *testing.T) {
 	env := newTestEnv(t, func(c *config.Config) {
-		c.Subscriptions.Enabled = false
+		c.Subscriptions.Enabled = true
 		c.Monitor.AllowPrivateTargets = true // no DNS lookup of the webhook host
 	}, false, nil)
 	ctx := context.Background()
@@ -256,11 +264,15 @@ func TestSubscribeAPIGating(t *testing.T) {
 		sp := env.createStatusPage(t, fmt.Sprintf(`{"slug":"s%d","title":"S","enabled":%v,"api_enabled":%v}`, i, tc.enabled, tc.apiEnabled))
 		path := "/api/v1/status-pages/" + strconv.FormatInt(sp.ID, 10) + "/subscribe"
 		for _, body := range []string{`{"type":"webhook","webhook_url":"https://example.com/hook"}`, `{"type":"email","email":"a@example.com"}`} {
-			if w := env.do("POST", path, body, nil); w.Code != tc.want {
-				t.Errorf("enabled=%v api_enabled=%v: subscribe %s returned %d %s, want %d", tc.enabled, tc.apiEnabled, body, w.Code, strings.TrimSpace(w.Body.String()), tc.want)
+			want := tc.want
+			if want == http.StatusCreated && strings.Contains(body, `"type":"email"`) {
+				want = http.StatusServiceUnavailable
+			}
+			if w := env.do("POST", path, body, nil); w.Code != want {
+				t.Errorf("enabled=%v api_enabled=%v: subscribe %s returned %d %s, want %d", tc.enabled, tc.apiEnabled, body, w.Code, strings.TrimSpace(w.Body.String()), want)
 			}
 		}
-		wantN := int64(0) // confirmed subscribers: the webhook; the email awaits confirmation
+		wantN := int64(0) // Only the webhook is stored; unavailable email can be retried.
 		if tc.want == http.StatusCreated {
 			wantN = 1
 		}
@@ -284,10 +296,39 @@ func agentMonitor(t *testing.T, env *testEnv) (*storage.Agent, *storage.Monitor)
 	if err := env.store.CreateMonitor(ctx, m); err != nil {
 		t.Fatal(err)
 	}
+	if err := env.store.SetMonitorAgentIDs(ctx, m.ID, []int64{a.ID}); err != nil {
+		t.Fatal(err)
+	}
 	return a, m
 }
 
-func postResults(env *testEnv, a *storage.Agent, body string) *httptest.ResponseRecorder {
+// postResults models a current v2 job for older behavioral fixtures. Protocol
+// tests send raw requests so missing, invalid and stale revisions stay explicit.
+func postResults(t *testing.T, env *testEnv, a *storage.Agent, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	var results []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &results); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range results {
+		if _, present := result["config_revision"]; present {
+			continue
+		}
+		var id int64
+		if err := json.Unmarshal(result["monitor_id"], &id); err != nil {
+			t.Fatal(err)
+		}
+		monitor, err := env.store.GetMonitor(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result["config_revision"] = json.RawMessage(strconv.FormatInt(monitor.ConfigRevision, 10))
+	}
+	encoded, err := json.Marshal(results)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = string(encoded)
 	return env.do("POST", "/api/v1/agent/results", body, map[string]string{"X-Agent-Token": a.Token})
 }
 
@@ -305,7 +346,7 @@ func TestAgentResultsRequireAssignment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"accepted":0`) {
 		t.Fatalf("unassigned agent post: %d %s, want accepted 0", w.Code, w.Body.String())
 	}
@@ -313,13 +354,13 @@ func TestAgentResultsRequireAssignment(t *testing.T) {
 		t.Errorf("unassigned agent %q opened incident %d on monitor %d", a.Name, inc.ID, m.ID)
 	}
 
-	w = postResults(env, other, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
+	w = postResults(t, env, other, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":1`) {
 		t.Fatalf("assigned agent post: %d %s, want accepted 1", w.Code, w.Body.String())
 	}
 }
 
-// Jobs follow the assignment; a monitor without one runs on every agent.
+// Jobs follow explicit assignments; new agents receive no jobs automatically.
 func TestAgentJobsFollowAssignment(t *testing.T) {
 	env := newTestEnv(t, nil, false, nil)
 	ctx := context.Background()
@@ -350,10 +391,17 @@ func TestAgentJobsFollowAssignment(t *testing.T) {
 		return out
 	}
 	if got := ids(a); len(got) != 1 || got[0] != open.ID {
-		t.Errorf("agent %q jobs = %v, want only the unassigned monitor %d", a.Name, got, open.ID)
+		t.Errorf("agent %q jobs = %v, want only assigned monitor %d", a.Name, got, open.ID)
 	}
-	if got := ids(other); len(got) != 2 {
-		t.Errorf("agent %q jobs = %v, want the unassigned and the pinned monitor", other.Name, got)
+	if got := ids(other); len(got) != 1 || got[0] != pinned.ID {
+		t.Errorf("agent %q jobs = %v, want only assigned monitor %d", other.Name, got, pinned.ID)
+	}
+	newAgent := &storage.Agent{Name: "new-probe", Enabled: true}
+	if err := env.store.CreateAgent(ctx, newAgent); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(newAgent); len(got) != 0 {
+		t.Errorf("new agent received jobs without explicit assignment: %v", got)
 	}
 }
 
@@ -457,7 +505,7 @@ func TestAgentPostingResultsKeepsAgentOnline(t *testing.T) {
 	if _, err := db.Exec(`UPDATE agents SET last_heartbeat=? WHERE id=?`, time.Now().Add(-3*time.Minute).UTC().Format("2006-01-02T15:04:05Z"), a.ID); err != nil {
 		t.Fatal(err)
 	}
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"up"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":1`) {
 		t.Fatalf("post: %s", w.Body.String())
 	}
@@ -493,7 +541,7 @@ func TestStaleAgentResultDoesNotReopenIncident(t *testing.T) {
 	post := func(status string, checkedAt time.Time) {
 		t.Helper()
 		body, _ := json.Marshal([]map[string]any{{"monitor_id": m.ID, "status": status, "message": "timeout", "checked_at": checkedAt.UTC().Format(time.RFC3339Nano)}})
-		if w := postResults(env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
+		if w := postResults(t, env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
 			t.Fatalf("post: %s", w.Body.String())
 		}
 	}
@@ -544,7 +592,7 @@ func TestAgentResultStoredAfterEvaluation(t *testing.T) {
 	if err := env.store.UpdateMonitor(ctx, m); err != nil {
 		t.Fatal(err)
 	}
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"refused"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"refused"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":1`) {
 		t.Fatalf("post: %s", w.Body.String())
 	}
@@ -564,7 +612,7 @@ func TestAgentResultStalenessIsPerLocation(t *testing.T) {
 	post := func(status string, checkedAt time.Time) {
 		t.Helper()
 		body, _ := json.Marshal([]map[string]any{{"monitor_id": m.ID, "status": status, "checked_at": checkedAt.UTC().Format(time.RFC3339Nano)}})
-		if w := postResults(env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
+		if w := postResults(t, env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
 			t.Fatalf("post: %s", w.Body.String())
 		}
 	}
@@ -609,7 +657,7 @@ func TestAgentCheckedAtLongCycleAndFuture(t *testing.T) {
 			res["checked_at"] = checkedAt.UTC().Format(time.RFC3339)
 		}
 		body, _ := json.Marshal([]map[string]any{res})
-		if w := postResults(env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
+		if w := postResults(t, env, a, string(body)); !strings.Contains(w.Body.String(), `"accepted":1`) {
 			t.Fatalf("post: %s", w.Body.String())
 		}
 	}
@@ -648,13 +696,16 @@ func TestAgentResultsRejectedForServerOnlyMonitor(t *testing.T) {
 	if err := env.store.CreateMonitor(ctx, m); err != nil {
 		t.Fatal(err)
 	}
+	if err := env.store.SetMonitorAgentIDs(ctx, m.ID, []int64{a.ID}); err != nil {
+		t.Fatal(err)
+	}
 	jobs, _ := env.store.ListAgentJobs(ctx, a.ID)
 	for _, j := range jobs {
 		if j.ID == m.ID {
 			t.Fatal("precondition: monitor with credentials offered to agent")
 		}
 	}
-	w := postResults(env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
+	w := postResults(t, env, a, `[{"monitor_id":`+strconv.FormatInt(m.ID, 10)+`,"status":"down","message":"forged"}]`)
 	if !strings.Contains(w.Body.String(), `"accepted":0`) {
 		t.Errorf("result for server-only monitor: %d %s, want accepted 0", w.Code, w.Body.String())
 	}
@@ -762,8 +813,8 @@ func TestStatusPagePasswordLimiterSharedWithWebForm(t *testing.T) {
 	})
 }
 
-// Read-only keys see only the subscriber count, never emails or webhook URLs.
-func TestSubscriberListNeedsWritePermission(t *testing.T) {
+// Subscriber contacts require their own explicit scope.
+func TestSubscriberListNeedsSubscriberPermission(t *testing.T) {
 	const roKey = "regression-read-only-key"
 	env := newTestEnv(t, func(c *config.Config) {
 		c.Auth.APIKeys = append(c.Auth.APIKeys, config.APIKeyConfig{Name: "ro", Hash: config.HashAPIKey(roKey), Permissions: []string{"monitors.read"}})
@@ -781,8 +832,8 @@ func TestSubscriberListNeedsWritePermission(t *testing.T) {
 	path := "/api/v1/status-pages/" + strconv.FormatInt(sp.ID, 10) + "/subscribers"
 
 	w := env.do("GET", path, "", map[string]string{"X-API-Key": roKey})
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"count":2`) {
-		t.Fatalf("read-only key: %d %s, want count 2", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("monitor read-only key: %d %s, want 403", w.Code, w.Body.String())
 	}
 	if body := w.Body.String(); strings.Contains(body, "alice@example.com") || strings.Contains(body, "secret-token") || strings.Contains(body, `"data"`) {
 		t.Errorf("read-only key sees subscriber details: %s", body)
@@ -790,11 +841,11 @@ func TestSubscriberListNeedsWritePermission(t *testing.T) {
 
 	w = env.do("GET", path, "", admin)
 	if body := w.Body.String(); !strings.Contains(body, "alice@example.com") || !strings.Contains(body, `"data"`) {
-		t.Errorf("write key lost the subscriber list: %s", body)
+		t.Errorf("admin lost the subscriber list: %s", body)
 	}
 }
 
-// A plain export is a full backup; redaction is opt-in.
+// A plain portable configuration export includes secrets; redaction is opt-in.
 func TestExportIncludesSecretsByDefault(t *testing.T) {
 	env := newTestEnv(t, nil, false, nil)
 	ctx := context.Background()
@@ -856,38 +907,39 @@ func TestExportImportKeepsAgentAssignment(t *testing.T) {
 		t.Errorf("imported monitor: agent_enabled=%v agents=%v, want true [%d]", mon.AgentEnabled, ids, probe.ID)
 	}
 
-	// No such agent: the monitor must not run on every agent.
+	// No such agent: reject the entire import without granting any jobs.
 	bare := newTestEnv(t, nil, false, nil)
 	bare.store.CreateAgent(ctx, &storage.Agent{Name: "unrelated", Enabled: true})
-	mon, ids, stats := importInto(bare)
-	if mon.AgentEnabled && len(ids) == 0 {
-		t.Errorf("monitor restricted to a missing agent was imported to run on every agent")
+	w = bare.do("POST", "/api/v1/import?mode=merge", exported, admin)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "explicit mapping") {
+		t.Fatalf("missing destination enrollment must fail atomically: %d %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(stats, `"errors":1`) {
-		t.Errorf("unknown agent not counted as an import error: %s", stats)
+	snapshot, err := bare.store.SnapshotConfiguration(ctx)
+	if err != nil || len(snapshot.Monitors)+len(snapshot.Groups)+len(snapshot.Channels) != 0 {
+		t.Fatalf("missing enrollment left a partial import: %v", err)
 	}
 }
 
-// failingAgentStore fails every attempt to store an agent assignment.
-type failingAgentStore struct {
-	storage.Store
-}
+// failingAgentStore injects failure at the complete monitor/assignment boundary.
+// Storage tests separately prove rollback after intermediate SQL writes.
+type failingAgentStore struct{ storage.Store }
 
-func (failingAgentStore) SetMonitorAgentIDs(context.Context, int64, []int64) error {
+func (failingAgentStore) CreateMonitorWithRelations(context.Context, *storage.Monitor, storage.MonitorCreateOptions, ...storage.MonitorAccess) error {
 	return errors.New("disk full")
 }
+func (failingAgentStore) UpdateMonitorWithRelations(context.Context, int64, storage.MonitorUpdate, ...storage.MonitorAccess) (*storage.Monitor, error) {
+	return nil, errors.New("disk full")
+}
+func (failingAgentStore) CloneMonitorWithRelations(context.Context, int64, storage.MonitorClone, []storage.MonitorAccess, []storage.MonitorAccess) (*storage.Monitor, *storage.Heartbeat, error) {
+	return nil, nil, errors.New("disk full")
+}
 
-// If storing an agent assignment fails, the monitor must not run on every
-// agent: create, update and clone leave it with agent checks off.
-func TestMonitorAgentAssignmentFailureKeepsAgentsOff(t *testing.T) {
+func TestMonitorAgentAssignmentFailureIsAtomic(t *testing.T) {
 	env := newTestEnv(t, nil, false, nil)
 	ctx := context.Background()
 	assigned := &storage.Agent{Name: "assigned", Enabled: true}
-	other := &storage.Agent{Name: "other", Enabled: true}
-	for _, a := range []*storage.Agent{assigned, other} {
-		if err := env.store.CreateAgent(ctx, a); err != nil {
-			t.Fatal(err)
-		}
+	if err := env.store.CreateAgent(ctx, assigned); err != nil {
+		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cfg := config.Defaults()
@@ -895,83 +947,42 @@ func TestMonitorAgentAssignmentFailureKeepsAgentsOff(t *testing.T) {
 	srv := server.NewServer(cfg, failingAgentStore{env.store}, nil, notifier.NewDispatcher(env.store, logger, true), nil, logger, "test")
 	t.Cleanup(srv.Close)
 	failing := &testEnv{srv: srv, store: env.store}
-
-	// checkOff asserts monitor id has agent checks off and, once enabled,
-	// is not offered to the agent it was not assigned to.
-	checkOff := func(step string, id int64) {
-		t.Helper()
-		if err := env.store.SetMonitorEnabled(ctx, id, true); err != nil {
-			t.Fatal(err)
+	source := &storage.Monitor{Name: "original", Type: "http", Target: "https://example.com", Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: true, FailureThreshold: 1, SuccessThreshold: 1}
+	if err := env.store.CreateMonitor(ctx, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.store.SetMonitorAgentIDs(ctx, source.ID, []int64{assigned.ID}); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"name":"replacement","type":"http","target":"https://example.com","interval":60,"timeout":10,"failure_threshold":1,"success_threshold":1,"agent_enabled":true,"agent_ids":[%d]}`, assigned.ID)
+	base := "/api/v1/monitors/" + strconv.FormatInt(source.ID, 10)
+	for _, request := range []struct{ method, path, body string }{{"POST", "/api/v1/monitors", body}, {"PUT", base, body}, {"POST", base + "/clone", ""}} {
+		w := failing.do(request.method, request.path, request.body, admin)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("%s %s falsely succeeded: %d %s", request.method, request.path, w.Code, w.Body.String())
 		}
-		m, err := env.store.GetMonitor(ctx, id)
-		if err != nil {
-			t.Fatal(err)
+		stored, err := env.store.GetMonitor(ctx, source.ID)
+		if err != nil || stored.Name != "original" || !stored.Enabled || !stored.AgentEnabled {
+			t.Fatalf("failed write changed original: %+v, %v", stored, err)
 		}
-		if m.AgentEnabled {
-			t.Errorf("%s: agent checks on after the assignment failed", step)
+		ids, err := env.store.GetMonitorAgentIDs(ctx, source.ID)
+		if err != nil || len(ids) != 1 || ids[0] != assigned.ID {
+			t.Fatalf("failed write changed delegation: %v, %v", ids, err)
 		}
-		jobs, err := env.store.ListAgentJobs(ctx, other.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, j := range jobs {
-			if j.ID == id {
-				t.Errorf("%s: monitor %d runs on unassigned agent %q", step, id, other.Name)
-			}
+		result, err := env.store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 100})
+		if err != nil || result.Total != 1 {
+			t.Fatalf("failed write left partial monitor: %+v, %v", result, err)
 		}
 	}
-	agentIDs := `[` + strconv.FormatInt(assigned.ID, 10) + `]`
-	body := `{"name":"api","type":"http","target":"https://example.com","interval":60,"timeout":10,"failure_threshold":1,"success_threshold":1,"agent_enabled":true,"agent_ids":` + agentIDs + `}`
-
-	w := failing.do("POST", "/api/v1/monitors", body, admin)
+	w := env.do("POST", base+"/clone", "", admin)
 	if w.Code != http.StatusCreated {
-		t.Fatalf("create: %d %s", w.Code, w.Body.String())
-	}
-	var created storage.Monitor
-	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
-		t.Fatal(err)
-	}
-	checkOff("create", created.ID)
-
-	src := &storage.Monitor{
-		Name: "src", Type: "http", Target: "https://example.org", Interval: 60, Timeout: 10,
-		Enabled: true, AgentEnabled: true, Tags: []string{}, FailureThreshold: 1, SuccessThreshold: 1,
-	}
-	if err := env.store.CreateMonitor(ctx, src); err != nil {
-		t.Fatal(err)
-	}
-	srcID := strconv.FormatInt(src.ID, 10)
-	if w := failing.do("PUT", "/api/v1/monitors/"+srcID, body, admin); w.Code != http.StatusOK {
-		t.Fatalf("update: %d %s", w.Code, w.Body.String())
-	}
-	checkOff("update", src.ID)
-
-	src.AgentEnabled = true
-	if err := env.store.UpdateMonitor(ctx, src); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetMonitorAgentIDs(ctx, src.ID, []int64{assigned.ID}); err != nil {
-		t.Fatal(err)
-	}
-	w = failing.do("POST", "/api/v1/monitors/"+srcID+"/clone", "", admin)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("clone: %d %s", w.Code, w.Body.String())
+		t.Fatalf("working clone: %d %s", w.Code, w.Body.String())
 	}
 	var clone storage.Monitor
 	if err := json.Unmarshal(w.Body.Bytes(), &clone); err != nil {
 		t.Fatal(err)
 	}
-	if clone.AgentEnabled || len(clone.AgentIDs) != 0 {
-		t.Errorf("clone response: agent_enabled=%v agent_ids=%v, want off and none", clone.AgentEnabled, clone.AgentIDs)
-	}
-	checkOff("clone", clone.ID)
-
-	// With a working store the clone keeps agent checks on.
-	w = env.do("POST", "/api/v1/monitors/"+srcID+"/clone", "", admin)
-	if err := json.Unmarshal(w.Body.Bytes(), &clone); err != nil {
-		t.Fatal(err)
-	}
-	if m, err := env.store.GetMonitor(ctx, clone.ID); err != nil || !m.AgentEnabled {
-		t.Errorf("clone with a working store: agent checks off (%v)", err)
+	if !clone.AgentEnabled || len(clone.AgentIDs) != 1 || clone.AgentIDs[0] != assigned.ID {
+		t.Fatalf("working clone lost explicit delegation: %+v", clone)
 	}
 }

@@ -17,22 +17,31 @@ func generateToken() (string, error) {
 }
 
 func (s *SQLiteStore) CreateStatusPageSubscriber(ctx context.Context, sub *StatusPageSubscriber) error {
-	token, err := generateToken()
+	created, err := insertSubscriber(ctx, s.writeDB, sub)
 	if err != nil {
 		return err
 	}
-	sub.Token = token
+	*sub = *created
+	return nil
+}
+
+func insertSubscriber(ctx context.Context, writer insertIDExecutor, sub *StatusPageSubscriber) (*StatusPageSubscriber, error) {
+	token, err := generateToken()
+	if err != nil {
+		return nil, err
+	}
 
 	confirmed := boolToInt(sub.Confirmed)
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, writer,
 		`INSERT INTO status_page_subscribers (status_page_id, type, email, webhook_url, confirmed, token)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		sub.StatusPageID, sub.Type, sub.Email, sub.WebhookURL, confirmed, token)
 	if err != nil {
-		return fmt.Errorf("create subscriber: %w", err)
+		return nil, fmt.Errorf("create subscriber: %w", err)
 	}
-	sub.ID, _ = res.LastInsertId()
-	return nil
+	created := *sub
+	created.ID, created.Token = id, token
+	return &created, nil
 }
 
 func (s *SQLiteStore) GetSubscriberByToken(ctx context.Context, token string) (*StatusPageSubscriber, error) {
@@ -40,32 +49,6 @@ func (s *SQLiteStore) GetSubscriberByToken(ctx context.Context, token string) (*
 		`SELECT id, status_page_id, type, email, webhook_url, confirmed, token, created_at
 		 FROM status_page_subscribers WHERE token = ?`, token)
 	return scanSubscriber(row)
-}
-
-func (s *SQLiteStore) ConfirmSubscriber(ctx context.Context, token string) error {
-	res, err := s.writeDB.ExecContext(ctx,
-		`UPDATE status_page_subscribers SET confirmed = 1 WHERE token = ? AND confirmed = 0`, token)
-	if err != nil {
-		return fmt.Errorf("confirm subscriber: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("subscriber not found or already confirmed")
-	}
-	return nil
-}
-
-func (s *SQLiteStore) DeleteSubscriberByToken(ctx context.Context, token string) error {
-	res, err := s.writeDB.ExecContext(ctx,
-		`DELETE FROM status_page_subscribers WHERE token = ?`, token)
-	if err != nil {
-		return fmt.Errorf("delete subscriber: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("subscriber not found")
-	}
-	return nil
 }
 
 func (s *SQLiteStore) CountSubscribersByPage(ctx context.Context, pageID int64) (int64, error) {
@@ -80,10 +63,16 @@ func (s *SQLiteStore) CountSubscribersByPage(ctx context.Context, pageID int64) 
 }
 
 func (s *SQLiteStore) ListConfirmedSubscribers(ctx context.Context, pageID int64) ([]*StatusPageSubscriber, error) {
+	return s.ListConfirmedSubscribersAfter(ctx, pageID, 0, -1)
+}
+
+// ListConfirmedSubscribersAfter reads a stable keyset batch without retaining
+// all recipient addresses in memory during notification fan-out.
+func (s *SQLiteStore) ListConfirmedSubscribersAfter(ctx context.Context, pageID, afterID int64, limit int) ([]*StatusPageSubscriber, error) {
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT id, status_page_id, type, email, webhook_url, confirmed, token, created_at
 		 FROM status_page_subscribers
-		 WHERE status_page_id = ? AND confirmed = 1`, pageID)
+		 WHERE status_page_id = ? AND confirmed = 1 AND id > ? ORDER BY id LIMIT ?`, pageID, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list confirmed subscribers: %w", err)
 	}
@@ -106,11 +95,11 @@ func (s *SQLiteStore) DeleteSubscriber(ctx context.Context, pageID, id int64) er
 	if err != nil {
 		return fmt.Errorf("delete subscriber: %w", err)
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("subscriber not found")
+	n, err := res.RowsAffected()
+	if err == nil && n == 0 {
+		return sql.ErrNoRows
 	}
-	return nil
+	return err
 }
 
 func (s *SQLiteStore) GetStatusPageIDsForMonitor(ctx context.Context, monitorID int64) ([]int64, error) {

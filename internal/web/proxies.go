@@ -1,19 +1,22 @@
 package web
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) Proxies(w http.ResponseWriter, r *http.Request) {
 	proxies, err := h.store.ListProxies(r.Context())
 	if err != nil {
 		h.logger.Error("web: list proxies", "error", err)
+		http.Error(w, "Failed to load proxies", http.StatusInternalServerError)
+		return
 	}
 
 	lp := h.newLayoutParams(r, "Proxies", "proxies")
@@ -29,12 +32,17 @@ func (h *Handler) ProxyForm(w http.ResponseWriter, r *http.Request) {
 	if idStr := r.PathValue("id"); idStr != "" {
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			h.redirect(w, r, "/proxies")
+			http.NotFound(w, r)
 			return
 		}
 		proxy, err = h.store.GetProxy(r.Context(), id)
 		if err != nil {
-			h.redirect(w, r, "/proxies")
+			if errors.Is(err, sql.ErrNoRows) {
+				http.NotFound(w, r)
+				return
+			}
+			h.logger.Error("web: load proxy form", "error", err)
+			http.Error(w, "Failed to load proxy", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -63,94 +71,127 @@ func (h *Handler) ProxyForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ProxyCreate(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid proxy form", http.StatusBadRequest)
+		return
+	}
 
 	p := parseProxyForm(r)
 
-	if err := validate.ValidateProxy(p); err != nil {
-		lp := h.newLayoutParams(r, "New Proxy", "proxies")
-		lp.Error = err.Error()
-		h.renderComponent(w, r, views.ProxyFormPage(views.ProxyFormParams{
-			LayoutParams: lp,
-			Proxy:        p,
-		}))
+	if _, err := proxyFormInput(p, false).Apply(nil, false); err != nil {
+		h.proxyFormError(w, r, p, false, err)
 		return
 	}
 
 	if err := h.store.CreateProxy(r.Context(), p); err != nil {
+		if errors.Is(err, storage.ErrProxyPasswordStorage) {
+			h.proxyFormError(w, r, p, false, err)
+			return
+		}
 		h.logger.Error("web: create proxy", "error", err)
-		h.setError(w, "Failed to create proxy")
-		h.redirect(w, r, "/proxies")
+		http.Error(w, "Failed to create proxy", http.StatusInternalServerError)
 		return
 	}
 
 	h.audit(r, "create", "proxy", p.ID, "")
 	h.setFlash(w, "Proxy created")
-	h.redirect(w, r, "/proxies")
+	h.proxyRedirect(w, r)
 }
 
 func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/proxies")
+		http.NotFound(w, r)
 		return
 	}
-	r.ParseForm()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid proxy form", http.StatusBadRequest)
+		return
+	}
 
 	p := parseProxyForm(r)
 	p.ID = id
-	var storedPass string
-	if existing, err := h.store.GetProxy(r.Context(), id); err == nil && existing != nil {
-		storedPass = existing.AuthPass
-	}
-
-	if err := validate.ValidateProxy(p); err != nil {
-		lp := h.newLayoutParams(r, "Edit Proxy", "proxies")
-		lp.Error = err.Error()
-		h.renderComponent(w, r, views.ProxyFormPage(views.ProxyFormParams{
-			LayoutParams:   lp,
-			Proxy:          p,
-			PasswordStored: storedPass != "",
-		}))
-		return
-	}
-
-	// The password field is rendered blank: blank keeps the stored password,
-	// "Remove saved value" clears it. Applied after validation so a re-shown
-	// form never contains the stored password.
-	if p.AuthPass == "" && r.FormValue("clear_auth_pass") != "on" {
-		p.AuthPass = storedPass
-	}
-
-	if err := h.store.UpdateProxy(r.Context(), p); err != nil {
+	input := proxyFormInput(p, r.FormValue("clear_auth_pass") == "on")
+	passwordStored := false
+	_, err = h.store.UpdateProxyWith(r.Context(), id, func(current *storage.Proxy) (*storage.Proxy, error) {
+		key := httputil.GetAPIKey(r.Context())
+		passwordStored = key.HasPermission("proxies.read") && current.AuthPass != ""
+		return input.Apply(current, key.SuperAdmin)
+	}, httputil.MonitorAccess(r.Context(), "monitors.update", "monitors.assign")...)
+	if err != nil {
+		if errors.Is(err, storage.ErrProxyRoutingForbidden) {
+			http.Error(w, storage.ErrProxyRoutingForbidden.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		if errors.Is(err, httputil.ErrInvalidProxy) || errors.Is(err, storage.ErrProxyPasswordStorage) || errors.Is(err, storage.ErrInvalidMonitorProxy) {
+			h.proxyFormError(w, r, p, passwordStored, err)
+			return
+		}
 		h.logger.Error("web: update proxy", "error", err)
-		h.setError(w, "Failed to update proxy")
-		h.redirect(w, r, "/proxies")
+		http.Error(w, "Failed to update proxy", http.StatusInternalServerError)
 		return
+	}
+	if h.pipeline != nil {
+		h.pipeline.ReloadMonitors()
 	}
 
 	h.audit(r, "update", "proxy", p.ID, "")
 	h.setFlash(w, "Proxy updated")
-	h.redirect(w, r, "/proxies")
+	h.proxyRedirect(w, r)
 }
 
 func (h *Handler) ProxyDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/proxies")
+		http.NotFound(w, r)
 		return
 	}
 
 	if err := h.store.DeleteProxy(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrProxyInUse) {
+			http.Error(w, storage.ErrProxyInUse.Error(), http.StatusConflict)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete proxy", "error", err)
-		h.setError(w, "Failed to delete proxy")
-		h.redirect(w, r, "/proxies")
+		http.Error(w, "Failed to delete proxy", http.StatusInternalServerError)
 		return
 	}
 
 	h.audit(r, "delete", "proxy", id, "")
 	h.setFlash(w, "Proxy deleted")
-	h.redirect(w, r, "/proxies")
+	h.proxyRedirect(w, r)
+}
+
+func (h *Handler) proxyFormError(w http.ResponseWriter, r *http.Request, submitted *storage.Proxy, passwordStored bool, err error) {
+	title := "New Proxy"
+	if submitted.ID > 0 {
+		title = "Edit Proxy"
+	}
+	lp := h.newLayoutParams(r, title, "proxies")
+	lp.Error = err.Error()
+	h.renderComponent(w, r, views.ProxyFormPage(views.ProxyFormParams{LayoutParams: lp, Proxy: submitted, PasswordStored: passwordStored}))
+}
+
+func (h *Handler) proxyRedirect(w http.ResponseWriter, r *http.Request) {
+	lp := h.newLayoutParams(r, "", "")
+	if lp.Can("proxies.read") {
+		h.redirect(w, r, "/proxies")
+		return
+	}
+	lp.BasePath = ""
+	h.redirect(w, r, lp.HomePath())
+}
+
+func proxyFormInput(p *storage.Proxy, clear bool) httputil.ProxyInput {
+	return httputil.ProxyInput{Name: &p.Name, Protocol: &p.Protocol, Host: &p.Host, Port: &p.Port, AuthUser: &p.AuthUser, AuthPass: &p.AuthPass, Enabled: &p.Enabled, ClearAuthPass: clear}
 }
 
 func parseProxyForm(r *http.Request) *storage.Proxy {

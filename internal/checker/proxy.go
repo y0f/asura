@@ -2,14 +2,42 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 
 	"golang.org/x/net/proxy"
 
-	"github.com/y0f/asura/internal/safenet"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
+
+func validateMonitorProxy(m *model.Monitor) error {
+	if m == nil {
+		return errors.New("missing monitor configuration")
+	}
+	if m.ProxyURL == "" {
+		if m.ProxyID != nil {
+			return errors.New("the configured proxy is disabled or unavailable")
+		}
+		return nil
+	}
+	u, err := url.Parse(m.ProxyURL)
+	if err != nil || u.Hostname() == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("invalid configured proxy endpoint")
+	}
+	if u.Port() != "" {
+		port, err := strconv.Atoi(u.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return errors.New("invalid configured proxy port")
+		}
+	} else if u.Scheme == "socks5" {
+		return errors.New("the configured SOCKS5 proxy requires a port")
+	}
+	return model.ValidateProxyCompatibility(m, u.Scheme)
+}
 
 // ProxyDialer returns a DialContext function that routes through the given proxy URL.
 // For SOCKS5 proxies, it uses golang.org/x/net/proxy.

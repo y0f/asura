@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 // agentReveal holds a newly created agent's token between the create POST and
@@ -70,10 +70,17 @@ func (h *Handler) Agents(w http.ResponseWriter, r *http.Request) {
 // renderAgents renders the agent list. created, when set, is an agent that was
 // just created: its token is shown once in a panel instead of a toast.
 func (h *Handler) renderAgents(w http.ResponseWriter, r *http.Request, created *storage.Agent) {
-	agents, err := h.store.ListAgents(r.Context())
-	if err != nil {
-		h.logger.Error("web: list agents", "error", err)
+	var agents []*storage.Agent
+	if httputil.GetAPIKey(r.Context()).HasPermission("agents.read") {
+		var err error
+		agents, err = h.store.ListAgents(r.Context())
+		if err != nil {
+			h.logger.Error("web: list agents", "error", err)
+			http.Error(w, "Failed to load agents", http.StatusInternalServerError)
+			return
+		}
 	}
+
 	lp := h.newLayoutParams(r, "Agents", "agents")
 	params := views.AgentListParams{
 		LayoutParams: lp,
@@ -104,6 +111,10 @@ func (h *Handler) AgentCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit(r, "create", "agent", a.ID, a.Name)
+	if !httputil.GetAPIKey(r.Context()).HasPermission("agents.read") {
+		h.renderAgents(w, r, a)
+		return
+	}
 	if id := h.storeAgentReveal(r, a); id != "" {
 		h.redirect(w, r, "/agents?created="+id)
 		return
@@ -124,6 +135,9 @@ func (h *Handler) AgentDelete(w http.ResponseWriter, r *http.Request) {
 		h.setError(w, "Failed to delete agent")
 		h.redirect(w, r, "/agents")
 		return
+	}
+	if h.pipeline != nil {
+		h.pipeline.ReloadMonitors()
 	}
 	h.audit(r, "delete", "agent", id, "")
 	for _, monID := range disabled {

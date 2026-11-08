@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
@@ -19,30 +19,32 @@ func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list notification channels")
 		return
 	}
+	for i, channel := range channels {
+		channels[i] = redact.Notification(channel)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": channels})
 }
 
 func (h *Handler) CreateNotification(w http.ResponseWriter, r *http.Request) {
-	var ch storage.NotificationChannel
-	if err := h.readJSON(r, &ch); err != nil {
+	var input httputil.NotificationInput
+	if err := h.readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	ch.Enabled = true
-
-	if err := validate.ValidateNotificationChannel(&ch); err != nil {
+	ch, err := input.Apply(nil, false)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if err := h.store.CreateNotificationChannel(r.Context(), &ch); err != nil {
+	if err := h.store.CreateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("create notification", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create notification channel")
 		return
 	}
 
 	h.audit(r, "create", "notification_channel", ch.ID, "")
-	writeJSON(w, http.StatusCreated, ch)
+	writeJSON(w, http.StatusCreated, notificationResponse(r, ch))
 }
 
 func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
@@ -52,37 +54,30 @@ func (h *Handler) UpdateNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.store.GetNotificationChannel(r.Context(), id)
+	var input httputil.NotificationInput
+	if err := h.readJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ch, err := h.store.UpdateNotificationChannelWith(r.Context(), id, func(current *storage.NotificationChannel) (*storage.NotificationChannel, error) {
+		return input.Apply(current, httputil.GetAPIKey(r.Context()).SuperAdmin)
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "notification channel not found")
 			return
 		}
-		h.logger.Error("get notification for update", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get notification channel")
-		return
-	}
-
-	var ch storage.NotificationChannel
-	if err := h.readJSON(r, &ch); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	ch.ID = id
-
-	if err := validate.ValidateNotificationChannel(&ch); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if err := h.store.UpdateNotificationChannel(r.Context(), &ch); err != nil {
+		if errors.Is(err, httputil.ErrInvalidNotification) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		h.logger.Error("update notification", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to update notification channel")
 		return
 	}
 
 	h.audit(r, "update", "notification_channel", ch.ID, "")
-	writeJSON(w, http.StatusOK, ch)
+	writeJSON(w, http.StatusOK, notificationResponse(r, ch))
 }
 
 func (h *Handler) DeleteNotification(w http.ResponseWriter, r *http.Request) {
@@ -92,18 +87,11 @@ func (h *Handler) DeleteNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.store.GetNotificationChannel(r.Context(), id)
-	if err != nil {
+	if err := h.store.DeleteNotificationChannel(r.Context(), id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "notification channel not found")
 			return
 		}
-		h.logger.Error("get notification for delete", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get notification channel")
-		return
-	}
-
-	if err := h.store.DeleteNotificationChannel(r.Context(), id); err != nil {
 		h.logger.Error("delete notification", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete notification channel")
 		return
@@ -144,7 +132,7 @@ func (h *Handler) TestNotification(w http.ResponseWriter, r *http.Request) {
 		Cause:       "This is a test notification",
 	}
 
-	if err := h.notifier.SendTest(ch, testIncident); err != nil {
+	if err := h.notifier.SendTest(r.Context(), ch, testIncident); err != nil {
 		h.logger.Error("notification test failed", "channel_id", ch.ID, "error", err)
 		writeError(w, http.StatusBadGateway, "test notification failed")
 		return
@@ -155,7 +143,7 @@ func (h *Handler) TestNotification(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListNotificationHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var f storage.NotifHistoryFilter
+	f := storage.NotifHistoryFilter{Access: httputil.MonitorAccess(r.Context(), "notification_history.read")}
 	if v := q.Get("channel_id"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 			f.ChannelID = id
@@ -171,5 +159,5 @@ func (h *Handler) ListNotificationHistory(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "failed to list notification history")
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, httputil.NotificationHistoryResponse(r.Context(), result))
 }

@@ -3,7 +3,7 @@ package views
 import (
 	"fmt"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type GroupListParams struct {
@@ -29,7 +29,7 @@ templ GroupListPage(p GroupListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data={ groupAlpineData(p.BasePath) }>
 			@PageHeader(PageHeaderParams{Title: "Groups", Subtitle: "Organise monitors by team, product or environment."}) {
-				if p.Can("monitors.write") {
+				if p.Can("groups.create") {
 					@ToolbarNewButtonClick("resetForm(); showForm = true", "New group")
 				}
 			}
@@ -51,12 +51,16 @@ templ GroupListPage(p GroupListParams) {
 									</td>
 									<td class="px-4 py-3 text-sm text-muted tabular-nums">{ fmt.Sprint(g.SortOrder) }</td>
 									<td class="px-4 py-3">
-										if p.Can("monitors.write") {
+										if p.Can("groups.update") || p.Can("groups.delete") {
 											<div class="flex items-center justify-end gap-0.5">
-												<button type="button" @click={ fmt.Sprintf("editGroup(%s)", ToJSON(g)) } class="row-action" title="Edit" aria-label={ "Edit " + g.Name }>
-													@iconEdit()
-												</button>
-												@DeleteButton(fmt.Sprintf("%s/groups/%d/delete", p.BasePath, g.ID), "Delete this group? Its monitors are kept and become ungrouped.")
+												if p.Can("groups.update") {
+													<button type="button" @click={ fmt.Sprintf("editGroup(%s)", ToJSON(g)) } class="row-action" title="Edit" aria-label={ "Edit " + g.Name }>
+														@iconEdit()
+													</button>
+												}
+												if p.Can("groups.delete") {
+													@DeleteButton(fmt.Sprintf("%s/groups/%d/delete", p.BasePath, g.ID), "Delete this group? Move its monitors to another group or ungroup them first.")
+												}
 											</div>
 										}
 									</td>
@@ -65,27 +69,29 @@ templ GroupListPage(p GroupListParams) {
 						</tbody>
 					</table>
 				</div>
-			} else if p.Can("monitors.write") {
+			} else if p.Can("groups.create") {
 				@EmptyStateModal("No groups yet.", "resetForm(); showForm = true", "Create your first group")
 			} else {
 				@EmptyState("No groups yet.", "", "")
 			}
-			@FormModal("showForm", "max-w-md", "editId ? 'Edit group' : 'New group'") {
-				<form method="POST" :action="formAction" class="space-y-4">
-					<div>
-						<label class="form-label" for="group-name">Name</label>
-						<input id="group-name" type="text" name="name" x-model="formData.name" required class="form-input"/>
-					</div>
-					<div>
-						<label class="form-label" for="group-sort">Sort order</label>
-						<input id="group-sort" type="number" name="sort_order" x-model="formData.sort_order" min="0" class="form-input tabular-nums"/>
-						<p class="form-hint">Lower numbers are listed first.</p>
-					</div>
-					<div class="flex items-center gap-2 pt-1">
-						<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create group'"></button>
-						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
-					</div>
-				</form>
+			if p.Can("groups.create") || p.Can("groups.update") {
+				@FormModal("showForm", "max-w-md", "editId ? 'Edit group' : 'New group'") {
+					<form method="POST" :action="formAction" class="space-y-4">
+						<div>
+							<label class="form-label" for="group-name">Name</label>
+							<input id="group-name" type="text" name="name" x-model="formData.name" required class="form-input"/>
+						</div>
+						<div>
+							<label class="form-label" for="group-sort">Sort order</label>
+							<input id="group-sort" type="number" name="sort_order" x-model="formData.sort_order" min="0" class="form-input tabular-nums"/>
+							<p class="form-hint">Lower numbers are listed first.</p>
+						</div>
+						<div class="flex items-center gap-2 pt-1">
+							<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create group'"></button>
+							<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
+						</div>
+					</form>
+				}
 			}
 		</div>
 	}
@@ -116,9 +122,9 @@ func groupAlpineData(basePath string) string {
 
 func (p GroupDetailParams) subtitle() string {
 	if p.Monitors == nil {
-		return "0 monitors"
+		return "0 visible monitors"
 	}
-	return fmt.Sprintf("%d monitor%s", p.Monitors.Total, plural(p.Monitors.Total))
+	return fmt.Sprintf("%d visible monitor%s", p.Monitors.Total, plural(p.Monitors.Total))
 }
 
 func (p GroupDetailParams) pageHref(page int) string {
@@ -158,7 +164,7 @@ templ GroupDetailPage(p GroupDetailParams) {
 										}
 									</td>
 									<td class="px-4 py-3 text-right">
-										@MonitorRowActions(p.BasePath, m, p.Can("monitors.write"))
+										@MonitorRowActions(p.LayoutParams, m)
 									</td>
 								</tr>
 							}
@@ -170,8 +176,8 @@ templ GroupDetailPage(p GroupDetailParams) {
 				}
 			} else {
 				<div class="px-4 py-12 text-center">
-					<p class="text-sm text-muted-light">No monitors in this group yet.</p>
-					if p.Can("monitors.write") {
+					<p class="text-sm text-muted-light">No monitors visible in this group.</p>
+					if p.HasCapability("monitors.read") && p.HasCapability("monitors.assign") && p.CanMonitor("monitors.update", 0, &p.Group.ID) && p.CanMonitor("monitors.assign", 0, &p.Group.ID) {
 						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="btn-secondary mt-4">Assign monitors</a>
 					}
 				</div>

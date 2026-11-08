@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/monitor"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/monitor"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 type Handler struct {
@@ -87,6 +87,7 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 		Active:     active,
 		Username:   httputil.GetAPIKeyName(r.Context()),
 		Perms:      perms,
+		Access:     httputil.GetAPIKey(r.Context()),
 		SuperAdmin: superAdmin,
 		Version:    h.version,
 		ToastKind:  toastKind,
@@ -96,9 +97,14 @@ func (h *Handler) newLayoutParams(r *http.Request, title, active string) views.L
 }
 
 func (h *Handler) renderComponent(w http.ResponseWriter, r *http.Request, c templ.Component) {
+	h.renderComponentWithCSP(w, r, c, componentCSP+h.cspFrameDirective)
+}
+
+const componentCSP = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+
+func (h *Handler) renderComponentWithCSP(w http.ResponseWriter, r *http.Request, c templ.Component, policy string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "+h.cspFrameDirective)
+	w.Header().Set("Content-Security-Policy", policy)
 	if err := c.Render(r.Context(), w); err != nil {
 		h.logger.Error("templ render", "error", err)
 	}
@@ -106,6 +112,15 @@ func (h *Handler) renderComponent(w http.ResponseWriter, r *http.Request, c temp
 
 func (h *Handler) redirect(w http.ResponseWriter, r *http.Request, path string) {
 	http.Redirect(w, r, h.cfg.Server.BasePath+path, http.StatusSeeOther)
+}
+
+func (h *Handler) redirectToReadable(w http.ResponseWriter, r *http.Request, path string) {
+	lp := h.newLayoutParams(r, "", "")
+	if !lp.CanVisit(path) {
+		lp.BasePath = ""
+		path = lp.HomePath()
+	}
+	h.redirect(w, r, path)
 }
 
 func (h *Handler) setToast(w http.ResponseWriter, kind, msg string) {

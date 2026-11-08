@@ -25,6 +25,7 @@ body {
 }
 
 h1, h2, h3, h4 { color: var(--color-white); }
+.app-wordmark { color: var(--color-white); font-size: var(--text-xl); font-weight: 650; letter-spacing: -0.045em; line-height: 1; }
 
 .tabular, td, th, .font-mono { font-variant-numeric: tabular-nums; }
 
@@ -32,15 +33,15 @@ h1, h2, h3, h4 { color: var(--color-white); }
    boots so a cold load of a collapsed sidebar does not expand then snap. */
 @media (min-width: 768px) {
   html.nav-collapsed .app-sidebar { width: 60px; }
-  html.nav-collapsed .app-sidebar [x-show="!collapsed"] { display: none !important; }
-  html.nav-collapsed .app-sidebar [x-show="collapsed"] { display: flex !important; }
+  html.nav-collapsed .app-sidebar [x-show="!navCollapsed"] { display: none !important; }
+  html.nav-collapsed .app-sidebar [x-show="navCollapsed"] { display: flex !important; }
   html.nav-collapsed .app-sidebar .nav-link { justify-content: center; padding-left: 0; padding-right: 0; }
 }
 
 /* Sidebar link state (driven by aria-current so hx-boost can re-mark) */
 #sidenav .nav-link { color: var(--color-muted-light); }
 #sidenav .nav-link:hover { color: var(--color-white); background-color: var(--color-surface-200); }
-#sidenav .nav-link[aria-current="page"] { color: var(--color-brand); background-color: var(--color-surface-200); }
+#sidenav .nav-link[aria-current="page"] { color: var(--color-brand); background-color: color-mix(in srgb, var(--color-brand) 9%, var(--color-surface-50)); font-weight: 500; }
 #sidenav .nav-icon { color: currentColor; }
 
 /* Scrollbars */
@@ -66,6 +67,8 @@ summary:focus-visible,
 
 /* Tables */
 table thead th { font-weight: 600; }
+table thead { background: var(--color-surface); }
+table tbody td { height: 2.75rem; }
 table tbody tr { transition: background-color 120ms ease; }
 table tbody tr:hover { background-color: color-mix(in srgb, var(--color-surface-200) 50%, transparent); }
 
@@ -77,7 +80,7 @@ table tbody tr:hover { background-color: color-mix(in srgb, var(--color-surface-
 /* Motion */
 @keyframes vFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .modal-backdrop { animation: vFadeIn 120ms ease-out; }
-.modal-panel { animation: vFadeIn 120ms ease-out; }
+/* Dialog surfaces remain opaque while opening. */
 @keyframes vToastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .toast-in { animation: vToastIn 160ms ease-out both; }
 .htmx-indicator { opacity: 0; transition: opacity 120ms ease-in; }

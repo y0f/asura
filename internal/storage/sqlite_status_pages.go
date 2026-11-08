@@ -3,10 +3,8 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -24,127 +22,123 @@ func (s *SQLiteStore) IsMonitorOnStatusPage(ctx context.Context, monitorID int64
 	return exists == 1, nil
 }
 
-func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time) ([]*DailyUptime, error) {
-	// Days strictly before today are served from the daily rollups; the current
-	// (uncovered) day falls back to a raw scan so it reflects fresh checks.
-	todayStart := time.Now().UTC().Truncate(24 * time.Hour)
-	rollupEnd := todayStart
-	if rollupEnd.After(to) {
-		rollupEnd = to
+func (s *SQLiteStore) GetDailyUptime(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) ([]*DailyUptime, error) {
+	if !from.Before(to) {
+		return []*DailyUptime{}, nil
 	}
+	tx, err := s.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := authorizeMonitorRead(ctx, tx, monitorID, access...); err != nil {
+		return nil, err
+	}
+	results, err := dailyUptimeQuery(ctx, tx, monitorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
 
-	byDay := make(map[string]*DailyUptime)
-	var order []string
-
-	add := func(d *DailyUptime) {
+// dailyUptimeQuery reads rollups and raw gaps through a caller-owned snapshot.
+func dailyUptimeQuery(ctx context.Context, reader monitorReadQuery, monitorID int64, from, to time.Time) ([]*DailyUptime, error) {
+	from, to = from.UTC(), to.UTC()
+	results := make([]*DailyUptime, 0)
+	if !from.Before(to) {
+		return results, nil
+	}
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return results, nil
+	}
+	rollupEnd := to
+	if today := time.Now().UTC().Truncate(24 * time.Hour); rollupEnd.After(today) {
+		rollupEnd = today
+	}
+	firstDay := from.Truncate(24 * time.Hour)
+	if firstDay.Before(from) {
+		firstDay = firstDay.AddDate(0, 0, 1)
+	}
+	// Read rollups and uncovered raw intervals in one snapshot. Limiting the
+	// raw scans to gaps keeps long reports proportional to unsummarized data.
+	rows, err := reader.QueryContext(ctx,
+		`SELECT day, total, up_count, down_count FROM check_result_daily
+		 WHERE monitor_id=? AND observation_kind='probe' AND day>=? AND day<? ORDER BY day`,
+		monitorID, firstDay.Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("get daily uptime rollup: %w", err)
+	}
+	var gaps [][2]time.Time
+	cursor := from
+	for rows.Next() {
+		var d DailyUptime
+		if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		day, err := time.Parse("2006-01-02", d.Date)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("parse rollup day: %w", err)
+		}
+		if cursor.Before(day) {
+			gaps = append(gaps, [2]time.Time{cursor, day})
+		}
+		cursor = day.AddDate(0, 0, 1)
+		results = append(results, &d)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if cursor.Before(to) {
+		gaps = append(gaps, [2]time.Time{cursor, to})
+	}
+	for _, gap := range gaps {
+		rows, err := reader.QueryContext(ctx,
+			`SELECT SUBSTR(created_at,1,10) AS day, COUNT(*),
+			 COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END),0),
+			 COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END),0)
+			 FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND created_at>=? AND created_at<?
+			 GROUP BY SUBSTR(created_at,1,10)`, monitorID, formatTime(gap[0]), formatTime(gap[1]))
+		if err != nil {
+			return nil, fmt.Errorf("get daily uptime gap: %w", err)
+		}
+		for rows.Next() {
+			var d DailyUptime
+			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			results = append(results, &d)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, d := range results {
 		if d.TotalChecks > 0 {
 			d.UptimePct = float64(d.UpChecks) / float64(d.TotalChecks) * 100
 		}
-		if _, ok := byDay[d.Date]; !ok {
-			order = append(order, d.Date)
-		}
-		byDay[d.Date] = d
 	}
-
-	rawFrom := todayStart
-
-	if rollupEnd.After(from) {
-		rows, err := s.readDB.QueryContext(ctx,
-			`SELECT day, total, up_count, down_count
-			 FROM check_result_daily
-			 WHERE monitor_id=? AND day >= ? AND day < ?
-			 ORDER BY day ASC`,
-			monitorID, from.UTC().Format("2006-01-02"), rollupEnd.Format("2006-01-02"))
-		if err != nil {
-			return nil, fmt.Errorf("get daily uptime rollup: %w", err)
-		}
-		var maxRolled string
-		for rows.Next() {
-			var d DailyUptime
-			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			add(&d)
-			maxRolled = d.Date
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-		// Extend the raw fallback to cover recent days the rollup has not yet
-		// produced (e.g. yesterday before the rollup tick runs); otherwise those
-		// days would render with no data even though raw rows exist.
-		if maxRolled == "" {
-			rawFrom = from
-		} else if t, perr := time.Parse("2006-01-02", maxRolled); perr == nil {
-			if cand := t.AddDate(0, 0, 1); cand.Before(rawFrom) {
-				rawFrom = cand
-			}
-		}
-	}
-
-	if rawFrom.Before(from) {
-		rawFrom = from
-	}
-	if rawFrom.Before(to) {
-		rows, err := s.readDB.QueryContext(ctx,
-			`SELECT DATE(created_at) as day,
-			        COUNT(*) as total,
-			        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
-			        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0)
-			 FROM check_results
-			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-			 GROUP BY DATE(created_at)
-			 ORDER BY day ASC`,
-			monitorID, formatTime(rawFrom), formatTime(to))
-		if err != nil {
-			return nil, fmt.Errorf("get daily uptime: %w", err)
-		}
-		for rows.Next() {
-			var d DailyUptime
-			if err := rows.Scan(&d.Date, &d.TotalChecks, &d.UpChecks, &d.DownChecks); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			add(&d)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	}
-
-	sort.Strings(order)
-	results := make([]*DailyUptime, 0, len(order))
-	for _, day := range order {
-		results = append(results, byDay[day])
-	}
+	sort.Slice(results, func(i, j int) bool { return results[i].Date < results[j].Date })
 	return results, nil
 }
 
 // --- Status Pages ---
 
 func (s *SQLiteStore) CreateStatusPage(ctx context.Context, sp *StatusPage) error {
-	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
-		`INSERT INTO status_pages
-		 (slug, title, description, custom_css, show_incidents, enabled, api_enabled, sort_order,
-		  logo_url, favicon_url, custom_header_html, password_hash, analytics_script, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sp.Slug, sp.Title, sp.Description, sp.CustomCSS, boolToInt(sp.ShowIncidents),
-		boolToInt(sp.Enabled), boolToInt(sp.APIEnabled), sp.SortOrder,
-		sp.LogoURL, sp.FaviconURL, sp.CustomHeaderHTML, sp.PasswordHash, sp.AnalyticsScript, now, now)
-	if err != nil {
-		return err
-	}
-	id, _ := res.LastInsertId()
-	sp.ID = id
-	sp.CreatedAt = parseTime(now)
-	sp.UpdatedAt = parseTime(now)
-	return nil
+	return saveStatusPage(ctx, s.writeDB, sp, true)
 }
 
 func scanStatusPage(sp *StatusPage, row interface {
@@ -195,7 +189,7 @@ func (s *SQLiteStore) ListStatusPages(ctx context.Context) ([]*StatusPage, error
 		        sp.created_at, sp.updated_at, COALESCE(cnt.c, 0)
 		 FROM status_pages sp
 		 LEFT JOIN (SELECT page_id, COUNT(*) as c FROM status_page_monitors GROUP BY page_id) cnt ON cnt.page_id = sp.id
-		 ORDER BY sp.sort_order, sp.title COLLATE NOCASE`)
+		 ORDER BY sp.sort_order, `+s.readDB.dialect.noCase("sp.title"))
 	if err != nil {
 		return nil, err
 	}
@@ -226,21 +220,18 @@ func (s *SQLiteStore) ListStatusPages(ctx context.Context) ([]*StatusPage, error
 }
 
 func (s *SQLiteStore) UpdateStatusPage(ctx context.Context, sp *StatusPage) error {
-	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE status_pages SET slug=?, title=?, description=?, custom_css=?, show_incidents=?,
-		 enabled=?, api_enabled=?, sort_order=?,
-		 logo_url=?, favicon_url=?, custom_header_html=?, password_hash=?, analytics_script=?,
-		 updated_at=? WHERE id=?`,
-		sp.Slug, sp.Title, sp.Description, sp.CustomCSS, boolToInt(sp.ShowIncidents),
-		boolToInt(sp.Enabled), boolToInt(sp.APIEnabled), sp.SortOrder,
-		sp.LogoURL, sp.FaviconURL, sp.CustomHeaderHTML, sp.PasswordHash, sp.AnalyticsScript,
-		now, sp.ID)
-	return err
+	return saveStatusPage(ctx, s.writeDB, sp, false)
 }
 
 func (s *SQLiteStore) DeleteStatusPage(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM status_pages WHERE id=?", id)
+	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM status_pages WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err == nil && count == 0 {
+		return sql.ErrNoRows
+	}
 	return err
 }
 
@@ -271,9 +262,10 @@ func (s *SQLiteStore) SetStatusPageMonitors(ctx context.Context, pageID int64, m
 	return tx.Commit()
 }
 
-func (s *SQLiteStore) ListStatusPageMonitors(ctx context.Context, pageID int64) ([]StatusPageMonitor, error) {
+func (s *SQLiteStore) ListStatusPageMonitors(ctx context.Context, pageID int64, access ...MonitorAccess) ([]StatusPageMonitor, error) {
+	clause, args := monitorAccessSQL("m", access)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT page_id, monitor_id, sort_order, group_name FROM status_page_monitors WHERE page_id=? ORDER BY sort_order, monitor_id`, pageID)
+		`SELECT spm.page_id, spm.monitor_id, spm.sort_order, spm.group_name FROM status_page_monitors spm JOIN monitors m ON m.id=spm.monitor_id WHERE spm.page_id=?`+clause+` ORDER BY spm.sort_order, spm.monitor_id`, append([]any{pageID}, args...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -296,89 +288,35 @@ func (s *SQLiteStore) ListStatusPageMonitors(ctx context.Context, pageID int64) 
 	return result, nil
 }
 
+// ListStatusPageMonitorsWithStatus returns only public display fields. Targets,
+// settings, credentials and assertions are never loaded or decrypted here.
 func (s *SQLiteStore) ListStatusPageMonitorsWithStatus(ctx context.Context, pageID int64) ([]*Monitor, []StatusPageMonitor, error) {
-	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
-		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
-		        m.upside_down, m.resend_interval, m.sla_target, m.anomaly_sensitivity, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
-		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0),
-		        spm.sort_order, spm.group_name
-		 FROM status_page_monitors spm
-		 JOIN monitors m ON m.id = spm.monitor_id
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id
-		 WHERE spm.page_id=? AND m.enabled=1
-		 ORDER BY spm.sort_order, m.name COLLATE NOCASE`, pageID)
+	return statusPageMonitorsQuery(ctx, s.readDB, s.readDB.dialect, pageID)
+}
+
+func statusPageMonitorsQuery(ctx context.Context, reader monitorReadQuery, dialect sqlDialect, pageID int64) ([]*Monitor, []StatusPageMonitor, error) {
+	rows, err := reader.QueryContext(ctx, `SELECT m.id,m.name,m.type,COALESCE(ms.status,'pending'),spm.sort_order,spm.group_name
+		FROM status_page_monitors spm JOIN monitors m ON m.id=spm.monitor_id
+		LEFT JOIN monitor_status ms ON ms.monitor_id=m.id
+		WHERE spm.page_id=? AND m.enabled=1 ORDER BY spm.sort_order,`+dialect.noCase("m.name")+``, pageID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list status page monitors with status: %w", err)
 	}
 	defer rows.Close()
-
-	var monitors []*Monitor
-	var spms []StatusPageMonitor
+	monitors := []*Monitor{}
+	members := []StatusPageMonitor{}
 	for rows.Next() {
-		var m Monitor
-		var tagsStr, settingsStr, assertionsStr string
-		var createdAt, updatedAt string
-		var lastCheck sql.NullString
-		var groupID, proxyID, escalationPolicyID sql.NullInt64
-		var spmSortOrder int
-		var spmGroupName string
-		err := rows.Scan(&m.ID, &m.Name, &m.Description, &m.Type, &m.Target, &m.Interval, &m.Timeout, &m.Enabled,
-			&tagsStr, &settingsStr, &assertionsStr, &m.TrackChanges, &m.FailureThreshold, &m.SuccessThreshold,
-			&m.UpsideDown, &m.ResendInterval, &m.SLATarget, &m.AnomalySensitivity, &groupID, &proxyID, &escalationPolicyID, &createdAt, &updatedAt,
-			&m.Status, &lastCheck, &m.ConsecFails, &m.ConsecSuccesses,
-			&spmSortOrder, &spmGroupName)
-		if err != nil {
+		m := &Monitor{Enabled: true}
+		member := StatusPageMonitor{PageID: pageID}
+		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.Status, &member.SortOrder, &member.GroupName); err != nil {
 			return nil, nil, err
 		}
-		if groupID.Valid {
-			gid := groupID.Int64
-			m.GroupID = &gid
-		}
-		if proxyID.Valid {
-			pid := proxyID.Int64
-			m.ProxyID = &pid
-		}
-		if escalationPolicyID.Valid {
-			epid := escalationPolicyID.Int64
-			m.EscalationPolicyID = &epid
-		}
-		m.CreatedAt = parseTime(createdAt)
-		m.UpdatedAt = parseTime(updatedAt)
-		json.Unmarshal([]byte(tagsStr), &m.Tags)
-		settingsStr, err = s.decryptSettings(settingsStr)
-		if err != nil {
-			return nil, nil, fmt.Errorf("decrypt settings: %w", err)
-		}
-		m.Settings = json.RawMessage(settingsStr)
-		m.Assertions = json.RawMessage(assertionsStr)
-		m.LastCheckAt = parseTimePtr(lastCheck)
-		if m.Tags == nil {
-			m.Tags = []string{}
-		}
-		if !m.Enabled {
-			m.Status = "paused"
-		}
-		if strings.TrimSpace(settingsStr) == "" {
-			m.Settings = json.RawMessage("{}")
-		}
-		if strings.TrimSpace(assertionsStr) == "" {
-			m.Assertions = json.RawMessage("[]")
-		}
-		monitors = append(monitors, &m)
-		spms = append(spms, StatusPageMonitor{
-			PageID:    pageID,
-			MonitorID: m.ID,
-			SortOrder: spmSortOrder,
-			GroupName: spmGroupName,
-		})
+		member.MonitorID = m.ID
+		monitors = append(monitors, m)
+		members = append(members, member)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
-	if monitors == nil {
-		monitors = []*Monitor{}
-		spms = []StatusPageMonitor{}
-	}
-	return monitors, spms, nil
+	return monitors, members, nil
 }

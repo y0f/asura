@@ -1,5 +1,7 @@
 /asura
 /asura.exe
+/asura-postgres
+/asura-postgres.exe
 /asura-agent
 /asura-agent.exe
 /asura-dev
@@ -24,6 +26,7 @@ dist/
 
 # Go artifacts
 coverage.out
+postgres-coverage.out
 *.cover
 *.prof
 __debug_bin*
@@ -34,3 +37,11 @@ __debug_bin*
 # Local dev / test scratch (screenshots, local server config, Playwright junctions)
 /.testrun/
 /node_modules/
+
+# Jekyll documentation build and local Bundler state
+/.build/
+/docs/.bundle/
+/docs/vendor/
+/docs/_site/
+/docs/.jekyll-cache/
+/docs/.jekyll-metadata

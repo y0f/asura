@@ -3,7 +3,7 @@ package views
 import (
 	"fmt"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // PageHeaderParams describes the heading block at the top of every page.
@@ -18,21 +18,21 @@ type PageHeaderParams struct {
 // an optional subtitle below it. Children are the page actions, shown on the
 // right of the title (or wrapped below it on narrow screens).
 templ PageHeader(h PageHeaderParams) {
-	<div class="mb-6">
+	<div class="page-heading">
 		if h.BackHref != "" {
 			<a href={ templ.SafeURL(h.BackHref) } class="inline-flex items-center gap-1 mb-2 text-sm text-muted hover:text-white">
-				<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+				<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 				{ h.BackLabel }
 			</a>
 		}
-		<div class="flex flex-wrap items-center gap-x-4 gap-y-3">
-			<h1 class="text-2xl sm:text-3xl font-bold text-white [overflow-wrap:anywhere] min-w-0">{ h.Title }</h1>
-			<div class="flex flex-wrap items-center gap-2 grow">
+		<div class="page-heading-row">
+			<h1 class="page-title">{ h.Title }</h1>
+			<div class="page-actions">
 				{ children... }
 			</div>
 		</div>
 		if h.Subtitle != "" {
-			<p class="subtitle mt-1.5">{ h.Subtitle }</p>
+			<p class="page-description">{ h.Subtitle }</p>
 		}
 	</div>
 }
@@ -40,9 +40,9 @@ templ PageHeader(h PageHeaderParams) {
 // StatCard is a single labelled metric. tone is a status tone ("ok", "warn",
 // "crit") or "" for a neutral value.
 templ StatCard(label, value, tone string) {
-	<div class="card px-4 py-3 min-w-0">
+	<div class="stat-card card px-4 py-3 min-w-0">
 		<div class="stat-label">{ label }</div>
-		<div class={ "text-xl sm:text-2xl font-semibold tabular-nums truncate", toneText(tone) }>{ value }</div>
+		<div class={ "stat-value truncate", toneText(tone) }>{ value }</div>
 		{ children... }
 	</div>
 }
@@ -63,36 +63,39 @@ func toneText(tone string) string {
 // $dispatch('confirm', {message, onConfirm}) (runs a callback).
 templ ConfirmModal() {
 	<div
-		x-data="{ open: false, url: '', message: '', callback: null, opener: null }"
+		x-data="{ open: false, url: '', message: '', callback: null }"
 		x-cloak
-		@confirm.window="opener = document.activeElement; url = $event.detail.url || ''; message = $event.detail.message; callback = $event.detail.onConfirm || null; open = true; $nextTick(() => $refs.cancel && $refs.cancel.focus())"
-		@keydown.escape.window="if (open) { open = false; opener && opener.focus() }"
+		@confirm.window="url = $event.detail.url || ''; message = $event.detail.message; callback = $event.detail.onConfirm || null; open = true"
 	>
-		<div x-show="open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-			<div x-show="open" class="modal-backdrop fixed inset-0 bg-black/70" @click="open = false"></div>
+		<dialog
+			class="modal-dialog w-[calc(100%-2rem)] max-w-md"
+			x-effect={ dialogEffect("open") }
+			@cancel.prevent="open = false"
+			@close="if (!$el.open) open = false"
+			@click={ dialogBackdropClose("open") }
+			@keydown.tab={ dialogTabCycle() }
+			role="alertdialog"
+			aria-labelledby="confirm-title"
+			aria-describedby="confirm-msg"
+		>
 			<div
-				x-show="open"
-				role="alertdialog"
-				aria-modal="true"
-				aria-labelledby="confirm-title"
-				aria-describedby="confirm-msg"
-				class="modal-panel relative z-10 w-full max-w-md border border-line-light rounded-card bg-surface-100 p-5"
+				class="modal-panel w-full border border-line-light rounded-card bg-surface-100 p-5"
 			>
 				<h2 id="confirm-title" class="text-lg font-semibold text-white mb-2">Are you sure?</h2>
 				<p id="confirm-msg" class="text-sm text-muted-light mb-5" x-text="message"></p>
 				<div class="flex items-center justify-end gap-2">
-					<button x-ref="cancel" @click="open = false; opener && opener.focus()" type="button" class="btn-secondary">Cancel</button>
+					<button autofocus @click="open = false" type="button" class="btn-secondary">Cancel</button>
 					<template x-if="url">
 						<form method="POST" :action="url">
 							<button type="submit" class="btn-danger">Continue</button>
 						</form>
 					</template>
-					<template x-if="!url && callback">
+					<template x-if="!url && !!callback">
 						<button type="button" @click="callback(); open = false" class="btn-danger">Continue</button>
 					</template>
 				</div>
 			</div>
-		</div>
+		</dialog>
 	</div>
 }
 
@@ -109,7 +112,9 @@ templ Toast(kind, msg string) {
 		}
 		class="toast-in fixed bottom-4 right-4 z-[60] w-[calc(100%-2rem)] max-w-sm flex items-start gap-3 px-4 py-3 border border-line-light rounded-card bg-surface-100 text-sm text-white shadow-lg shadow-black/30"
 	>
-		<span class={ "dot mt-1.5", templ.KV("bg-ok", kind == "success"), templ.KV("bg-crit", kind == "error"), templ.KV("bg-warn", kind == "warning") }></span>
+		<span class={ "mt-0.5", templ.KV("text-ok", kind == "success"), templ.KV("text-crit", kind == "error"), templ.KV("text-warn", kind == "warning") }>
+			@StatusIcon(kind)
+		</span>
 		<span class="flex-1 break-words">{ msg }</span>
 		<button type="button" @click="show=false" aria-label="Dismiss" class="-mr-1 -mt-0.5 text-muted hover:text-white">
 			@iconX()
@@ -129,23 +134,19 @@ func toastInit(kind string) string {
 }
 
 templ iconX() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
 }
 
 templ iconPlus() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m7-7H5"></path></svg>
 }
 
 templ iconEdit() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
-}
-
-templ iconEye() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5 4 4M4 16l-1 5 5-1L20 8a2.83 2.83 0 0 0-4-4Z"></path></svg>
 }
 
 templ iconTrash() {
-	<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m4 4v7m6-7v7"></path><path d="M9 6V3h6v3"></path></svg>
 }
 
 // DeleteButton is the row-level delete action; it asks for confirmation first.
@@ -167,6 +168,7 @@ templ DeleteButton(action, message string) {
 // and an optional call-to-action link.
 templ EmptyState(message, actionHref, actionLabel string) {
 	<div class="card px-6 py-12 flex flex-col items-center text-center">
+		@emptyMark()
 		<p class="text-sm text-muted-light">{ message }</p>
 		if actionHref != "" {
 			<a href={ templ.SafeURL(actionHref) } class="btn-secondary mt-4">{ actionLabel }</a>
@@ -178,6 +180,7 @@ templ EmptyState(message, actionHref, actionLabel string) {
 // the surrounding scope (e.g. "showForm = true") to open a create dialog.
 templ EmptyStateModal(message, clickExpr, actionLabel string) {
 	<div class="card px-6 py-12 flex flex-col items-center text-center">
+		@emptyMark()
 		<p class="text-sm text-muted-light">{ message }</p>
 		if actionLabel != "" {
 			<button type="button" @click={ clickExpr } class="btn-secondary mt-4">{ actionLabel }</button>
@@ -185,26 +188,29 @@ templ EmptyStateModal(message, clickExpr, actionLabel string) {
 	</div>
 }
 
+templ emptyMark() {
+	<span class="empty-mark" aria-hidden="true">
+		<svg focusable="false" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h5M8 16h3"></path></svg>
+	</span>
+}
+
 // FormModal is the shared centered dialog for create/edit forms whose open state
 // is owned by the surrounding page Alpine scope. show is the boolean expression to
 // bind (e.g. "showForm"), maxWidth a max-w-* class, and titleExpr an Alpine
 // expression for the heading. Backdrop click and Escape close it.
 templ FormModal(show, maxWidth, titleExpr string) {
-	<div
-		x-show={ show }
+	<dialog
 		x-cloak
-		@keydown.escape.window={ show + " = false" }
-		@click.self={ show + " = false" }
-		x-effect={ "if (" + show + ") $nextTick(() => { const f = $el.querySelector('input:not([type=hidden]),select,textarea'); f && f.focus() })" }
-		class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+		x-effect={ dialogEffect(show) + "; if (" + show + ") $nextTick(() => { const f = $el.querySelector('input:not([type=hidden]):not(:disabled),select:not(:disabled),textarea:not(:disabled)'); if (f) f.focus() })" }
+		@cancel.prevent={ show + " = false" }
+		@close={ "if (!$el.open) " + show + " = false" }
+		@click={ dialogBackdropClose(show) }
+		@keydown.tab={ dialogTabCycle() }
+		aria-labelledby={ show + "-title" }
+		class={ "modal-dialog w-[calc(100%-2rem)]", maxWidth }
 	>
 		<div
-			x-show={ show }
-			@click.stop
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby={ show + "-title" }
-			class={ "modal-panel relative w-full max-h-[85vh] overflow-y-auto rounded-card border border-line-light bg-surface-100", maxWidth }
+			class="modal-panel relative w-full max-h-[85vh] overflow-y-auto rounded-card border border-line-light bg-surface-100"
 		>
 			<div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface-100 px-5 py-3">
 				<h2 id={ show + "-title" } class="text-lg font-semibold text-white" x-text={ titleExpr }></h2>
@@ -216,13 +222,53 @@ templ FormModal(show, maxWidth, titleExpr string) {
 				{ children... }
 			</div>
 		</div>
-	</div>
+	</dialog>
 }
 
-// StatusPill renders a status as a coloured dot plus its label.
+// Native modal dialogs provide background inertness and focus
+// restoration, including nested confirmations, without an extra Alpine plugin.
+func dialogEffect(show string) string {
+	return "if (" + show + ") { if (!$el.open) $el.showModal() } else if ($el.open) $el.close()"
+}
+
+// Keep Tab within the document as well: native dialog focus can otherwise move
+// to browser chrome at the first or last control in some browsers.
+func dialogTabCycle() string {
+	return "const controls = [...$el.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')].filter(el => !el.matches(':disabled') && el.tabIndex >= 0 && el.getClientRects().length); const first = controls[0], last = controls[controls.length - 1]; if (!first) { $event.preventDefault(); $el.focus() } else if ($event.shiftKey && document.activeElement === first) { $event.preventDefault(); last.focus() } else if (!$event.shiftKey && document.activeElement === last) { $event.preventDefault(); first.focus() }"
+}
+func dialogBackdropClose(show string) string {
+	return "if ($event.target === $el) { const r = $el.getBoundingClientRect(); if ($event.clientX < r.left || $event.clientX > r.right || $event.clientY < r.top || $event.clientY > r.bottom) " + show + " = false }"
+}
+
+// StatusIcon uses distinct silhouettes so a status never depends on colour.
+// Icons share a 24px grid, 2px strokes and round joins with the action icons.
+// The adjacent text supplies the accessible name.
+templ StatusIcon(status string) {
+	<svg aria-hidden="true" focusable="false" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		switch status {
+			case "up", "resolved", "operational", "sent", "success":
+				<circle cx="12" cy="12" r="9"></circle>
+				<path d="m8 12 2.5 2.5L16 9"></path>
+			case "down", "open", "created", "major_outage", "failed", "error":
+				<path d="M8 3h8l5 5v8l-5 5H8l-5-5V8Z"></path>
+				<path d="m9 9 6 6m0-6-6 6"></path>
+			case "degraded", "acknowledged", "warning":
+				<path d="m12 3 10 18H2Z"></path>
+				<path d="M12 9v5m0 3h.01"></path>
+			case "paused":
+				<circle cx="12" cy="12" r="9"></circle>
+				<path d="M9 8v8m6-8v8"></path>
+			default:
+				<circle cx="12" cy="12" r="9"></circle>
+				<path d="M12 7v5l3 2"></path>
+		}
+	</svg>
+}
+
+// StatusPill renders a status as a distinct icon and a readable label.
 templ StatusPill(status string) {
 	<span class={ "inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap", StatusColor(status) }>
-		<span class={ "dot", StatusDot(status) }></span>
+		@StatusIcon(status)
 		{ StatusLabel(status) }
 	</span>
 }
@@ -251,43 +297,42 @@ templ ToolbarNewButtonClick(clickExpr, label string) {
 // SearchInput renders the standard search field with a leading magnifier icon.
 templ SearchInput(name, value, placeholder string) {
 	<div class="relative w-full sm:w-64">
-		<svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-		<input type="search" name={ name } value={ value } placeholder={ placeholder } aria-label={ placeholder } class="form-input h-8 pl-8"/>
+		<svg aria-hidden="true" focusable="false" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+		<input type="search" name={ name } value={ value } placeholder={ placeholder } aria-label={ placeholder } class="form-input pl-8"/>
 	</div>
 }
 
 // IncidentRow renders an active-incident summary row linking to the incident.
-templ IncidentRow(basePath string, inc *storage.Incident) {
-	<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", basePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200">
+templ IncidentRow(p LayoutParams, inc *storage.Incident) {
+	<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="block px-4 py-3 hover:bg-surface-200">
 		<div class="flex items-center justify-between gap-3 mb-1">
-			<span class="text-sm font-medium text-white truncate">{ inc.MonitorName }</span>
+			<span class="text-sm font-medium text-white truncate">{ p.MonitorLabel(inc.MonitorName, inc.MonitorID, inc.MonitorGroupID) }</span>
 			@StatusPill(inc.Status)
 		</div>
-		<div class="text-xs text-muted truncate">{ inc.Cause }</div>
+		<div class="text-xs text-muted truncate">{ p.incidentCause(inc) }</div>
 		<div class="text-xs text-muted mt-0.5">@RelTime(inc.StartedAt)</div>
 	</a>
 }
 
-// MonitorRowActions renders the pause/resume + view + edit action cluster shared
-// by the monitor list table and the group detail table. canWrite gates the
-// mutating actions.
-templ MonitorRowActions(basePath string, m *storage.Monitor, canWrite bool) {
+// MonitorRowActions checks each action against this monitor's current scope.
+templ MonitorRowActions(p LayoutParams, m *storage.Monitor) {
 	<div class="flex items-center justify-end gap-0.5">
-		if canWrite {
-			if m.Enabled {
-				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", basePath, m.ID)) } class="contents">
-					<button type="submit" class="row-action" title="Pause" aria-label={ "Pause " + m.Name }>
-						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-					</button>
-				</form>
-			} else {
-				<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", basePath, m.ID)) } class="contents">
-					<button type="submit" class="row-action" title="Resume" aria-label={ "Resume " + m.Name }>
-						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-					</button>
-				</form>
-			}
-			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", basePath, m.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + m.Name }>
+		if m.Enabled && p.CanMonitor("monitors.pause", m.ID, m.GroupID) {
+			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, m.ID)) } class="contents">
+				<button type="submit" class="row-action" title="Pause" aria-label={ "Pause " + m.Name }>
+					<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+				</button>
+			</form>
+		}
+		if !m.Enabled && p.CanMonitor("monitors.resume", m.ID, m.GroupID) {
+			<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, m.ID)) } class="contents">
+				<button type="submit" class="row-action" title="Resume" aria-label={ "Resume " + m.Name }>
+					<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 5 11 7-11 7Z"></path></svg>
+				</button>
+			</form>
+		}
+		if p.CanMonitor("monitors.read", m.ID, m.GroupID) && p.CanMonitor("monitors.update", m.ID, m.GroupID) {
+			<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, m.ID)) } class="row-action" title="Edit" aria-label={ "Edit " + m.Name }>
 				@iconEdit()
 			</a>
 		}
@@ -324,7 +369,37 @@ templ Pager(page, totalPages int, summary, prevHref, nextHref string) {
 // sse:refresh trigger on the given target element id.
 templ MonitorListListener(basePath, targetID string) {
 	<div class="hidden" data-sse-url={ basePath + "/events" } data-sse-target={ targetID }></div>
-	<script src={ basePath + "/static/sse-refresh.js" } defer></script>
+	<script src={ Asset(basePath, "sse-refresh.js") } defer></script>
+}
+
+// DailyUptimeData provides exact chart values without requiring hover or
+// adding a keyboard stop for every SVG cell. Native details works without JS.
+templ DailyUptimeData(label string, days []DailyBar) {
+	if len(days) > 0 {
+		<details class="mt-3 text-xs">
+			<summary class="cursor-pointer py-2 text-muted-light hover:text-white">Daily uptime data</summary>
+			<div class="max-h-48 overflow-auto rounded-control border border-line" tabindex="0" role="region" aria-label={ label }>
+				<table class="w-full text-left tabular-nums">
+					<caption class="sr-only">{ label }</caption>
+					<thead><tr><th scope="col" class="px-3 py-2">Day</th><th scope="col" class="px-3 py-2">Uptime</th></tr></thead>
+					<tbody>
+						for _, day := range days {
+							<tr class="border-t border-line">
+								<th scope="row" class="px-3 py-1.5 font-normal text-muted-light">{ day.Label }</th>
+								<td class="px-3 py-1.5 text-white">
+									if day.HasData {
+										{ fmt.Sprintf("%.2f%%", day.UptimePct) }
+									} else {
+										No checks
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</details>
+	}
 }
 
 // Settings field helpers shared by the per-type monitor settings blocks.
@@ -337,6 +412,75 @@ templ SettingText(label, name, value, placeholder, inputType string) {
 	</div>
 }
 
+// Stored payloads can contain credentials. The handler supplies only a blank
+// value or the user's current retry input; these controls never load secrets.
+templ SettingPrivateText(label, name, key, value, placeholder string, stored bool) {
+	<div>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input
+			id={ name }
+			type="text"
+			name={ name }
+			value={ value }
+			autocomplete="off"
+			spellcheck="false"
+			class="form-input"
+			if stored {
+				placeholder="Saved. Leave blank to keep it."
+				aria-describedby={ name + "-saved" }
+			} else {
+				placeholder={ placeholder }
+			}
+		/>
+		if stored {
+			@StoredPayloadControl(name, key)
+		}
+	</div>
+}
+
+templ StoredPayloadControl(name, key string) {
+	<p id={ name + "-saved" } class="form-hint">Saved content stays hidden. Leave this blank to keep it, or enter replacement content. Selecting Remove saved value also discards any replacement entered here.</p>
+	@ClearSecretCheckbox(key)
+}
+
+templ StoredURLControl(name, key string) {
+	<p id={ name + "-saved" } class="form-hint">The saved URL's path and credentials stay hidden. Leave this blank or at the shown origin to keep the full URL. A different URL replaces it.</p>
+	<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+		<input type="checkbox" name="clear_secrets" value={ key } class="form-checkbox"/>
+		Use the entered URL as a replacement, including when it is only an origin
+	</label>
+}
+
+templ SettingPrivateURL(label, name, key, value, placeholder string, stored bool) {
+	<div>
+		<label class="form-label" for={ name }>{ label }</label>
+		<input
+			id={ name }
+			type="url"
+			name={ name }
+			value={ value }
+			placeholder={ placeholder }
+			autocomplete="off"
+			spellcheck="false"
+			class="form-input"
+			if stored {
+				aria-describedby={ name + "-saved" }
+			}
+		/>
+		if stored {
+			@StoredURLControl(name, key)
+		}
+	</div>
+}
+
+templ StoredTargetControl() {
+	<p id="target-saved" class="form-hint">The saved target stays hidden. Leave this blank to keep it, or enter a replacement.</p>
+	<label class="mt-1.5 inline-flex items-center gap-2 cursor-pointer text-xs text-muted">
+		<input type="checkbox" name="clear_secrets" value="target" class="form-checkbox"/>
+		Use the entered target as a replacement, including when it is blank
+	</label>
+}
+
 // SettingPassword renders a labelled secret input. A value already stored on
 // the server is never written into the page: the field shows a "saved" hint,
 // submitting it blank keeps the stored value, and a checkbox removes it. value
@@ -344,13 +488,19 @@ templ SettingText(label, name, value, placeholder, inputType string) {
 templ SettingPassword(label, name, key, value string, stored bool, placeholder string) {
 	<div>
 		<label class="form-label" for={ name }>{ label }</label>
-		<input id={ name } type="password" name={ name } value={ value } autocomplete="new-password"
+		<input
+			id={ name }
+			type="password"
+			name={ name }
+			value={ value }
+			autocomplete="new-password"
 			if stored && value == "" {
 				placeholder="Saved. Leave blank to keep it."
 			} else {
 				placeholder={ placeholder }
 			}
-			class="form-input"/>
+			class="form-input"
+		/>
 		if stored {
 			@ClearSecretCheckbox(key)
 		}
@@ -379,11 +529,14 @@ templ SettingNumber(label, name, value, placeholder, min, max, extraClass string
 // state of the box.
 templ SettingCheckbox(label, name string, checked bool) {
 	<label class="flex items-center gap-2 cursor-pointer">
-		<input type="checkbox" name={ name }
+		<input
+			type="checkbox"
+			name={ name }
 			if checked {
 				checked
 			}
-			class="form-checkbox"/>
+			class="form-checkbox"
+		/>
 		<span class="text-sm text-muted-light">{ label }</span>
 	</label>
 }
@@ -394,6 +547,7 @@ templ SettingCheckbox(label, name string, checked bool) {
 templ HeaderListEditor(modelName, keyName, valName string) {
 	<div>
 		<div class="form-label">Headers</div>
+		<p class="form-hint mb-2">Saved values stay hidden. Leave a value blank to keep it; remove its row to delete it.</p>
 		<div class="space-y-2">
 			<template x-for={ "(h, i) in " + modelName } :key="i">
 				<div class="flex gap-2">

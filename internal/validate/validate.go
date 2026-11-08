@@ -5,18 +5,20 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
+	"time"
 
-	"github.com/y0f/asura/internal/assertion"
-	"github.com/y0f/asura/internal/cron"
+	"github.com/y0f/asura/v2/internal/cron"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 var ValidMonitorTypes = map[string]bool{
@@ -39,32 +41,46 @@ var _validNotificationTypes = map[string]bool{
 	"googlechat": true, "matrix": true, "gotify": true,
 }
 
-var _validNotificationEvents = map[string]bool{
-	"incident.created":      true,
-	"incident.acknowledged": true,
-	"incident.resolved":     true,
-	"incident.reminder":     true,
-	"incident.escalated":    true,
-	"content.changed":       true,
-	"cert.changed":          true,
+// NotificationEventTypes lists selectable events in display order. Validation,
+// channel forms and history filters share this contract. Test notifications are
+// sent explicitly and do not participate in channel event filtering.
+func NotificationEventTypes() []string {
+	return []string{
+		"incident.created", "incident.acknowledged", "incident.resolved",
+		"incident.reminder", "incident.escalated", "content.changed",
+		"cert.changed", "sla.breach", "maintenance.started", "maintenance.ended",
+	}
 }
 
 func ValidateEscalationPolicy(ep *storage.EscalationPolicy) error {
-	if strings.TrimSpace(ep.Name) == "" {
+	if ep == nil || strings.TrimSpace(ep.Name) == "" {
 		return fmt.Errorf("name is required")
 	}
 	if len(ep.Name) > 255 {
 		return fmt.Errorf("name must be at most 255 characters")
 	}
+	if len(ep.Description) > 5000 {
+		return fmt.Errorf("description must be at most 5000 characters")
+	}
 	if len(ep.Steps) == 0 {
 		return fmt.Errorf("at least one step is required")
 	}
 	for i, step := range ep.Steps {
-		if step.DelayMinutes < 0 {
-			return fmt.Errorf("step %d: delay_minutes must be >= 0", i+1)
+		if step == nil {
+			return fmt.Errorf("step %d is required", i+1)
+		}
+		if step.DelayMinutes < 0 || int64(step.DelayMinutes) > int64(math.MaxInt64)/int64(time.Minute) {
+			return fmt.Errorf("step %d: delay_minutes must be nonnegative and fit a duration", i+1)
 		}
 		if len(step.NotificationChannelIDs) == 0 {
 			return fmt.Errorf("step %d: at least one notification channel is required", i+1)
+		}
+		seen := make(map[int64]bool, len(step.NotificationChannelIDs))
+		for _, id := range step.NotificationChannelIDs {
+			if id <= 0 || seen[id] {
+				return fmt.Errorf("step %d: channel IDs must be unique and positive", i+1)
+			}
+			seen[id] = true
 		}
 	}
 	return nil
@@ -83,8 +99,11 @@ func ValidateMonitor(m *storage.Monitor) error {
 	if !ValidMonitorTypes[m.Type] {
 		return fmt.Errorf("type must be one of: http, http_multi, tcp, dns, icmp, tls, websocket, command, heartbeat, docker, domain, grpc, mqtt, smtp, ssh, redis, postgresql, udp, manual")
 	}
+	if math.IsNaN(m.SLATarget) || math.IsInf(m.SLATarget, 0) || m.SLATarget < 0 || m.SLATarget > 100 {
+		return fmt.Errorf("sla_target must be a finite percentage between 0 and 100")
+	}
 	if m.Type == "heartbeat" || m.Type == "manual" {
-		return nil
+		return validateMonitorLimits(m)
 	}
 	if strings.TrimSpace(m.Target) == "" {
 		return fmt.Errorf("target is required")
@@ -130,44 +149,17 @@ func validateMonitorJSON(m *storage.Monitor) error {
 			return fmt.Errorf("settings must be a valid JSON object")
 		}
 	}
-	if err := validateAssertions(m.Assertions); err != nil {
-		return err
-	}
 	if m.Type == "docker" {
-		return validateDockerSettings(m)
-	}
-	if m.Type == "http" {
-		return validateHTTPSettings(m)
-	}
-	return nil
-}
-
-// validateAssertions validates the monitor assertions JSON. New input must be a
-// ConditionSet object ({operator, groups}); the legacy empty array form ([]) is
-// still accepted since migration v21 wraps non-empty arrays into a ConditionSet.
-func validateAssertions(raw json.RawMessage) error {
-	trimmed := strings.TrimSpace(string(raw))
-	if trimmed == "" || trimmed == "[]" || trimmed == "{}" || trimmed == "null" {
-		return nil
-	}
-	if trimmed[0] != '{' {
-		return fmt.Errorf("assertions must be a condition set object")
-	}
-	var cs assertion.ConditionSet
-	dec := json.NewDecoder(strings.NewReader(trimmed))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cs); err != nil {
-		return fmt.Errorf("assertions must be a valid condition set object")
-	}
-	if cs.Operator != "" && cs.Operator != "and" && cs.Operator != "or" {
-		return fmt.Errorf("assertions operator must be 'and' or 'or'")
-	}
-	for _, g := range cs.Groups {
-		if g.Operator != "" && g.Operator != "and" && g.Operator != "or" {
-			return fmt.Errorf("assertions group operator must be 'and' or 'or'")
+		if err := validateDockerSettings(m); err != nil {
+			return err
 		}
 	}
-	return nil
+	if m.Type == "http" {
+		if err := validateHTTPSettings(m); err != nil {
+			return err
+		}
+	}
+	return validateMonitorConfiguration(m)
 }
 
 func validateHTTPSettings(m *storage.Monitor) error {
@@ -266,11 +258,11 @@ func ValidateNotificationChannel(ch *storage.NotificationChannel) error {
 		return fmt.Errorf("settings is required")
 	}
 	for _, ev := range ch.Events {
-		if !_validNotificationEvents[ev] {
+		if !slices.Contains(NotificationEventTypes(), ev) {
 			return fmt.Errorf("invalid event: %s", ev)
 		}
 	}
-	return nil
+	return validateNotificationSettings(ch)
 }
 
 var _hexColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -334,6 +326,18 @@ func ValidateStatusPage(sp *storage.StatusPage) error {
 	if len(sp.FaviconURL) > 2048 {
 		return fmt.Errorf("favicon_url must be at most 2048 characters")
 	}
+	var imageErr error
+	sp.LogoURL, _, imageErr = StatusPageImageURL(sp.LogoURL)
+	if imageErr != nil {
+		return fmt.Errorf("logo_url: %w", imageErr)
+	}
+	sp.FaviconURL, _, imageErr = StatusPageImageURL(sp.FaviconURL)
+	if imageErr != nil {
+		return fmt.Errorf("favicon_url: %w", imageErr)
+	}
+	if sp.SortOrder < 0 {
+		return fmt.Errorf("sort_order must be nonnegative")
+	}
 	if len(sp.CustomHeaderHTML) > 5000 {
 		return fmt.Errorf("custom_header_html must be at most 5000 characters")
 	}
@@ -364,12 +368,25 @@ func ValidateProxy(p *storage.Proxy) error {
 	if p.Port < 1 || p.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
+	if len(p.AuthUser) > 1024 || len(p.AuthPass) > 16384 {
+		return fmt.Errorf("proxy credentials exceed the supported length")
+	}
 	return nil
 }
 
 func ValidateMaintenanceWindow(mw *storage.MaintenanceWindow) error {
 	if strings.TrimSpace(mw.Name) == "" {
 		return fmt.Errorf("name is required")
+	}
+	seenIDs := make(map[int64]bool, len(mw.MonitorIDs))
+	for _, id := range mw.MonitorIDs {
+		if id <= 0 {
+			return fmt.Errorf("monitor_ids must contain positive monitor IDs")
+		}
+		if seenIDs[id] {
+			return fmt.Errorf("monitor_ids contains duplicate monitor ID %d", id)
+		}
+		seenIDs[id] = true
 	}
 	if mw.Recurring != "manual" {
 		if mw.StartTime.IsZero() {
@@ -582,6 +599,13 @@ func sanitizeHTML(input string) string {
 					if val == "" {
 						continue
 					}
+				}
+				if key == "src" {
+					imageURL, _, err := StatusPageImageURL(val)
+					if err != nil {
+						continue
+					}
+					val = imageURL
 				}
 				buf.WriteByte(' ')
 				buf.WriteString(key)

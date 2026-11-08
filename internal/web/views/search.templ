@@ -9,21 +9,29 @@ import "encoding/json"
 templ CommandPalette(p LayoutParams) {
 	<div
 		x-data="cmdPalette()"
-		data-nav={ navIndexJSON(p.BasePath) }
+		data-nav={ navIndexJSON(p) }
 		@keydown.window="hotkey($event)"
 		@cmdk-open.window="openPalette()"
 	>
-		<div x-show="open" x-cloak class="fixed inset-0 z-50" @keydown.escape.window="close()">
-			<div class="modal-backdrop absolute inset-0 bg-black/70" @click="close()"></div>
-			<div class="relative mx-auto mt-[14vh] w-full max-w-xl px-4">
+		<dialog
+			x-cloak
+			class="modal-dialog w-[calc(100%-2rem)] max-w-xl"
+			aria-label="Go to page"
+			x-effect={ dialogEffect("open") }
+			@cancel.prevent="close()"
+			@close="if (!$el.open) open = false"
+			@click={ dialogBackdropClose("open") }
+			@keydown.tab={ dialogTabCycle() }
+		>
+			<div class="w-full">
 				<div
 					class="modal-panel overflow-hidden rounded-card border border-line-light bg-surface-100 shadow-lg shadow-black/40"
-					x-show="open"
 				>
 					<div class="flex items-center gap-3 px-4 border-b border-line">
-						<svg class="w-4 h-4 text-muted shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-4 h-4 text-muted shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
 						<input
 							x-ref="input"
+							autofocus
 							type="search"
 							autocomplete="off"
 							role="combobox"
@@ -39,7 +47,6 @@ templ CommandPalette(p LayoutParams) {
 							@keydown.up.prevent="move(-1)"
 							@keydown.enter.prevent="go()"
 						/>
-						
 					</div>
 					<div id="cmd-list" role="listbox" aria-label="Search results" x-ref="list" class="max-h-[22rem] overflow-y-auto p-1.5">
 						<template x-for="(h, i) in results" :key="h.href">
@@ -53,24 +60,22 @@ templ CommandPalette(p LayoutParams) {
 								class="cmdk-hit group flex items-center gap-3 rounded-control px-3 py-2 cursor-pointer text-muted-light"
 								:class="i === active && 'is-active'"
 							>
-								
 								<span class="min-w-0 flex-1">
 									<span class="block truncate text-sm text-white" x-text="h.label"></span>
 									<span class="block truncate text-xs text-muted" x-text="h.group + ' · ' + h.desc"></span>
 								</span>
-								
 							</a>
 						</template>
 						<div x-show="results.length === 0" class="px-4 py-10 text-center text-sm text-muted">No results for "<span class="text-muted-light" x-text="q"></span>".</div>
 					</div>
 					<div class="flex items-center gap-4 border-t border-line px-4 py-2 text-xs text-muted">
 						<span class="flex items-center gap-1.5">
-							@kbdIcon("M12 19V5M5 12l7-7 7 7")
-							@kbdIcon("M12 5v14M19 12l-7 7-7-7")
+							@kbdIcon("Up arrow", "M12 19V5M5 12l7-7 7 7")
+							@kbdIcon("Down arrow", "M12 5v14M19 12l-7 7-7-7")
 							<span class="ml-px">to navigate</span>
 						</span>
 						<span class="flex items-center gap-1.5">
-							@kbdIcon("M9 10l-5 5 5 5M4 15h11a4 4 0 0 0 4-4V4")
+							@kbdIcon("Enter", "M9 10l-5 5 5 5M4 15h11a4 4 0 0 0 4-4V4")
 							<span class="ml-px">to select</span>
 						</span>
 						<span class="hidden sm:flex items-center gap-1.5">
@@ -80,14 +85,15 @@ templ CommandPalette(p LayoutParams) {
 					</div>
 				</div>
 			</div>
-		</div>
+		</dialog>
 	</div>
 	@cmdPaletteScript()
 }
 
-templ kbdIcon(d string) {
+templ kbdIcon(label, d string) {
 	<kbd class="inline-flex h-5 w-5 items-center justify-center rounded-[3px] border border-line-light text-muted">
-		<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d={ d }></path></svg>
+		<svg focusable="false" aria-hidden="true" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d={ d }></path></svg>
+		<span class="sr-only">{ label }</span>
 	</kbd>
 }
 
@@ -102,11 +108,10 @@ templ cmdPaletteScript() {
 					this.results = this.all;
 				},
 				hotkey(e) {
+					if (!this.open && document.querySelector('dialog[open]')) return;
 					const cmdK = (e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey);
-					const slash = e.key === "/" && !this.typing(e.target);
-					if (cmdK || slash) { e.preventDefault(); this.toggle(); }
+					if (cmdK) { e.preventDefault(); this.toggle(); }
 				},
-				typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); },
 				toggle() { this.open ? this.close() : this.openPalette(); },
 				openPalette() {
 					this.open = true; this.q = ""; this.filter();
@@ -141,28 +146,35 @@ type navSearchItem struct {
 	Group string `json:"group"`
 }
 
-func navIndexJSON(basePath string) string {
+func navIndexJSON(p LayoutParams) string {
 	items := []navSearchItem{
-		{"Dashboard", "Overview of monitors and incidents", basePath + "/", "Home"},
-		{"Monitors", "All monitors and their status", basePath + "/monitors", "Monitoring"},
-		{"New Monitor", "Create a new monitor", basePath + "/monitors/new", "Monitoring"},
-		{"Groups", "Monitor groups", basePath + "/groups", "Monitoring"},
-		{"Tags", "Monitor tags", basePath + "/tags", "Monitoring"},
-		{"Incidents", "Incident history and active incidents", basePath + "/incidents", "Alerting"},
-		{"Notifications", "Notification channels", basePath + "/notifications", "Alerting"},
-		{"Notification History", "Sent notification log", basePath + "/notifications/history", "Alerting"},
-		{"Escalation Policies", "On-call escalation rules", basePath + "/escalation-policies", "Alerting"},
-		{"On-Call", "On-call rotations", basePath + "/on-call", "Alerting"},
-		{"SLA Report", "Uptime and SLA reporting", basePath + "/sla", "Operations"},
-		{"Maintenance", "Scheduled maintenance windows", basePath + "/maintenance", "Operations"},
-		{"Status Pages", "Public status pages", basePath + "/status-pages", "Operations"},
-		{"Request Logs", "HTTP requests served by Asura", basePath + "/logs", "System"},
-		{"Audit Log", "Who changed what", basePath + "/audit", "System"},
-		{"Agents", "Remote monitoring agents", basePath + "/agents", "System"},
-		{"Proxies", "Outbound proxies", basePath + "/proxies", "System"},
-		{"Settings", "Application settings", basePath + "/settings", "System"},
+		{"Dashboard", "Overview of monitors and incidents", "/", "Home"},
+		{"Monitors", "All monitors and their status", "/monitors", "Monitoring"},
+		{"New Monitor", "Create a new monitor", "/monitors/new", "Monitoring"},
+		{"Groups", "Monitor groups", "/groups", "Monitoring"},
+		{"Tags", "Monitor tags", "/tags", "Monitoring"},
+		{"Incidents", "Incident history and active incidents", "/incidents", "Alerting"},
+		{"Notifications", "Notification channels", "/notifications", "Alerting"},
+		{"Notification History", "Sent notification log", "/notifications/history", "Alerting"},
+		{"Escalation Policies", "On-call escalation rules", "/escalation-policies", "Alerting"},
+		{"On-Call", "On-call rotations", "/on-call", "Alerting"},
+		{"SLA Report", "Uptime and SLA reporting", "/sla", "Operations"},
+		{"Maintenance", "Scheduled maintenance windows", "/maintenance", "Operations"},
+		{"Status Pages", "Public status pages", "/status-pages", "Operations"},
+		{"Request Logs", "HTTP requests served by Asura", "/logs", "System"},
+		{"Audit Log", "Who changed what", "/audit", "System"},
+		{"Agents", "Remote monitoring agents", "/agents", "System"},
+		{"Proxies", "Outbound proxies", "/proxies", "System"},
+		{"Settings", "Application settings", "/settings", "System"},
 	}
-	b, err := json.Marshal(items)
+	allowed := make([]navSearchItem, 0, len(items))
+	for _, item := range items {
+		if p.CanVisit(item.Href) {
+			item.Href = p.BasePath + item.Href
+			allowed = append(allowed, item)
+		}
+	}
+	b, err := json.Marshal(allowed)
 	if err != nil {
 		return "[]"
 	}

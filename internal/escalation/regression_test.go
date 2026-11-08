@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func escalationFixture(t *testing.T, store storage.Store, delay int, repeat bool) (*storage.Monitor, *storage.Incident, *int64) {
@@ -87,7 +87,9 @@ func TestEscalationHeldDuringMaintenance(t *testing.T) {
 		t.Fatal("setup: monitor should be in maintenance")
 	}
 
-	r := NewRunner(store, notifier.NewDispatcher(store, logger, true), logger)
+	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
+	r := NewRunner(store, dispatcher, logger)
 	r.Tick(ctx)
 	if got := waitHits(hits, 1); got != 0 {
 		t.Errorf("escalation step dispatched %d notification(s) during maintenance", got)
@@ -101,7 +103,9 @@ func TestEscalationRepeatPausesBetweenCycles(t *testing.T) {
 	logger := testLogger()
 	_, inc, hits := escalationFixture(t, store, 0, true)
 
-	r := NewRunner(store, notifier.NewDispatcher(store, logger, true), logger)
+	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
+	r := NewRunner(store, dispatcher, logger)
 	for i := 0; i < 5; i++ {
 		r.Tick(ctx) // each real tick is 30s apart; NextFireAt = now+0 is always due
 	}
@@ -113,5 +117,19 @@ func TestEscalationRepeatPausesBetweenCycles(t *testing.T) {
 	if got > 1 {
 		t.Errorf("repeat policy with step-0 delay 0 paged %d times in 5 consecutive ticks (next_fire_at=%s, i.e. no pause)",
 			got, st.NextFireAt.Sub(time.Now()).Round(time.Second))
+	}
+}
+
+func TestEscalationRetainsStepWhenNotificationAdmissionFails(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	logger := testLogger()
+	_, inc, _ := escalationFixture(t, store, 0, false)
+	dispatcher := notifier.NewDispatcher(store, logger, true)
+	dispatcher.Shutdown(ctx)
+	NewRunner(store, dispatcher, logger).Tick(ctx)
+	state, err := store.GetEscalationStateByIncident(ctx, inc.ID)
+	if err != nil || state.CurrentStep != 0 || state.NextFireAt.After(time.Now()) {
+		t.Fatalf("failed admission consumed escalation step: %+v %v", state, err)
 	}
 }

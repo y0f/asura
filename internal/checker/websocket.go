@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 type WebSocketChecker struct {
@@ -21,8 +21,8 @@ type WebSocketChecker struct {
 
 func (c *WebSocketChecker) Type() string { return "websocket" }
 
-func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.WebSocketSettings
+func (c *WebSocketChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.WebSocketSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -46,6 +46,7 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 		}
 	}
 	transport := &http.Transport{DialContext: baseDial}
+	defer transport.CloseIdleConnections()
 	if monitor.ProxyURL != "" {
 		if socks := ProxyDialer(monitor.ProxyURL, baseDial, c.AllowPrivate); socks != nil {
 			transport.DialContext = socks
@@ -54,9 +55,16 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 		}
 	}
 
-	opts := &websocket.DialOptions{
-		HTTPClient: &http.Client{Transport: transport},
+	// websocket.Dial installs its own redirect hook, so an explicit ceiling
+	// is needed to retain net/http's usual ten-hop bound. HTTP proxies also
+	// need destination validation on every hop, before the proxy connects.
+	checkRedirect := redirectPolicy(10)
+	if HTTPProxyURL(monitor.ProxyURL) != nil {
+		checkRedirect = proxiedRedirectPolicy(checkRedirect, c.AllowPrivate)
 	}
+	opts := &websocket.DialOptions{HTTPClient: &http.Client{
+		Transport: transport, CheckRedirect: checkRedirect,
+	}}
 	if len(settings.Headers) > 0 {
 		header := http.Header{}
 		for k, v := range settings.Headers {
@@ -107,7 +115,8 @@ func (c *WebSocketChecker) Check(ctx context.Context, monitor *storage.Monitor) 
 		}
 	}
 
-	conn.Close(websocket.StatusNormalClosure, "check complete")
+	// The probe is complete. CloseNow in the defer releases the socket without
+	// starting the library's independent five-second close-handshake timeout.
 
 	return &Result{
 		Status:       "up",

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type DiscordSettings struct {
@@ -73,7 +73,7 @@ func (s *DiscordSender) Send(ctx context.Context, channel *storage.NotificationC
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("discord returned status %d", resp.StatusCode)
 	}
 

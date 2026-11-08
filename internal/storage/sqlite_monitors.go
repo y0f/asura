@@ -10,26 +10,87 @@ import (
 	"time"
 )
 
-func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor) error {
-	tags, _ := json.Marshal(m.Tags)
+func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
+	return s.createMonitor(ctx, m, nil, access...)
+}
+
+func validateMonitorCreateOptions(m *Monitor, options MonitorCreateOptions) error {
+	if m.Type == "heartbeat" {
+		if options.Heartbeat == nil || options.Heartbeat.Token == "" || options.Heartbeat.Grace < 0 || options.Heartbeat.MonitorID != 0 || options.Heartbeat.ID != 0 {
+			return fmt.Errorf("a new heartbeat credential and nonnegative grace period are required")
+		}
+	} else if options.Heartbeat != nil {
+		return fmt.Errorf("heartbeat credentials require a heartbeat monitor")
+	}
+	return nil
+}
+
+func (s *SQLiteStore) CreateMonitorWithRelations(ctx context.Context, m *Monitor, options MonitorCreateOptions, access ...MonitorAccess) error {
+	return s.createMonitor(ctx, m, &options, access...)
+}
+
+func (s *SQLiteStore) createMonitor(ctx context.Context, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) error {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create monitor begin: %w", err)
+	}
+	defer tx.Rollback()
+	saved, heartbeat, err := s.insertMonitor(ctx, tx, m, options, access...)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create monitor commit: %w", err)
+	}
+	*m = *saved
+	if heartbeat != nil {
+		*options.Heartbeat = *heartbeat
+	}
+	return nil
+}
+
+// insertMonitor is shared by creation and cloning; its caller owns the writer
+// transaction and must not expose output values before committing it.
+func (s *SQLiteStore) insertMonitor(ctx context.Context, tx *sqlTransaction, m *Monitor, options *MonitorCreateOptions, access ...MonitorAccess) (*Monitor, *Heartbeat, error) {
+	if options != nil {
+		if err := validateMonitorCreateOptions(m, *options); err != nil {
+			return nil, nil, err
+		}
+	}
+	if !allowedMonitorDestination(0, m.GroupID, access) {
+		return nil, nil, sql.ErrNoRows
+	}
+	m = copyMonitorSnapshot(m)
 	if m.Settings == nil {
 		m.Settings = json.RawMessage("{}")
 	}
 	if m.Assertions == nil {
 		m.Assertions = json.RawMessage("[]")
 	}
-	now := formatTime(time.Now())
-
 	settings, err := s.encryptSettings(string(m.Settings))
 	if err != nil {
-		return fmt.Errorf("encrypt settings: %w", err)
+		return nil, nil, fmt.Errorf("encrypt settings: %w", err)
 	}
+	return s.insertPreparedMonitor(ctx, tx, m, settings, options)
+}
 
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("create monitor begin: %w", err)
+// insertPreparedMonitor writes a private, validated snapshot using ciphertext
+// prepared before any configuration replacement. The caller owns the transaction
+// and must expose neither the monitor nor fresh heartbeat token before commit.
+func (s *SQLiteStore) insertPreparedMonitor(ctx context.Context, tx *sqlTransaction, m *Monitor, settings string, options *MonitorCreateOptions) (*Monitor, *Heartbeat, error) {
+	if options != nil {
+		if err := validateMonitorCreateOptions(m, *options); err != nil {
+			return nil, nil, err
+		}
 	}
-	defer tx.Rollback()
+	if err := checkMonitorGroup(ctx, tx, m.GroupID); err != nil {
+		return nil, nil, err
+	}
+	if err := checkMonitorProxy(ctx, tx, m); err != nil {
+		return nil, nil, err
+	}
+	tags, _ := json.Marshal(m.Tags)
+	now := formatTime(time.Now())
 
 	var groupID any
 	if m.GroupID != nil {
@@ -43,7 +104,7 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor) error {
 	if m.EscalationPolicyID != nil {
 		escalationPolicyID = *m.EscalationPolicyID
 	}
-	res, err := tx.ExecContext(ctx,
+	id, err := insertID(ctx, tx,
 		`INSERT INTO monitors (name, description, type, target, interval_secs, timeout_secs, enabled, tags, settings, assertions, track_changes, failure_threshold, success_threshold, upside_down, agent_enabled, resend_interval, sla_target, anomaly_sensitivity, group_id, proxy_id, escalation_policy_id, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Description, m.Type, m.Target, m.Interval, m.Timeout, boolToInt(m.Enabled),
@@ -51,51 +112,73 @@ func (s *SQLiteStore) CreateMonitor(ctx context.Context, m *Monitor) error {
 		m.FailureThreshold, m.SuccessThreshold, boolToInt(m.UpsideDown), boolToInt(m.AgentEnabled), m.ResendInterval, m.SLATarget, m.AnomalySensitivity, groupID, proxyID, escalationPolicyID, now, now,
 	)
 	if err != nil {
-		return err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return err
+		return nil, nil, monitorRelationError(err)
 	}
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO monitor_status (monitor_id, status) VALUES (?, 'pending')`, id); err != nil {
-		return err
+		return nil, nil, err
+	}
+	var heartbeat *Heartbeat
+	if options != nil {
+		created := *m
+		created.ID = id
+		if err := replaceMonitorRelations(ctx, tx, &created, MonitorRelationChanges{Notifications: true, Tags: true, Agents: true}); err != nil {
+			return nil, nil, err
+		}
+		if options.Heartbeat != nil {
+			copy := *options.Heartbeat
+			heartbeat = &copy
+			heartbeat.MonitorID, heartbeat.Status, heartbeat.LastPingAt = id, "pending", nil
+			if err := createHeartbeat(ctx, tx, heartbeat); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("create monitor commit: %w", err)
+	if err := tx.QueryRowContext(ctx, "SELECT config_revision FROM monitors WHERE id=?", id).Scan(&m.ConfigRevision); err != nil {
+		return nil, nil, err
 	}
-
 	m.ID = id
 	m.CreatedAt = parseTime(now)
 	m.UpdatedAt = parseTime(now)
-	return nil
+	m.LastCheckAt = nil
+	m.ConsecFails, m.ConsecSuccesses = 0, 0
+	m.Status = "pending"
+	if !m.Enabled {
+		m.Status = "paused"
+	}
+	return m, heartbeat, nil
 }
 
-func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64) (*Monitor, error) {
-	row := s.readDB.QueryRowContext(ctx,
-		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
+const selectMonitorSQL = `SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
 		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
 		        m.upside_down, m.agent_enabled, m.resend_interval, m.sla_target, m.anomaly_sensitivity, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
-		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0)
+		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0), m.config_revision
 		 FROM monitors m
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id
-		 WHERE m.id = ?`, id)
+		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id`
+
+func (s *SQLiteStore) GetMonitor(ctx context.Context, id int64, access ...MonitorAccess) (*Monitor, error) {
+	clause, args := monitorAccessSQL("m", access)
+	args = append([]any{id}, args...)
+	row := s.readDB.QueryRowContext(ctx, selectMonitorSQL+` WHERE m.id = ?`+clause, args...)
 	return s.scanMonitor(row)
 }
 
 func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p Pagination) (*PaginatedResult, error) {
 	where := "1=1"
-	var args []any
+	clause, args := monitorAccessSQL("m", f.Access)
+	where += clause
 
 	if f.Type != "" {
 		where += " AND m.type=?"
 		args = append(args, f.Type)
 	}
 	if f.Search != "" {
-		where += " AND (m.name LIKE ? || '%' OR m.target LIKE ? || '%')"
-		args = append(args, f.Search, f.Search)
+		// Search only public names. Matching raw targets would let an ordinary
+		// reader probe redacted URI credentials through result counts.
+		where += " AND " + s.readDB.dialect.like("m.name", "? || '%'")
+		args = append(args, f.Search)
 	}
 	if f.GroupID != nil {
 		where += " AND m.group_id=?"
@@ -112,14 +195,15 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 		args = append(args, f.Status)
 	}
 
-	orderBy := "m.name COLLATE NOCASE ASC"
+	nameOrder := s.readDB.dialect.noCase("m.name") + " ASC"
+	orderBy := nameOrder
 	switch f.Sort {
 	case "status":
-		orderBy = "COALESCE(ms.status, 'pending') ASC, m.name COLLATE NOCASE ASC"
+		orderBy = "COALESCE(ms.status, 'pending') ASC, " + nameOrder
 	case "last_check":
-		orderBy = "ms.last_check_at DESC, m.name COLLATE NOCASE ASC"
+		orderBy = "ms.last_check_at DESC NULLS LAST, " + nameOrder
 	case "response_time":
-		orderBy = "ms.last_response_time DESC, m.name COLLATE NOCASE ASC"
+		orderBy = "CASE WHEN m.type NOT IN ('manual','heartbeat') AND ms.observation_kind='probe' AND ms.last_check_at IS NOT NULL THEN ms.last_response_time END DESC NULLS LAST, " + nameOrder
 	}
 
 	var total int64
@@ -134,13 +218,7 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 	offset := (p.Page - 1) * p.PerPage
 	args = append(args, p.PerPage, offset)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
-		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
-		        m.upside_down, m.agent_enabled, m.resend_interval, m.sla_target, m.anomaly_sensitivity, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
-		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0)
-		 FROM monitors m
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id
-		 WHERE `+where+`
+		selectMonitorSQL+` WHERE `+where+`
 		 ORDER BY `+orderBy+`
 		 LIMIT ? OFFSET ?`, args...)
 	if err != nil {
@@ -172,7 +250,27 @@ func (s *SQLiteStore) ListMonitors(ctx context.Context, f MonitorListFilter, p P
 	}, nil
 }
 
-func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor) error {
+func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor, access ...MonitorAccess) error {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	copy := copyMonitorSnapshot(m)
+	if err := s.updateMonitor(ctx, tx, copy, access...); err != nil {
+		return err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT config_revision FROM monitors WHERE id=?", copy.ID).Scan(&copy.ConfigRevision); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	*m = *copy
+	return nil
+}
+
+func (s *SQLiteStore) updateMonitor(ctx context.Context, writer *sqlTransaction, m *Monitor, access ...MonitorAccess) error {
 	tags, _ := json.Marshal(m.Tags)
 	now := formatTime(time.Now())
 	var groupID any
@@ -191,74 +289,72 @@ func (s *SQLiteStore) UpdateMonitor(ctx context.Context, m *Monitor) error {
 	if err != nil {
 		return fmt.Errorf("encrypt settings: %w", err)
 	}
-	_, err = s.writeDB.ExecContext(ctx,
-		`UPDATE monitors SET name=?, description=?, type=?, target=?, interval_secs=?, timeout_secs=?, enabled=?,
-		 tags=?, settings=?, assertions=?, track_changes=?, failure_threshold=?, success_threshold=?,
-		 upside_down=?, agent_enabled=?, resend_interval=?, sla_target=?, anomaly_sensitivity=?, group_id=?, proxy_id=?, escalation_policy_id=?, updated_at=?
-		 WHERE id=?`,
+	clause, accessArgs := monitorAccessSQL("", access)
+	destinationClause, destinationArgs := monitorDestinationSQL(&monitorDestination{groupID: m.GroupID}, access)
+	clause += destinationClause
+	accessArgs = append(accessArgs, destinationArgs...)
+	if m.GroupID != nil || m.ProxyID != nil {
+		if len(access) > 0 {
+			// Preserve scoped not-found behavior before reporting an invalid
+			// destination; the transaction prevents either decision going stale.
+			var id int64
+			if err := writer.QueryRowContext(ctx, "SELECT id FROM monitors WHERE id=?"+clause, append([]any{m.ID}, accessArgs...)...).Scan(&id); err != nil {
+				return err
+			}
+		}
+		if err := checkMonitorGroup(ctx, writer, m.GroupID); err != nil {
+			return err
+		}
+		if err := checkMonitorProxy(ctx, writer, m); err != nil {
+			return err
+		}
+	}
+	args := []any{
 		m.Name, m.Description, m.Type, m.Target, m.Interval, m.Timeout, boolToInt(m.Enabled),
 		string(tags), settings, string(m.Assertions), boolToInt(m.TrackChanges),
 		m.FailureThreshold, m.SuccessThreshold, boolToInt(m.UpsideDown), boolToInt(m.AgentEnabled), m.ResendInterval, m.SLATarget, m.AnomalySensitivity, groupID, proxyID, escalationPolicyID, now, m.ID,
-	)
-	return err
+	}
+	result, err := writer.ExecContext(ctx,
+		`UPDATE monitors SET name=?, description=?, type=?, target=?, interval_secs=?, timeout_secs=?, enabled=?,
+		 tags=?, settings=?, assertions=?, track_changes=?, failure_threshold=?, success_threshold=?,
+		 upside_down=?, agent_enabled=?, resend_interval=?, sla_target=?, anomaly_sensitivity=?, group_id=?, proxy_id=?, escalation_policy_id=?, updated_at=?
+		 WHERE id=?`+clause, append(args, accessArgs...)...)
+	if err := scopedMutationResult(result, err, access); err != nil {
+		return monitorRelationError(err)
+	}
+	m.UpdatedAt = parseTime(now)
+	return nil
 }
 
-func (s *SQLiteStore) DeleteMonitor(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM monitors WHERE id=?", id)
-	return err
+func (s *SQLiteStore) DeleteMonitor(ctx context.Context, id int64, access ...MonitorAccess) error {
+	clause, args := monitorAccessSQL("", access)
+	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM monitors WHERE id=?"+clause, append([]any{id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
-func (s *SQLiteStore) SetMonitorEnabled(ctx context.Context, id int64, enabled bool) error {
+func (s *SQLiteStore) SetMonitorEnabled(ctx context.Context, id int64, enabled bool, access ...MonitorAccess) error {
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		"UPDATE monitors SET enabled=?, updated_at=? WHERE id=?",
-		boolToInt(enabled), now, id)
-	return err
+	clause, args := monitorAccessSQL("", access)
+	result, err := s.writeDB.ExecContext(ctx,
+		"UPDATE monitors SET enabled=?, updated_at=? WHERE id=?"+clause,
+		append([]any{boolToInt(enabled), now, id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
-func (s *SQLiteStore) BulkSetMonitorsEnabled(ctx context.Context, ids []int64, enabled bool) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders, args := bulkArgs(ids)
-	args = append([]any{boolToInt(enabled), formatTime(time.Now())}, args...)
-	res, err := s.writeDB.ExecContext(ctx,
-		"UPDATE monitors SET enabled=?, updated_at=? WHERE id IN ("+placeholders+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+func (s *SQLiteStore) BulkSetMonitorsEnabled(ctx context.Context, ids []int64, enabled bool, access ...MonitorAccess) (int64, error) {
+	return s.mutateMonitorSet(ctx, ids, access, nil, "UPDATE monitors SET enabled=?, updated_at=?", []any{boolToInt(enabled), formatTime(time.Now())})
 }
 
-func (s *SQLiteStore) BulkDeleteMonitors(ctx context.Context, ids []int64) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders, args := bulkArgs(ids)
-	res, err := s.writeDB.ExecContext(ctx,
-		"DELETE FROM monitors WHERE id IN ("+placeholders+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+func (s *SQLiteStore) BulkDeleteMonitors(ctx context.Context, ids []int64, access ...MonitorAccess) (int64, error) {
+	return s.mutateMonitorSet(ctx, ids, access, nil, "DELETE FROM monitors", nil)
 }
 
-func (s *SQLiteStore) BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders, args := bulkArgs(ids)
+func (s *SQLiteStore) BulkSetMonitorGroup(ctx context.Context, ids []int64, groupID *int64, access ...MonitorAccess) (int64, error) {
 	var gid any
 	if groupID != nil {
 		gid = *groupID
 	}
-	args = append([]any{gid, formatTime(time.Now())}, args...)
-	res, err := s.writeDB.ExecContext(ctx,
-		"UPDATE monitors SET group_id=?, updated_at=? WHERE id IN ("+placeholders+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+	return s.mutateMonitorSet(ctx, ids, access, &monitorDestination{groupID: groupID}, "UPDATE monitors SET group_id=?, updated_at=?", []any{gid, formatTime(time.Now())})
 }
 
 func bulkArgs(ids []int64) (string, []any) {
@@ -276,14 +372,7 @@ func bulkArgs(ids []int64) (string, []any) {
 
 func (s *SQLiteStore) GetAllEnabledMonitors(ctx context.Context) ([]*Monitor, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT m.id, m.name, m.description, m.type, m.target, m.interval_secs, m.timeout_secs, m.enabled,
-		        m.tags, m.settings, m.assertions, m.track_changes, m.failure_threshold, m.success_threshold,
-		        m.upside_down, m.agent_enabled, m.resend_interval, m.sla_target, m.anomaly_sensitivity, m.group_id, m.proxy_id, m.escalation_policy_id, m.created_at, m.updated_at,
-		        COALESCE(ms.status, 'pending'), ms.last_check_at, COALESCE(ms.consec_fails, 0), COALESCE(ms.consec_successes, 0)
-		 FROM monitors m
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id
-		 WHERE m.enabled = 1
-		 ORDER BY m.id`)
+		selectMonitorSQL+` WHERE m.enabled = 1 ORDER BY m.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -310,10 +399,10 @@ func (s *SQLiteStore) GetMonitorStatus(ctx context.Context, monitorID int64) (*M
 	var lastCheck, baselineUpdated sql.NullString
 	err := s.readDB.QueryRowContext(ctx,
 		`SELECT monitor_id, status, last_check_at, consec_fails, consec_successes, last_body_hash, last_cert_fingerprint,
-		        last_response_time, baseline_avg, baseline_stddev, baseline_updated_at
+		        last_response_time, baseline_avg, baseline_stddev, baseline_updated_at, config_revision, observation_kind
 		 FROM monitor_status WHERE monitor_id=?`, monitorID).
 		Scan(&ms.MonitorID, &ms.Status, &lastCheck, &ms.ConsecFails, &ms.ConsecSuccesses, &ms.LastBodyHash, &ms.LastCertFingerprint,
-			&ms.ResponseTime, &ms.BaselineAvg, &ms.BaselineStddev, &baselineUpdated)
+			&ms.ResponseTime, &ms.BaselineAvg, &ms.BaselineStddev, &baselineUpdated, &ms.ConfigRevision, &ms.ObservationKind)
 	if err != nil {
 		return nil, err
 	}
@@ -323,20 +412,31 @@ func (s *SQLiteStore) GetMonitorStatus(ctx context.Context, monitorID int64) (*M
 }
 
 func (s *SQLiteStore) UpsertMonitorStatus(ctx context.Context, st *MonitorStatus) error {
+	return upsertMonitorStatus(ctx, s.writeDB, st)
+}
+
+func upsertMonitorStatus(ctx context.Context, writer monitorWriteExecutor, st *MonitorStatus) error {
+	kind := st.ObservationKind
+	if kind == "" {
+		kind = ObservationUnknown
+	}
 	var lastCheck string
 	if st.LastCheckAt != nil {
 		lastCheck = formatTime(*st.LastCheckAt)
 	}
-	_, err := s.writeDB.ExecContext(ctx,
-		`INSERT INTO monitor_status (monitor_id, status, last_check_at, consec_fails, consec_successes, last_body_hash, last_cert_fingerprint, last_response_time)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	_, err := writer.ExecContext(ctx,
+		`INSERT INTO monitor_status (monitor_id, status, last_check_at, consec_fails, consec_successes, last_body_hash, last_cert_fingerprint, last_response_time, config_revision, observation_kind)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(monitor_id) DO UPDATE SET
 		   status=excluded.status, last_check_at=excluded.last_check_at,
 		   consec_fails=excluded.consec_fails, consec_successes=excluded.consec_successes,
 		   last_body_hash=excluded.last_body_hash,
 		   last_cert_fingerprint=excluded.last_cert_fingerprint,
-		   last_response_time=excluded.last_response_time`,
-		st.MonitorID, st.Status, nullStr(lastCheck), st.ConsecFails, st.ConsecSuccesses, st.LastBodyHash, st.LastCertFingerprint, st.ResponseTime)
+		   baseline_avg=CASE WHEN monitor_status.observation_kind!='probe' AND excluded.observation_kind='probe' THEN 0 ELSE monitor_status.baseline_avg END,
+		   baseline_stddev=CASE WHEN monitor_status.observation_kind!='probe' AND excluded.observation_kind='probe' THEN 0 ELSE monitor_status.baseline_stddev END,
+		   baseline_updated_at=CASE WHEN monitor_status.observation_kind!='probe' AND excluded.observation_kind='probe' THEN NULL ELSE monitor_status.baseline_updated_at END,
+		   last_response_time=excluded.last_response_time, config_revision=excluded.config_revision, observation_kind=excluded.observation_kind`,
+		st.MonitorID, st.Status, nullStr(lastCheck), st.ConsecFails, st.ConsecSuccesses, st.LastBodyHash, st.LastCertFingerprint, st.ResponseTime, st.ConfigRevision, kind)
 	return err
 }
 
@@ -355,8 +455,8 @@ func (s *SQLiteStore) GetResponseTimeStats(ctx context.Context, monitorID int64,
 				SQRT(SUM((response_time - sub.a) * (response_time - sub.a)) / (COUNT(*) - 1))
 			ELSE 0 END, 0), COUNT(*)
 		 FROM check_results,
-		      (SELECT AVG(response_time) AS a FROM check_results WHERE monitor_id=? AND status='up' AND created_at>=?) sub
-		 WHERE monitor_id=? AND status='up' AND created_at>=?`,
+		      (SELECT AVG(response_time) AS a FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND status='up' AND created_at>=?) sub
+		 WHERE monitor_id=? AND observation_kind='probe' AND status='up' AND created_at>=?`,
 		monitorID, formatTime(from), monitorID, formatTime(from)).
 		Scan(&avg, &stddev, &count)
 	return
@@ -364,92 +464,34 @@ func (s *SQLiteStore) GetResponseTimeStats(ctx context.Context, monitorID int64,
 
 // --- Check Results ---
 
+// InsertCheckResult is a trusted probe-fixture insertion path. Runtime checks
+// use RecordMonitorCheck; manual transitions have a separate insertion method.
+// Incoming observation kinds are never trusted.
 func (s *SQLiteStore) InsertCheckResult(ctx context.Context, r *CheckResult) error {
+	return insertCheckResult(ctx, s.writeDB, r)
+}
+
+func insertCheckResult(ctx context.Context, writer monitorWriteExecutor, r *CheckResult) error {
 	var certExpiry string
 	if r.CertExpiry != nil {
 		certExpiry = formatTime(*r.CertExpiry)
 	}
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
-		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, agent_id, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	id, err := insertID(ctx, writer,
+		`INSERT INTO check_results (monitor_id, status, response_time, status_code, message, headers, body, body_hash, cert_expiry, cert_fingerprint, dns_records, agent_id, created_at, observation_kind)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'probe')`,
 		r.MonitorID, r.Status, r.ResponseTime, r.StatusCode, r.Message, r.Headers,
 		r.Body, r.BodyHash, nullStr(certExpiry), r.CertFingerprint, r.DNSRecords, r.AgentID, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	r.ID = id
 	r.CreatedAt = parseTime(now)
+	r.ObservationKind = ObservationProbe
 	return nil
 }
 
-func (s *SQLiteStore) ListCheckResults(ctx context.Context, monitorID int64, p Pagination) (*PaginatedResult, error) {
-	var total int64
-	err := s.readDB.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM check_results WHERE monitor_id=?", monitorID).Scan(&total)
-	if err != nil {
-		return nil, err
-	}
-
-	offset := (p.Page - 1) * p.PerPage
-	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, monitor_id, status, response_time, status_code, message, body_hash, cert_expiry, dns_records, created_at
-		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		monitorID, p.PerPage, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []*CheckResult
-	for rows.Next() {
-		var r CheckResult
-		var certExp sql.NullString
-		var createdAt string
-		err := rows.Scan(&r.ID, &r.MonitorID, &r.Status, &r.ResponseTime, &r.StatusCode,
-			&r.Message, &r.BodyHash, &certExp, &r.DNSRecords, &createdAt)
-		if err != nil {
-			return nil, err
-		}
-		r.CreatedAt = parseTime(createdAt)
-		r.CertExpiry = parseTimePtr(certExp)
-		results = append(results, &r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if results == nil {
-		results = []*CheckResult{}
-	}
-
-	return &PaginatedResult{
-		Data:       results,
-		Total:      total,
-		Page:       p.Page,
-		PerPage:    p.PerPage,
-		TotalPages: int(math.Ceil(float64(total) / float64(p.PerPage))),
-	}, nil
-}
-
-func (s *SQLiteStore) GetLatestCheckResult(ctx context.Context, monitorID int64) (*CheckResult, error) {
-	var r CheckResult
-	var certExp sql.NullString
-	var createdAt string
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT id, monitor_id, status, response_time, status_code, message, body, body_hash, cert_expiry, dns_records, created_at
-		 FROM check_results WHERE monitor_id=? ORDER BY created_at DESC LIMIT 1`, monitorID).
-		Scan(&r.ID, &r.MonitorID, &r.Status, &r.ResponseTime, &r.StatusCode,
-			&r.Message, &r.Body, &r.BodyHash, &certExp, &r.DNSRecords, &createdAt)
-	if err != nil {
-		return nil, err
-	}
-	r.CreatedAt = parseTime(createdAt)
-	r.CertExpiry = parseTimePtr(certExp)
-	return &r, nil
-}
-
-func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int) (map[int64][]*SparklinePoint, error) {
+func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int64, n int, access ...MonitorAccess) (map[int64][]*SparklinePoint, error) {
 	result := make(map[int64][]*SparklinePoint, len(monitorIDs))
 	if len(monitorIDs) == 0 || n <= 0 {
 		return result, nil
@@ -457,9 +499,10 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 
 	// One indexed LIMIT query per monitor reads only the n newest rows. A single
 	// ROW_NUMBER() query over all monitors would number every retained row.
+	clause, args := monitorOwnerAccessSQL("monitor_id", access)
 	stmt, err := s.readDB.PrepareContext(ctx,
 		`SELECT status, response_time FROM check_results
-		 WHERE monitor_id=? ORDER BY created_at DESC LIMIT ?`)
+		 WHERE monitor_id=? AND observation_kind='probe' AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=check_results.monitor_id AND m.type NOT IN ('manual','heartbeat'))`+clause+` ORDER BY created_at DESC, id DESC LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +512,7 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 		if _, done := result[id]; done {
 			continue
 		}
-		rows, err := stmt.QueryContext(ctx, id, n)
+		rows, err := stmt.QueryContext(ctx, append(append([]any{id}, args...), n)...)
 		if err != nil {
 			return nil, err
 		}
@@ -496,8 +539,13 @@ func (s *SQLiteStore) GetMonitorSparklines(ctx context.Context, monitorIDs []int
 	return result, nil
 }
 
-func (s *SQLiteStore) GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64) ([]int64, error) {
-	rows, err := s.readDB.QueryContext(ctx,
+func (s *SQLiteStore) GetMonitorNotificationChannelIDs(ctx context.Context, monitorID int64, access ...MonitorAccess) ([]int64, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	rows, err := reader.QueryContext(ctx,
 		`SELECT channel_id FROM monitor_notifications WHERE monitor_id=? ORDER BY channel_id`, monitorID)
 	if err != nil {
 		return nil, err

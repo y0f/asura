@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 const (
@@ -40,7 +40,20 @@ func dialSMTP(ctx context.Context, addr string) (net.Conn, error) {
 		conn.Close()
 		return nil, err
 	}
-	return conn, nil
+	// net/smtp has no context-aware commands after dialing. Closing the socket
+	// interrupts a stalled greeting, AUTH or DATA immediately on cancellation.
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	return &smtpConn{Conn: conn, stop: stop}, nil
+}
+
+type smtpConn struct {
+	net.Conn
+	stop func() bool
+}
+
+func (c *smtpConn) Close() error {
+	c.stop()
+	return c.Conn.Close()
 }
 
 // newSMTPClient dials addr and wraps it in an SMTP client, closing the

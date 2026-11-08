@@ -10,8 +10,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 type TLSChecker struct {
@@ -20,8 +20,8 @@ type TLSChecker struct {
 
 func (c *TLSChecker) Type() string { return "tls" }
 
-func (c *TLSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.TLSSettings
+func (c *TLSChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.TLSSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -61,9 +61,9 @@ func (c *TLSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 		}, nil
 	}
 
+	defer closeConnOnCancel(ctx, rawConn)()
 	tlsConn := tls.Client(rawConn, &tls.Config{ServerName: host})
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		rawConn.Close()
 		return &Result{
 			Status:       "down",
 			ResponseTime: time.Since(start).Milliseconds(),
@@ -86,23 +86,21 @@ func (c *TLSChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 	cert := state.PeerCertificates[0]
 	expiry := cert.NotAfter
 	expiryUnix := expiry.Unix()
-	daysUntilExpiry := int(time.Until(expiry).Hours() / 24)
+	status, daysUntilExpiry := expiryStatus(expiry, time.Now(), warnDays)
 	sum := sha256.Sum256(cert.Raw)
 	fingerprint := hex.EncodeToString(sum[:])
 
 	result := &Result{
-		Status:          "up",
+		Status:          status,
 		ResponseTime:    elapsed,
 		CertExpiry:      &expiryUnix,
 		CertFingerprint: fingerprint,
 		Message:         fmt.Sprintf("cert expires in %d days (%s)", daysUntilExpiry, expiry.Format("2006-01-02")),
 	}
 
-	if daysUntilExpiry <= 0 {
-		result.Status = "down"
+	if status == "down" {
 		result.Message = fmt.Sprintf("certificate expired on %s", expiry.Format("2006-01-02"))
-	} else if daysUntilExpiry <= warnDays {
-		result.Status = "degraded"
+	} else if status == "degraded" {
 		result.Message = fmt.Sprintf("cert expires in %d days (warning threshold: %d)", daysUntilExpiry, warnDays)
 	}
 

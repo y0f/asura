@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 type TCPChecker struct {
@@ -18,8 +18,8 @@ type TCPChecker struct {
 
 func (c *TCPChecker) Type() string { return "tcp" }
 
-func (c *TCPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.TCPSettings
+func (c *TCPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.TCPSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -45,7 +45,7 @@ func (c *TCPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 			Message:      fmt.Sprintf("connection failed: %v", err),
 		}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 
 	conn.SetDeadline(time.Now().Add(timeout))
 
@@ -62,16 +62,23 @@ func (c *TCPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 
 	if settings.ExpectData != "" {
 		buf := make([]byte, 4096)
-		n, err := conn.Read(buf)
-		if err != nil {
-			return &Result{
-				Status:       "down",
-				ResponseTime: elapsed,
-				Message:      fmt.Sprintf("read failed: %v", err),
-			}, nil
+		matched := false
+		for total := 0; total < len(buf); {
+			n, err := conn.Read(buf[total:])
+			total += n
+			if strings.Contains(string(buf[:total]), settings.ExpectData) {
+				matched = true
+				break
+			}
+			if err != nil {
+				return &Result{
+					Status:       "down",
+					ResponseTime: elapsed,
+					Message:      fmt.Sprintf("read failed: %v", err),
+				}, nil
+			}
 		}
-		received := string(buf[:n])
-		if !strings.Contains(received, settings.ExpectData) {
+		if !matched {
 			return &Result{
 				Status:       "down",
 				ResponseTime: elapsed,

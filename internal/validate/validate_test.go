@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func generateTestCertPEM(t *testing.T) (certPEM, keyPEM string) {
@@ -128,6 +128,15 @@ func TestValidateNotificationChannel(t *testing.T) {
 				Name: "Hook", Type: "webhook",
 				Settings: json.RawMessage(`{"url":"https://example.com"}`),
 				Events:   []string{"incident.created", "incident.reminder"},
+			},
+			"",
+		},
+		{
+			"emitted SLA, escalation and maintenance events",
+			&storage.NotificationChannel{
+				Name: "Hook", Type: "webhook",
+				Settings: json.RawMessage(`{"url":"https://example.com"}`),
+				Events:   []string{"sla.breach", "incident.escalated", "maintenance.started", "maintenance.ended"},
 			},
 			"",
 		},

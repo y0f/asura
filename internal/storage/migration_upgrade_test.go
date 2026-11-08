@@ -26,8 +26,54 @@ func reopenAtVersion(t *testing.T, v int, downgrade func(s *SQLiteStore)) *SQLit
 	if err != nil {
 		t.Fatal(err)
 	}
+	if v < 40 {
+		for _, trigger := range []string{"monitor_config_revision", "monitor_agent_revision_insert", "monitor_agent_revision_delete", "monitor_agent_revision_update", "agent_enabled_revision", "proxy_config_revision"} {
+			if _, err := s.writeDB.Exec("DROP TRIGGER " + trigger); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if v < 36 {
+		for _, table := range []string{"check_result_hourly", "check_result_daily"} {
+			if _, err := s.writeDB.Exec("ALTER TABLE " + table + " DROP COLUMN sum_rt"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if v < 37 {
+		if _, err := s.writeDB.Exec("DROP INDEX idx_incidents_pending"); err != nil {
+			t.Fatal(err)
+		}
+		for _, column := range []string{"announcement_pending", "escalation_pending"} {
+			if _, err := s.writeDB.Exec("ALTER TABLE incidents DROP COLUMN " + column); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if v < 38 {
+		if _, err := s.writeDB.Exec("ALTER TABLE on_call_rotations DROP COLUMN period_started_at"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if v < 39 {
+		if _, err := s.writeDB.Exec("DROP TABLE legacy_agent_assignments"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if downgrade != nil {
 		downgrade(s)
+	}
+	if v < 41 {
+		downgradeObservationKinds(t, s)
+	}
+	// Fixtures may use current storage helpers to prepare their legacy data.
+	// Drop the new columns after that preparation, before running upgrades.
+	if v < 40 {
+		for _, table := range []string{"monitors", "monitor_status"} {
+			if _, err := s.writeDB.Exec("ALTER TABLE " + table + " DROP COLUMN config_revision"); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if _, err := s.writeDB.Exec("UPDATE schema_version SET version = ?", v); err != nil {
 		t.Fatal(err)
@@ -64,6 +110,34 @@ func TestUpgradeFromV34AddsMonitorAgents(t *testing.T) {
 	}
 	if ids, err := s.GetMonitorAgentIDs(ctx, m.ID); err != nil || len(ids) != 1 || ids[0] != a.ID {
 		t.Fatalf("agents after upgrade = %v, %v; want [%d]", ids, err, a.ID)
+	}
+}
+
+func TestUpgradeFromV35PreservesRollupSamples(t *testing.T) {
+	var monitorID int64
+	s := reopenAtVersion(t, 35, func(s *SQLiteStore) {
+		monitorID = newTestMonitor(t, s, "legacy rollup").ID
+		if _, err := s.writeDB.Exec(`INSERT INTO check_result_hourly (monitor_id, hour, avg_rt, up_count, total)
+			VALUES (?, '2026-01-02T00', 100, 9, 9), (?, '2026-01-02T01', 1000, 1, 1)`, monitorID, monitorID); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var knownSums int
+	if err := s.readDB.QueryRow(`SELECT COUNT(sum_rt) FROM check_result_hourly WHERE monitor_id=?`, monitorID).Scan(&knownSums); err != nil {
+		t.Fatal(err)
+	}
+	if knownSums != 0 {
+		t.Fatal("migration must not invent exact response-time sums for historical rounded means")
+	}
+	if err := s.RollupDaily(context.Background(), "2026-01-02"); err != nil {
+		t.Fatal(err)
+	}
+	var mean, total int64
+	if err := s.readDB.QueryRow(`SELECT avg_rt, total FROM check_result_daily WHERE monitor_id=?`, monitorID).Scan(&mean, &total); err != nil {
+		t.Fatal(err)
+	}
+	if mean != 190 || total != 10 {
+		t.Errorf("upgraded rollup mean/count = %d/%d, want 190/10", mean, total)
 	}
 }
 

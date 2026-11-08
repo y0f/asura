@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -30,17 +32,27 @@ func (s *Server) getStatusPageIDBySlug(slug string) (int64, bool) {
 	return id, ok
 }
 
-// subscriberLink resolves the {slug} path value to an enabled status page and
-// passes its ID to h.
+// subscriberLink resolves token links even after publication is disabled. The
+// mutation itself binds page/token and decides whether confirmation is allowed.
 func (s *Server) subscriberLink(h func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pageID, ok := s.getStatusPageIDBySlug(r.PathValue("slug"))
-		if !ok {
-			writeError(w, http.StatusNotFound, "status page not found")
-			return
-		}
-		h(w, r, pageID)
+		s.serveSubscriberLink(w, r, r.PathValue("slug"), h)
 	}
+}
+
+func (s *Server) serveSubscriberLink(w http.ResponseWriter, r *http.Request, slug string, h func(http.ResponseWriter, *http.Request, int64)) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	page, err := s.store.GetStatusPageBySlug(r.Context(), slug)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "status page not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load status page")
+		return
+	}
+	h(w, r, page.ID)
 }
 
 func (s *Server) statusPageRouter(next http.Handler) http.Handler {
@@ -60,6 +72,16 @@ func (s *Server) statusPageRouter(next http.Handler) http.Handler {
 				}
 
 				if slug != "" && !strings.Contains(slug, "/") {
+					// Token actions need fresh page identity even after a page is
+					// disabled and disappears from the public-route cache.
+					if r.Method == http.MethodGet && suffix == "confirm" {
+						s.serveSubscriberLink(w, r, slug, s.web.StatusPageConfirm)
+						return
+					}
+					if r.Method == http.MethodGet && suffix == "unsubscribe" {
+						s.serveSubscriberLink(w, r, slug, s.web.StatusPageUnsubscribe)
+						return
+					}
 					if pageID, ok := s.getStatusPageIDBySlug(slug); ok {
 						switch {
 						case r.Method == http.MethodGet && suffix == "":
@@ -76,12 +98,6 @@ func (s *Server) statusPageRouter(next http.Handler) http.Handler {
 							return
 						case r.Method == http.MethodPost && suffix == "subscribe":
 							s.web.StatusPageSubscribe(w, r, pageID)
-							return
-						case r.Method == http.MethodGet && suffix == "confirm":
-							s.web.StatusPageConfirm(w, r, pageID)
-							return
-						case r.Method == http.MethodGet && suffix == "unsubscribe":
-							s.web.StatusPageUnsubscribe(w, r, pageID)
 							return
 						}
 					}

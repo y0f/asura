@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/y0f/asura/internal/sla"
+	"github.com/y0f/asura/v2/internal/sla"
 )
 
 type SLAReportParams struct {
 	LayoutParams
-	Entries []*sla.ReportEntry
-	Period  time.Time
+	Entries          []*sla.ReportEntry
+	Period           time.Time
+	ReadableMonitors map[int64]bool
 }
 
 func (p SLAReportParams) prevPeriod() string {
@@ -36,9 +37,11 @@ func (p SLAReportParams) isFutureMonth() bool {
 // risk (under 10% of the error budget left) or breached.
 func slaState(entry *sla.ReportEntry) (label, tone string) {
 	switch {
+	case entry.TotalChecks == 0:
+		return "No checks", "neutral"
 	case entry.Breached:
 		return "Breached", "crit"
-	case entry.RemainSecs <= entry.BudgetSecs/10:
+	case entry.BudgetAtRisk:
 		return "At risk", "warn"
 	default:
 		return "Healthy", "ok"
@@ -51,17 +54,17 @@ templ SLAReportPage(p SLAReportParams) {
 			<div class="flex items-center gap-1 sm:ml-auto">
 				if !p.isFutureMonth() {
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.prevPeriod())) } class="icon-btn border border-line-light" aria-label="Previous month" title="Previous month">
-						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 					</a>
 				}
 				<span class="px-2 text-sm text-white font-medium tabular-nums min-w-[8.5rem] text-center">{ p.Period.Format("January 2006") }</span>
 				if !p.isCurrentMonth() && !p.isFutureMonth() {
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/sla?period=%s", p.BasePath, p.nextPeriod())) } class="icon-btn border border-line-light" aria-label="Next month" title="Next month">
-						<svg aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
 					</a>
 				} else {
 					<span class="icon-btn border border-line opacity-40" aria-hidden="true">
-						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
 					</span>
 				}
 				<a href={ templ.SafeURL(fmt.Sprintf("%s/sla/export?period=%s", p.BasePath, p.Period.Format("2006-01"))) } class="btn-secondary ml-2">Export JSON</a>
@@ -94,13 +97,23 @@ templ SLAReportPage(p SLAReportParams) {
 						for _, entry := range p.Entries {
 							<tr>
 								<td class="px-4 py-3">
-									<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="text-sm text-white font-medium hover:underline">{ entry.MonitorName }</a>
+									if entry.MonitorName != "" && (p.Can("monitors.read") || p.ReadableMonitors[entry.MonitorID]) {
+										<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, entry.MonitorID)) } class="text-sm text-white font-medium hover:underline">{ entry.MonitorName }</a>
+									} else {
+										<span class="text-sm text-white font-medium">{ fmt.Sprintf("Monitor #%d", entry.MonitorID) }</span>
+									}
 								</td>
 								<td class="px-4 py-3 text-sm text-muted-light tabular-nums">{ fmt.Sprintf("%.2f%%", entry.Target) }</td>
-								<td class={ "px-4 py-3 text-sm font-medium tabular-nums", UptimeColor(entry.UptimePct) }>{ UptimeFmt(entry.UptimePct) }</td>
+								<td class={ "px-4 py-3 text-sm font-medium tabular-nums", UptimeColor(entry.UptimePct) }>
+									if entry.TotalChecks > 0 {
+										{ UptimeFmt(entry.UptimePct) }
+									} else {
+										<span class="text-muted" aria-label="No check data">—</span>
+									}
+								</td>
 								<td class="px-4 py-3">
 									{{ label, tone := slaState(entry) }}
-									<span class={ "inline-flex items-center gap-1.5 text-sm whitespace-nowrap", "text-" + tone }><span class={ "dot", "bg-" + tone }></span>{ label }</span>
+									<span class={ "inline-flex items-center gap-1.5 text-sm whitespace-nowrap", toneTextClass(tone) }><span class={ "dot", toneDotClass(tone) }></span>{ label }</span>
 								</td>
 								<td class="px-4 py-3">
 									<div class="text-sm text-white tabular-nums">{ sla.FormatDuration(entry.RemainSecs) }</div>
@@ -132,5 +145,11 @@ func (p SLAReportParams) breachedCount() int {
 }
 
 func (p SLAReportParams) meetingSLA() int {
-	return len(p.Entries) - p.breachedCount()
+	count := 0
+	for _, entry := range p.Entries {
+		if entry.TotalChecks > 0 && !entry.Breached {
+			count++
+		}
+	}
+	return count
 }

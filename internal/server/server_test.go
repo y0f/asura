@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -9,9 +10,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func testServer(t *testing.T) (*Server, string) {
@@ -43,6 +44,7 @@ func testServer(t *testing.T) (*Server, string) {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	dispatcher := notifier.NewDispatcher(store, logger, true)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	srv := NewServer(cfg, store, nil, dispatcher, nil, logger, "test")
 
 	return srv, adminKey

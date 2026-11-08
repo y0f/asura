@@ -2,24 +2,27 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
 
+const proxyColumns = "id, name, protocol, host, port, auth_user, auth_pass, enabled, created_at, updated_at"
+
 func (s *SQLiteStore) CreateProxy(ctx context.Context, p *Proxy) error {
 	now := formatTime(time.Now())
-	authPass, err := s.encryptSettings(p.AuthPass)
+	authPass, err := s.encryptProxyPassword(p.AuthPass)
 	if err != nil {
 		return fmt.Errorf("encrypt proxy auth: %w", err)
 	}
-	res, err := s.writeDB.ExecContext(ctx,
+	var id int64
+	err = s.writeDB.QueryRowContext(ctx,
 		`INSERT INTO proxies (name, protocol, host, port, auth_user, auth_pass, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, authPass, boolToInt(p.Enabled), now, now)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, authPass, boolToInt(p.Enabled), now, now).Scan(&id)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	p.ID = id
 	p.CreatedAt = parseTime(now)
 	p.UpdatedAt = parseTime(now)
@@ -27,25 +30,12 @@ func (s *SQLiteStore) CreateProxy(ctx context.Context, p *Proxy) error {
 }
 
 func (s *SQLiteStore) GetProxy(ctx context.Context, id int64) (*Proxy, error) {
-	var p Proxy
-	var createdAt, updatedAt, authPass string
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT id, name, protocol, host, port, auth_user, auth_pass, enabled, created_at, updated_at
-		 FROM proxies WHERE id=?`, id).
-		Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &authPass, &p.Enabled, &createdAt, &updatedAt)
-	if err != nil {
-		return nil, err
-	}
-	p.AuthPass, _ = s.decryptSettings(authPass)
-	p.CreatedAt = parseTime(createdAt)
-	p.UpdatedAt = parseTime(updatedAt)
-	return &p, nil
+	return s.scanProxy(s.readDB.QueryRowContext(ctx, "SELECT "+proxyColumns+" FROM proxies WHERE id=?", id).Scan)
 }
 
 func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, protocol, host, port, auth_user, auth_pass, enabled, created_at, updated_at
-		 FROM proxies ORDER BY name COLLATE NOCASE`)
+		"SELECT "+proxyColumns+" FROM proxies ORDER BY "+s.readDB.dialect.noCase("name"))
 	if err != nil {
 		return nil, err
 	}
@@ -53,15 +43,11 @@ func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 
 	var proxies []*Proxy
 	for rows.Next() {
-		var p Proxy
-		var createdAt, updatedAt, authPass string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.AuthUser, &authPass, &p.Enabled, &createdAt, &updatedAt); err != nil {
+		p, err := s.scanProxy(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		p.AuthPass, _ = s.decryptSettings(authPass)
-		p.CreatedAt = parseTime(createdAt)
-		p.UpdatedAt = parseTime(updatedAt)
-		proxies = append(proxies, &p)
+		proxies = append(proxies, p)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -73,18 +59,31 @@ func (s *SQLiteStore) ListProxies(ctx context.Context) ([]*Proxy, error) {
 }
 
 func (s *SQLiteStore) UpdateProxy(ctx context.Context, p *Proxy) error {
-	now := formatTime(time.Now())
-	authPass, err := s.encryptSettings(p.AuthPass)
-	if err != nil {
-		return fmt.Errorf("encrypt proxy auth: %w", err)
-	}
-	_, err = s.writeDB.ExecContext(ctx,
-		`UPDATE proxies SET name=?, protocol=?, host=?, port=?, auth_user=?, auth_pass=?, enabled=?, updated_at=? WHERE id=?`,
-		p.Name, p.Protocol, p.Host, p.Port, p.AuthUser, authPass, boolToInt(p.Enabled), now, p.ID)
+	_, err := s.UpdateProxyWith(ctx, p.ID, func(*Proxy) (*Proxy, error) { return p, nil })
 	return err
 }
 
 func (s *SQLiteStore) DeleteProxy(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM proxies WHERE id=?", id)
-	return err
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var inUse bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM monitors WHERE proxy_id=?) FROM proxies WHERE id=?", id, id).Scan(&inUse); err != nil {
+		return err
+	}
+	if inUse {
+		return ErrProxyInUse
+	}
+	result, err := tx.ExecContext(ctx, "DELETE FROM proxies WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	if count, err := result.RowsAffected(); err != nil {
+		return err
+	} else if count != 1 {
+		return sql.ErrNoRows
+	}
+	return tx.Commit()
 }

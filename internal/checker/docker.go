@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
 )
 
 const defaultDockerSocket = "/var/run/docker.sock"
@@ -19,8 +19,8 @@ type DockerChecker struct{}
 
 func (c *DockerChecker) Type() string { return "docker" }
 
-func (c *DockerChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.DockerSettings
+func (c *DockerChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.DockerSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -117,7 +117,7 @@ type dockerInspect struct {
 	} `json:"State"`
 }
 
-func evaluateContainerState(inspect dockerInspect, settings storage.DockerSettings, elapsed int64) *Result {
+func evaluateContainerState(inspect dockerInspect, settings model.DockerSettings, elapsed int64) *Result {
 	if !inspect.State.Running {
 		return &Result{
 			Status:       "down",

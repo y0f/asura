@@ -12,16 +12,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/storage"
 	"golang.org/x/time/rate"
 )
 
 type ContextKey string
 
 const (
-	CtxKeyRequestID ContextKey = "request_id"
-	CtxKeyAPIKey    ContextKey = "api_key"
+	CtxKeyRequestID        ContextKey = "request_id"
+	CtxKeyAPIKey           ContextKey = "api_key"
+	CtxKeySessionTokenHash ContextKey = "session_token_hash"
 )
 
 func GetRequestID(ctx context.Context) string {
@@ -246,39 +247,20 @@ func (rl *RateLimiter) Middleware(trustedNets []net.IPNet, writeError func(http.
 
 func OverallStatus(monitors []*storage.Monitor) string {
 	overall := "operational"
+	pending := len(monitors) == 0
 	for _, m := range monitors {
-		if m.Status == "down" {
+		switch m.Status {
+		case "down":
 			return "major_outage"
-		}
-		if m.Status == "degraded" {
+		case "degraded":
 			overall = "degraded"
+		case "up":
+		default:
+			pending = true
 		}
+	}
+	if overall == "operational" && pending {
+		return "unknown"
 	}
 	return overall
-}
-
-func PublicIncidentsForPage(ctx context.Context, store storage.Store, sp *storage.StatusPage, monitors []*storage.Monitor, now time.Time) []*storage.Incident {
-	if !sp.ShowIncidents || len(monitors) == 0 {
-		return []*storage.Incident{}
-	}
-
-	ids := make([]int64, len(monitors))
-	for i, m := range monitors {
-		ids[i] = m.ID
-	}
-
-	// The page's monitors and the cutoff are filtered in SQL, so a public hit is
-	// one indexed query however many incidents other monitors have.
-	const wantIncidents = 10
-	incidents, err := store.ListRecentIncidents(ctx, ids, now.AddDate(0, 0, -7), wantIncidents)
-	if err != nil {
-		return []*storage.Incident{}
-	}
-	filtered := make([]*storage.Incident, 0, len(incidents))
-	for _, inc := range incidents {
-		safe := *inc
-		safe.Cause = ""
-		filtered = append(filtered, &safe)
-	}
-	return filtered
 }

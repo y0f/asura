@@ -58,7 +58,9 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
+	Driver                  string        `yaml:"driver"`
 	Path                    string        `yaml:"path"`
+	DSN                     string        `yaml:"dsn"`
 	MaxReadConns            int           `yaml:"max_read_conns"`
 	RetentionDays           int           `yaml:"retention_days"`
 	RetentionPeriod         time.Duration `yaml:"retention_period"`
@@ -68,6 +70,7 @@ type DatabaseConfig struct {
 
 type AuthConfig struct {
 	APIKeys []APIKeyConfig `yaml:"api_keys"`
+	Roles   []RoleConfig   `yaml:"roles,omitempty"`
 	Session SessionConfig  `yaml:"session"`
 	Login   LoginConfig    `yaml:"login"`
 	TOTP    TOTPConfig     `yaml:"totp"`
@@ -88,47 +91,16 @@ type LoginConfig struct {
 }
 
 type APIKeyConfig struct {
-	Name        string   `yaml:"name"`
-	Hash        string   `yaml:"hash"`
-	Role        string   `yaml:"role,omitempty"`
-	SuperAdmin  bool     `yaml:"super_admin,omitempty"`
-	Permissions []string `yaml:"permissions,omitempty"`
-	TOTP        bool     `yaml:"totp,omitempty"`
-}
+	Name         string              `yaml:"name"`
+	Hash         string              `yaml:"hash"`
+	Role         string              `yaml:"role,omitempty"`
+	SuperAdmin   bool                `yaml:"super_admin,omitempty"`
+	Permissions  []string            `yaml:"permissions,omitempty"`
+	RoleBindings []RoleBindingConfig `yaml:"role_bindings,omitempty"`
+	TOTP         bool                `yaml:"totp,omitempty"`
 
-var AllPermissions = []string{
-	"monitors.read", "monitors.write",
-	"incidents.read", "incidents.write",
-	"notifications.read", "notifications.write",
-	"escalation_policies.read", "escalation_policies.write",
-	"maintenance.read", "maintenance.write",
-	"metrics.read",
-}
-
-func (k *APIKeyConfig) HasPermission(perm string) bool {
-	if k.SuperAdmin {
-		return true
-	}
-	for _, p := range k.Permissions {
-		if p == perm {
-			return true
-		}
-	}
-	return false
-}
-
-func (k *APIKeyConfig) PermissionMap() map[string]bool {
-	m := make(map[string]bool)
-	if k.SuperAdmin {
-		for _, p := range AllPermissions {
-			m[p] = true
-		}
-		return m
-	}
-	for _, p := range k.Permissions {
-		m[p] = true
-	}
-	return m
+	// Compiled role grants belong to a validated, immutable configuration.
+	roleGrants map[string]MonitorAccess
 }
 
 type MonitorConfig struct {
@@ -137,8 +109,6 @@ type MonitorConfig struct {
 	DefaultInterval        time.Duration `yaml:"default_interval"`
 	FailureThreshold       int           `yaml:"failure_threshold"`
 	SuccessThreshold       int           `yaml:"success_threshold"`
-	MaxConcurrentDNS       int           `yaml:"max_concurrent_dns"`
-	CommandTimeout         time.Duration `yaml:"command_timeout"`
 	CommandAllowlist       []string      `yaml:"command_allowlist"`
 	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"`
 	AllowPrivateTargets    bool          `yaml:"allow_private_targets"`
@@ -162,6 +132,7 @@ func Defaults() *Config {
 			RateLimitBurst:  60,
 		},
 		Database: DatabaseConfig{
+			Driver:                  "sqlite",
 			Path:                    "asura.db",
 			MaxReadConns:            4,
 			RetentionDays:           90,
@@ -184,7 +155,6 @@ func Defaults() *Config {
 			DefaultInterval:        60 * time.Second,
 			FailureThreshold:       3,
 			SuccessThreshold:       1,
-			CommandTimeout:         30 * time.Second,
 			HeartbeatCheckInterval: 30 * time.Second,
 			AdaptiveIntervals:      true,
 		},
@@ -238,7 +208,7 @@ func (c *Config) Validate() error {
 	if err := c.validateAuth(); err != nil {
 		return err
 	}
-	if err := validateAPIKeys(c.Auth.APIKeys); err != nil {
+	if err := validateRolesAndAPIKeys(c.Auth.Roles, c.Auth.APIKeys); err != nil {
 		return err
 	}
 	return validateLogLevel(c.Logging.Level)
@@ -260,6 +230,9 @@ func (c *Config) validateAuth() error {
 func (c *Config) validateServer() error {
 	if c.Server.Listen == "" {
 		return fmt.Errorf("server.listen is required")
+	}
+	if (c.Server.TLSCert == "") != (c.Server.TLSKey == "") {
+		return fmt.Errorf("server.tls_cert and server.tls_key must be set together")
 	}
 	if c.Server.MaxBodySize <= 0 {
 		return fmt.Errorf("server.max_body_size must be positive")
@@ -285,14 +258,29 @@ func (c *Config) validateServer() error {
 }
 
 func (c *Config) validateDatabase() error {
-	if c.Database.Path == "" {
-		return fmt.Errorf("database.path is required")
+	switch c.Database.Driver {
+	case "", "sqlite":
+		if c.Database.Path == "" {
+			return fmt.Errorf("database.path is required for SQLite")
+		}
+		if c.Database.DSN != "" {
+			return fmt.Errorf("database.dsn is only supported by PostgreSQL")
+		}
+	case "postgres":
+		if strings.TrimSpace(c.Database.DSN) == "" {
+			return fmt.Errorf("database.dsn is required for PostgreSQL")
+		}
+	default:
+		return fmt.Errorf("database.driver must be sqlite or postgres")
 	}
 	if c.Database.MaxReadConns <= 0 {
 		return fmt.Errorf("database.max_read_conns must be positive")
 	}
 	if c.Database.RetentionDays <= 0 {
 		return fmt.Errorf("database.retention_days must be positive")
+	}
+	if c.Database.RetentionPeriod <= 0 {
+		return fmt.Errorf("database.retention_period must be positive")
 	}
 	return nil
 }
@@ -307,6 +295,9 @@ func (c *Config) validateMonitorConfig() error {
 	if c.Monitor.DefaultInterval < 5*time.Second {
 		return fmt.Errorf("monitor.default_interval must be at least 5s")
 	}
+	if c.Monitor.HeartbeatCheckInterval <= 0 {
+		return fmt.Errorf("monitor.heartbeat_check_interval must be positive")
+	}
 	if c.Monitor.FailureThreshold <= 0 {
 		return fmt.Errorf("monitor.failure_threshold must be positive")
 	}
@@ -317,46 +308,7 @@ func (c *Config) validateMonitorConfig() error {
 }
 
 func validateAPIKeys(keys []APIKeyConfig) error {
-	validPerms := make(map[string]bool)
-	for _, p := range AllPermissions {
-		validPerms[p] = true
-	}
-
-	// Sessions, TOTP secrets and audit entries are keyed by name.
-	seen := make(map[string]int, len(keys))
-	for i := range keys {
-		key := &keys[i]
-		if key.Name == "" {
-			return fmt.Errorf("auth.api_keys[%d].name is required", i)
-		}
-		if j, dup := seen[key.Name]; dup {
-			return fmt.Errorf("auth.api_keys[%d].name %q duplicates auth.api_keys[%d]", i, key.Name, j)
-		}
-		seen[key.Name] = i
-		if key.Hash == "" {
-			return fmt.Errorf("auth.api_keys[%d].hash is required", i)
-		}
-		if key.Role == "admin" {
-			key.SuperAdmin = true
-			key.Role = ""
-		} else if key.Role == "readonly" {
-			key.Permissions = []string{
-				"monitors.read", "incidents.read",
-				"notifications.read", "escalation_policies.read",
-				"maintenance.read", "metrics.read",
-			}
-			key.Role = ""
-		}
-		if !key.SuperAdmin && len(key.Permissions) == 0 {
-			return fmt.Errorf("auth.api_keys[%d] must have super_admin or permissions", i)
-		}
-		for _, p := range key.Permissions {
-			if !validPerms[p] {
-				return fmt.Errorf("auth.api_keys[%d] invalid permission: %s", i, p)
-			}
-		}
-	}
-	return nil
+	return validateRolesAndAPIKeys(nil, keys)
 }
 
 func validateLogLevel(level string) error {

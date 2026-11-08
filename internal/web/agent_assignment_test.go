@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // The monitor form's agent_ids[] field sets, replaces and clears the agent
@@ -89,25 +89,31 @@ func TestMonitorFormAgentAssignment(t *testing.T) {
 		t.Errorf("clone: agents %v, want [%d]", got, a2.ID)
 	}
 
-	// No agent_ids[] in the form clears the assignment.
+	// An omitted selector preserves the assignment; the rendered marker permits
+	// an explicit empty selection to clear it.
 	update(nil)
+	if got := assigned(mon.ID); !only(got, a2.ID) {
+		t.Fatalf("omitted selector changed assignment: %v", got)
+	}
+	update(url.Values{"relation_fields": {"agents"}})
 	if got := assigned(mon.ID); len(got) != 0 {
 		t.Errorf("update without agent_ids[]: agents %v, want none", got)
 	}
 }
 
-// failingAgentStore fails every attempt to store an agent assignment.
-type failingAgentStore struct {
-	*storage.SQLiteStore
-}
+// failingAgentStore injects failure at the new complete mutation boundary.
+type failingAgentStore struct{ *storage.SQLiteStore }
 
-func (failingAgentStore) SetMonitorAgentIDs(context.Context, int64, []int64) error {
+func (failingAgentStore) CreateMonitorWithRelations(context.Context, *storage.Monitor, storage.MonitorCreateOptions, ...storage.MonitorAccess) error {
 	return errors.New("disk full")
 }
+func (failingAgentStore) UpdateMonitorWithRelations(context.Context, int64, storage.MonitorUpdate, ...storage.MonitorAccess) (*storage.Monitor, error) {
+	return nil, errors.New("disk full")
+}
+func (failingAgentStore) CloneMonitorWithRelations(context.Context, int64, storage.MonitorClone, []storage.MonitorAccess, []storage.MonitorAccess) (*storage.Monitor, *storage.Heartbeat, error) {
+	return nil, nil, errors.New("disk full")
+}
 
-// If storing the agent assignment of a new monitor fails, the monitor must
-// not run on every agent: it is left with agent checks off and the user is
-// told so.
 func TestMonitorCreateAgentAssignmentFailure(t *testing.T) {
 	h, store := storeHandler(t)
 	ctx := context.Background()
@@ -116,28 +122,17 @@ func TestMonitorCreateAgentAssignmentFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.store = failingAgentStore{store}
-
 	w := httptest.NewRecorder()
 	h.MonitorCreate(w, adminRequest("POST", "/monitors", httpMonitorForm("", url.Values{"agent_enabled": {"on"}, "agent_ids[]": {strconvI(a.ID)}})))
-	if w.Code != http.StatusSeeOther {
-		t.Fatalf("create returned %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Failed to create monitor") {
+		t.Fatalf("missing failure response: %d %s", w.Code, w.Body.String())
 	}
 	res, err := store.ListMonitors(ctx, storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 10})
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || res.Total != 0 {
+		t.Fatalf("failed create left partial monitor: %+v, %v", res, err)
 	}
-	mons := res.Data.([]*storage.Monitor)
-	if len(mons) != 1 {
-		t.Fatalf("created %d monitors, want 1", len(mons))
-	}
-	if mons[0].AgentEnabled {
-		t.Error("monitor whose agent assignment failed has agent checks on, so it runs on every agent")
-	}
-	if jobs, _ := store.ListAgentJobs(ctx, a.ID); len(jobs) != 0 {
-		t.Errorf("agent %d is offered %d job(s), want none", a.ID, len(jobs))
-	}
-	if c := w.Result().Cookies(); len(c) == 0 || !strings.Contains(c[0].Value, "error") {
-		t.Errorf("no error shown to the user: cookies %v", c)
+	if jobs, err := store.ListAgentJobs(ctx, a.ID); err != nil || len(jobs) != 0 {
+		t.Fatalf("failed create delegated jobs: %+v, %v", jobs, err)
 	}
 }
 
@@ -180,9 +175,7 @@ func runsOn(t *testing.T, store *storage.SQLiteStore, agent, id int64) bool {
 	return false
 }
 
-// If storing the new agent assignment of an edited monitor fails, the monitor
-// must not keep running on every agent: agent checks are switched off and the
-// user is shown an error.
+// A failed edit preserves the complete existing monitor and assignment.
 func TestMonitorUpdateAgentAssignmentFailure(t *testing.T) {
 	h, store := storeHandler(t)
 	ctx := context.Background()
@@ -198,6 +191,9 @@ func TestMonitorUpdateAgentAssignmentFailure(t *testing.T) {
 	if err := store.CreateMonitor(ctx, mon); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.SetMonitorAgentIDs(ctx, mon.ID, []int64{other.ID}); err != nil {
+		t.Fatal(err)
+	}
 	h.store = failingAgentStore{store}
 
 	id := strconvI(mon.ID)
@@ -205,18 +201,18 @@ func TestMonitorUpdateAgentAssignmentFailure(t *testing.T) {
 	r := adminRequest("POST", "/monitors/"+id, httpMonitorForm("", url.Values{"agent_enabled": {"on"}, "agent_ids[]": {strconvI(assigned.ID)}}))
 	r.SetPathValue("id", id)
 	h.MonitorUpdate(w, r)
-	if w.Code != http.StatusSeeOther {
+	if w.Code != http.StatusOK {
 		t.Fatalf("update returned %d: %s", w.Code, w.Body.String())
 	}
 	got, err := store.GetMonitor(ctx, mon.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.AgentEnabled || runsOn(t, store, other.ID, mon.ID) {
-		t.Error("monitor whose agent assignment failed still runs on every agent")
+	if !got.AgentEnabled || got.Name != mon.Name || !runsOn(t, store, other.ID, mon.ID) || runsOn(t, store, assigned.ID, mon.ID) {
+		t.Error("failed edit changed the existing configuration or assignment")
 	}
-	if !errorToast(w) {
-		t.Errorf("no error shown to the user: cookies %v", w.Result().Cookies())
+	if !strings.Contains(w.Body.String(), "Failed to update monitor") {
+		t.Fatal("failure was not shown")
 	}
 
 	// With a working store the assignment is saved and agent checks are on.
@@ -233,8 +229,7 @@ func TestMonitorUpdateAgentAssignmentFailure(t *testing.T) {
 	}
 }
 
-// If storing the agent assignment of a clone fails, the clone must not run on
-// every agent once resumed, and the user is shown an error.
+// A failed clone leaves no new monitor or agent assignment.
 func TestMonitorCloneAgentAssignmentFailure(t *testing.T) {
 	h, store := storeHandler(t)
 	ctx := context.Background()
@@ -264,20 +259,8 @@ func TestMonitorCloneAgentAssignmentFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var clone *storage.Monitor
-	for _, m := range res.Data.([]*storage.Monitor) {
-		if m.ID != src.ID {
-			clone = m
-		}
-	}
-	if clone == nil {
-		t.Fatalf("clone not created (%d)", w.Code)
-	}
-	if err := store.SetMonitorEnabled(ctx, clone.ID, true); err != nil {
-		t.Fatal(err)
-	}
-	if runsOn(t, store, other.ID, clone.ID) {
-		t.Error("resumed clone whose agent assignment failed runs on every agent")
+	if res.Total != 1 || res.Data.([]*storage.Monitor)[0].ID != src.ID {
+		t.Fatalf("failed clone left partial rows: %+v", res)
 	}
 	if !errorToast(w) {
 		t.Errorf("no error shown to the user: cookies %v", w.Result().Cookies())

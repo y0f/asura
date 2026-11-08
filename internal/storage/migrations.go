@@ -1,8 +1,47 @@
 package storage
 
-const schemaVersion = 35
+const schemaVersion = 41
 
-const schema = `
+// Database triggers also invalidate queued checks after trusted setters,
+// assignment cascades and proxy edits. Advancing a revision itself cannot
+// recurse; there is no wall-clock granularity or process-local counter.
+const monitorRevisionTriggers = `
+CREATE TRIGGER monitor_config_revision AFTER UPDATE ON monitors
+WHEN NEW.config_revision = OLD.config_revision
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id=NEW.id;
+END;
+CREATE TRIGGER monitor_agent_revision_insert AFTER INSERT ON monitor_agents
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id=NEW.monitor_id;
+END;
+CREATE TRIGGER monitor_agent_revision_delete AFTER DELETE ON monitor_agents
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id=OLD.monitor_id;
+END;
+CREATE TRIGGER monitor_agent_revision_update AFTER UPDATE ON monitor_agents
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE id IN (OLD.monitor_id, NEW.monitor_id);
+END;
+CREATE TRIGGER agent_enabled_revision AFTER UPDATE OF enabled ON agents
+WHEN NEW.enabled != OLD.enabled
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1
+ WHERE id IN (SELECT monitor_id FROM monitor_agents WHERE agent_id=NEW.id);
+END;
+CREATE TRIGGER proxy_config_revision AFTER UPDATE ON proxies
+BEGIN
+ UPDATE monitors SET config_revision=config_revision+1 WHERE proxy_id=NEW.id;
+END;
+`
+
+const legacyAgentAssignmentsSchema = `CREATE TABLE IF NOT EXISTS legacy_agent_assignments (
+	kind TEXT NOT NULL CHECK (kind IN ('monitor', 'agent')),
+	id INTEGER NOT NULL,
+	PRIMARY KEY (kind, id)
+);`
+
+const schema = legacyAgentAssignmentsSchema + `
 CREATE TABLE IF NOT EXISTS schema_version (
 	version INTEGER NOT NULL
 );
@@ -64,6 +103,7 @@ CREATE TABLE IF NOT EXISTS monitors (
 	group_id        INTEGER DEFAULT NULL,
 	proxy_id              INTEGER DEFAULT NULL REFERENCES proxies(id) ON DELETE SET NULL,
 	escalation_policy_id  INTEGER DEFAULT NULL REFERENCES escalation_policies(id) ON DELETE SET NULL,
+	config_revision       INTEGER NOT NULL DEFAULT 1 CHECK (config_revision > 0),
 	created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 	updated_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
@@ -79,7 +119,9 @@ CREATE TABLE IF NOT EXISTS monitor_notifications (
 CREATE INDEX IF NOT EXISTS idx_monitor_notif_channel ON monitor_notifications(channel_id);
 
 CREATE TABLE IF NOT EXISTS monitor_status (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	monitor_id             INTEGER PRIMARY KEY REFERENCES monitors(id) ON DELETE CASCADE,
+	config_revision        INTEGER NOT NULL DEFAULT 0,
 	status                 TEXT    NOT NULL DEFAULT 'pending',
 	last_check_at          TEXT,
 	consec_fails           INTEGER NOT NULL DEFAULT 0,
@@ -93,6 +135,7 @@ CREATE TABLE IF NOT EXISTS monitor_status (
 );
 
 CREATE TABLE IF NOT EXISTS check_results (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	id               INTEGER PRIMARY KEY AUTOINCREMENT,
 	monitor_id       INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	status           TEXT    NOT NULL,
@@ -121,10 +164,14 @@ CREATE TABLE IF NOT EXISTS incidents (
 	acknowledged_at TEXT,
 	acknowledged_by TEXT    NOT NULL DEFAULT '',
 	resolved_at     TEXT,
-	resolved_by     TEXT    NOT NULL DEFAULT ''
+	resolved_by     TEXT    NOT NULL DEFAULT '',
+	announcement_pending INTEGER NOT NULL DEFAULT 0,
+	escalation_pending INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_incidents_monitor_id ON incidents(monitor_id, status);
+CREATE INDEX IF NOT EXISTS idx_incidents_pending ON incidents(id)
+WHERE status IN ('open','acknowledged') AND (announcement_pending=1 OR escalation_pending=1);
 
 CREATE TABLE IF NOT EXISTS incident_events (
 	id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -287,8 +334,10 @@ CREATE INDEX IF NOT EXISTS idx_sp_subscribers_page ON status_page_subscribers(st
 CREATE INDEX IF NOT EXISTS idx_sp_subscribers_token ON status_page_subscribers(token);
 
 CREATE TABLE IF NOT EXISTS check_result_hourly (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	hour       TEXT    NOT NULL,
+	sum_rt     INTEGER,
 	avg_rt     INTEGER NOT NULL DEFAULT 0,
 	min_rt     INTEGER NOT NULL DEFAULT 0,
 	max_rt     INTEGER NOT NULL DEFAULT 0,
@@ -296,12 +345,14 @@ CREATE TABLE IF NOT EXISTS check_result_hourly (
 	up_count   INTEGER NOT NULL DEFAULT 0,
 	down_count INTEGER NOT NULL DEFAULT 0,
 	total      INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (monitor_id, hour)
+	PRIMARY KEY (monitor_id, hour, observation_kind)
 );
 
 CREATE TABLE IF NOT EXISTS check_result_daily (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
 	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
 	day        TEXT    NOT NULL,
+	sum_rt     INTEGER,
 	avg_rt     INTEGER NOT NULL DEFAULT 0,
 	min_rt     INTEGER NOT NULL DEFAULT 0,
 	max_rt     INTEGER NOT NULL DEFAULT 0,
@@ -309,7 +360,7 @@ CREATE TABLE IF NOT EXISTS check_result_daily (
 	up_count   INTEGER NOT NULL DEFAULT 0,
 	down_count INTEGER NOT NULL DEFAULT 0,
 	total      INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (monitor_id, day)
+	PRIMARY KEY (monitor_id, day, observation_kind)
 );
 
 CREATE TABLE IF NOT EXISTS agents (
@@ -339,6 +390,7 @@ CREATE TABLE IF NOT EXISTS on_call_rotations (
 	channel_ids         TEXT    NOT NULL DEFAULT '[]',
 	period              TEXT    NOT NULL DEFAULT 'daily',
 	current_index       INTEGER NOT NULL DEFAULT 0,
+	period_started_at   TEXT NOT NULL DEFAULT '',
 	override_channel_id INTEGER DEFAULT NULL,
 	override_until      TEXT,
 	created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -400,7 +452,7 @@ CREATE TABLE IF NOT EXISTS notification_history (
 );
 CREATE INDEX IF NOT EXISTS idx_notif_history_channel ON notification_history(channel_id, sent_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notif_history_sent_at ON notification_history(sent_at DESC);
-`
+` + monitorRevisionTriggers
 
 // migrations holds incremental schema changes after the baseline.
 // Consolidated at v1.0.0: all pre-v15 migrations are folded into the
@@ -643,5 +695,78 @@ ALTER TABLE totp_keys ADD COLUMN last_counter INTEGER NOT NULL DEFAULT 0;`,
 );
 
 CREATE INDEX IF NOT EXISTS idx_monitor_agents_agent_id ON monitor_agents(agent_id);`,
+	},
+	{
+		version: 36,
+		sql: `ALTER TABLE check_result_hourly ADD COLUMN sum_rt INTEGER;
+ALTER TABLE check_result_daily ADD COLUMN sum_rt INTEGER;`,
+	},
+	{
+		version: 37,
+		sql: `ALTER TABLE incidents ADD COLUMN announcement_pending INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE incidents ADD COLUMN escalation_pending INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idx_incidents_pending ON incidents(id)
+WHERE status IN ('open','acknowledged') AND (announcement_pending=1 OR escalation_pending=1);`,
+	},
+	{
+		version: 38,
+		sql: `ALTER TABLE on_call_rotations ADD COLUMN period_started_at TEXT NOT NULL DEFAULT '';
+UPDATE on_call_rotations SET period_started_at=updated_at;`,
+	},
+	{
+		version: 39,
+		sql: legacyAgentAssignmentsSchema + `
+INSERT INTO legacy_agent_assignments (kind, id)
+SELECT 'monitor', m.id FROM monitors m
+WHERE m.agent_enabled=1 AND m.type NOT IN ('heartbeat','manual','docker','command')
+AND NOT EXISTS (SELECT 1 FROM monitor_agents ma WHERE ma.monitor_id=m.id);
+INSERT INTO legacy_agent_assignments (kind, id)
+SELECT 'agent', id FROM agents WHERE enabled=1;`,
+	},
+	{
+		version: 40,
+		sql: `ALTER TABLE monitors ADD COLUMN config_revision INTEGER NOT NULL DEFAULT 1 CHECK (config_revision > 0);
+ALTER TABLE monitor_status ADD COLUMN config_revision INTEGER NOT NULL DEFAULT 0;
+UPDATE monitor_status SET config_revision=(SELECT config_revision FROM monitors WHERE monitors.id=monitor_status.monitor_id);` + monitorRevisionTriggers,
+	},
+	{
+		version: 41,
+		sql: `ALTER TABLE check_results ADD COLUMN observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat'));
+ALTER TABLE monitor_status ADD COLUMN observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat'));
+UPDATE monitor_status SET baseline_avg=0, baseline_stddev=0, baseline_updated_at=NULL;
+CREATE TABLE check_result_hourly_v41 (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	hour       TEXT    NOT NULL,
+	sum_rt     INTEGER,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, hour, observation_kind)
+);
+INSERT INTO check_result_hourly_v41 (monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total) SELECT monitor_id, hour, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total FROM check_result_hourly;
+DROP TABLE check_result_hourly;
+ALTER TABLE check_result_hourly_v41 RENAME TO check_result_hourly;
+CREATE TABLE check_result_daily_v41 (
+	observation_kind TEXT NOT NULL DEFAULT 'unknown' CHECK (observation_kind IN ('unknown','probe','manual','heartbeat')),
+	monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+	day        TEXT    NOT NULL,
+	sum_rt     INTEGER,
+	avg_rt     INTEGER NOT NULL DEFAULT 0,
+	min_rt     INTEGER NOT NULL DEFAULT 0,
+	max_rt     INTEGER NOT NULL DEFAULT 0,
+	p95_rt     INTEGER NOT NULL DEFAULT 0,
+	up_count   INTEGER NOT NULL DEFAULT 0,
+	down_count INTEGER NOT NULL DEFAULT 0,
+	total      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (monitor_id, day, observation_kind)
+);
+INSERT INTO check_result_daily_v41 (monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total) SELECT monitor_id, day, sum_rt, avg_rt, min_rt, max_rt, p95_rt, up_count, down_count, total FROM check_result_daily;
+DROP TABLE check_result_daily;
+ALTER TABLE check_result_daily_v41 RENAME TO check_result_daily;`,
 	},
 }

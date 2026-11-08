@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // storeHandler returns a Handler backed by a real temporary SQLite store.
@@ -43,7 +43,7 @@ func adminRequest(method, target string, form url.Values) *http.Request {
 	} else {
 		r = httptest.NewRequest(method, target, nil)
 	}
-	key := &config.APIKeyConfig{Name: "admin", Role: "admin"}
+	key := &config.APIKeyConfig{Name: "admin", SuperAdmin: true}
 	return r.WithContext(context.WithValue(r.Context(), httputil.CtxKeyAPIKey, key))
 }
 
@@ -258,7 +258,7 @@ func TestNotificationInvalidJSONDoesNotWipeSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := strconvI(ch.ID)
-	for _, raw := range []string{`{"bot_token":"","chat_id":"-100"`, ``, `null`} {
+	for _, raw := range []string{`{"bot_token":"","chat_id":"-100"`, ``, `null`, `{"bot_token":"","bot_token":null,"chat_id":"changed"}`, `{"bot_token":42,"chat_id":"changed"}`} {
 		form := url.Values{"name": {"TG"}, "type": {"telegram"}, "enabled": {"on"}, "notif_settings_mode": {"json"},
 			"settings_json": {raw}, "event_incident_created": {"on"}}
 		w := httptest.NewRecorder()
@@ -346,7 +346,7 @@ func TestMonitorFormRejectsUnknownAgentIDs(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.MonitorCreate(w, adminRequest("POST", "/monitors", httpMonitorForm("tok", agentIDs)))
-	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "agent 999999 does not exist") {
+	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "selected related resource no longer exists") {
 		t.Fatalf("create with an unknown agent id: code %d, want the form re-shown with an error", w.Code)
 	}
 
@@ -363,7 +363,7 @@ func TestMonitorFormRejectsUnknownAgentIDs(t *testing.T) {
 	r := adminRequest("POST", "/monitors/"+id, httpMonitorForm("tok", agentIDs))
 	r.SetPathValue("id", id)
 	h.MonitorUpdate(w, r)
-	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "agent 999999 does not exist") {
+	if w.Code == http.StatusSeeOther || !strings.Contains(w.Body.String(), "selected related resource no longer exists") {
 		t.Fatalf("update with an unknown agent id: code %d, want the form re-shown with an error", w.Code)
 	}
 	if got, _ := store.GetMonitorAgentIDs(ctx, mon.ID); len(got) != 1 || got[0] != agent.ID {

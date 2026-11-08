@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type TeamsSettings struct {
@@ -83,7 +83,7 @@ func (s *TeamsSender) Send(ctx context.Context, channel *storage.NotificationCha
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("teams returned status %d", resp.StatusCode)
 	}
 	return nil

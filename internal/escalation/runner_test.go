@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func testStore(t *testing.T) storage.Store {
@@ -59,7 +59,7 @@ func TestStartEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout"}
+	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout", EscalationPending: true}
 	if err := store.CreateIncident(ctx, inc); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestStartEscalationNoPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout"}
+	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout", EscalationPending: true}
 	if err := store.CreateIncident(ctx, inc); err != nil {
 		t.Fatal(err)
 	}
@@ -102,6 +102,10 @@ func TestStartEscalationNoPolicy(t *testing.T) {
 	_, err := store.GetEscalationStateByIncident(ctx, inc.ID)
 	if err == nil {
 		t.Fatal("expected error (no state created), got nil")
+	}
+	stored, err := store.GetIncident(ctx, inc.ID)
+	if err != nil || stored.EscalationPending {
+		t.Fatalf("no-policy setup remained pending: %+v %v", stored, err)
 	}
 }
 
@@ -131,7 +135,7 @@ func TestCancelEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout"}
+	inc := &storage.Incident{MonitorID: mon.ID, Status: "open", Cause: "timeout", EscalationPending: true}
 	if err := store.CreateIncident(ctx, inc); err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +210,7 @@ func TestTickProcessesState(t *testing.T) {
 	}
 
 	dispatcher := notifier.NewDispatcher(store, logger, false)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	runner := NewRunner(store, dispatcher, logger)
 
 	runner.Tick(ctx)
@@ -260,6 +265,7 @@ func TestTickDeletesStateOnResolvedIncident(t *testing.T) {
 	}
 
 	dispatcher := notifier.NewDispatcher(store, logger, false)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	runner := NewRunner(store, dispatcher, logger)
 
 	runner.Tick(ctx)
@@ -311,6 +317,7 @@ func TestTickDeletesStateOnDisabledPolicy(t *testing.T) {
 	}
 
 	dispatcher := notifier.NewDispatcher(store, logger, false)
+	t.Cleanup(func() { dispatcher.Shutdown(context.Background()) })
 	runner := NewRunner(store, dispatcher, logger)
 
 	runner.Tick(ctx)

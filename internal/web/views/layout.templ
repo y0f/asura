@@ -1,18 +1,18 @@
 package views
 
 type LayoutParams struct {
-	Title     string
-	Active    string
-	Username  string
-	Perms     map[string]bool
-	// SuperAdmin gates actions that need more than a permission (import,
-	// database maintenance).
+	Title    string
+	Active   string
+	Username string
+	Perms    map[string]bool
+	Access   PermissionChecker
+	// SuperAdmin gates configuration imports and exports, including secrets.
 	SuperAdmin bool
-	Version   string
-	ToastKind string
-	ToastMsg  string
-	Error     string
-	BasePath  string
+	Version    string
+	ToastKind  string
+	ToastMsg   string
+	Error      string
+	BasePath   string
 }
 
 // Can reports whether the signed-in key holds the given permission.
@@ -33,51 +33,46 @@ templ themeScript() {
 templ Layout(p LayoutParams) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="dark">
-	<head>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-		@themeScript()
-		<title>{ p.Title } · Asura</title>
-		<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
-		<link rel="preload" href={ p.BasePath + "/static/fonts/inter.woff2" } as="font" type="font/woff2" crossorigin/>
-		<link rel="stylesheet" href={ Asset(p.BasePath, "tailwind.css") }/>
-		<link rel="stylesheet" href={ Asset(p.BasePath, "uplot.min.css") }/>
-		<script src={ Asset(p.BasePath, "uplot.iife.min.js") } defer></script>
-		<script src={ Asset(p.BasePath, "htmx.min.js") } defer></script>
-		<script defer src={ Asset(p.BasePath, "alpine.min.js") }></script>
-		@shellScript()
-	</head>
-	<body class="bg-surface text-muted-light font-sans antialiased">
-		<a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
-		<div x-data="shell" class="flex min-h-screen" @keydown.escape.window="nav=false">
-			@Sidebar(p)
-			<div x-show="nav" x-cloak @click="nav=false" class="modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden"></div>
-			<div class="flex-1 flex flex-col min-w-0">
-				@topbar(p)
-				@CommandPalette(p)
-				<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-					<div class="max-w-7xl mx-auto">
-						if p.ToastMsg != "" {
-							@Toast(p.ToastKind, p.ToastMsg)
-						}
-						if p.Error != "" {
-							@Toast("error", p.Error)
-						}
-						{ children... }
-					</div>
-				</main>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="htmx-config" content='{"historyCacheSize":0,"refreshOnHistoryMiss":true}'/>
+			@themeScript()
+			<title>{ p.Title } · Asura</title>
+			<link rel="icon" href={ p.BasePath + "/static/favicon.ico" }/>
+			<link rel="preload" href={ p.BasePath + "/static/fonts/inter.woff2" } as="font" type="font/woff2" crossorigin/>
+			<link rel="stylesheet" href={ Asset(p.BasePath, "tailwind.css") }/>
+			<link rel="stylesheet" href={ Asset(p.BasePath, "uplot.min.css") }/>
+			<script src={ Asset(p.BasePath, "uplot.iife.min.js") } defer></script>
+			<script src={ Asset(p.BasePath, "htmx.min.js") } defer></script>
+			<script src={ Asset(p.BasePath, "notifications-form.js") } defer></script>
+			<script src={ Asset(p.BasePath, "monitor-chart.js") } defer></script>
+			<script defer src={ Asset(p.BasePath, "alpine.min.js") }></script>
+			@shellScript()
+		</head>
+		<body class="bg-surface text-muted-light font-sans antialiased">
+			<div x-data="shell" class="flex min-h-screen" @keydown.escape="if (!document.querySelector('dialog[open]')) nav=false" @cmdk-open.window="nav=false" @focusin="revealEditorField($event)">
+				<a href="#content" :inert="mobile && nav" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] btn-secondary">Skip to content</a>
+				@Sidebar(p)
+				<div x-show="nav" x-cloak @click="nav=false" class="modal-backdrop fixed inset-0 z-30 bg-black/70 md:hidden"></div>
+				<div class="flex-1 flex flex-col min-w-0" :inert="mobile && nav">
+					@topbar(p)
+					@CommandPalette(p)
+					<main id="content" data-title={ p.Title } class="flex-1 w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+						<div class="max-w-7xl mx-auto">
+							if p.ToastMsg != "" {
+								@Toast(p.ToastKind, p.ToastMsg)
+							}
+							if p.Error != "" {
+								@Toast("error", p.Error)
+							}
+							{ children... }
+						</div>
+					</main>
+				</div>
+				@ConfirmModal()
 			</div>
-			@ConfirmModal()
-		</div>
-		if p.Can("monitors.write") {
-			<script>
-				document.addEventListener('keydown',function(e){
-					if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable)return;
-					if(e.key==='n'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){var l=document.querySelector('[href$="/monitors/new"]');if(l){e.preventDefault();window.location.href=l.href}}
-				});
-			</script>
-		}
-	</body>
+		</body>
 	</html>
 }
 
@@ -86,28 +81,90 @@ templ Layout(p LayoutParams) {
 templ shellScript() {
 	<script>
 		document.addEventListener("alpine:init", () => {
+			function readPreference(key, fallback) {
+				try { return localStorage.getItem(key) ?? fallback; } catch (_) { return fallback; }
+			}
+			function savePreference(key, value) {
+				try { localStorage.setItem(key, value); } catch (_) { /* Preferences remain usable for this page. */ }
+			}
 			Alpine.data("shell", () => ({
 				nav: false,
 				mobile: window.matchMedia("(max-width: 767px)").matches,
-				collapsed: localStorage.getItem("navc") === "1",
-				theme: localStorage.getItem("theme") || "dark",
+				collapsed: readPreference("navc", "0") === "1",
+				get navCollapsed() { return !this.mobile && this.collapsed; },
+				theme: readPreference("theme", "dark"),
 				ready: false,
 				init() {
 					const mq = window.matchMedia("(max-width: 767px)");
-					mq.addEventListener("change", () => { this.mobile = mq.matches; if (!mq.matches) this.nav = false; });
+					this._mobileQuery = mq;
+					this._mobileChange = () => {
+						this.mobile = mq.matches;
+						if (!mq.matches) this.nav = false;
+						else if (this.$refs.sidebar.contains(document.activeElement)) this.$nextTick(() => this.$refs.navOpen.focus());
+					};
+					mq.addEventListener("change", this._mobileChange);
 					this._mql = window.matchMedia("(prefers-color-scheme: dark)");
-					this._mql.addEventListener("change", () => { if (this.theme === "system") this.applyTheme(); });
+					this._themeChange = () => { if (this.theme === "system") this.applyTheme(); };
+					this._mql.addEventListener("change", this._themeChange);
+					this.$watch("nav", open => this.syncNav(open));
 					requestAnimationFrame(() => requestAnimationFrame(() => { this.ready = true; }));
+				},
+				destroy() {
+					this._mobileQuery.removeEventListener("change", this._mobileChange);
+					this._mql.removeEventListener("change", this._themeChange);
+					document.documentElement.classList.remove("nav-open");
+				},
+				syncNav(open) {
+					document.documentElement.classList.toggle("nav-open", this.mobile && open);
+					if (this.mobile && open) {
+						this.$nextTick(() => this.$refs.navClose.focus());
+					} else {
+						this.$nextTick(() => {
+							if (document.querySelector("dialog[open]")) return;
+							if (!this.mobile) {
+								if (!document.activeElement.getClientRects().length) {
+									const link = this.$refs.sidebar.querySelector('[aria-current="page"]');
+									if (link) link.focus({ preventScroll: true });
+								}
+								return;
+							}
+							const opener = this._navOpener;
+							if (opener && opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });
+						});
+					}
+				},
+				openNav(opener) { this._navOpener = opener; this.nav = true; },
+				revealEditorField(event) {
+					const field = event.target;
+					if (!field.matches("input, select, textarea")) return;
+					const form = field.closest(".monitor-editor");
+					if (!form) return;
+					requestAnimationFrame(() => {
+						if (!field.isConnected || document.activeElement !== field) return;
+						const actions = form.querySelector(":scope > .form-actions");
+						if (!actions || !actions.getClientRects().length || getComputedStyle(actions).position !== "sticky") return;
+						const rect = field.getBoundingClientRect(), bar = actions.getBoundingClientRect();
+						if (bar.top < innerHeight && rect.bottom > bar.top && rect.top < bar.bottom) {
+							window.scrollBy({ top: rect.bottom - bar.top + 16, behavior: "instant" });
+						}
+					});
+				},
+				trapNav(event) {
+					if (!this.mobile || !this.nav || document.querySelector("dialog[open]")) return;
+					const controls = Array.from(this.$refs.sidebar.querySelectorAll('a[href], button, input, select, textarea, [tabindex="0"]')).filter(el => !el.disabled && el.getClientRects().length);
+					const first = controls[0], last = controls[controls.length - 1];
+					if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+					else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 				},
 				applyTheme() {
 					const dark = this.theme === "dark" || (this.theme === "system" && this._mql.matches);
 					document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
 					window.dispatchEvent(new CustomEvent("theme-changed"));
 				},
-				setTheme(t) { this.theme = t; localStorage.setItem("theme", t); this.applyTheme(); },
+				setTheme(t) { this.theme = t; savePreference("theme", t); this.applyTheme(); },
 				toggleCollapse() {
 					this.collapsed = !this.collapsed;
-					localStorage.setItem("navc", this.collapsed ? "1" : "0");
+					savePreference("navc", this.collapsed ? "1" : "0");
 					document.documentElement.classList.toggle("nav-collapsed", this.collapsed);
 				},
 			}));
@@ -147,13 +204,25 @@ templ boostScript() {
 				if (win) win.setAttribute("aria-current", "page");
 			}
 			function sync() { syncTitle(); syncActive(); }
-			function reinit(e) {
-				var t = e && e.target;
-				if (!t || t.id !== "content" || !window.Alpine) return;
-				Alpine.destroyTree(t);
-				Alpine.initTree(t);
-			}
-			document.addEventListener("htmx:afterSettle", function (e) { reinit(e); sync(); });
+			// Alpine observes inserted nodes itself. Shared component definitions
+			// load before Alpine starts, including on later boosted navigations.
+			let refreshFocus = null;
+			document.addEventListener("htmx:beforeSwap", function (event) {
+				const target = event.detail.target, active = document.activeElement;
+				if (target && target.id === "content" && event.detail.shouldSwap) {
+					document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
+				}
+				if (!target || target.id !== "dashboard-content") return;
+				refreshFocus = event.detail.shouldSwap && target.contains(active) && active.tagName === "A" ? active.getAttribute("href") : null;
+			});
+			document.addEventListener("htmx:afterSettle", function (event) {
+				sync();
+				if (event.target.id !== "dashboard-content" || !refreshFocus) return;
+				const href = refreshFocus; refreshFocus = null;
+				if (document.activeElement !== document.body) return;
+				const link = Array.from(event.target.querySelectorAll("a[href]")).find(a => a.getAttribute("href") === href);
+				if (link) link.focus({ preventScroll: true });
+			});
 			document.addEventListener("htmx:historyRestore", sync);
 		})();
 	</script>
@@ -168,7 +237,8 @@ templ navScrollScript() {
 			function nav() { return document.getElementById("sidenav"); }
 			function restore() {
 				var n = nav(); if (!n) return;
-				var v = sessionStorage.getItem(KEY); if (v === null) return;
+				var v; try { v = sessionStorage.getItem(KEY); } catch (_) { return; }
+				if (v === null) return;
 				var top = parseInt(v, 10) || 0;
 				if (n.scrollTop !== top) n.scrollTop = top;
 			}
@@ -178,7 +248,8 @@ templ navScrollScript() {
 				var n = nav(); if (!n) return;
 				bound = true;
 				n.addEventListener("scroll", function () { clearTimeout(t); t = setTimeout(function () {
-					var nn = nav(); if (nn) sessionStorage.setItem(KEY, String(nn.scrollTop));
+					var nn = nav();
+					try { if (nn) sessionStorage.setItem(KEY, String(nn.scrollTop)); } catch (_) { /* Scroll position is optional. */ }
 				}, 100); }, { passive: true });
 			}
 			function init() { restore(); bind(); }
@@ -190,40 +261,44 @@ templ navScrollScript() {
 
 templ Sidebar(p LayoutParams) {
 	<aside
+		x-ref="sidebar"
+		@keydown.tab="trapNav($event)"
 		:class="{ 'translate-x-0': nav, '-translate-x-full md:translate-x-0': !nav, 'md:!w-[60px]': collapsed, 'transition-[transform,width] duration-200 ease-out': ready }"
 		:inert="mobile && !nav"
 		:aria-hidden="(mobile && !nav) ? 'true' : null"
-		class="app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-screen w-64 md:w-56 transform flex-col border-r border-line bg-surface"
+		:role="mobile && nav ? 'dialog' : null"
+		:aria-modal="mobile && nav ? 'true' : null"
+		class="app-sidebar fixed md:sticky inset-y-0 left-0 top-0 z-40 flex h-dvh w-64 md:w-[232px] transform flex-col border-r border-line bg-surface-50"
 		aria-label="Main navigation"
 	>
-		<div class="h-14 flex items-center shrink-0 px-4 gap-2" :class="collapsed ? 'md:justify-center md:px-0' : 'justify-between'">
-			<a href={ templ.SafeURL(p.BasePath + "/") } class="flex items-center gap-2 min-w-0" x-show="!collapsed">
-				<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
+		<div class="h-16 flex items-center shrink-0 px-5 gap-2" :class="navCollapsed ? 'md:justify-center md:px-0' : 'justify-between'">
+			<a href={ templ.SafeURL(p.HomePath()) } class="flex items-center gap-2 min-w-0" x-show="!navCollapsed">
+				<span class="app-wordmark">Asura<span class="text-brand">.</span></span>
 				if p.Version != "" {
 					<span class="font-mono text-2xs text-muted truncate">{ p.Version }</span>
 				}
 			</a>
-			<a href={ templ.SafeURL(p.BasePath + "/") } x-cloak x-show="collapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
-				<img src={ p.BasePath + "/static/favicon.ico" } alt="" class="h-6 w-6"/>
+			<a href={ templ.SafeURL(p.HomePath()) } x-cloak x-show="navCollapsed" class="hidden md:flex items-center justify-center" aria-label="Asura home">
+				<span class="app-wordmark" aria-hidden="true">A</span>
 			</a>
-			<button @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
+			<button x-ref="navClose" @click="nav=false" class="md:hidden icon-btn -mr-1" aria-label="Close navigation">
 				@iconX()
 			</button>
 		</div>
-		<div class="px-3 pb-2 shrink-0">
+		<div class="px-3 pb-4 shrink-0">
 			<button
 				type="button"
-				@click="window.dispatchEvent(new CustomEvent('cmdk-open'))"
-				class="sidebar-search-btn flex h-8 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface-50 px-2.5 text-sm text-muted hover:text-white"
+				@click="nav=false; $nextTick(() => { if (mobile) $refs.navOpen.focus(); window.dispatchEvent(new CustomEvent('cmdk-open')); })"
+				class="sidebar-search-btn flex h-9 w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-control border border-line-light bg-surface px-2.5 text-sm text-muted hover:text-white"
 				:class="collapsed && 'md:justify-center md:px-0'"
 				:title="collapsed ? 'Go to (Ctrl K)' : null"
 				aria-label="Open search"
 			>
-				<svg aria-hidden="true" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-				<span class="flex-1 text-left" x-show="!collapsed">Go to…</span>
+				<svg focusable="false" aria-hidden="true" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+				<span class="flex-1 text-left" x-show="!navCollapsed">Go to…</span>
 				<kbd
 					x-data="{ mac: /Mac|iPhone|iPad/i.test((navigator.platform || '') + ' ' + navigator.userAgent) }"
-					x-show="!collapsed"
+					x-show="!navCollapsed"
 					class="inline-flex h-5 items-center gap-0.5 rounded-[3px] border border-line-light px-1 font-mono text-2xs text-muted"
 				>
 					<span x-show="!mac">Ctrl</span><span x-cloak x-show="mac">⌘</span><span>K</span>
@@ -231,62 +306,67 @@ templ Sidebar(p LayoutParams) {
 			</button>
 		</div>
 		<nav id="sidenav" hx-boost="true" hx-target="#content" hx-select="#content" hx-swap="outerHTML show:window:top" hx-sync="this:replace" class="flex-1 px-3 pb-3 overflow-y-auto overflow-x-hidden space-y-4">
-			<div class="space-y-0.5">
-				@navLink(p, "/", "dashboard", "Dashboard") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
-				}
-			</div>
-			@navGroup("Monitoring") {
+			if p.CanVisit("/") {
+				<div class="space-y-0.5">
+					@navLink(p, "/", "dashboard", "Dashboard") {
+						<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+					}
+				</div>
+			}
+			@navGroup("Monitoring", p.CanVisit("/monitors") || p.CanVisit("/groups") || p.CanVisit("/tags")) {
 				@navLink(p, "/monitors", "monitors", "Monitors") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
 				}
 				@navLink(p, "/groups", "groups", "Groups") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 				}
 				@navLink(p, "/tags", "tags", "Tags") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
 				}
 			}
-			@navGroup("Alerting") {
+			@navGroup("Alerting", p.CanVisit("/incidents") || p.CanVisit("/notifications") || p.CanVisit("/notifications/history") || p.CanVisit("/escalation-policies") || p.CanVisit("/on-call")) {
 				@navLink(p, "/incidents", "incidents", "Incidents") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 				}
 				@navLink(p, "/notifications", "notifications", "Notifications") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
 				}
-				@navLink(p, "/escalation-policies", "escalation-policies", "Escalation Policies") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"></path><path d="M7 20v-4"></path><path d="M12 20v-8"></path><path d="M17 20V8"></path><path d="M22 4v16"></path></svg>
+				@navLink(p, "/notifications/history", "notification-history", "Notification history") {
+					<svg aria-hidden="true" focusable="false" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
 				}
-				@navLink(p, "/on-call", "on-call", "On-Call") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+				@navLink(p, "/escalation-policies", "escalation-policies", "Escalation policies") {
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"></path><path d="M7 20v-4"></path><path d="M12 20v-8"></path><path d="M17 20V8"></path><path d="M22 4v16"></path></svg>
+				}
+				@navLink(p, "/on-call", "on-call", "On-call") {
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
 				}
 			}
-			@navGroup("Operations") {
-				@navLink(p, "/sla", "sla", "SLA Report") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+			@navGroup("Operations", p.CanVisit("/sla") || p.CanVisit("/maintenance") || p.CanVisit("/status-pages")) {
+				@navLink(p, "/sla", "sla", "SLA report") {
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
 				}
 				@navLink(p, "/maintenance", "maintenance", "Maintenance") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"></path></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"></path></svg>
 				}
-				@navLink(p, "/status-pages", "status-pages", "Status Pages") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+				@navLink(p, "/status-pages", "status-pages", "Status pages") {
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 				}
 			}
-			@navGroup("System") {
-				@navLink(p, "/logs", "logs", "Request Logs") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+			@navGroup("System", p.CanVisit("/logs") || p.CanVisit("/audit") || p.CanVisit("/agents") || p.CanVisit("/proxies") || p.CanVisit("/settings")) {
+				@navLink(p, "/logs", "logs", "Request logs") {
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
 				}
-				@navLink(p, "/audit", "audit", "Audit Log") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+				@navLink(p, "/audit", "audit", "Audit log") {
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
 				}
 				@navLink(p, "/agents", "agents", "Agents") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
 				}
 				@navLink(p, "/proxies", "proxies", "Proxies") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5Z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5Z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path></svg>
 				}
 				@navLink(p, "/settings", "settings", "Settings") {
-					<svg class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+					<svg focusable="false" aria-hidden="true" class="nav-icon w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
 				}
 			}
 		</nav>
@@ -296,11 +376,13 @@ templ Sidebar(p LayoutParams) {
 
 // navGroup renders a labelled cluster of nav links. The label hides when the
 // sidebar is collapsed to the icon rail.
-templ navGroup(title string) {
-	<div class="space-y-0.5">
-		<div x-show="!collapsed" class="px-2 pb-1 text-xs font-medium text-muted">{ title }</div>
-		{ children... }
-	</div>
+templ navGroup(title string, visible bool) {
+	if visible {
+		<div class="space-y-0.5">
+			<div x-show="!navCollapsed" class="px-2 pb-1 text-xs font-medium text-muted">{ title }</div>
+			{ children... }
+		</div>
+	}
 }
 
 // navLink renders one sidebar entry. Active state is driven by aria-current + the
@@ -308,31 +390,33 @@ templ navGroup(title string) {
 // link on the persistent sidebar without re-rendering it. The icon is passed as
 // children (an SVG carrying the .nav-icon class).
 templ navLink(p LayoutParams, href, key, label string) {
-	<a
-		href={ templ.SafeURL(p.BasePath + href) }
-		data-nav-key={ key }
-		@click="nav=false"
-		:title="collapsed ? $el.dataset.label : null"
-		data-label={ label }
-		if key == p.Active {
-			aria-current="page"
-		}
-		class="nav-link flex items-center gap-2.5 rounded-control px-2 h-8 text-sm"
-		:class="collapsed && 'md:justify-center md:px-0'"
-	>
-		{ children... }
-		<span class="flex-1 truncate" x-show="!collapsed">{ label }</span>
-	</a>
+	if p.CanVisit(href) {
+		<a
+			href={ templ.SafeURL(p.BasePath + href) }
+			data-nav-key={ key }
+			@click="nav=false"
+			:title="collapsed ? $el.dataset.label : null"
+			data-label={ label }
+			if key == p.Active {
+				aria-current="page"
+			}
+			class="nav-link flex items-center gap-2.5 rounded-control px-2.5 h-8 text-sm"
+			:class="collapsed && 'md:justify-center md:px-0'"
+		>
+			{ children... }
+			<span class="flex-1 min-w-0 wrap-break-word" x-show="!navCollapsed">{ label }</span>
+		</a>
+	}
 }
 
 // topbar is only shown below md: the menu button and logo. On desktop the
 // sidebar carries the brand and each page renders its own heading.
 templ topbar(p LayoutParams) {
 	<header class="md:hidden h-14 flex items-center gap-3 px-4 border-b border-line bg-surface sticky top-0 z-20">
-		<button @click="nav=true" class="icon-btn -ml-2" aria-label="Open navigation" :aria-expanded="nav">
-			<svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+		<button x-ref="navOpen" @click="openNav($el)" class="icon-btn -ml-2" aria-label="Open navigation" :aria-expanded="nav">
+			<svg focusable="false" aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
 		</button>
-		<img src={ p.BasePath + "/static/logo.gif" } alt="Asura" class="h-4 w-auto"/>
+		<span class="app-wordmark">Asura<span class="text-brand">.</span></span>
 		<span id="page-title" class="text-sm text-muted truncate">{ p.Title }</span>
 	</header>
 }
@@ -341,20 +425,22 @@ templ topbar(p LayoutParams) {
 // signed-in key opening an upward menu with the theme switcher, the sidebar
 // collapse toggle and sign-out.
 templ sidebarUser(p LayoutParams) {
-	<div class="relative border-t border-line p-3 shrink-0" x-data="{ open: false }" @keydown.escape.window="open=false">
+	<div class="relative border-t border-line p-3 shrink-0" x-data="{ open: false }" @keydown.escape="if (open) { $event.stopPropagation(); $event.preventDefault(); open=false; $refs.accountButton.focus() }" @focusout="if (!$el.contains($event.relatedTarget)) open=false">
 		<button
+			x-ref="accountButton"
 			@click="open=!open"
 			class="flex w-full items-center gap-2.5 rounded-control px-2 h-9 hover:bg-surface-200"
 			:class="{ 'bg-surface-200': open, 'md:justify-center md:px-0': collapsed }"
-			aria-haspopup="true"
+			aria-controls="account-options"
 			:aria-expanded="open"
 			aria-label="Account menu"
 		>
 			<span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-control bg-surface-300 text-xs font-semibold text-white uppercase">{ initial(p.Username) }</span>
-			<span class="flex-1 truncate text-left text-sm font-medium text-white" x-show="!collapsed">{ username(p.Username) }</span>
-			<svg aria-hidden="true" x-show="!collapsed" class="w-4 h-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+			<span class="flex-1 truncate text-left text-sm font-medium text-white" x-show="!navCollapsed">{ username(p.Username) }</span>
+			<svg focusable="false" aria-hidden="true" x-show="!navCollapsed" class="w-4 h-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
 		</button>
 		<div
+			id="account-options"
 			x-show="open"
 			x-cloak
 			@click.outside="open=false"
@@ -368,13 +454,13 @@ templ sidebarUser(p LayoutParams) {
 				<span class="text-sm text-muted-light">Theme</span>
 				<div class="flex items-center gap-0.5 rounded-control border border-line-light p-0.5">
 					<button type="button" @click="setTheme('light')" :class="theme === 'light' ? 'bg-surface-300 text-white' : 'text-muted hover:text-white'" class="flex h-6 w-6 items-center justify-center rounded-[3px]" title="Light" aria-label="Light theme" :aria-pressed="theme === 'light'">
-						<svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"></path></svg>
 					</button>
 					<button type="button" @click="setTheme('dark')" :class="theme === 'dark' ? 'bg-surface-300 text-white' : 'text-muted hover:text-white'" class="flex h-6 w-6 items-center justify-center rounded-[3px]" title="Dark" aria-label="Dark theme" :aria-pressed="theme === 'dark'">
-						<svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
 					</button>
 					<button type="button" @click="setTheme('system')" :class="theme === 'system' ? 'bg-surface-300 text-white' : 'text-muted hover:text-white'" class="flex h-6 w-6 items-center justify-center rounded-[3px]" title="System" aria-label="System theme" :aria-pressed="theme === 'system'">
-						<svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>
+						<svg focusable="false" aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>
 					</button>
 				</div>
 			</div>
@@ -407,12 +493,12 @@ func initial(u string) string {
 
 templ PrevPageBtn(href string) {
 	<a href={ templ.SafeURL(href) } aria-label="Previous page" title="Previous page" class="inline-flex items-center justify-center w-8 h-8 text-muted-light hover:text-white border border-line-light rounded-control hover:bg-surface-200">
-		<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+		<svg focusable="false" aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
 	</a>
 }
 
 templ NextPageBtn(href string) {
 	<a href={ templ.SafeURL(href) } aria-label="Next page" title="Next page" class="inline-flex items-center justify-center w-8 h-8 text-muted-light hover:text-white border border-line-light rounded-control hover:bg-surface-200">
-		<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+		<svg focusable="false" aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
 	</a>
 }

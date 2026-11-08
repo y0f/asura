@@ -1,24 +1,28 @@
 package web
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 	channels, err := h.store.ListNotificationChannels(r.Context())
 	if err != nil {
 		h.logger.Error("web: list notifications", "error", err)
+		http.Error(w, "Failed to load notification channels", http.StatusInternalServerError)
+		return
 	}
 
 	lp := h.newLayoutParams(r, "Notifications", "notifications")
@@ -29,69 +33,103 @@ func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) NotificationCreate(w http.ResponseWriter, r *http.Request) {
-	ch := h.parseNotificationForm(r)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid notification form", http.StatusBadRequest)
+		return
+	}
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		h.setError(w, err.Error())
+		h.notificationRedirect(w, r)
+		return
+	}
+	if err := notificationEventSelectionError(r, ch.Events); err != nil {
+		h.setError(w, err.Error())
+		h.notificationRedirect(w, r)
+		return
+	}
 
 	if err := notificationJSONError(r); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 	if err := validateChannelForm(ch); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
 	if err := h.store.CreateNotificationChannel(r.Context(), ch); err != nil {
 		h.logger.Error("web: create notification", "error", err)
 		h.setError(w, "Failed to create channel")
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
 	h.setFlash(w, "Notification channel created")
-	h.redirect(w, r, "/notifications")
+	h.audit(r, "create", "notification_channel", ch.ID, "")
+	h.notificationRedirect(w, r)
 }
 
 func (h *Handler) NotificationUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/notifications")
+		http.NotFound(w, r)
 		return
 	}
-	ch := h.parseNotificationForm(r)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid notification form", http.StatusBadRequest)
+		return
+	}
+	ch, err := h.parseNotificationForm(r)
+	if err != nil {
+		h.setError(w, err.Error())
+		h.notificationRedirect(w, r)
+		return
+	}
 	ch.ID = id
+	if err := notificationEventSelectionError(r, ch.Events); err != nil {
+		h.setError(w, err.Error())
+		h.notificationRedirect(w, r)
+		return
+	}
 
 	// Reject a bad JSON editor submission before merging, otherwise the stored
 	// secrets alone would pass "settings is required" and wipe everything else.
 	if err := notificationJSONError(r); err != nil {
 		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 
-	// Secret fields are sent to the browser blank: a blank field keeps the
-	// stored value (only while the type is unchanged) and "Remove saved value"
-	// clears it.
-	if existing, err := h.store.GetNotificationChannel(r.Context(), id); err == nil && existing != nil && existing.Type == ch.Type {
-		ch.Settings = views.MergeSecrets(ch.Settings, existing.Settings, views.NotificationSecretKeys[ch.Type], views.ClearSet(r.Form["clear_secrets"]))
-	}
-
-	if err := validateChannelForm(ch); err != nil {
-		h.setError(w, err.Error())
-		h.redirect(w, r, "/notifications")
+	events, _ := json.Marshal(ch.Events)
+	input := httputil.NotificationInput{Name: &ch.Name, Type: &ch.Type, Enabled: &ch.Enabled, Settings: ch.Settings, Events: events, ClearSecrets: r.Form["clear_secrets"]}
+	_, err = h.store.UpdateNotificationChannelWith(r.Context(), id, func(current *storage.NotificationChannel) (*storage.NotificationChannel, error) {
+		next, err := input.Apply(current, httputil.GetAPIKey(r.Context()).SuperAdmin)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateChannelForm(next); err != nil {
+			return nil, fmt.Errorf("%w: %v", httputil.ErrInvalidNotification, err)
+		}
+		return next, nil
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else if errors.Is(err, httputil.ErrInvalidNotification) {
+			h.setError(w, err.Error())
+			h.notificationRedirect(w, r)
+		} else {
+			h.logger.Error("web: update notification", "error", err)
+			http.Error(w, "Failed to update notification channel", http.StatusInternalServerError)
+		}
 		return
 	}
-
-	if err := h.store.UpdateNotificationChannel(r.Context(), ch); err != nil {
-		h.logger.Error("web: update notification", "error", err)
-		h.setError(w, "Failed to update channel")
-		h.redirect(w, r, "/notifications")
-		return
-	}
-
+	h.audit(r, "update", "notification_channel", id, "")
 	h.setFlash(w, "Notification channel updated")
-	h.redirect(w, r, "/notifications")
+	h.notificationRedirect(w, r)
 }
 
 // notificationJSONError rejects an empty or invalid "Edit as JSON" submission,
@@ -126,26 +164,41 @@ func validateChannelForm(ch *storage.NotificationChannel) error {
 func (h *Handler) NotificationDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 	if err := h.store.DeleteNotificationChannel(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete notification", "error", err)
+		http.Error(w, "Failed to delete notification channel", http.StatusInternalServerError)
+		return
 	}
+	h.audit(r, "delete", "notification_channel", id, "")
 	h.setFlash(w, "Notification channel deleted")
-	h.redirect(w, r, "/notifications")
+	h.notificationRedirect(w, r)
 }
 
 func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/notifications")
+		h.notificationRedirect(w, r)
 		return
 	}
 	ch, err := h.store.GetNotificationChannel(r.Context(), id)
 	if err != nil {
-		h.setError(w, "Channel not found")
-		h.redirect(w, r, "/notifications")
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+		} else {
+			h.logger.Error("web: notification test read", "error", err)
+			http.Error(w, "Failed to load notification channel", http.StatusInternalServerError)
+		}
+		return
+	}
+	if h.notifier == nil {
+		http.Error(w, "Notification system is unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -156,17 +209,28 @@ func (h *Handler) NotificationTest(w http.ResponseWriter, r *http.Request) {
 		Cause:       "Test notification from Asura",
 	}
 
-	if err := h.notifier.SendTest(ch, testInc); err != nil {
-		h.setError(w, "Test failed: "+err.Error())
+	if err := h.notifier.SendTest(r.Context(), ch, testInc); err != nil {
+		h.logger.Error("web: notification test failed", "channel_id", ch.ID, "error", err)
+		h.setError(w, "Test notification failed")
 	} else {
 		h.setFlash(w, "Test notification sent")
 	}
-	h.redirect(w, r, "/notifications")
+	h.notificationRedirect(w, r)
+}
+
+func (h *Handler) notificationRedirect(w http.ResponseWriter, r *http.Request) {
+	lp := h.newLayoutParams(r, "", "")
+	if lp.Can("notifications.read") {
+		h.redirect(w, r, "/notifications")
+		return
+	}
+	lp.BasePath = ""
+	h.redirect(w, r, lp.HomePath())
 }
 
 func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var f storage.NotifHistoryFilter
+	f := storage.NotifHistoryFilter{Access: httputil.MonitorAccess(r.Context(), "notification_history.read")}
 	if v := q.Get("channel_id"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 			f.ChannelID = id
@@ -179,24 +243,33 @@ func (h *Handler) NotificationHistory(w http.ResponseWriter, r *http.Request) {
 	result, err := h.store.ListNotificationHistory(r.Context(), f, p)
 	if err != nil {
 		h.logger.Error("web: list notification history", "error", err)
+		http.Error(w, "Failed to load notification history", http.StatusInternalServerError)
+		return
 	}
 
-	channels, err := h.store.ListNotificationChannels(r.Context())
-	if err != nil {
-		h.logger.Error("web: list channels for history", "error", err)
+	var channels []*storage.NotificationChannel
+	if httputil.GetAPIKey(r.Context()).HasPermission("notifications.read") {
+		channels, err = h.store.ListNotificationChannels(r.Context())
+		if err != nil {
+			h.logger.Error("web: list channels for history", "error", err)
+			http.Error(w, "Failed to load notification history", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	lp := h.newLayoutParams(r, "Notification History", "notifications")
+	lp := h.newLayoutParams(r, "Notification History", "notification-history")
 	h.renderComponent(w, r, views.NotificationHistoryPage(views.NotificationHistoryParams{
 		LayoutParams: lp,
-		Result:       result,
+		Result:       httputil.NotificationHistoryResponse(r.Context(), result),
 		Channels:     channels,
 		Filter:       f,
 	}))
 }
 
-func (h *Handler) parseNotificationForm(r *http.Request) *storage.NotificationChannel {
-	r.ParseForm()
+func (h *Handler) parseNotificationForm(r *http.Request) (*storage.NotificationChannel, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, fmt.Errorf("invalid notification form")
+	}
 
 	ch := &storage.NotificationChannel{
 		Name:    r.FormValue("name"),
@@ -209,15 +282,29 @@ func (h *Handler) parseNotificationForm(r *http.Request) *storage.NotificationCh
 			ch.Settings = json.RawMessage(raw)
 		}
 	} else {
-		ch.Settings = assembleNotificationSettings(r, ch.Type)
+		var err error
+		ch.Settings, err = assembleNotificationSettings(r, ch.Type)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ch.Events = parseNotificationEvents(r)
 
-	return ch
+	return ch, nil
 }
 
 func parseNotificationEvents(r *http.Request) []string {
+	if r.FormValue("event_mode") == "all" {
+		return nil
+	}
+	if r.FormValue("event_mode") == "selected" {
+		// Keep every submitted value: shared validation rejects unsupported
+		// selections instead of silently broadening the channel to all events.
+		return r.Form["event_types"]
+	}
+	// Keep legacy submissions compatible; the current form always supplies a
+	// mode, so an unchecked selection can never implicitly mean all events.
 	var events []string
 	eventKeys := []string{
 		"event_incident_created",
@@ -254,7 +341,54 @@ func parseNotificationEvents(r *http.Request) []string {
 	return events
 }
 
-func assembleNotificationSettings(r *http.Request, chType string) json.RawMessage {
+func notificationEventSelectionError(r *http.Request, events []string) error {
+	mode := r.FormValue("event_mode")
+	if mode != "" && mode != "all" && mode != "selected" {
+		return fmt.Errorf("invalid event selection mode")
+	}
+	if mode == "selected" && len(events) == 0 {
+		return fmt.Errorf("select at least one event or choose all events")
+	}
+	return nil
+}
+
+func assembleNotificationSettings(r *http.Request, chType string) (json.RawMessage, error) {
+	number, err := notificationFormNumber(r, chType)
+	if err != nil {
+		return nil, err
+	}
+	return assembleNotificationValues(r, chType, number), nil
+}
+
+// Parse only the active provider's numeric field. Blank fields keep their
+// existing defaults; malformed or overflowing values must never become zero.
+func notificationFormNumber(r *http.Request, chType string) (int, error) {
+	var field, label string
+	fallback := 0
+	switch chType {
+	case "email":
+		field, label = "notif_email_port", "Email port"
+	case "ntfy":
+		field, label = "notif_ntfy_priority", "ntfy priority"
+	case "pushover":
+		field, label = "notif_pushover_priority", "Pushover priority"
+	case "gotify":
+		field, label, fallback = "notif_gotify_priority", "Gotify priority", 5
+	default:
+		return 0, nil
+	}
+	raw := strings.TrimSpace(r.FormValue(field))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a whole number", label)
+	}
+	return value, nil
+}
+
+func assembleNotificationValues(r *http.Request, chType string, number int) json.RawMessage {
 	switch chType {
 	case "webhook":
 		s := notifier.WebhookSettings{
@@ -284,20 +418,19 @@ func assembleNotificationSettings(r *http.Request, chType string) json.RawMessag
 		b, _ := json.Marshal(s)
 		return b
 	case "email":
-		return assembleEmailSettings(r)
+		return assembleEmailSettings(r, number)
 	case "ntfy":
-		return assembleNtfySettings(r)
+		return assembleNtfySettings(r, number)
 	case "teams", "pagerduty", "opsgenie", "pushover":
-		return assembleExtendedSettings(r, chType)
+		return assembleExtendedSettings(r, chType, number)
 	case "googlechat", "matrix", "gotify":
-		return assembleExtraSettings(r, chType)
+		return assembleExtraSettings(r, chType, number)
 	default:
 		return json.RawMessage("{}")
 	}
 }
 
-func assembleEmailSettings(r *http.Request) json.RawMessage {
-	port, _ := strconv.Atoi(r.FormValue("notif_email_port"))
+func assembleEmailSettings(r *http.Request, port int) json.RawMessage {
 	s := notifier.EmailSettings{
 		Host:     r.FormValue("notif_email_host"),
 		Port:     port,
@@ -331,21 +464,19 @@ func assembleEmailSettings(r *http.Request) json.RawMessage {
 	return b
 }
 
-func assembleNtfySettings(r *http.Request) json.RawMessage {
+func assembleNtfySettings(r *http.Request, priority int) json.RawMessage {
 	s := notifier.NtfySettings{
 		ServerURL: r.FormValue("notif_ntfy_server_url"),
 		Topic:     r.FormValue("notif_ntfy_topic"),
 		Tags:      r.FormValue("notif_ntfy_tags"),
 		ClickURL:  r.FormValue("notif_ntfy_click_url"),
-	}
-	if v := r.FormValue("notif_ntfy_priority"); v != "" {
-		s.Priority, _ = strconv.Atoi(v)
+		Priority:  priority,
 	}
 	b, _ := json.Marshal(s)
 	return b
 }
 
-func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
+func assembleExtraSettings(r *http.Request, chType string, priority int) json.RawMessage {
 	var v any
 	switch chType {
 	case "googlechat":
@@ -362,9 +493,7 @@ func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
 		s := notifier.GotifySettings{
 			ServerURL: r.FormValue("notif_gotify_server_url"),
 			AppToken:  r.FormValue("notif_gotify_app_token"),
-		}
-		if p := r.FormValue("notif_gotify_priority"); p != "" {
-			s.Priority, _ = strconv.Atoi(p)
+			Priority:  priority,
 		}
 		v = s
 	}
@@ -372,7 +501,7 @@ func assembleExtraSettings(r *http.Request, chType string) json.RawMessage {
 	return b
 }
 
-func assembleExtendedSettings(r *http.Request, chType string) json.RawMessage {
+func assembleExtendedSettings(r *http.Request, chType string, priority int) json.RawMessage {
 	var v any
 	switch chType {
 	case "teams":
@@ -394,9 +523,7 @@ func assembleExtendedSettings(r *http.Request, chType string) json.RawMessage {
 			AppToken: r.FormValue("notif_pushover_app_token"),
 			Sound:    r.FormValue("notif_pushover_sound"),
 			Device:   r.FormValue("notif_pushover_device"),
-		}
-		if p := r.FormValue("notif_pushover_priority"); p != "" {
-			s.Priority, _ = strconv.Atoi(p)
+			Priority: priority,
 		}
 		v = s
 	}

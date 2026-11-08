@@ -2,11 +2,13 @@ package monitor
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"time"
 
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // HeartbeatWatcher periodically checks for expired heartbeats and triggers incidents.
@@ -52,108 +54,76 @@ func (w *HeartbeatWatcher) check(ctx context.Context) {
 	}
 
 	for _, hb := range expired {
-		if hb.Status == "down" {
-			w.resendIfNeeded(ctx, hb)
-			continue
-		}
-
-		// Re-read the latest committed heartbeat snapshot to avoid racing a ping
-		// that arrived between the expired-listing SELECT and this transition. In
-		// WAL mode committed pings are visible to the read pool, so if last_ping_at
-		// advanced the monitor recovered and we must not mark it down.
-		fresh, err := w.store.GetHeartbeatByMonitorID(ctx, hb.MonitorID)
-		if err != nil {
-			w.logger.Error("heartbeat watcher: re-fetch heartbeat", "error", err)
-			continue
-		}
-		if fresh.Status == "down" || pingAdvanced(hb.LastPingAt, fresh.LastPingAt) {
-			continue
-		}
-
-		w.logger.Info("heartbeat expired", "monitor_id", hb.MonitorID)
-
-		// Mark heartbeat as down
-		if err := w.store.UpdateHeartbeatStatus(ctx, hb.MonitorID, "down"); err != nil {
-			w.logger.Error("heartbeat watcher: mark down", "monitor_id", hb.MonitorID, "error", err)
-			continue
-		}
-
-		// Get monitor for incident creation
-		mon, err := w.store.GetMonitor(ctx, hb.MonitorID)
-		if err != nil {
-			w.logger.Error("heartbeat watcher: get monitor", "error", err)
-			continue
-		}
-
-		// Update monitor status to down
-		now := time.Now()
-		status := &storage.MonitorStatus{
-			MonitorID:   mon.ID,
-			Status:      "down",
-			LastCheckAt: &now,
-			ConsecFails: mon.FailureThreshold,
-		}
-		if err := w.store.UpsertMonitorStatus(ctx, status); err != nil {
-			w.logger.Error("heartbeat watcher: upsert status", "error", err)
-		}
-
-		// Create the incident, notify and start escalation exactly like the
-		// check pipeline does.
-		w.pipeline.processFailure(ctx, mon, "down", "heartbeat missed", w.pipeline.inMaintenance(ctx, mon.ID))
+		w.checkHeartbeat(ctx, hb.MonitorID)
 	}
 }
 
-// pingAdvanced reports whether a heartbeat ping arrived after the one observed
-// when the heartbeat was listed as expired.
-func pingAdvanced(observed, current *time.Time) bool {
-	if current == nil {
-		return false
+func (w *HeartbeatWatcher) checkHeartbeat(ctx context.Context, monitorID int64) {
+	unlock := w.pipeline.lockMonitorStatus(monitorID)
+	defer unlock()
+
+	// The scan is only a candidate list. Both reminders and expiry use fresh
+	// state under the same lock as pings, including their incident transitions.
+	hb, err := w.store.GetHeartbeatByMonitorID(ctx, monitorID)
+	if err != nil {
+		w.logger.Error("heartbeat watcher: get heartbeat", "error", err)
+		return
 	}
-	if observed == nil {
-		return true
+	if hb.Status == "down" {
+		w.resendIfNeeded(ctx, hb)
+		return
 	}
-	return current.After(*observed)
+	mon, err := w.store.GetMonitor(ctx, monitorID)
+	if err != nil {
+		w.logger.Error("heartbeat watcher: get monitor", "error", err)
+		return
+	}
+	expired, err := w.store.ExpireHeartbeat(ctx, monitorID)
+	if err != nil {
+		w.logger.Error("heartbeat watcher: mark down", "monitor_id", monitorID, "error", err)
+		return
+	}
+	if !expired {
+		return
+	}
+	w.logger.Info("heartbeat expired", "monitor_id", monitorID)
+	w.pipeline.processFailure(ctx, mon, "down", "heartbeat missed", w.pipeline.inMaintenance(ctx, monitorID))
 }
 
 func (w *HeartbeatWatcher) resendIfNeeded(ctx context.Context, hb *storage.Heartbeat) {
 	mon, err := w.store.GetMonitor(ctx, hb.MonitorID)
+	if err != nil || !mon.Enabled || mon.Type != "heartbeat" {
+		return
+	}
+	// Expiry may have committed just before incident creation failed or the
+	// process stopped. Retry that transition even when reminders are disabled.
+	inc, err := w.store.GetOpenIncident(ctx, mon.ID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && inc == nil) {
+		w.pipeline.processFailure(ctx, mon, "down", "heartbeat missed", w.pipeline.inMaintenance(ctx, mon.ID))
+		return
+	}
 	if err != nil {
+		w.logger.Error("heartbeat watcher: get open incident", "monitor_id", mon.ID, "error", err)
 		return
 	}
-	if _, silenced := w.pipeline.silenced.Load(mon.ID); silenced {
-		w.announceAfterMaintenance(ctx, mon)
+	w.pipeline.checkSLABreach(ctx, mon)
+	if inc.AnnouncementPending {
+		if !w.pipeline.inMaintenance(ctx, mon.ID) {
+			w.pipeline.announceIncident(ctx, mon, inc)
+		}
 		return
 	}
-	if mon.ResendInterval <= 0 {
-		return
-	}
-	if !w.pipeline.shouldResend(mon) {
+	resend := w.pipeline.shouldResend(mon)
+	if !inc.EscalationPending && !resend {
 		return
 	}
 	inMaintenance, _ := w.store.IsMonitorInMaintenance(ctx, mon.ID, time.Now())
 	if inMaintenance {
 		return
 	}
-	inc, err := w.store.GetOpenIncident(ctx, mon.ID)
-	if err != nil || inc == nil {
-		return
-	}
-	w.pipeline.emitNotification(ctx, "incident.reminder", inc, mon, nil)
-	w.pipeline.lastNotified.Store(mon.ID, time.Now())
-}
-
-// announceAfterMaintenance announces an incident that was opened silently
-// during a maintenance window once that window has ended.
-func (w *HeartbeatWatcher) announceAfterMaintenance(ctx context.Context, mon *storage.Monitor) {
-	if w.pipeline.inMaintenance(ctx, mon.ID) {
-		return
-	}
-	inc, err := w.store.GetOpenIncident(ctx, mon.ID)
-	if err != nil || inc == nil {
-		w.pipeline.silenced.Delete(mon.ID)
-		return
-	}
-	if w.pipeline.takeSilenced(mon.ID, inc.ID) {
-		w.pipeline.announceIncident(ctx, mon, inc)
+	w.pipeline.prepareEscalation(ctx, mon, inc)
+	if resend {
+		w.pipeline.emitNotification(ctx, "incident.reminder", inc, mon, nil)
+		w.pipeline.lastNotified.Store(mon.ID, time.Now())
 	}
 }

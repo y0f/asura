@@ -48,7 +48,7 @@ func seedChecks(tb testing.TB, s *SQLiteStore, monitorID int64, times []time.Tim
 	if err != nil {
 		tb.Fatal(err)
 	}
-	stmt, err := tx.Prepare(`INSERT INTO check_results (monitor_id, status, response_time, created_at) VALUES (?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO check_results (monitor_id, status, response_time, created_at, observation_kind) VALUES (?, ?, ?, ?, 'probe')`)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -427,7 +427,9 @@ func TestHashLegacyTokensAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustExec := func(db *sql.DB, q string, args ...any) {
+	mustExec := func(db interface {
+		Exec(string, ...any) (sql.Result, error)
+	}, q string, args ...any) {
 		t.Helper()
 		if _, err := db.Exec(q, args...); err != nil {
 			t.Fatal(err)

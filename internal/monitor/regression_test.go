@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // countingStore wraps the real SQLite store so individual calls can be counted,
@@ -42,14 +42,24 @@ func (s *countingStore) IsMonitorInMaintenance(ctx context.Context, id int64, at
 	return s.SQLiteStore.IsMonitorInMaintenance(ctx, id, at)
 }
 
-func (s *countingStore) GetOpenIncident(ctx context.Context, id int64) (*storage.Incident, error) {
+func (s *countingStore) GetOpenIncident(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.Incident, error) {
 	s.openIncCalls.Add(1)
-	return s.SQLiteStore.GetOpenIncident(ctx, id)
+	return s.SQLiteStore.GetOpenIncident(ctx, id, access...)
 }
 
-func (s *countingStore) GetLatestCheckResult(ctx context.Context, id int64) (*storage.CheckResult, error) {
+func (s *countingStore) RecordIncidentFailure(ctx context.Context, id int64, severity, cause string) (*storage.Incident, bool, error) {
+	s.openIncCalls.Add(1)
+	return s.SQLiteStore.RecordIncidentFailure(ctx, id, severity, cause)
+}
+
+func (s *countingStore) RecordIncidentRecovery(ctx context.Context, id int64) (*storage.Incident, bool, error) {
+	s.openIncCalls.Add(1)
+	return s.SQLiteStore.RecordIncidentRecovery(ctx, id)
+}
+
+func (s *countingStore) GetLatestCheckResult(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.CheckResult, error) {
 	s.latestCRCalls.Add(1)
-	cr, err := s.SQLiteStore.GetLatestCheckResult(ctx, id)
+	cr, err := s.SQLiteStore.GetLatestCheckResult(ctx, id, access...)
 	if cr != nil {
 		s.latestCRBytes.Add(int64(len(cr.Body)))
 	}
@@ -66,12 +76,15 @@ func (s *countingStore) GetMonitorStatus(ctx context.Context, id int64) (*storag
 	return ms, err
 }
 
-func (s *countingStore) InsertCheckResult(ctx context.Context, cr *storage.CheckResult) error {
+func (s *countingStore) RecordMonitorCheck(ctx context.Context, mon *storage.Monitor, cr *storage.CheckResult, status *storage.MonitorStatus) error {
+	if err := s.SQLiteStore.RecordMonitorCheck(ctx, mon, cr, status); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	cp := *cr
 	s.inserted = append(s.inserted, &cp)
 	s.mu.Unlock()
-	return s.SQLiteStore.InsertCheckResult(ctx, cr)
+	return nil
 }
 
 func (s *countingStore) ListExpiredHeartbeats(ctx context.Context) ([]*storage.Heartbeat, error) {
@@ -81,14 +94,26 @@ func (s *countingStore) ListExpiredHeartbeats(ctx context.Context) ([]*storage.H
 	return s.SQLiteStore.ListExpiredHeartbeats(ctx)
 }
 
-func (s *countingStore) GetHeartbeatByMonitorID(ctx context.Context, id int64) (*storage.Heartbeat, error) {
+func (s *countingStore) GetHeartbeatByMonitorID(ctx context.Context, id int64, access ...storage.MonitorAccess) (*storage.Heartbeat, error) {
 	for _, hb := range s.expired {
 		if hb.MonitorID == id {
 			cp := *hb
 			return &cp, nil
 		}
 	}
-	return s.SQLiteStore.GetHeartbeatByMonitorID(ctx, id)
+	return s.SQLiteStore.GetHeartbeatByMonitorID(ctx, id, access...)
+}
+
+func (s *countingStore) ExpireHeartbeat(ctx context.Context, id int64) (bool, error) {
+	// This fixture supplies synthetic expired snapshots to test escalation. Real
+	// deadline checks and atomic status writes have separate SQLite tests.
+	for _, hb := range s.expired {
+		if hb.MonitorID == id {
+			err := s.SQLiteStore.UpdateHeartbeatStatus(ctx, id, "down")
+			return err == nil, err
+		}
+	}
+	return s.SQLiteStore.ExpireHeartbeat(ctx, id)
 }
 
 func newCountingPipeline(t *testing.T) (*countingStore, *Pipeline) {
@@ -141,6 +166,35 @@ func drainEvents(p *Pipeline) []string {
 	}
 }
 
+func assignTestAgents(t *testing.T, s storage.Store, mon *storage.Monitor, count int) []int64 {
+	t.Helper()
+	ctx := context.Background()
+	ids := make([]int64, count)
+	for i := range ids {
+		a := &storage.Agent{Name: "test location", Enabled: true}
+		if err := s.CreateAgent(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+		ids[i] = a.ID
+	}
+	if err := s.SetMonitorAgentIDs(ctx, mon.ID, ids); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.GetMonitor(ctx, mon.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*mon = *current
+	return ids
+}
+
+func processTestAgentResult(t *testing.T, p *Pipeline, ctx context.Context, mon *storage.Monitor, result *storage.CheckResult) {
+	t.Helper()
+	if err := p.ProcessAgentResult(ctx, mon, result); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func countEvents(evs []string, typ string) int {
 	n := 0
 	for _, e := range evs {
@@ -173,6 +227,7 @@ func TestAgentResultAppliesUpsideDownAndAssertions(t *testing.T) {
 	t.Run("upside_down", func(t *testing.T) {
 		ps, p := newCountingPipeline(t)
 		mon := createTestMonitor(t, ps, &storage.Monitor{UpsideDown: true, AgentEnabled: true})
+		agentID := assignTestAgents(t, ps, mon, 1)[0]
 
 		// Local path: target unreachable -> upside-down monitor is up.
 		p.handleResult(ctx, WorkerResult{Monitor: mon, Result: &checker.Result{Status: "down", Message: "refused"}})
@@ -183,7 +238,7 @@ func TestAgentResultAppliesUpsideDownAndAssertions(t *testing.T) {
 		drainEvents(p)
 
 		// Agent sees the same unreachable target and posts "down".
-		p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", Message: "refused"})
+		processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, AgentID: &agentID, Status: "down", Message: "refused"})
 		st, _ = ps.SQLiteStore.GetMonitorStatus(ctx, mon.ID)
 		inc, _ := ps.SQLiteStore.GetOpenIncident(ctx, mon.ID)
 		if st.Status != "up" || inc != nil {
@@ -195,12 +250,13 @@ func TestAgentResultAppliesUpsideDownAndAssertions(t *testing.T) {
 		ps, p := newCountingPipeline(t)
 		asr := `{"operator":"and","groups":[{"operator":"and","conditions":[{"type":"status_code","operator":"eq","value":"200"}]}]}`
 		mon := createTestMonitor(t, ps, &storage.Monitor{Assertions: json.RawMessage(asr), AgentEnabled: true})
+		agentID := assignTestAgents(t, ps, mon, 1)[0]
 
 		p.handleResult(ctx, WorkerResult{Monitor: mon, Result: &checker.Result{Status: "up", StatusCode: 500}})
 		if inc, _ := ps.SQLiteStore.GetOpenIncident(ctx, mon.ID); inc == nil {
 			t.Fatal("precondition: local assertion failure should open incident")
 		}
-		p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "up", StatusCode: 500})
+		processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, AgentID: &agentID, Status: "up", StatusCode: 500})
 		st, _ := ps.SQLiteStore.GetMonitorStatus(ctx, mon.ID)
 		inc, _ := ps.SQLiteStore.GetOpenIncident(ctx, mon.ID)
 		if st.Status != "down" || inc == nil {
@@ -214,11 +270,12 @@ func TestAgentAndLocalStreaksDoNotFlap(t *testing.T) {
 	ctx := context.Background()
 	ps, p := newCountingPipeline(t)
 	mon := createTestMonitor(t, ps, &storage.Monitor{FailureThreshold: 2, SuccessThreshold: 1, AgentEnabled: true})
+	agentID := assignTestAgents(t, ps, mon, 1)[0]
 
 	var evs []string
 	for round := 0; round < 3; round++ {
-		p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", Message: "regional"})
-		p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", Message: "regional"})
+		processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, AgentID: &agentID, Status: "down", Message: "regional"})
+		processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, AgentID: &agentID, Status: "down", Message: "regional"})
 		p.handleResult(ctx, WorkerResult{Monitor: mon, Result: &checker.Result{Status: "up", StatusCode: 200}})
 		evs = append(evs, drainEvents(p)...)
 	}
@@ -305,7 +362,7 @@ func TestHealthyCheckAvoidsExtraQueries(t *testing.T) {
 	for i := 0; i < n; i++ {
 		p.handleResult(ctx, WorkerResult{Monitor: mon, Result: &checker.Result{Status: "up", StatusCode: 200, Body: body, BodyHash: hash}})
 	}
-	t.Logf("%d steady up checks: IsMonitorInMaintenance=%d GetOpenIncident=%d GetMonitorStatus=%d GetLatestCheckResult=%d (%d MB body read)",
+	t.Logf("%d steady up checks: IsMonitorInMaintenance=%d Open-incident lookup=%d GetMonitorStatus=%d GetLatestCheckResult=%d (%d MB body read)",
 		n, ps.maintCalls.Load(), ps.openIncCalls.Load(), ps.getStatusCalls.Load(), ps.latestCRCalls.Load(), ps.latestCRBytes.Load()>>20)
 	if ps.maintCalls.Load() >= n || ps.openIncCalls.Load() >= n || ps.latestCRCalls.Load() >= n-1 || ps.getStatusCalls.Load() > n {
 		t.Fatalf("steady healthy monitor (no status change, no open incident, unchanged hash) still does per-check maintenance/open-incident/latest-body/status re-reads")
@@ -398,12 +455,13 @@ func TestAgentOnlyOutageStillAlerts(t *testing.T) {
 	ctx := context.Background()
 	ps, p := newCountingPipeline(t)
 	mon := createTestMonitor(t, ps, &storage.Monitor{FailureThreshold: 3, SuccessThreshold: 1, AgentEnabled: true})
-	a1, a2 := int64(1), int64(2)
+	agents := assignTestAgents(t, ps, mon, 2)
+	a1, a2 := agents[0], agents[1]
 
 	var evs []string
 	for i := 0; i < 3; i++ {
-		p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", AgentID: &a1})
-		p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", AgentID: &a2})
+		processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", AgentID: &a1})
+		processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "down", AgentID: &a2})
 		p.handleResult(ctx, WorkerResult{Monitor: mon, Result: &checker.Result{Status: "up", StatusCode: 200}})
 		evs = append(evs, drainEvents(p)...)
 	}
@@ -411,11 +469,11 @@ func TestAgentOnlyOutageStillAlerts(t *testing.T) {
 		t.Fatalf("regional outage: events %v, want exactly one incident.created", evs)
 	}
 
-	p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "up", AgentID: &a1})
+	processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "up", AgentID: &a1})
 	if evs := drainEvents(p); countEvents(evs, "incident.resolved") != 0 {
 		t.Fatal("resolved while agent 2 still reports down")
 	}
-	p.ProcessAgentResult(ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "up", AgentID: &a2})
+	processTestAgentResult(t, p, ctx, mon, &storage.CheckResult{MonitorID: mon.ID, Status: "up", AgentID: &a2})
 	if evs := drainEvents(p); countEvents(evs, "incident.resolved") != 1 {
 		t.Fatalf("all locations up: events %v, want incident.resolved", evs)
 	}

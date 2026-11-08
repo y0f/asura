@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/totp"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/totp"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 const sessionCookie = "asura_session"
@@ -37,6 +37,23 @@ func generateSessionToken() (string, error) {
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.renderComponent(w, r, views.LoginPage(views.LoginParams{BasePath: h.cfg.Server.BasePath}))
+}
+
+func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
+	key := httputil.GetAPIKey(r.Context())
+	if key == nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	landing := views.LandingPath(key.CapabilityMap())
+	switch landing {
+	case "":
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	case "/":
+		h.Dashboard(w, r)
+	default:
+		http.Redirect(w, r, h.cfg.Server.BasePath+landing, http.StatusSeeOther)
+	}
 }
 
 func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
@@ -240,6 +257,15 @@ func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createSessionAndLogin(w http.ResponseWriter, r *http.Request, apiKey *config.APIKeyConfig, ip string) {
+	landing := views.LandingPath(apiKey.CapabilityMap())
+	if landing == "" {
+		h.renderComponent(w, r, views.LoginPage(views.LoginParams{
+			BasePath: h.cfg.Server.BasePath,
+			Error:    "This API key does not have access to any application pages. Ask an administrator for a read permission.",
+		}))
+		return
+	}
+
 	token, err := generateSessionToken()
 	if err != nil {
 		h.logger.Error("generate session token", "error", err)
@@ -271,7 +297,7 @@ func (h *Handler) createSessionAndLogin(w http.ResponseWriter, r *http.Request, 
 	})
 
 	h.auditLogin("login_success", apiKey.Name, ip)
-	http.Redirect(w, r, h.cfg.Server.BasePath+"/", http.StatusSeeOther)
+	http.Redirect(w, r, h.cfg.Server.BasePath+landing, http.StatusSeeOther)
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -383,14 +409,22 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), httputil.CtxKeyAPIKey, apiKey)
+		ctx = context.WithValue(ctx, httputil.CtxKeySessionTokenHash, tokenHash)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func (h *Handler) RequirePerm(perm string, next http.Handler) http.Handler {
+	return h.RequirePermissions(next, perm)
+}
+
+// RequirePermissions admits every coarse capability and checks form origins.
+// Handlers must separately authorize each object and current affected targets.
+// With no scopes, the handler must authorize its operation itself.
+func (h *Handler) RequirePermissions(next http.Handler, scopes ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		k := httputil.GetAPIKey(r.Context())
-		if k == nil || !k.HasPermission(perm) {
+		if !k.HasAllCapabilities(scopes...) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

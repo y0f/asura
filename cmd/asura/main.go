@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/escalation"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/monitor"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/server"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/escalation"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/monitor"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/server"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 var version = "dev"
@@ -79,22 +79,25 @@ func main() {
 	logger := setupLogger(cfg.Logging)
 	logger.Info("starting asura", "version", version, "listen", cfg.Server.Listen)
 
-	store, err := storage.NewSQLiteStore(cfg.Database.Path, cfg.Database.MaxReadConns)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store, err := storage.Open(ctx, storage.Options{
+		Driver: cfg.Database.Driver, Path: cfg.Database.Path, DSN: cfg.Database.DSN,
+		MaxReadConns: cfg.Database.MaxReadConns, EncryptionKey: cfg.Database.EncryptionKey,
+		RuntimeOwner: true,
+		OnOwnershipLoss: func() {
+			logger.Error("database ownership lost; stopping server")
+			cancel()
+		},
+	})
 	if err != nil {
 		logger.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
 	defer store.Close()
-	logger.Info("database opened", "path", cfg.Database.Path)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	logger.Info("database opened", "driver", cfg.Database.Driver)
 
 	if cfg.Database.EncryptionKey != "" {
-		if err := enableEncryption(ctx, store, cfg.Database.EncryptionKey); err != nil {
-			logger.Error("failed to enable encryption at rest", "error", err)
-			os.Exit(1)
-		}
 		logger.Info("encryption at rest enabled")
 	}
 
@@ -130,14 +133,24 @@ func main() {
 	worker(func() { pipeline.Run(ctx) })
 	worker(func() { heartbeatWatcher.Run(ctx) })
 	worker(func() { retentionWorker.Run(ctx) })
-	worker(func() { forwardNotifications(ctx, pipeline, dispatcher, subNotifier, srv.EventBroker()) })
+	// The forwarder outlives producers so events already accepted by the
+	// pipeline are drained before the delivery queues stop admission.
+	producersDone := make(chan struct{})
+	forwardDone := make(chan struct{})
+	forwardCtx, cancelForward := context.WithCancel(context.Background())
+	defer cancelForward()
+	go func() {
+		defer close(forwardDone)
+		forwardNotifications(forwardCtx, producersDone, pipeline.NotifyChan(), dispatcher, subNotifier, srv.EventBroker(), logger)
+	}()
 	worker(func() { srv.RequestLogWriter().Run(ctx) })
 	worker(func() { runRollupWorker(ctx, store, logger) })
 	worker(func() { runBaselineWorker(ctx, store, logger) })
 	worker(func() { runRotationAdvancer(ctx, store, logger) })
 	worker(func() { runVacuumWorker(ctx, store, logger) })
 
-	httpServer := startHTTPServer(cfg, srv, logger, cancel)
+	requests := &requestTracker{handler: srv}
+	httpServer := startHTTPServer(cfg, requests, logger, cancel)
 	// Shutdown does not cancel request contexts, so long-lived SSE streams
 	// must be closed explicitly or they hold up graceful shutdown.
 	httpServer.RegisterOnShutdown(srv.EventBroker().Close)
@@ -156,58 +169,92 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
+	requests.Stop()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server shutdown error", "error", err)
+		_ = httpServer.Close()
 	}
+	requests.Wait()
 	srv.Close()
 
 	cancel()
 
-	workersDone := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(workersDone)
-	}()
+	// Never close SQLite under a still-running producer or delivery worker.
+	wg.Wait()
+	close(producersDone)
+	forwardGrace := time.AfterFunc(15*time.Second, cancelForward)
+	<-forwardDone
+	forwardGrace.Stop()
+	cancelForward()
 
-	select {
-	case <-workersDone:
-	case <-time.After(15 * time.Second):
-		logger.Warn("timed out waiting for background workers to stop")
+	deliveryCtx, deliveryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer deliveryCancel()
+	if err := dispatcher.Shutdown(deliveryCtx); err != nil {
+		logger.Warn("notification drain interrupted", "error", err)
 	}
-
+	logger.Info("notification delivery stopped", "counts", dispatcher.Stats())
+	if subNotifier != nil {
+		if err := subNotifier.Shutdown(deliveryCtx); err != nil {
+			logger.Warn("subscriber drain interrupted", "error", err)
+		}
+		logger.Info("subscriber delivery stopped", "counts", subNotifier.Stats())
+	}
 	logger.Info("shutdown complete")
 }
 
-func forwardNotifications(ctx context.Context, pipeline *monitor.Pipeline, dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier, broker *server.EventBroker) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-pipeline.NotifyChan():
-			payload := &notifier.Payload{
-				EventType: event.EventType,
-				Incident:  event.Incident,
-				Monitor:   event.Monitor,
-				Change:    event.Change,
-			}
-			if event.MonitorID > 0 {
-				dispatcher.NotifyForMonitor(event.MonitorID, payload)
-			} else {
-				dispatcher.NotifyWithPayload(payload)
-			}
-
-			if subNotifier != nil && event.MonitorID > 0 {
-				switch event.EventType {
-				case "incident.created", "incident.resolved":
-					go subNotifier.NotifyForMonitor(ctx, event.MonitorID, event.EventType, event.Incident, event.Monitor)
+func forwardNotifications(ctx context.Context, producersDone <-chan struct{}, events <-chan monitor.NotificationEvent, dispatcher *notifier.Dispatcher, subNotifier *notifier.SubscriberNotifier, broker *server.EventBroker, logger *slog.Logger) {
+	forward := func(event monitor.NotificationEvent) {
+		// Bound lookups and fan-out even when there are many configured
+		// recipients; accepted sends have their own delivery lifetime.
+		admissionCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		payload := &notifier.Payload{EventType: event.EventType, Incident: event.Incident, Monitor: event.Monitor, Change: event.Change}
+		var err error
+		if event.MonitorID > 0 {
+			err = dispatcher.NotifyForMonitor(admissionCtx, event.MonitorID, payload)
+		} else {
+			err = dispatcher.NotifyWithPayload(admissionCtx, payload)
+		}
+		if err != nil {
+			logger.Error("forward notification", "monitor_id", event.MonitorID, "event", event.EventType, "error", err)
+		}
+		if subNotifier != nil && event.MonitorID > 0 {
+			switch event.EventType {
+			case "incident.created", "incident.resolved":
+				if err := subNotifier.NotifyForMonitor(admissionCtx, event.MonitorID, event.EventType, event.Incident, event.Monitor); err != nil {
+					logger.Error("forward subscriber notification", "monitor_id", event.MonitorID, "event", event.EventType, "error", err)
 				}
 			}
-
-			if broker != nil {
-				broker.Broadcast(server.SSEEvent{
-					Type: event.EventType,
-					Data: payload,
-				})
+		}
+		if broker != nil {
+			update := server.SSEEvent{Type: event.EventType, MonitorID: event.MonitorID}
+			if event.Incident != nil {
+				update.MonitorID = event.Incident.MonitorID
+				update.IncidentID = event.Incident.ID
+				update.Status = event.Incident.Status
+			}
+			broker.Broadcast(update)
+		}
+	}
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			forward(event)
+		case <-producersDone:
+			// All producers have joined, so an empty buffer is now final.
+			for {
+				select {
+				case event, ok := <-events:
+					if !ok {
+						return
+					}
+					forward(event)
+				default:
+					return
+				}
 			}
 		}
 	}
@@ -323,6 +370,19 @@ func runBaselineWorker(ctx context.Context, store storage.Store, logger *slog.Lo
 }
 
 func runRotationAdvancer(ctx context.Context, store storage.Store, logger *slog.Logger) {
+	advance := func() {
+		rotations, err := store.ListOnCallRotations(ctx)
+		if err != nil {
+			logger.Error("rotation advancer: list", "error", err)
+			return
+		}
+		for _, rot := range rotations {
+			if err := store.AdvanceRotation(ctx, rot.ID); err != nil {
+				logger.Error("rotation advancer: advance", "id", rot.ID, "error", err)
+			}
+		}
+	}
+	advance()
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -330,16 +390,7 @@ func runRotationAdvancer(ctx context.Context, store storage.Store, logger *slog.
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rotations, err := store.ListOnCallRotations(ctx)
-			if err != nil {
-				logger.Error("rotation advancer: list", "error", err)
-				continue
-			}
-			for _, rot := range rotations {
-				if err := store.AdvanceRotation(ctx, rot.ID); err != nil {
-					logger.Error("rotation advancer: advance", "id", rot.ID, "error", err)
-				}
-			}
+			advance()
 		}
 	}
 }

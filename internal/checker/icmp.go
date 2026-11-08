@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -21,7 +21,7 @@ type ICMPChecker struct {
 
 func (c *ICMPChecker) Type() string { return "icmp" }
 
-func (c *ICMPChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
+func (c *ICMPChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
 	timeout := time.Duration(monitor.Timeout) * time.Second
 	start := time.Now()
 
@@ -88,7 +88,7 @@ func probeICMP(ctx context.Context, dst net.IP, isIPv6 bool, start time.Time, ti
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: time.Since(start).Milliseconds(), Message: fmt.Sprintf("ICMP listen failed: %v", err)}
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 
 	seq := int(icmpSeq.Add(1) & 0xffff)
 	sent := time.Now()

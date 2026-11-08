@@ -1,32 +1,50 @@
 package web
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/api"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/api"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
-	lp := h.newLayoutParams(r, "Settings", "settings")
-	dbSize, _ := h.store.DBSize()
-	total := int64(0)
-	if result, err := h.store.ListMonitors(r.Context(), storage.MonitorListFilter{}, storage.Pagination{Page: 1, PerPage: 1}); err == nil {
-		total = result.Total
+	key := httputil.GetAPIKey(r.Context())
+	if !key.HasPermission("settings.read") {
+		http.Error(w, "Settings access is required", http.StatusForbidden)
+		return
 	}
+	var dbSize, monitorCount int64
+	if key.HasPermission("database.read") {
+		var err error
+		dbSize, err = h.store.DBSize()
+		if err != nil {
+			h.logger.Error("web: settings database size", "error", err)
+			http.Error(w, "Failed to read database information", http.StatusInternalServerError)
+			return
+		}
+	}
+	if key.HasCapability("monitors.read") {
+		filter := storage.MonitorListFilter{Access: httputil.MonitorAccess(r.Context(), "monitors.read")}
+		result, err := h.store.ListMonitors(r.Context(), filter, storage.Pagination{Page: 1, PerPage: 1})
+		if err != nil {
+			h.logger.Error("web: settings monitor count", "error", err)
+			http.Error(w, "Failed to read monitor information", http.StatusInternalServerError)
+			return
+		}
+		monitorCount = result.Total
+	}
+	lp := h.newLayoutParams(r, "Settings", "settings")
 	uptime := time.Since(h.startTime).Truncate(time.Second).String()
 	h.renderComponent(w, r, views.SettingsPage(views.SettingsParams{
 		LayoutParams:  lp,
 		DBSizeBytes:   dbSize,
 		AppVersion:    h.version,
 		Uptime:        uptime,
-		MonitorCount:  total,
+		MonitorCount:  monitorCount,
 		WorkerCount:   h.cfg.Monitor.Workers,
 		RetentionDays: h.cfg.Database.RetentionDays,
 		EncryptionOn:  h.cfg.Database.EncryptionKey != "",
@@ -35,8 +53,8 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 	k := httputil.GetAPIKey(r.Context())
-	if k == nil || !k.SuperAdmin {
-		h.setError(w, "Vacuum requires super admin access")
+	if !k.HasPermission("database.maintain") {
+		h.setError(w, "Vacuum requires database.maintain")
 		h.redirect(w, r, "/settings")
 		return
 	}
@@ -50,13 +68,13 @@ func (h *Handler) DBVacuum(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	k := httputil.GetAPIKey(r.Context())
-	canExportSecrets := k != nil && k.HasPermission("monitors.write")
-
-	redact := true
-	if canExportSecrets && r.URL.Query().Get("redact_secrets") == "false" {
-		redact = false
+	if k == nil || !k.SuperAdmin {
+		http.Error(w, "Configuration export requires super admin access", http.StatusForbidden)
+		return
 	}
+	redact := r.URL.Query().Get("redact_secrets") != "false"
 
 	data, err := api.BuildExportData(r.Context(), h.store, redact)
 	if err != nil {
@@ -64,23 +82,46 @@ func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/settings")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", `attachment; filename="asura-export.json"`)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.Encode(data)
-}
-
-func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
-	k := httputil.GetAPIKey(r.Context())
-	if k == nil || !k.SuperAdmin {
-		h.setError(w, "Import requires admin access")
+	body, err := api.EncodeConfigurationExport(data)
+	if err != nil {
+		if errors.Is(err, storage.ErrInvalidConfiguration) {
+			h.setError(w, err.Error())
+		} else {
+			h.setError(w, "Failed to encode the complete configuration")
+		}
 		h.redirect(w, r, "/settings")
 		return
 	}
 
-	mode := r.FormValue("mode")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="asura-export.json"`)
+	w.Write(body)
+}
+
+func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	k := httputil.GetAPIKey(r.Context())
+	if k == nil || !k.SuperAdmin {
+		http.Error(w, "Configuration import requires super admin access", http.StatusForbidden)
+		return
+	}
+
+	// Bound the whole multipart request before parsing or spilling uploaded
+	// files to private temporary storage. The file itself has a 32 MiB limit.
+	r.Body = http.MaxBytesReader(w, r.Body, api.MaxConfigurationBytes+(1<<20))
+	defer r.Body.Close()
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		h.setError(w, "Invalid configuration upload or upload exceeds the 32 MiB file limit")
+		h.redirect(w, r, "/settings")
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+	if len(r.MultipartForm.Value["mode"]) > 1 || len(r.MultipartForm.Value["agent_mapping"]) > 1 || len(r.MultipartForm.File) != 1 || len(r.MultipartForm.File["file"]) != 1 {
+		h.setError(w, "Upload exactly one configuration file with one set of import options")
+		h.redirect(w, r, "/settings")
+		return
+	}
+	mode := r.PostForm.Get("mode")
 	if mode == "" {
 		mode = "merge"
 	}
@@ -90,7 +131,13 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, _, err := r.FormFile("file")
+	agentIDs, err := api.ParseConfigurationAgentMapping(r.PostForm.Get("agent_mapping"))
+	if err != nil {
+		h.setError(w, err.Error())
+		h.redirect(w, r, "/settings")
+		return
+	}
+	file, err := r.MultipartForm.File["file"][0].Open()
 	if err != nil {
 		h.setError(w, "No file uploaded")
 		h.redirect(w, r, "/settings")
@@ -98,26 +145,24 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	body, err := io.ReadAll(io.LimitReader(file, 10<<20))
+	data, err := api.DecodeConfiguration(file)
 	if err != nil {
-		h.setError(w, "Failed to read file")
+		h.setError(w, err.Error())
 		h.redirect(w, r, "/settings")
 		return
 	}
 
-	var data api.ExportData
-	if err := json.Unmarshal(body, &data); err != nil {
-		h.setError(w, "Invalid JSON file")
+	stats, err := api.RunImport(r.Context(), h.store, data, mode, agentIDs)
+	if err != nil {
+		if errors.Is(err, storage.ErrInvalidConfiguration) {
+			h.setError(w, err.Error())
+		} else {
+			h.logger.Error("web: import configuration rolled back", "error", err)
+			h.setError(w, "Configuration import failed; no changes were saved")
+		}
 		h.redirect(w, r, "/settings")
 		return
 	}
-	if data.Version != 1 {
-		h.setError(w, "Unsupported export version")
-		h.redirect(w, r, "/settings")
-		return
-	}
-
-	stats := api.RunImport(r.Context(), h.store, h.logger, &data, mode)
 
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
@@ -126,11 +171,13 @@ func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
 		h.OnStatusPageChange()
 	}
 
-	kind := "success"
-	if stats.Errors > 0 {
-		kind = "warning"
+	result := views.ImportResultParams{LayoutParams: h.newLayoutParams(r, "Configuration imported", "settings"), Stats: *stats}
+	result.Stats.Heartbeats = nil
+	for _, heartbeat := range stats.Heartbeats {
+		result.Heartbeats = append(result.Heartbeats, views.ImportedHeartbeatEnrollment{
+			MonitorID: heartbeat.MonitorID, MonitorName: heartbeat.MonitorName,
+			PingURL: h.cfg.ResolvedExternalURL() + "/api/v1/heartbeat/" + heartbeat.Token,
+		})
 	}
-	h.setToast(w, kind, fmt.Sprintf("Imported %d monitors, %d channels, %d groups, %d proxies, %d maintenance windows and %d status pages (%d skipped, %d errors)",
-		stats.Monitors, stats.Channels, stats.Groups, stats.Proxies, stats.Maintenance, stats.StatusPages, stats.Skipped, stats.Errors))
-	h.redirect(w, r, "/settings")
+	h.renderComponent(w, r, views.ImportResultPage(result))
 }

@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type IncidentListParams struct {
@@ -60,17 +60,21 @@ templ IncidentListPage(p IncidentListParams) {
 		@PageHeader(PageHeaderParams{Title: "Incidents", Subtitle: "Opened automatically when a monitor fails, closed when it recovers."})
 		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
 			<nav class="flex flex-wrap gap-1" aria-label="Filter by status">
-				<a href={ templ.SafeURL(p.filterHref("")) }
+				<a
+					href={ templ.SafeURL(p.filterHref("")) }
 					if p.Filter == "" {
 						aria-current="page"
 					}
-					class={ "filter-tab", templ.KV("filter-active", p.Filter == ""), templ.KV("filter-inactive", p.Filter != "") }>All</a>
+					class={ "filter-tab", templ.KV("filter-active", p.Filter == ""), templ.KV("filter-inactive", p.Filter != "") }
+				>All</a>
 				for _, st := range []string{"open", "acknowledged", "resolved"} {
-					<a href={ templ.SafeURL(p.filterHref(st)) }
+					<a
+						href={ templ.SafeURL(p.filterHref(st)) }
 						if p.Filter == st {
 							aria-current="page"
 						}
-						class={ "filter-tab", templ.KV("filter-active", p.Filter == st), templ.KV("filter-inactive", p.Filter != st) }>{ StatusLabel(st) }</a>
+						class={ "filter-tab", templ.KV("filter-active", p.Filter == st), templ.KV("filter-inactive", p.Filter != st) }
+					>{ StatusLabel(st) }</a>
 				}
 			</nav>
 			<form method="GET" action={ templ.SafeURL(p.BasePath + "/incidents") }>
@@ -99,15 +103,15 @@ templ IncidentListPage(p IncidentListParams) {
 							for _, inc := range incs {
 								<tr>
 									<td class="px-4 py-3">
-										<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="text-sm text-white font-medium hover:underline whitespace-nowrap">{ inc.MonitorName }</a>
+										<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, inc.ID)) } class="text-sm text-white font-medium hover:underline whitespace-nowrap">{ p.MonitorLabel(inc.MonitorName, inc.MonitorID, inc.MonitorGroupID) }</a>
 									</td>
 									<td class="px-4 py-3">@StatusPill(inc.Status)</td>
 									<td class="px-4 py-3 hidden md:table-cell">@SeverityPill(inc.Severity)</td>
-									<td class="px-4 py-3 text-sm text-muted max-w-0 w-full truncate hidden md:table-cell" title={ inc.Cause }>{ inc.Cause }</td>
+									<td class="px-4 py-3 text-sm text-muted max-w-0 w-full truncate hidden md:table-cell" title={ p.incidentCause(inc) }>{ p.incidentCause(inc) }</td>
 									<td class="px-4 py-3 text-sm text-muted-light tabular-nums whitespace-nowrap hidden sm:table-cell">{ IncidentDuration(inc.StartedAt, inc.ResolvedAt) }</td>
 									<td class="px-4 py-3 text-sm text-muted whitespace-nowrap">@RelTime(inc.StartedAt)</td>
 									<td class="px-4 py-3 text-right">
-										if p.Can("incidents.write") {
+										if p.CanMonitor("incidents.delete", inc.MonitorID, inc.MonitorGroupID) {
 											@DeleteButton(fmt.Sprintf("%s/incidents/%d/delete", p.BasePath, inc.ID), "Delete this incident and its timeline?")
 										}
 									</td>
@@ -136,33 +140,44 @@ func (p IncidentDetailParams) subtitle() string {
 
 templ IncidentDetailPage(p IncidentDetailParams) {
 	@Layout(p.LayoutParams) {
-		@PageHeader(PageHeaderParams{Title: p.Incident.MonitorName, Subtitle: p.subtitle(), BackHref: p.BasePath + "/incidents", BackLabel: "Incidents"}) {
+		@PageHeader(PageHeaderParams{Title: p.MonitorLabel(p.Incident.MonitorName, p.Incident.MonitorID, p.Incident.MonitorGroupID), Subtitle: p.subtitle(), BackHref: p.BasePath + "/incidents", BackLabel: "Incidents"}) {
 			@StatusPill(p.Incident.Status)
 			@SeverityPill(p.Incident.Severity)
-			if p.Can("incidents.write") {
-				<div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-					if p.Incident.Status == "open" {
-						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d/ack", p.BasePath, p.Incident.ID)) }>
-							<button type="submit" class="btn-secondary">Acknowledge</button>
-						</form>
-					}
-					if p.Incident.Status != "resolved" {
-						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d/resolve", p.BasePath, p.Incident.ID)) }>
-							<button type="submit" class="btn-primary">Resolve</button>
-						</form>
-					}
-					<button type="button"
+			<div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+				if p.Incident.Status == "open" && p.CanMonitor("incidents.acknowledge", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d/ack", p.BasePath, p.Incident.ID)) }>
+						<button type="submit" class="btn-secondary">Acknowledge</button>
+					</form>
+				}
+				if p.Incident.Status != "resolved" && p.CanMonitor("incidents.resolve", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+					<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d/resolve", p.BasePath, p.Incident.ID)) }>
+						<button type="submit" class="btn-primary">Resolve</button>
+					</form>
+				}
+				if p.CanMonitor("incidents.delete", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+					<button
+						type="button"
 						data-url={ fmt.Sprintf("%s/incidents/%d/delete", p.BasePath, p.Incident.ID) }
 						data-msg="Delete this incident and its timeline?"
 						@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
-						class="btn-danger">Delete</button>
-				</div>
-			}
+						class="btn-danger"
+					>Delete</button>
+				}
+			</div>
 		}
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 			<section class="card card-pad" aria-labelledby="inc-cause">
-				<h2 id="inc-cause" class="text-md font-semibold mb-2">Cause</h2>
-				<p class="text-sm text-white break-words">{ p.Incident.Cause }</p>
+				<h2 id="inc-cause" class="text-md font-semibold mb-2">
+					if p.canReadDiagnostics("incidents.read", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+						Cause
+					} else {
+						Summary
+					}
+				</h2>
+				<p class="text-sm text-white break-words">{ p.incidentCause(p.Incident) }</p>
+				if !p.canReadDiagnostics("incidents.read", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+					<p class="form-hint mt-2">The raw cause and timeline messages require diagnostic access.</p>
+				}
 				<dl class="mt-4 text-sm">
 					<div class="flex justify-between gap-4 py-2 border-t border-line"><dt class="text-muted">Incident</dt><dd class="text-white tabular-nums">{ fmt.Sprintf("#%d", p.Incident.ID) }</dd></div>
 					<div class="flex justify-between gap-4 py-2 border-t border-line"><dt class="text-muted">Started</dt><dd class="text-white">@RelTime(p.Incident.StartedAt)</dd></div>
@@ -171,7 +186,13 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 					}
 					<div class="flex justify-between gap-4 py-2 border-t border-line">
 						<dt class="text-muted">Monitor</dt>
-						<dd><a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Incident.MonitorID)) } class="text-white hover:underline">{ p.Incident.MonitorName }</a></dd>
+						<dd>
+							if p.CanMonitor("monitors.read", p.Incident.MonitorID, p.Incident.MonitorGroupID) {
+								<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, p.Incident.MonitorID)) } class="text-white hover:underline">{ p.Incident.MonitorName }</a>
+							} else {
+								{ fmt.Sprintf("Monitor #%d", p.Incident.MonitorID) }
+							}
+						</dd>
 					</div>
 				</dl>
 			</section>
@@ -188,7 +209,7 @@ templ IncidentDetailPage(p IncidentDetailParams) {
 									<span class="w-px flex-1 bg-line mt-1"></span>
 								</div>
 								<div class="pb-4 min-w-0">
-									<div class="text-sm text-white break-words">{ ev.Message }</div>
+									<div class="text-sm text-white break-words">{ p.eventMessage(ev) }</div>
 									<div class="text-xs text-muted mt-0.5">@RelTime(ev.CreatedAt)</div>
 								</div>
 							</li>

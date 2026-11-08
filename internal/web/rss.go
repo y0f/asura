@@ -1,13 +1,14 @@
 package web
 
 import (
+	"database/sql"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type rssChannel struct {
@@ -38,6 +39,11 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 	ctx := r.Context()
 
 	sp, err := h.store.GetStatusPage(ctx, pageID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.logger.Error("web: RSS status page", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
+		return
+	}
 	if err != nil || sp == nil || !sp.Enabled {
 		http.NotFound(w, r)
 		return
@@ -47,13 +53,20 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 		return
 	}
 
-	monitors, _, err := h.store.ListStatusPageMonitorsWithStatus(ctx, sp.ID)
-	if err != nil {
-		monitors = []*storage.Monitor{}
-	}
-
 	now := time.Now().UTC()
-	incidents := httputil.PublicIncidentsForPage(ctx, h.store, sp, monitors, now)
+	snapshot, err := h.store.GetPublicStatusPageSnapshot(ctx, sp.ID, storage.PublicStatusPageAccess{
+		ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageWeb,
+	}, now, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		h.logger.Error("web: RSS snapshot", "error", err)
+		http.Error(w, "Failed to load status page", http.StatusInternalServerError)
+		return
+	}
+	sp, incidents := snapshot.Page, snapshot.Incidents
 
 	extURL := h.cfg.ResolvedExternalURL()
 	pageURL := fmt.Sprintf("%s/%s", extURL, sp.Slug)
@@ -91,7 +104,11 @@ func (h *Handler) StatusPageRSS(w http.ResponseWriter, r *http.Request, pageID i
 	}
 
 	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	if sp.PasswordHash == "" {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+	} else {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.Write([]byte(xml.Header))
 	xml.NewEncoder(w).Encode(feed)
 }

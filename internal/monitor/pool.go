@@ -3,10 +3,11 @@ package monitor
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // Job represents a check to be executed.
@@ -41,10 +42,12 @@ func NewPool(workers int, registry *checker.Registry, jobs <-chan Job, results c
 }
 
 func (p *Pool) Run(ctx context.Context) {
+	var workers sync.WaitGroup
 	for i := 0; i < p.workers; i++ {
-		go p.worker(ctx, i)
+		workers.Go(func() { p.worker(ctx, i) })
 	}
 	<-ctx.Done()
+	workers.Wait()
 }
 
 func (p *Pool) worker(ctx context.Context, id int) {
@@ -62,12 +65,15 @@ func (p *Pool) worker(ctx context.Context, id int) {
 }
 
 func (p *Pool) executeJob(ctx context.Context, job Job) {
+	if ctx.Err() != nil {
+		return
+	}
 	c, err := p.registry.Get(job.Monitor.Type)
 	if err != nil {
-		p.results <- WorkerResult{
+		p.sendResult(ctx, WorkerResult{
 			Monitor: job.Monitor,
 			Err:     err,
-		}
+		})
 		return
 	}
 
@@ -76,9 +82,16 @@ func (p *Pool) executeJob(ctx context.Context, job Job) {
 	defer cancel()
 
 	result, err := c.Check(checkCtx, job.Monitor)
-	p.results <- WorkerResult{
+	p.sendResult(ctx, WorkerResult{
 		Monitor: job.Monitor,
 		Result:  result,
 		Err:     err,
+	})
+}
+
+func (p *Pool) sendResult(ctx context.Context, result WorkerResult) {
+	select {
+	case p.results <- result:
+	case <-ctx.Done():
 	}
 }

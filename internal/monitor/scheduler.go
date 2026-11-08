@@ -3,14 +3,18 @@ package monitor
 import (
 	"container/heap"
 	"context"
-	"fmt"
+	"database/sql"
+	"errors"
 	"log/slog"
+	"net"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type schedulerEntry struct {
@@ -54,9 +58,11 @@ type Scheduler struct {
 	mu                sync.RWMutex
 	monitors          map[int64]*storage.Monitor
 	entries           map[int64]*schedulerEntry
+	inFlight          map[int64]struct{} // queued, running, or awaiting result processing
 	heap              schedulerHeap
 	effectiveInterval map[int64]int64 // nanoseconds
 	reload            chan struct{}
+	afterLoad         func(context.Context, map[int64]struct{}) bool
 	droppedJobs       atomic.Int64
 }
 
@@ -67,6 +73,7 @@ func NewScheduler(store storage.Store, jobs chan<- Job, logger *slog.Logger) *Sc
 		logger:            logger,
 		monitors:          make(map[int64]*storage.Monitor),
 		entries:           make(map[int64]*schedulerEntry),
+		inFlight:          make(map[int64]struct{}),
 		effectiveInterval: make(map[int64]int64),
 		reload:            make(chan struct{}, 1),
 	}
@@ -83,29 +90,38 @@ func (s *Scheduler) TriggerReload() {
 func (s *Scheduler) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	retry := time.NewTicker(5 * time.Second)
+	defer retry.Stop()
 
-	s.loadMonitors(ctx)
+	reloadPending := !s.loadMonitors(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-s.reload:
-			s.loadMonitors(ctx)
+			reloadPending = !s.loadMonitors(ctx)
+		case <-retry.C:
+			if reloadPending {
+				reloadPending = !s.loadMonitors(ctx)
+			}
 		case now := <-ticker.C:
 			s.dispatch(now)
 		}
 	}
 }
 
-func (s *Scheduler) loadMonitors(ctx context.Context) {
+func (s *Scheduler) loadMonitors(ctx context.Context) bool {
 	monitors, err := s.store.GetAllEnabledMonitors(ctx)
 	if err != nil {
 		s.logger.Error("scheduler: load monitors", "error", err)
-		return
+		return false
 	}
 
-	s.resolveProxyURLs(ctx, monitors)
+	if err := s.resolveProxyURLs(ctx, monitors); err != nil {
+		s.logger.Error("scheduler: load proxy routes", "error", err)
+		return false
+	}
 
 	activeIDs := make(map[int64]struct{}, len(monitors))
 	newMonitors := make(map[int64]*storage.Monitor, len(monitors))
@@ -115,7 +131,6 @@ func (s *Scheduler) loadMonitors(ctx context.Context) {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	nowNano := time.Now().UnixNano()
 
@@ -143,7 +158,12 @@ func (s *Scheduler) loadMonitors(ctx context.Context) {
 	}
 
 	s.monitors = newMonitors
+	s.mu.Unlock()
 	s.logger.Debug("scheduler: loaded monitors", "count", len(monitors))
+	if s.afterLoad != nil {
+		return s.afterLoad(ctx, activeIDs)
+	}
+	return true
 }
 
 // applyEditedInterval resets the effective interval of an edited monitor to
@@ -186,9 +206,12 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		iv := s.interval(entry.monitorID, mon.Interval)
 
-		entry.lastRun = nowNano
-
 		if mon.Type == "heartbeat" || mon.Type == "manual" {
+			entry.nextRun = nowNano + iv
+			heap.Push(&s.heap, entry)
+			continue
+		}
+		if _, busy := s.inFlight[mon.ID]; busy {
 			entry.nextRun = nowNano + iv
 			heap.Push(&s.heap, entry)
 			continue
@@ -196,6 +219,8 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		select {
 		case s.jobs <- Job{Monitor: mon}:
+			s.inFlight[mon.ID] = struct{}{}
+			entry.lastRun = nowNano
 			entry.nextRun = nowNano + iv
 		default:
 			s.droppedJobs.Add(1)
@@ -205,6 +230,14 @@ func (s *Scheduler) dispatch(now time.Time) {
 
 		heap.Push(&s.heap, entry)
 	}
+}
+
+// complete releases the local slot only after the result has been processed.
+// Reloads retain the slot, including disable/re-enable while a check is running.
+func (s *Scheduler) complete(monitorID int64) {
+	s.mu.Lock()
+	delete(s.inFlight, monitorID)
+	s.mu.Unlock()
 }
 
 // GetMultiplier returns the current effective interval multiplier for a monitor.
@@ -227,7 +260,7 @@ func (s *Scheduler) GetMultiplier(monitorID int64) float64 {
 }
 
 // resolveProxyURLs populates ProxyURL for monitors that have a ProxyID set.
-func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Monitor) {
+func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Monitor) error {
 	proxyIDs := make(map[int64]struct{})
 	for _, m := range monitors {
 		if m.ProxyID != nil {
@@ -235,18 +268,24 @@ func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Mo
 		}
 	}
 	if len(proxyIDs) == 0 {
-		return
+		return nil
 	}
 
 	proxyCache := make(map[int64]string)
 	for id := range proxyIDs {
 		p, err := s.store.GetProxy(ctx, id)
-		if err != nil || !p.Enabled {
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // A missing configured route stays fail-closed.
+		}
+		if err != nil {
+			return err // Keep the previous complete snapshot and retry transient reads.
+		}
+		if !p.Enabled {
 			continue
 		}
 		u := &url.URL{
 			Scheme: p.Protocol,
-			Host:   fmt.Sprintf("%s:%d", p.Host, p.Port),
+			Host:   net.JoinHostPort(strings.Trim(p.Host, "[]"), strconv.Itoa(p.Port)),
 		}
 		if p.AuthUser != "" {
 			u.User = url.UserPassword(p.AuthUser, p.AuthPass)
@@ -259,6 +298,7 @@ func (s *Scheduler) resolveProxyURLs(ctx context.Context, monitors []*storage.Mo
 			m.ProxyURL = proxyCache[*m.ProxyID]
 		}
 	}
+	return nil
 }
 
 // UpdateInterval sets the effective interval for a monitor and adjusts the heap.

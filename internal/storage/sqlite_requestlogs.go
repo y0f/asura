@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/y0f/asura/v2/internal/logsafe"
 )
 
 func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*RequestLog) error {
@@ -33,8 +35,8 @@ func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*Request
 			monitorID = *l.MonitorID
 		}
 		_, err := stmt.ExecContext(ctx,
-			l.Method, l.Path, l.StatusCode, l.LatencyMs,
-			l.ClientIP, l.UserAgent, l.Referer,
+			l.Method, logsafe.Path(l.Path), l.StatusCode, l.LatencyMs,
+			l.ClientIP, l.UserAgent, logsafe.Referer(l.Referer),
 			monitorID, l.RouteGroup, formatTime(l.CreatedAt))
 		if err != nil {
 			return fmt.Errorf("request log batch insert: %w", err)
@@ -44,16 +46,17 @@ func (s *SQLiteStore) InsertRequestLogBatch(ctx context.Context, logs []*Request
 	return tx.Commit()
 }
 
-func buildRequestLogWhere(f RequestLogFilter) (string, []any) {
+func (s *SQLiteStore) buildRequestLogWhere(f RequestLogFilter) (string, []any) {
 	where := "1=1"
-	var args []any
+	clause, args := monitorOwnerAccessSQL("monitor_id", f.Access)
+	where += clause
 
 	if f.Method != "" {
 		where += " AND method=?"
 		args = append(args, f.Method)
 	}
 	if f.Path != "" {
-		where += " AND path LIKE ?"
+		where += " AND " + s.readDB.dialect.like("path", "?")
 		args = append(args, "%"+f.Path+"%")
 	}
 	if f.StatusCode > 0 {
@@ -84,7 +87,7 @@ func buildRequestLogWhere(f RequestLogFilter) (string, []any) {
 }
 
 func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p Pagination) (*PaginatedResult, error) {
-	where, args := buildRequestLogWhere(f)
+	where, args := s.buildRequestLogWhere(f)
 
 	var total int64
 	countArgs := make([]any, len(args))
@@ -116,6 +119,7 @@ func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p
 			return nil, err
 		}
 		l.CreatedAt = parseTime(createdAt)
+		l.Path, l.Referer = logsafe.Path(l.Path), logsafe.Referer(l.Referer)
 		if monitorID.Valid {
 			mid := monitorID.Int64
 			l.MonitorID = &mid
@@ -138,12 +142,12 @@ func (s *SQLiteStore) ListRequestLogs(ctx context.Context, f RequestLogFilter, p
 	}, nil
 }
 
-func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, limit int) ([]string, error) {
+func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, limit int, access ...MonitorAccess) ([]string, error) {
+	where, args := s.buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
 	rows, err := s.readDB.QueryContext(ctx,
 		`SELECT client_ip FROM request_logs
-		 WHERE created_at >= ? AND created_at < ? AND client_ip != ''
-		 GROUP BY client_ip ORDER BY COUNT(*) DESC LIMIT ?`,
-		formatTime(from), formatTime(to), limit)
+		 WHERE `+where+` AND client_ip != ''
+		 GROUP BY client_ip ORDER BY COUNT(*) DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -160,23 +164,21 @@ func (s *SQLiteStore) ListTopClientIPs(ctx context.Context, from, to time.Time, 
 	return ips, rows.Err()
 }
 
-func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time) (*RequestLogStats, error) {
-	fromStr := formatTime(from)
-	toStr := formatTime(to)
+func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time, access ...MonitorAccess) (*RequestLogStats, error) {
+	where, args := s.buildRequestLogWhere(RequestLogFilter{From: from, To: to, Access: access})
 
 	var stats RequestLogStats
 	err := s.readDB.QueryRowContext(ctx,
-		`SELECT COUNT(*), COUNT(DISTINCT client_ip), CAST(COALESCE(AVG(latency_ms), 0) AS INTEGER)
-		 FROM request_logs WHERE created_at >= ? AND created_at < ?`,
-		fromStr, toStr).Scan(&stats.TotalRequests, &stats.UniqueVisitors, &stats.AvgLatencyMs)
+		`SELECT COUNT(*), COUNT(DISTINCT client_ip), `+s.readDB.dialect.integer("COALESCE(AVG(latency_ms), 0)")+`
+		 FROM request_logs WHERE `+where, args...).Scan(&stats.TotalRequests, &stats.UniqueVisitors, &stats.AvgLatencyMs)
 	if err != nil {
 		return nil, err
 	}
 
 	topPaths, err := s.readDB.QueryContext(ctx,
 		`SELECT path, COUNT(*) as cnt FROM request_logs
-		 WHERE created_at >= ? AND created_at < ?
-		 GROUP BY path ORDER BY cnt DESC LIMIT 10`, fromStr, toStr)
+		 WHERE `+where+`
+		 GROUP BY path ORDER BY cnt DESC LIMIT 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +189,7 @@ func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time
 		if err := topPaths.Scan(&pc.Path, &pc.Count); err != nil {
 			return nil, err
 		}
+		pc.Path = logsafe.Path(pc.Path)
 		stats.TopPaths = append(stats.TopPaths, pc)
 	}
 	if err := topPaths.Err(); err != nil {
@@ -198,8 +201,8 @@ func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time
 
 	topReferers, err := s.readDB.QueryContext(ctx,
 		`SELECT referer, COUNT(*) as cnt FROM request_logs
-		 WHERE created_at >= ? AND created_at < ? AND referer != ''
-		 GROUP BY referer ORDER BY cnt DESC LIMIT 10`, fromStr, toStr)
+		 WHERE `+where+` AND referer != ''
+		 GROUP BY referer ORDER BY cnt DESC LIMIT 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -210,6 +213,7 @@ func (s *SQLiteStore) GetRequestLogStats(ctx context.Context, from, to time.Time
 		if err := topReferers.Scan(&pc.Path, &pc.Count); err != nil {
 			return nil, err
 		}
+		pc.Path = logsafe.Referer(pc.Path)
 		stats.TopReferers = append(stats.TopReferers, pc)
 	}
 	if err := topReferers.Err(); err != nil {
@@ -249,7 +253,7 @@ func (s *SQLiteStore) RollupRequestLogs(ctx context.Context, date string) error 
 		   monitor_id,
 		   COUNT(*) AS requests,
 		   COUNT(DISTINCT client_ip) AS unique_visitors,
-		   CAST(COALESCE(AVG(latency_ms), 0) AS INTEGER) AS avg_latency_ms
+		   `+s.readDB.dialect.integer("COALESCE(AVG(latency_ms), 0)")+` AS avg_latency_ms
 		 FROM request_logs
 		 WHERE created_at >= ? AND created_at < ?
 		 GROUP BY route_group, monitor_id`,

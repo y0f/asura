@@ -7,13 +7,12 @@ import (
 
 func (s *SQLiteStore) CreateMonitorGroup(ctx context.Context, g *MonitorGroup) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO monitor_groups (name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?)`,
 		g.Name, g.SortOrder, now, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	g.ID = id
 	g.CreatedAt = parseTime(now)
 	g.UpdatedAt = parseTime(now)
@@ -36,7 +35,7 @@ func (s *SQLiteStore) GetMonitorGroup(ctx context.Context, id int64) (*MonitorGr
 
 func (s *SQLiteStore) ListMonitorGroups(ctx context.Context) ([]*MonitorGroup, error) {
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, name, sort_order, created_at, updated_at FROM monitor_groups ORDER BY sort_order, name COLLATE NOCASE`)
+		`SELECT id, name, sort_order, created_at, updated_at FROM monitor_groups ORDER BY sort_order, `+s.readDB.dialect.noCase("name"))
 	if err != nil {
 		return nil, err
 	}
@@ -64,10 +63,14 @@ func (s *SQLiteStore) ListMonitorGroups(ctx context.Context) ([]*MonitorGroup, e
 
 func (s *SQLiteStore) UpdateMonitorGroup(ctx context.Context, g *MonitorGroup) error {
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE monitor_groups SET name=?, sort_order=?, updated_at=? WHERE id=?`,
-		g.Name, g.SortOrder, now, g.ID)
-	return err
+	var createdAt, updatedAt string
+	if err := s.writeDB.QueryRowContext(ctx,
+		`UPDATE monitor_groups SET name=?, sort_order=?, updated_at=? WHERE id=? RETURNING created_at, updated_at`,
+		g.Name, g.SortOrder, now, g.ID).Scan(&createdAt, &updatedAt); err != nil {
+		return err
+	}
+	g.CreatedAt, g.UpdatedAt = parseTime(createdAt), parseTime(updatedAt)
+	return nil
 }
 
 func (s *SQLiteStore) DeleteMonitorGroup(ctx context.Context, id int64) error {

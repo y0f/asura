@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
 )
 
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
@@ -30,17 +30,17 @@ func (h *Handler) CreateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil {
-		writeError(w, http.StatusConflict, "tag name already in use")
-		return
-	}
 	if err := h.store.CreateTag(r.Context(), &t); err != nil {
+		if errors.Is(err, storage.ErrTagNameConflict) {
+			writeError(w, http.StatusConflict, storage.ErrTagNameConflict.Error())
+			return
+		}
 		h.logger.Error("create tag", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create tag")
 		return
 	}
 	h.audit(r, "create", "tag", t.ID, "")
-	writeJSON(w, http.StatusCreated, t)
+	writeJSON(w, http.StatusCreated, tagResponse(r, &t))
 }
 
 func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
@@ -49,17 +49,6 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	_, err = h.store.GetTag(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "tag not found")
-			return
-		}
-		h.logger.Error("get tag for update", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get tag")
-		return
-	}
-
 	var t storage.Tag
 	if err := h.readJSON(r, &t); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -70,22 +59,21 @@ func (h *Handler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if existing, err := h.store.GetTagByName(r.Context(), t.Name); err == nil && existing != nil && existing.ID != id {
-		writeError(w, http.StatusConflict, "tag name already in use")
-		return
-	}
 	if err := h.store.UpdateTag(r.Context(), &t); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "tag not found")
+			return
+		}
+		if errors.Is(err, storage.ErrTagNameConflict) {
+			writeError(w, http.StatusConflict, storage.ErrTagNameConflict.Error())
+			return
+		}
 		h.logger.Error("update tag", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to update tag")
 		return
 	}
 	h.audit(r, "update", "tag", t.ID, "")
-	updated, _ := h.store.GetTag(r.Context(), id)
-	if updated != nil {
-		writeJSON(w, http.StatusOK, updated)
-	} else {
-		writeJSON(w, http.StatusOK, t)
-	}
+	writeJSON(w, http.StatusOK, tagResponse(r, &t))
 }
 
 func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
@@ -94,21 +82,22 @@ func (h *Handler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	_, err = h.store.GetTag(r.Context(), id)
-	if err != nil {
+	if err := h.store.DeleteTag(r.Context(), id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "tag not found")
 			return
 		}
-		h.logger.Error("get tag for delete", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get tag")
-		return
-	}
-	if err := h.store.DeleteTag(r.Context(), id); err != nil {
 		h.logger.Error("delete tag", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete tag")
 		return
 	}
 	h.audit(r, "delete", "tag", id, "")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func tagResponse(r *http.Request, tag *storage.Tag) any {
+	if !httputil.GetAPIKey(r.Context()).HasPermission("tags.read") {
+		return map[string]int64{"id": tag.ID}
+	}
+	return tag
 }

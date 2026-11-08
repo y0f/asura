@@ -15,26 +15,57 @@ function monitorChart() {
         chart: null,
         points: [],
         chartUrl: '',
+        loadedRange: '',
+        error: '',
+        request: null,
+        destroyed: false,
+        get summary() {
+            const failed = this.points.filter(p => p.s === 'down').length;
+            const degraded = this.points.filter(p => p.s === 'degraded').length;
+            return 'Response time for ' + this.loadedRange + ': ' + this.points.length +
+                ' data points, ' + failed + ' down points, ' + degraded + ' degraded points.';
+        },
         async fetchData() {
+            if (this.request) this.request.abort();
+            const request = new AbortController();
+            this.request = request;
+            const range = this.range;
             this.loading = true;
+            this.error = '';
             try {
-                const resp = await fetch(this.chartUrl + '?range=' + this.range, { credentials: 'same-origin' });
+                const resp = await fetch(this.chartUrl + '?range=' + encodeURIComponent(range), {
+                    credentials: 'same-origin', signal: request.signal,
+                });
+                if (!resp.ok) throw new Error('Chart request failed');
                 const data = await resp.json();
-                this.points = data.points || [];
+                const points = data.points == null ? [] : data.points;
+                if (!Array.isArray(points) || !points.every(p => p && Number.isFinite(p.ts) && Number.isFinite(p.rt))) {
+                    throw new Error('Invalid chart response');
+                }
+                if (request !== this.request || this.destroyed) return;
+                this.points = points;
+                this.loadedRange = range;
             } catch (e) {
-                this.points = [];
+                if (request.signal.aborted || request !== this.request || this.destroyed) return;
+                this.error = 'Could not update the chart.';
+            } finally {
+                if (request === this.request && !this.destroyed) {
+                    this.loading = false;
+                    this.$nextTick(() => this.render());
+                }
             }
-            this.loading = false;
-            this.$nextTick(() => this.render());
         },
         render() {
             const el = this.$refs.chart;
             const tip = this.$refs.tooltip;
-            if (!el || !this.points.length) return;
+            if (!el || this.destroyed) return;
             if (this.chart) { this.chart.destroy(); this.chart = null; }
+            if (tip) tip.style.display = 'none';
+            if (!this.points.length) return;
             const ts = this.points.map(p => p.ts);
             const rt = this.points.map(p => p.rt);
             const statuses = this.points.map(p => p.s);
+            const singleTime = ts.every(value => value === ts[0]);
             const tipDate = tip ? tip.querySelector('.tip-date') : null;
             const tipVal = tip ? tip.querySelector('.tip-value') : null;
             const tipSt = tip ? tip.querySelector('.tip-status') : null;
@@ -49,25 +80,29 @@ function monitorChart() {
                 cursor: { show: true, drag: { x: false, y: false } },
                 select: { show: false }, legend: { show: false },
                 padding: [12, 8, 0, 0],
+                // Epoch timestamps must not receive percentage padding when
+                // there is only one observed time. Keep the point visible.
+                scales: singleTime ? { x: { range: () => [ts[0] - 30, ts[0] + 30] } } : {},
                 axes: [
                     { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font, gap: 6 },
                     { size: 64, stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 }, font, gap: 6, values: (u, vals) => vals.map(v => v + 'ms') }
                 ],
                 series: [
                     {},
-                    { label: 'Response time', stroke: lineColor, width: 1.5, fill: withAlpha(lineColor, 0.1), points: { show: false } }
+                    { label: 'Response time', stroke: lineColor, width: 1.5, fill: withAlpha(lineColor, 0.1), points: { show: singleTime, size: 6 } }
                 ],
                 hooks: {
                     draw: [(u) => {
                         const ctx = u.ctx;
-                        const { left, top, width, height } = u.bbox;
+                        const { top, height } = u.bbox;
                         for (let i = 0; i < statuses.length; i++) {
                             if (statuses[i] !== 'down') continue;
                             const x = Math.round(u.valToPos(ts[i], 'x', true));
                             ctx.save();
                             ctx.globalAlpha = 0.18;
                             ctx.fillStyle = critColor;
-                            const bw = Math.max(2, width / statuses.length);
+                            // Mark an observation, not an invented outage span.
+                            const bw = 2 * uPlot.pxRatio;
                             ctx.fillRect(x - bw / 2, top, bw, height);
                             ctx.restore();
                         }
@@ -81,13 +116,13 @@ function monitorChart() {
                         const date = t.toLocaleDateString([], { month: 'short', day: 'numeric' });
                         if (tipDate) tipDate.textContent = date + ' ' + time;
                         if (tipVal) tipVal.textContent = rt[idx] + 'ms';
-                        if (tipSt) { tipSt.textContent = statuses[idx] === 'down' ? 'down' : ''; tipSt.style.display = statuses[idx] === 'down' ? '' : 'none'; }
+                        if (tipSt) { tipSt.textContent = statuses[idx] || 'Unknown'; tipSt.style.display = ''; }
                         tip.style.display = 'block';
-                        const cx = u.valToPos(ts[idx], 'x', true);
+                        const cx = u.valToPos(ts[idx], 'x');
                         const tipW = tip.offsetWidth;
                         let lx = cx + 12;
                         if (lx + tipW > el.clientWidth) lx = cx - tipW - 12;
-                        tip.style.left = lx + 'px';
+                        tip.style.left = Math.max(0, lx) + 'px';
                         tip.style.top = '8px';
                     }]
                 }
@@ -96,6 +131,7 @@ function monitorChart() {
         },
         resizeObs: null,
         themeHandler: null,
+        refreshHandler: null,
         init() {
             this.chartUrl = this.$el.dataset.chartUrl;
             this.fetchData();
@@ -105,7 +141,18 @@ function monitorChart() {
             this.$nextTick(() => { if (this.$refs.chart) this.resizeObs.observe(this.$refs.chart); });
             this.themeHandler = () => this.render();
             window.addEventListener('theme-changed', this.themeHandler);
+            this.refreshHandler = event => {
+                if (event.target.id === 'monitor-detail' && this.$el.isConnected) this.fetchData();
+            };
+            document.addEventListener('htmx:afterSettle', this.refreshHandler);
         },
-        destroy() { if (this.resizeObs) this.resizeObs.disconnect(); if (this.chart) this.chart.destroy(); if (this.themeHandler) window.removeEventListener('theme-changed', this.themeHandler); }
+        destroy() {
+            this.destroyed = true;
+            if (this.request) this.request.abort();
+            if (this.resizeObs) this.resizeObs.disconnect();
+            if (this.chart) this.chart.destroy();
+            window.removeEventListener('theme-changed', this.themeHandler);
+            document.removeEventListener('htmx:afterSettle', this.refreshHandler);
+        }
     };
 }

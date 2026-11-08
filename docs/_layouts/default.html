@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="{{ site.lang | default: 'en' }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% seo %}
+    <link rel="icon" type="image/gif" href="{{ '/assets/asura.gif' | relative_url }}">
+    <link rel="stylesheet" href="{{ '/assets/site.css' | relative_url }}">
+    {% if page.url == '/' or page.url == '/index.html' %}<script src="{{ '/assets/bookmarks.js' | relative_url }}" defer></script>{% endif %}
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header>
+      <nav aria-label="Main navigation">
+        <a class="brand" href="{{ '/' | relative_url }}"><img src="{{ '/assets/asura.gif' | relative_url }}" alt="Asura" width="108" height="27"></a>
+        <div class="links">
+          <a href="{{ '/getting-started.html' | relative_url }}">Get started</a>
+          <a href="{{ '/api.html' | relative_url }}">API reference</a>
+          <a href="https://github.com/y0f/asura">GitHub <span aria-hidden="true">↗</span></a>
+        </div>
+      </nav>
+    </header>
+    <main id="content" tabindex="-1">
+      <details class="page-navigation">
+        <summary>Documentation <span aria-hidden="true">·</span> {{ page.nav_title | default: page.title }}</summary>
+        <nav aria-label="Documentation pages">
+          {% for item in site.data.navigation %}
+          <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+          {% endfor %}
+        </nav>
+      </details>
+      <article>{{ content }}</article>
+    </main>
+    <footer>
+      <span>Self-hosted monitoring. Your services, your data.</span>
+      <a href="https://github.com/y0f/asura/blob/main/LICENSE">MIT license</a>
+    </footer>
+  </body>
+</html>

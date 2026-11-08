@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func createProtectedStatusPage(t *testing.T, store *storage.SQLiteStore, password bool) (*storage.StatusPage, *storage.Monitor) {
@@ -52,6 +52,7 @@ func createProtectedStatusPage(t *testing.T, store *storage.SQLiteStore, passwor
 // Regression: password-protected status pages leak via /rss and /subscribe.
 func TestPasswordStatusPageProtectsRSSAndSubscribe(t *testing.T) {
 	h, store := storeHandler(t)
+	h.cfg.Subscriptions.Enabled = true
 	h.loginRL = httputil.NewRateLimiter(10, 10)
 	sp, mon := createProtectedStatusPage(t, store, true)
 
@@ -150,7 +151,9 @@ func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(
 // Regression: confirmation email is sent with the (soon cancelled) request context.
 func TestSubscribeConfirmationEmailOutlivesRequest(t *testing.T) {
 	h, store := storeHandler(t)
+	h.cfg.Subscriptions.Enabled = true
 	h.loginRL = httputil.NewRateLimiter(100, 100)
+	t.Cleanup(h.loginRL.Stop)
 	var logs syncBuf
 	h.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelError}))
 	sp, _ := createProtectedStatusPage(t, store, false)
@@ -159,6 +162,11 @@ func TestSubscribeConfirmationEmailOutlivesRequest(t *testing.T) {
 	port := smtpSrv.l.Addr().(*net.TCPAddr).Port
 	h.subNotifier = notifier.NewSubscriberNotifier(store, config.SMTPConfig{Host: "127.0.0.1", Port: port, From: "status@example.com", TLSMode: "none"},
 		"http://status.example", h.logger, true)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		h.subNotifier.Shutdown(ctx)
+	})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.StatusPageSubscribe(w, r, sp.ID) }))
 	defer srv.Close()

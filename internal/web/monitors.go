@@ -6,18 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/assertion"
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/sla"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/validate"
-	"github.com/y0f/asura/internal/web/views"
+	"github.com/y0f/asura/v2/internal/assertion"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/validate"
+	"github.com/y0f/asura/v2/internal/web/views"
 )
 
 type headerPair struct {
@@ -25,10 +27,12 @@ type headerPair struct {
 	Value string `json:"value"`
 }
 
+// monitorToFormData builds a retry form from caller-submitted values. Stored
+// monitors must go through storedMonitorFormData before reaching this function.
 func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 	fd := &views.MonitorFormParams{Monitor: mon}
 	if mon == nil {
-		fd.Monitor = &storage.Monitor{AgentEnabled: true}
+		fd.Monitor = &storage.Monitor{}
 		fd.FollowRedirects = true
 		fd.MaxRedirects = 10
 		fd.HTTP.AuthMethod = "none"
@@ -43,7 +47,7 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 
 	fd.SettingsJSON = "{}"
 	if len(mon.Settings) > 0 {
-		redacted, _ := views.RedactSettings(mon.Settings, views.MonitorSecretKeys[mon.Type])
+		redacted, _ := redact.MonitorSettings(mon.Settings)
 		fd.SettingsJSON = string(redacted)
 	}
 	fd.AssertionsRaw = "{}"
@@ -57,6 +61,22 @@ func monitorToFormData(mon *storage.Monitor) *views.MonitorFormParams {
 	fd.HeadersJSON = headersToJSON(fd.HTTP.Headers)
 	fd.WsHeadersJSON = headersToJSON(fd.WS.Headers)
 	fd.AssertionsJSON = assertionsToJSON(mon.Assertions)
+	return fd
+}
+
+func storedMonitorFormData(mon *storage.Monitor, diagnostics ...bool) *views.MonitorFormParams {
+	safe := redact.MonitorWithDiagnostics(mon, len(diagnostics) > 0 && diagnostics[0])
+	fd := monitorToFormData(safe)
+	if len(safe.Settings) > 0 {
+		fd.SettingsJSON = string(safe.Settings)
+	}
+	fd.SecretsStored = redact.MonitorStoredSecrets(mon)
+	if mon.Type == "http" {
+		// Preserve legacy authentication inference without exposing its value.
+		var original storage.HTTPSettings
+		_ = json.Unmarshal(mon.Settings, &original)
+		fd.HTTP.AuthMethod = inferHTTPAuthMethod(original)
+	}
 	return fd
 }
 
@@ -432,28 +452,40 @@ func (h *Handler) Monitors(w http.ResponseWriter, r *http.Request) {
 		sortParam = ""
 	}
 
-	f := storage.MonitorListFilter{Type: typeFilter, Search: q, TagID: tagFilter, GroupID: groupFilter, Status: statusFilter, Sort: sortParam}
+	f := storage.MonitorListFilter{Type: typeFilter, Search: q, TagID: tagFilter, GroupID: groupFilter, Status: statusFilter, Sort: sortParam, Access: httputil.MonitorAccess(r.Context(), "monitors.read")}
 	result, err := h.store.ListMonitors(r.Context(), f, p)
 	if err != nil {
 		h.logger.Error("web: list monitors", "error", err)
+		http.Error(w, "Failed to load monitors", http.StatusInternalServerError)
+		return
+	}
+	if monitors, ok := result.Data.([]*storage.Monitor); ok {
+		result.Data = redact.MonitorSummaries(monitors)
 	}
 
 	var tagMap map[int64][]storage.MonitorTag
-	if result != nil {
+	key := httputil.GetAPIKey(r.Context())
+	if result != nil && key.HasPermission("tags.read") {
 		if monList, ok := result.Data.([]*storage.Monitor); ok && len(monList) > 0 {
 			ids := make([]int64, len(monList))
 			for i, m := range monList {
 				ids[i] = m.ID
 			}
-			tagMap, _ = h.store.GetMonitorTagsBatch(r.Context(), ids)
+			tagMap, _ = h.store.GetMonitorTagsBatch(r.Context(), ids, httputil.MonitorAccess(r.Context(), "monitors.read")...)
 		}
 	}
 	if tagMap == nil {
 		tagMap = map[int64][]storage.MonitorTag{}
 	}
 
-	groups, _ := h.store.ListMonitorGroups(r.Context())
-	allTags, _ := h.store.ListTags(r.Context())
+	var groups []*storage.MonitorGroup
+	var allTags []*storage.Tag
+	if key.HasPermission("groups.read") {
+		groups, _ = h.store.ListMonitorGroups(r.Context())
+	}
+	if key.HasPermission("tags.read") {
+		allTags, _ = h.store.ListTags(r.Context())
+	}
 
 	lp := h.newLayoutParams(r, "Monitors", "monitors")
 	h.renderComponent(w, r, views.MonitorListPage(views.MonitorListParams{
@@ -479,9 +511,8 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	mon, err := h.store.GetMonitor(ctx, id)
-	if err != nil {
-		h.redirect(w, r, "/monitors")
+	mon, ok := h.requireMonitor(w, r, id, "monitors.read")
+	if !ok {
 		return
 	}
 
@@ -494,72 +525,164 @@ func (h *Handler) MonitorDetail(w http.ResponseWriter, r *http.Request) {
 		changesPage = 1
 	}
 
+	access, diagnostics := httputil.DiagnosticReadAccess(ctx, "monitors.read", mon.ID, mon.GroupID)
+	readChecks, readChanges, readLatest := h.store.ListCheckSummaries, h.store.ListContentChangeSummaries, h.store.GetLatestCheckSummary
+	if diagnostics {
+		readChecks, readChanges, readLatest = h.store.ListCheckResults, h.store.ListContentChanges, h.store.GetLatestCheckResult
+	}
+
 	now := time.Now().UTC()
-	checks, _ := h.store.ListCheckResults(ctx, id, storage.Pagination{Page: checksPage, PerPage: 10})
+	checks, err := readChecks(ctx, id, storage.Pagination{Page: checksPage, PerPage: 10}, access...)
+	if err == nil {
+		checks, err = httputil.CheckResultsResponse(ctx, checks, diagnostics)
+	}
+	if h.monitorReadError(w, r, err, "Failed to load monitor checks") {
+		return
+	}
 	if checks == nil {
 		checks = &storage.PaginatedResult{}
 	}
-	changes, _ := h.store.ListContentChanges(ctx, id, storage.Pagination{Page: changesPage, PerPage: 10})
+	changes, err := readChanges(ctx, id, storage.Pagination{Page: changesPage, PerPage: 10}, access...)
+	if err == nil {
+		changes, err = httputil.ContentChangesResponse(changes, diagnostics)
+	}
+	if h.monitorReadError(w, r, err, "Failed to load monitor changes") {
+		return
+	}
 	if changes == nil {
 		changes = &storage.PaginatedResult{}
 	}
 
-	uptime24h, _ := h.store.GetUptimePercent(ctx, id, now.Add(-24*time.Hour), now)
-	uptime7d, _ := h.store.GetUptimePercent(ctx, id, now.Add(-7*24*time.Hour), now)
-	uptime30d, _ := h.store.GetUptimePercent(ctx, id, now.Add(-30*24*time.Hour), now)
-	p50, p95, p99, _ := h.store.GetResponseTimePercentiles(ctx, id, now.Add(-24*time.Hour), now)
-	totalChecks, upChecks, downChecks, _, _ := h.store.GetCheckCounts(ctx, id, now.Add(-24*time.Hour), now)
-	latestCheck, _ := h.store.GetLatestCheckResult(ctx, id)
-	openIncident, _ := h.store.GetOpenIncident(ctx, id)
-	monTags, _ := h.store.GetMonitorTags(ctx, id)
+	var uptime24h, uptime7d, uptime30d, p50, p95, p99 float64
+	var samples24h, samples7d, samples30d, totalChecks, upChecks, downChecks, responseSamples int64
+	if mon.HasSampledMetrics() {
+		data, err := h.store.GetMonitorMetricsSnapshot(ctx, id, now.Add(-24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load monitor metrics") {
+			return
+		}
+		if data.Sampled {
+			samples24h, totalChecks, upChecks, downChecks = data.Total, data.Total, data.Up, data.Down
+			if data.UptimePercent != nil {
+				uptime24h = *data.UptimePercent
+			}
+			if data.Response != nil {
+				p50, p95, p99 = data.Response.P50, data.Response.P95, data.Response.P99
+				responseSamples = data.Response.Samples
+			}
+		}
+		daily7d, err7d := h.store.GetDailyUptime(ctx, id, now.Add(-7*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		daily30d, err30d := h.store.GetDailyUptime(ctx, id, now.Add(-30*24*time.Hour), now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if err := errors.Join(err7d, err30d); err != nil {
+			h.monitorReadError(w, r, err, "Failed to load monitor uptime")
+			return
+		}
+		uptime7d, samples7d = storage.SummarizeUptime(daily7d)
+		uptime30d, samples30d = storage.SummarizeUptime(daily30d)
+	}
+	latestCheck, err := readLatest(ctx, id, access...)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		h.monitorReadError(w, r, err, "Failed to load latest check")
+		return
+	}
+	key := httputil.GetAPIKey(ctx)
+	latestCheck = redact.Check(latestCheck, diagnostics, key.HasPermission("agents.read"))
+	var openIncident *storage.Incident
+	if key.AllowsMonitor("incidents.read", mon.ID, mon.GroupID) {
+		incidentAccess := append(append([]storage.MonitorAccess{}, access...), httputil.MonitorAccess(ctx, "incidents.read")...)
+		openIncident, err = h.store.GetOpenIncident(ctx, id, incidentAccess...)
+		if openIncident != nil && !diagnostics {
+			copy := *openIncident
+			copy.Cause = redact.IncidentCause()
+			openIncident = &copy
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			h.monitorReadError(w, r, err, "Failed to load open incident")
+			return
+		}
+	}
+	var monTags []storage.MonitorTag
+	if key.HasPermission("tags.read") {
+		monTags, err = h.store.GetMonitorTags(ctx, id, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load monitor tags") {
+			return
+		}
+	}
 
 	var slaData *views.SLAData
-	if mon.SLATarget > 0 {
-		s, err := sla.Compute(ctx, h.store, mon.ID, mon.SLATarget)
-		if err == nil {
+	if mon.HasSampledMetrics() && mon.SLATarget > 0 && key.AllowsMonitor("sla.read", mon.ID, mon.GroupID) {
+		s, err := sla.Compute(ctx, h.store, mon.ID, httputil.MonitorAccess(ctx, "monitors.read", "sla.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load SLA status") {
+			return
+		}
+		if s != nil && s.Target > 0 {
 			slaData = &views.SLAData{
 				Target:            s.Target,
+				TotalChecks:       s.TotalChecks,
 				UptimeMonth:       s.UptimePctMonth,
 				BudgetTotalSecs:   s.BudgetTotalSecs,
 				BudgetRemainSecs:  s.BudgetRemainSecs,
+				BudgetRemainPct:   s.BudgetRemainPct,
+				BudgetAtRisk:      s.BudgetAtRisk,
 				BudgetRemainHuman: s.BudgetRemainHuman,
 				Breached:          s.Breached,
 			}
 		}
 	}
 
-	heatmap := buildHeatmap(ctx, h.store, id, now)
+	var heatmap []views.HeatmapDay
+	if mon.HasSampledMetrics() {
+		heatmap, err = buildHeatmap(ctx, h.store, id, now, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load uptime history") {
+			return
+		}
+	}
+	var heartbeat *views.HeartbeatData
+	if mon.Type == "heartbeat" {
+		data, err := h.store.GetHeartbeatByMonitorID(ctx, id, httputil.MonitorAccess(ctx, "monitors.read")...)
+		if h.monitorReadError(w, r, err, "Failed to load heartbeat state") {
+			return
+		}
+		if data != nil {
+			heartbeat = &views.HeartbeatData{LastPingAt: data.LastPingAt, GraceSecs: data.Grace}
+		}
+	}
 
 	lp := h.newLayoutParams(r, mon.Name, "monitors")
 	h.renderComponent(w, r, views.MonitorDetailPage(views.MonitorDetailParams{
-		LayoutParams: lp,
-		Monitor:      mon,
-		Checks:       checks,
-		Changes:      changes,
-		ChecksPage:   checksPage,
-		ChangesPage:  changesPage,
-		Uptime24h:    uptime24h,
-		Uptime7d:     uptime7d,
-		Uptime30d:    uptime30d,
-		P50:          p50,
-		P95:          p95,
-		P99:          p99,
-		TotalChecks:  totalChecks,
-		UpChecks:     upChecks,
-		DownChecks:   downChecks,
-		LatestCheck:  latestCheck,
-		OpenIncident: openIncident,
-		Tags:         monTags,
-		SLA:          slaData,
-		Heatmap:      heatmap,
+		LayoutParams:     lp,
+		Monitor:          httputil.MonitorReadResponse(ctx, mon),
+		CloneAllowed:     h.monitorCloneAllowed(r, mon),
+		Checks:           checks,
+		Changes:          changes,
+		ChecksPage:       checksPage,
+		ChangesPage:      changesPage,
+		Uptime24h:        uptime24h,
+		Uptime7d:         uptime7d,
+		Uptime30d:        uptime30d,
+		Uptime24hHasData: samples24h > 0,
+		Uptime7dHasData:  samples7d > 0,
+		Uptime30dHasData: samples30d > 0,
+		P50:              p50,
+		P95:              p95,
+		P99:              p99,
+		TotalChecks:      totalChecks,
+		UpChecks:         upChecks,
+		ResponseSamples:  responseSamples,
+		DownChecks:       downChecks,
+		LatestCheck:      latestCheck,
+		OpenIncident:     openIncident,
+		Tags:             monTags,
+		SLA:              slaData,
+		Heatmap:          heatmap,
+		Heartbeat:        heartbeat,
 	}))
 }
 
-func buildHeatmap(ctx context.Context, store storage.Store, monitorID int64, now time.Time) []views.HeatmapDay {
+func buildHeatmap(ctx context.Context, store storage.Store, monitorID int64, now time.Time, access ...storage.MonitorAccess) ([]views.HeatmapDay, error) {
 	from := now.AddDate(-1, 0, 0)
-	daily, err := store.GetDailyUptime(ctx, monitorID, from, now)
+	daily, err := store.GetDailyUptime(ctx, monitorID, from, now, access...)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	dayMap := make(map[string]*storage.DailyUptime, len(daily))
 	for _, d := range daily {
@@ -590,150 +713,123 @@ func buildHeatmap(ctx context.Context, store storage.Store, monitorID int64, now
 		}
 		days = append(days, hd)
 	}
-	return days
+	return days, nil
 }
 
 func (h *Handler) renderMonitorForm(w http.ResponseWriter, r *http.Request, lp views.LayoutParams, fd *views.MonitorFormParams) {
 	fd.LayoutParams = lp
-	fd.Agents, _ = h.store.ListAgents(r.Context())
+	if err := h.loadMonitorFormChoices(r, fd); err != nil {
+		h.logger.Error("web: load monitor form choices", "error", err)
+		http.Error(w, "Failed to load monitor form", http.StatusInternalServerError)
+		return
+	}
 	h.renderComponent(w, r, views.MonitorFormPage(*fd))
 }
 
 func (h *Handler) MonitorForm(w http.ResponseWriter, r *http.Request) {
 	lp := h.newLayoutParams(r, "New Monitor", "monitors")
-
-	groups, _ := h.store.ListMonitorGroups(r.Context())
-	channels, _ := h.store.ListNotificationChannels(r.Context())
-	proxies, _ := h.store.ListProxies(r.Context())
-	allTags, _ := h.store.ListTags(r.Context())
-	escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
-
-	idStr := r.PathValue("id")
-	if idStr != "" {
-		id, err := strconv.ParseInt(idStr, 10, 64)
+	fd := monitorToFormData(nil)
+	if r.PathValue("id") != "" {
+		id, err := httputil.ParseID(r)
 		if err != nil {
-			h.redirect(w, r, "/monitors")
+			http.NotFound(w, r)
 			return
 		}
-		mon, err := h.store.GetMonitor(r.Context(), id)
-		if err != nil {
-			h.redirect(w, r, "/monitors")
+		mon, ok := h.requireMonitor(w, r, id, "monitors.read", "monitors.update")
+		if !ok {
 			return
 		}
 		lp.Title = "Edit " + mon.Name
-		mon.AgentIDs, _ = h.store.GetMonitorAgentIDs(r.Context(), id)
-		fd := monitorToFormData(mon)
-		fd.SecretsStored = views.StoredSecrets(mon.Settings, views.MonitorSecretKeys[mon.Type])
-		blankMonitorSecrets(fd)
-		fd.Groups = groups
-		fd.NotificationChannels = channels
-		fd.Proxies = proxies
-		fd.AllTags = allTags
-		fd.EscalationPolicies = escalationPolicies
-		fd.SelectedChannelIDs, _ = h.store.GetMonitorNotificationChannelIDs(r.Context(), id)
-		fd.SelectedTags, _ = h.store.GetMonitorTags(r.Context(), id)
-		h.renderMonitorForm(w, r, lp, fd)
-	} else {
-		fd := monitorToFormData(nil)
-		fd.Groups = groups
-		fd.NotificationChannels = channels
-		fd.Proxies = proxies
-		fd.AllTags = allTags
-		fd.EscalationPolicies = escalationPolicies
-		h.renderMonitorForm(w, r, lp, fd)
+		mon.AgentIDs, err = h.store.GetMonitorAgentIDs(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read", "monitors.update")...)
+		if err != nil {
+			h.monitorReadError(w, r, err, "Failed to load monitor assignments")
+			return
+		}
+		fd = storedMonitorFormData(mon, httputil.GetAPIKey(r.Context()).AllowsMonitor("diagnostics.read", mon.ID, mon.GroupID))
+		fd.SelectedChannelIDs, err = h.store.GetMonitorNotificationChannelIDs(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read", "monitors.update")...)
+		if err != nil {
+			h.monitorReadError(w, r, err, "Failed to load monitor assignments")
+			return
+		}
+		if httputil.GetAPIKey(r.Context()).HasPermission("tags.read") {
+			fd.SelectedTags, err = h.store.GetMonitorTags(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.read", "monitors.update")...)
+			if err != nil {
+				h.monitorReadError(w, r, err, "Failed to load monitor assignments")
+				return
+			}
+		}
 	}
+	h.renderMonitorForm(w, r, lp, fd)
 }
 
 func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
 	mon, channelIDs, monTags := h.parseMonitorForm(r)
-
+	mon.NotificationChannelIDs, mon.MonitorTags = channelIDs, monTags
 	h.applyMonitorDefaults(mon)
-
-	if err := h.validateMonitorFormAgents(r, mon); err != nil {
-		groups, _ := h.store.ListMonitorGroups(r.Context())
-		channels, _ := h.store.ListNotificationChannels(r.Context())
-		proxies, _ := h.store.ListProxies(r.Context())
-		allTags, _ := h.store.ListTags(r.Context())
-		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
+	inputErr := validateMonitorRelationForm(r)
+	if inputErr == nil {
+		_, inputErr = httputil.PrepareMonitorRelations(httputil.GetAPIKey(r.Context()), mon, nil, monitorRelationFields(r))
+	}
+	if inputErr == nil {
+		inputErr = validateMonitorForm(r, mon)
+	}
+	if inputErr == nil {
+		inputErr = validate.ValidateMonitorSLAChange(mon, nil)
+	}
+	var options storage.MonitorCreateOptions
+	if inputErr == nil {
+		options, inputErr = httputil.MonitorCreateOptions(mon)
+	}
+	if inputErr != nil {
+		if errors.Is(inputErr, httputil.ErrMonitorRelationForbidden) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		lp := h.newLayoutParams(r, "New Monitor", "monitors")
-		lp.Error = err.Error()
+		lp.Error = inputErr.Error()
 		fd := monitorToFormData(mon)
 		keepRawJSON(r, fd)
-		fd.Groups = groups
-		fd.NotificationChannels = channels
-		fd.Proxies = proxies
-		fd.AllTags = allTags
-		fd.EscalationPolicies = escalationPolicies
-		fd.SelectedChannelIDs = channelIDs
-		fd.SelectedTags = monTags
+		fd.SelectedChannelIDs, fd.SelectedTags = channelIDs, monTags
 		h.renderMonitorForm(w, r, lp, fd)
 		return
 	}
-
-	// A monitor without an agent assignment runs on every agent, so one that
-	// is to be assigned is created with agents off and only switched on once
-	// the assignment is stored.
-	agentEnabled := mon.AgentEnabled
-	if len(mon.AgentIDs) > 0 {
-		mon.AgentEnabled = false
-	}
-	err := h.store.CreateMonitor(r.Context(), mon)
-	mon.AgentEnabled = agentEnabled
-	if err != nil {
-		groups, _ := h.store.ListMonitorGroups(r.Context())
-		channels, _ := h.store.ListNotificationChannels(r.Context())
-		proxies, _ := h.store.ListProxies(r.Context())
-		allTags, _ := h.store.ListTags(r.Context())
-		escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
+	if err := h.store.CreateMonitorWithRelations(r.Context(), mon, options, httputil.MonitorAccess(r.Context(), "monitors.create")...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: create monitor", "error", err)
 		lp := h.newLayoutParams(r, "New Monitor", "monitors")
 		lp.Error = "Failed to create monitor"
+		if errors.Is(err, storage.ErrInvalidMonitorRelation) {
+			lp.Error = "A selected related resource no longer exists. Review the selections and try again."
+		} else if errors.Is(err, storage.ErrInvalidMonitorProxy) {
+			lp.Error = storage.ErrInvalidMonitorProxy.Error()
+		}
 		fd := monitorToFormData(mon)
 		keepRawJSON(r, fd)
-		fd.Groups = groups
-		fd.NotificationChannels = channels
-		fd.Proxies = proxies
-		fd.AllTags = allTags
-		fd.EscalationPolicies = escalationPolicies
-		fd.SelectedChannelIDs = channelIDs
-		fd.SelectedTags = monTags
+		fd.SelectedChannelIDs, fd.SelectedTags = channelIDs, monTags
 		h.renderMonitorForm(w, r, lp, fd)
 		return
 	}
-
-	if len(channelIDs) > 0 {
-		if err := h.store.SetMonitorNotificationChannels(r.Context(), mon.ID, channelIDs); err != nil {
-			h.logger.Error("web: set monitor notification channels", "error", err)
-		}
-	}
-
-	var assignErr string
-	if len(mon.AgentIDs) > 0 {
-		err := h.store.SetMonitorAgentIDs(r.Context(), mon.ID, mon.AgentIDs)
-		if err == nil && agentEnabled {
-			err = h.store.UpdateMonitor(r.Context(), mon)
-		}
-		if err != nil {
-			h.logger.Error("web: set monitor agents", "error", err)
-			assignErr = "Monitor created, but saving its agent assignment failed, so agent checks are off. Edit the monitor to try again."
-		}
-	}
-
-	if len(monTags) > 0 {
-		if err := h.store.SetMonitorTags(r.Context(), mon.ID, monTags); err != nil {
-			h.logger.Error("web: set monitor tags", "error", err)
-		}
-	}
-
+	h.audit(r, "create", "monitor", mon.ID, "")
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
 	}
-
-	if assignErr != "" {
-		h.setError(w, assignErr)
-	} else {
-		h.setFlash(w, "Monitor created")
+	if options.Heartbeat != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		lp := h.newLayoutParams(r, "Heartbeat monitor created", "monitors")
+		h.renderComponent(w, r, views.HeartbeatCreatedPage(views.HeartbeatCreatedParams{
+			LayoutParams: lp, Monitor: mon,
+			PingURL: h.cfg.ResolvedExternalURL() + "/api/v1/heartbeat/" + options.Heartbeat.Token,
+		}))
+		return
 	}
+	h.setFlash(w, "Monitor created")
 	h.redirect(w, r, "/monitors")
 }
 
@@ -742,132 +838,99 @@ func (h *Handler) MonitorCreate(w http.ResponseWriter, r *http.Request) {
 // created_at) is kept instead of letting parseMonitorForm's default flip a
 // paused monitor back on; enable/disable goes through Pause/Resume. It returns
 // the stored secrets and settings when the type is unchanged.
-func keepStoredMonitorFields(mon, existing *storage.Monitor) (storedSecrets map[string]bool, existingSettings json.RawMessage, sameType bool) {
+func keepStoredMonitorFields(mon, existing *storage.Monitor) map[string]bool {
 	mon.Enabled = existing.Enabled
 	mon.CreatedAt = existing.CreatedAt
-	sameType = existing.Type == mon.Type
-	if sameType {
-		storedSecrets = views.StoredSecrets(existing.Settings, views.MonitorSecretKeys[mon.Type])
-		existingSettings = existing.Settings
+	if existing.Type == mon.Type {
+		return redact.MonitorStoredSecrets(existing)
 	}
-	// Multi-step settings have no form editor; never let a form-mode save
-	// replace stored steps with nothing.
-	if mon.Type == "http_multi" && len(mon.Settings) == 0 && existing.Type == "http_multi" {
-		mon.Settings = existing.Settings
-	}
-	return storedSecrets, existingSettings, sameType
+	return nil
 }
 
 // renderMonitorEditError shows the edit form again with msg. mon carries the
 // submitted values, so a stored secret is never put into the form.
 func (h *Handler) renderMonitorEditError(w http.ResponseWriter, r *http.Request, msg string, mon *storage.Monitor, storedSecrets map[string]bool, channelIDs []int64, monTags []storage.MonitorTag) {
-	groups, _ := h.store.ListMonitorGroups(r.Context())
-	channels, _ := h.store.ListNotificationChannels(r.Context())
-	proxies, _ := h.store.ListProxies(r.Context())
-	allTags, _ := h.store.ListTags(r.Context())
-	escalationPolicies, _ := h.store.ListEscalationPolicies(r.Context())
 	lp := h.newLayoutParams(r, "Edit Monitor", "monitors")
 	lp.Error = msg
 	fd := monitorToFormData(mon)
 	fd.SecretsStored = storedSecrets
 	keepRawJSON(r, fd)
-	fd.Groups = groups
-	fd.NotificationChannels = channels
-	fd.Proxies = proxies
-	fd.AllTags = allTags
-	fd.EscalationPolicies = escalationPolicies
 	fd.SelectedChannelIDs = channelIDs
 	fd.SelectedTags = monTags
 	h.renderMonitorForm(w, r, lp, fd)
 }
 
-// saveEditedAgentAssignment stores the agent assignment of an updated monitor
-// that was saved with agent checks off while it has agent_ids, and switches
-// them back on only once the assignment is stored. It returns the message to
-// show when that fails (agent checks then stay off), or "".
-func (h *Handler) saveEditedAgentAssignment(r *http.Request, mon *storage.Monitor, agentEnabled bool) string {
-	err := h.store.SetMonitorAgentIDs(r.Context(), mon.ID, mon.AgentIDs)
-	if err == nil && agentEnabled && len(mon.AgentIDs) > 0 {
-		err = h.store.UpdateMonitor(r.Context(), mon)
-	}
-	if err == nil {
-		return ""
-	}
-	h.logger.Error("web: set monitor agents", "error", err)
-	msg := "Monitor updated, but saving its agent assignment failed"
-	if len(mon.AgentIDs) > 0 {
-		msg += ", so agent checks are off. Edit the monitor to try again."
-	}
-	return msg
-}
-
 func (h *Handler) MonitorUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
 	id, err := httputil.ParseID(r)
 	if err != nil {
-		h.redirect(w, r, "/monitors")
+		http.NotFound(w, r)
 		return
 	}
-
-	mon, channelIDs, monTags := h.parseMonitorForm(r)
-	mon.ID = id
-	existing, err := h.store.GetMonitor(r.Context(), id)
-	if err != nil || existing == nil {
-		h.redirect(w, r, "/monitors")
+	submitted, channelIDs, monTags := h.parseMonitorForm(r)
+	submitted.ID = id
+	submitted.NotificationChannelIDs, submitted.MonitorTags = channelIDs, monTags
+	if err := validateMonitorRelationForm(r); err != nil {
+		h.renderMonitorEditError(w, r, err.Error(), submitted, nil, channelIDs, monTags)
 		return
 	}
-	storedSecrets, existingSettings, sameType := keepStoredMonitorFields(mon, existing)
-
-	// Secret fields are rendered empty: a blank field keeps the stored value
-	// and "Remove saved value" clears it. Validation runs on the merged
-	// settings (a kept secret still satisfies "required"), but a re-shown form
-	// is built from what was submitted, so it never contains a stored secret.
-	submittedSettings := mon.Settings
-	if sameType {
-		mon.Settings = views.MergeSecrets(mon.Settings, existingSettings, activeMonitorSecretKeys(mon.Type, mon.Settings, existingSettings), views.ClearSet(r.Form["clear_secrets"]))
-	}
-
-	if err := h.validateMonitorFormAgents(r, mon); err != nil {
-		mon.Settings = submittedSettings
-		h.renderMonitorEditError(w, r, err.Error(), mon, storedSecrets, channelIDs, monTags)
-		return
-	}
-
-	// As in MonitorCreate, agent checks of a monitor that is to be assigned
-	// stay off until the assignment is stored.
-	agentEnabled := mon.AgentEnabled
-	if len(mon.AgentIDs) > 0 {
-		mon.AgentEnabled = false
-	}
-	err = h.store.UpdateMonitor(r.Context(), mon)
-	mon.AgentEnabled = agentEnabled
+	var storedSecrets map[string]bool
+	var inputErr error
+	key := httputil.GetAPIKey(r.Context())
+	_, err = h.store.UpdateMonitorWithRelations(r.Context(), id, func(current *storage.Monitor) (*storage.Monitor, storage.MonitorRelationChanges, error) {
+		candidate := *submitted
+		if _, present := r.Form["sla_target"]; !present {
+			candidate.SLATarget = current.SLATarget
+		}
+		changes, err := httputil.PrepareMonitorRelations(key, &candidate, current, monitorRelationFields(r))
+		if err == nil {
+			storedSecrets = keepStoredMonitorFields(&candidate, current)
+			if candidate.Type == current.Type {
+				clear := views.ClearSet(r.Form["clear_secrets"])
+				keys := activeMonitorSecretKeys(candidate.Type, candidate.Settings, current.Settings)
+				err = redact.MergeMonitorEdit(&candidate, current, keys, clear, key != nil && key.SuperAdmin)
+			}
+		}
+		if err == nil {
+			err = validateMonitorForm(r, &candidate)
+		}
+		if err == nil {
+			err = validate.ValidateMonitorSLAChange(&candidate, current)
+		}
+		inputErr = err
+		return &candidate, changes, err
+	}, httputil.MonitorAccess(r.Context(), "monitors.update")...)
 	if err != nil {
-		h.logger.Error("web: update monitor", "error", err)
-		mon.Settings = submittedSettings
-		h.renderMonitorEditError(w, r, "Failed to update monitor", mon, storedSecrets, channelIDs, monTags)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		if errors.Is(inputErr, httputil.ErrMonitorRelationForbidden) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		message := "Failed to update monitor"
+		if inputErr != nil {
+			message = inputErr.Error()
+		} else if errors.Is(err, storage.ErrInvalidMonitorRelation) {
+			message = "A selected related resource no longer exists. Review the selections and try again."
+		} else if errors.Is(err, storage.ErrInvalidMonitorProxy) {
+			message = storage.ErrInvalidMonitorProxy.Error()
+		} else {
+			h.logger.Error("web: update monitor", "error", err)
+		}
+		h.renderMonitorEditError(w, r, message, submitted, storedSecrets, channelIDs, monTags)
 		return
 	}
-
 	checker.ClearOAuth2TokenCache(id)
-
-	if err := h.store.SetMonitorNotificationChannels(r.Context(), id, channelIDs); err != nil {
-		h.logger.Error("web: set monitor notification channels", "error", err)
-	}
-
-	assignErr := h.saveEditedAgentAssignment(r, mon, agentEnabled)
-
-	if err := h.store.SetMonitorTags(r.Context(), id, monTags); err != nil {
-		h.logger.Error("web: set monitor tags", "error", err)
-	}
-
+	h.audit(r, "update", "monitor", id, "")
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
 	}
-
-	if assignErr != "" {
-		h.setError(w, assignErr)
-	} else {
-		h.setFlash(w, "Monitor updated")
-	}
+	h.setFlash(w, "Monitor updated")
 	h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 }
 
@@ -878,8 +941,14 @@ func (h *Handler) MonitorDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.DeleteMonitor(r.Context(), id); err != nil {
+	if err := h.store.DeleteMonitor(r.Context(), id, httputil.MonitorAccess(r.Context(), "monitors.delete")...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: delete monitor", "error", err)
+		http.Error(w, "Failed to delete monitor", http.StatusInternalServerError)
+		return
 	}
 
 	if h.pipeline != nil {
@@ -896,7 +965,11 @@ func (h *Handler) MonitorPause(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/monitors")
 		return
 	}
-	if err := h.store.SetMonitorEnabled(r.Context(), id, false); err != nil {
+	if err := h.store.SetMonitorEnabled(r.Context(), id, false, httputil.MonitorAccess(r.Context(), "monitors.pause")...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: pause monitor", "error", err)
 		h.setError(w, "Failed to pause monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
@@ -915,7 +988,11 @@ func (h *Handler) MonitorResume(w http.ResponseWriter, r *http.Request) {
 		h.redirect(w, r, "/monitors")
 		return
 	}
-	if err := h.store.SetMonitorEnabled(r.Context(), id, true); err != nil {
+	if err := h.store.SetMonitorEnabled(r.Context(), id, true, httputil.MonitorAccess(r.Context(), "monitors.resume")...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		h.logger.Error("web: resume monitor", "error", err)
 		h.setError(w, "Failed to resume monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
@@ -942,10 +1019,8 @@ func (h *Handler) MonitorSetManualStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	mon, err := h.store.GetMonitor(r.Context(), id)
-	if err != nil {
-		h.setError(w, "Monitor not found")
-		h.redirect(w, r, "/monitors")
+	mon, ok := h.requireMonitor(w, r, id, "monitors.status")
+	if !ok {
 		return
 	}
 
@@ -956,8 +1031,19 @@ func (h *Handler) MonitorSetManualStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	message := r.FormValue("message")
-	if h.pipeline != nil {
-		h.pipeline.ProcessManualStatus(r.Context(), mon, status, message)
+	if h.pipeline == nil {
+		http.Error(w, "Monitoring is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.pipeline.ProcessManualStatus(r.Context(), mon, status, message, httputil.MonitorAccess(r.Context(), "monitors.status")...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		h.logger.Error("set manual status", "error", err)
+		h.setError(w, "Failed to set monitor status")
+		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
+		return
 	}
 
 	h.audit(r, "set_status", "monitor", id, status)
@@ -973,152 +1059,126 @@ func (h *Handler) MonitorClone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	src, err := h.store.GetMonitor(ctx, id)
+	seed, err := httputil.MonitorCreateOptions(&storage.Monitor{Type: "heartbeat"})
 	if err != nil {
-		h.setError(w, "Monitor not found")
-		h.redirect(w, r, "/monitors")
+		http.Error(w, "Failed to prepare monitor clone", http.StatusInternalServerError)
 		return
 	}
-
-	clone := &storage.Monitor{
-		Name:               src.Name + " (copy)",
-		Description:        src.Description,
-		Type:               src.Type,
-		Target:             src.Target,
-		Interval:           src.Interval,
-		Timeout:            src.Timeout,
-		Enabled:            false,
-		Settings:           src.Settings,
-		Assertions:         src.Assertions,
-		TrackChanges:       src.TrackChanges,
-		FailureThreshold:   src.FailureThreshold,
-		SuccessThreshold:   src.SuccessThreshold,
-		UpsideDown:         src.UpsideDown,
-		AgentEnabled:       src.AgentEnabled,
-		ResendInterval:     src.ResendInterval,
-		SLATarget:          src.SLATarget,
-		AnomalySensitivity: src.AnomalySensitivity,
-		GroupID:            src.GroupID,
-		ProxyID:            src.ProxyID,
-		EscalationPolicyID: src.EscalationPolicyID,
-	}
-
-	// As in MonitorCreate, agent checks of a clone that is to be assigned
-	// stay off until the assignment is stored.
-	agentIDs, _ := h.store.GetMonitorAgentIDs(ctx, id)
-	agentEnabled := clone.AgentEnabled
-	if len(agentIDs) > 0 {
-		clone.AgentEnabled = false
-	}
-	err = h.store.CreateMonitor(ctx, clone)
-	clone.AgentEnabled = agentEnabled
+	var inputErr error
+	clone, heartbeat, err := h.store.CloneMonitorWithRelations(ctx, id, func(source *storage.Monitor) (*storage.Monitor, storage.MonitorCreateOptions, error) {
+		clone, options, err := httputil.PrepareMonitorClone(httputil.GetAPIKey(ctx), source, seed.Heartbeat.Token)
+		inputErr = err
+		return clone, options, err
+	}, httputil.MonitorAccess(ctx, "monitors.read", "monitors.clone"), httputil.MonitorAccess(ctx, "monitors.clone"))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		if errors.Is(inputErr, httputil.ErrMonitorRelationForbidden) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		h.logger.Error("web: clone monitor", "error", err)
 		h.setError(w, "Failed to clone monitor")
 		h.redirect(w, r, "/monitors/"+strconv.FormatInt(id, 10))
 		return
 	}
-
-	channelIDs, _ := h.store.GetMonitorNotificationChannelIDs(ctx, id)
-	if len(channelIDs) > 0 {
-		if err := h.store.SetMonitorNotificationChannels(ctx, clone.ID, channelIDs); err != nil {
-			h.logger.Error("web: clone monitor channels", "error", err)
-		}
-	}
-
-	srcTags, _ := h.store.GetMonitorTags(ctx, id)
-	if len(srcTags) > 0 {
-		if err := h.store.SetMonitorTags(ctx, clone.ID, srcTags); err != nil {
-			h.logger.Error("web: clone monitor tags", "error", err)
-		}
-	}
-
-	var assignErr string
-	if len(agentIDs) > 0 {
-		err := h.store.SetMonitorAgentIDs(ctx, clone.ID, agentIDs)
-		if err == nil && agentEnabled {
-			err = h.store.UpdateMonitor(ctx, clone)
-		}
-		if err != nil {
-			h.logger.Error("web: clone monitor agents", "error", err)
-			assignErr = "Monitor cloned, but saving its agent assignment failed, so agent checks are off. Edit the monitor to try again."
-		}
-	}
-
+	h.audit(r, "clone", "monitor", clone.ID, fmt.Sprintf("from=%d", id))
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
 	}
-
-	if assignErr != "" {
-		h.setError(w, assignErr)
-	} else {
-		h.setFlash(w, "Monitor cloned")
+	if heartbeat != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		h.renderComponent(w, r, views.HeartbeatCreatedPage(views.HeartbeatCreatedParams{
+			LayoutParams: h.newLayoutParams(r, "Heartbeat monitor created", "monitors"), Monitor: clone,
+			PingURL: h.cfg.ResolvedExternalURL() + "/api/v1/heartbeat/" + heartbeat.Token,
+		}))
+		return
 	}
-	h.redirect(w, r, "/monitors/"+strconv.FormatInt(clone.ID, 10)+"/edit")
+	h.setFlash(w, "Monitor cloned")
+	if httputil.GetAPIKey(ctx).AllowsMonitor("monitors.read", clone.ID, clone.GroupID) {
+		h.redirect(w, r, "/monitors/"+strconv.FormatInt(clone.ID, 10))
+	} else {
+		h.redirect(w, r, "/monitors")
+	}
 }
 
 func (h *Handler) MonitorBulk(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	action := r.FormValue("action")
-	ids := parseIDList(r.Form["ids[]"])
-	if len(ids) == 0 {
-		h.setError(w, "No monitors selected")
-		h.redirect(w, r, "/monitors")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form", http.StatusBadRequest)
 		return
 	}
-
+	action := r.FormValue("action")
+	scopes := httputil.MonitorBulkPermissions(action)
+	if scopes == nil {
+		http.Error(w, "Invalid action", http.StatusBadRequest)
+		return
+	}
+	if !httputil.GetAPIKey(r.Context()).HasAllCapabilities(scopes...) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	values := r.Form["ids[]"]
+	if len(values) == 0 || len(values) > 500 {
+		http.Error(w, "Select between 1 and 500 monitors", http.StatusBadRequest)
+		return
+	}
+	ids := make([]int64, len(values))
+	for i, value := range values {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || id <= 0 {
+			http.Error(w, "Invalid monitor ID", http.StatusBadRequest)
+			return
+		}
+		ids[i] = id
+	}
 	ctx := r.Context()
-	var msg string
-
+	var affected int64
+	var err error
+	var description string
 	switch action {
 	case "pause":
-		if _, err := h.store.BulkSetMonitorsEnabled(ctx, ids, false); err != nil {
-			h.logger.Error("web: bulk pause", "error", err)
-			h.setError(w, "Failed to pause monitors")
-			h.redirect(w, r, "/monitors")
-			return
-		}
-		msg = strconv.Itoa(len(ids)) + " monitors paused"
+		affected, err = h.store.BulkSetMonitorsEnabled(ctx, ids, false, httputil.MonitorAccess(ctx, "monitors.pause")...)
+		description = "paused"
 	case "resume":
-		if _, err := h.store.BulkSetMonitorsEnabled(ctx, ids, true); err != nil {
-			h.logger.Error("web: bulk resume", "error", err)
-			h.setError(w, "Failed to resume monitors")
-			h.redirect(w, r, "/monitors")
-			return
-		}
-		msg = strconv.Itoa(len(ids)) + " monitors resumed"
+		affected, err = h.store.BulkSetMonitorsEnabled(ctx, ids, true, httputil.MonitorAccess(ctx, "monitors.resume")...)
+		description = "resumed"
 	case "delete":
-		if _, err := h.store.BulkDeleteMonitors(ctx, ids); err != nil {
-			h.logger.Error("web: bulk delete", "error", err)
-			h.setError(w, "Failed to delete monitors")
-			h.redirect(w, r, "/monitors")
-			return
-		}
-		msg = strconv.Itoa(len(ids)) + " monitors deleted"
+		affected, err = h.store.BulkDeleteMonitors(ctx, ids, httputil.MonitorAccess(ctx, "monitors.delete")...)
+		description = "deleted"
 	case "set_group":
-		var gid *int64
-		if v := r.FormValue("group_id"); v != "" {
-			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
-				gid = &parsed
+		var groupID *int64
+		if value := r.FormValue("group_id"); value != "" && value != "0" {
+			id, parseErr := strconv.ParseInt(value, 10, 64)
+			if parseErr != nil || id <= 0 {
+				http.Error(w, "Invalid group ID", http.StatusBadRequest)
+				return
 			}
+			groupID = &id
 		}
-		if _, err := h.store.BulkSetMonitorGroup(ctx, ids, gid); err != nil {
-			h.logger.Error("web: bulk set group", "error", err)
-			h.setError(w, "Failed to update monitors")
-			h.redirect(w, r, "/monitors")
+		affected, err = h.store.BulkSetMonitorGroup(ctx, ids, groupID, httputil.MonitorAccess(ctx, "monitors.update", "monitors.assign")...)
+		description = "updated"
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
 			return
 		}
-		msg = strconv.Itoa(len(ids)) + " monitors updated"
-	default:
-		h.setError(w, "Invalid action")
+		if errors.Is(err, storage.ErrInvalidMonitorRelation) {
+			http.Error(w, "The selected group no longer exists", http.StatusBadRequest)
+			return
+		}
+		h.logger.Error("web: bulk monitor operation", "action", action, "error", err)
+		h.setError(w, "Failed to update selected monitors")
 		h.redirect(w, r, "/monitors")
 		return
 	}
-
+	h.audit(r, "bulk_"+action, "monitor", 0, fmt.Sprintf("ids=%v", ids))
 	if h.pipeline != nil {
 		h.pipeline.ReloadMonitors()
 	}
-	h.setFlash(w, msg)
+	h.setFlash(w, fmt.Sprintf("%d monitors %s", affected, description))
 	h.redirect(w, r, "/monitors")
 }
 
@@ -1278,21 +1338,16 @@ func httpAuthSecretKey(method string) string {
 	}
 }
 
-// blankMonitorSecrets clears stored secret values from form data so they are
-// never written into the edit page. MonitorSecretKeys lists the same fields.
-func blankMonitorSecrets(fd *views.MonitorFormParams) {
-	fd.HTTP.BasicAuthPass = ""
-	fd.HTTP.BearerToken = ""
-	fd.HTTP.OAuth2ClientSecret = ""
-	fd.HTTP.MTLSClientKey = ""
-	fd.MQTT.Password = ""
-	fd.Redis.Password = ""
-}
-
 // validateMonitorForm rejects invalid JSON typed in the advanced editors before
 // the normal monitor validation runs. Without this, invalid JSON was silently
 // dropped and saved as empty settings or conditions.
 func validateMonitorForm(r *http.Request, mon *storage.Monitor) error {
+	if raw := r.FormValue("sla_target"); raw != "" {
+		value, err := strconv.ParseFloat(raw, 64)
+		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 100 {
+			return fmt.Errorf("SLA target must be a finite number between 0 and 100")
+		}
+	}
 	for _, f := range []struct{ prefix, label string }{{"settings", "Settings"}, {"assertions", "Conditions"}} {
 		if r.FormValue(f.prefix+"_mode") != "json" {
 			continue
@@ -1303,26 +1358,6 @@ func validateMonitorForm(r *http.Request, mon *storage.Monitor) error {
 		}
 	}
 	return validate.ValidateMonitor(mon)
-}
-
-// validateMonitorFormAgents runs validateMonitorForm and then checks that every
-// agent the form assigns still exists, as the API does. Otherwise a stale form
-// (agent deleted in another tab) fails the assignment after the monitor is
-// saved, leaving a new monitor unrestricted.
-func (h *Handler) validateMonitorFormAgents(r *http.Request, mon *storage.Monitor) error {
-	if err := validateMonitorForm(r, mon); err != nil {
-		return err
-	}
-	for _, id := range mon.AgentIDs {
-		if _, err := h.store.GetAgent(r.Context(), id); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("agent %d does not exist; reload the form and choose the agents again", id)
-			}
-			h.logger.Error("web: get agent", "id", id, "error", err)
-			return fmt.Errorf("could not check the selected agents")
-		}
-	}
-	return nil
 }
 
 // keepRawJSON puts the user's JSON editor text back into a re-rendered form so a

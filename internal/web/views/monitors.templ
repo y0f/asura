@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/y0f/asura/internal/sla"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type MonitorListParams struct {
@@ -26,32 +26,41 @@ type MonitorListParams struct {
 
 type MonitorDetailParams struct {
 	LayoutParams
-	Monitor      *storage.Monitor
-	Checks       *storage.PaginatedResult
-	Changes      *storage.PaginatedResult
-	ChecksPage   int
-	ChangesPage  int
-	Uptime24h    float64
-	Uptime7d     float64
-	Uptime30d    float64
-	P50          float64
-	P95          float64
-	P99          float64
-	TotalChecks  int64
-	UpChecks     int64
-	DownChecks   int64
-	LatestCheck  *storage.CheckResult
-	OpenIncident *storage.Incident
-	Tags         []storage.MonitorTag
-	SLA          *SLAData
-	Heatmap      []HeatmapDay
+	Monitor          *storage.Monitor
+	Checks           *storage.PaginatedResult
+	Changes          *storage.PaginatedResult
+	ChecksPage       int
+	ChangesPage      int
+	Uptime24h        float64
+	Uptime7d         float64
+	Uptime30d        float64
+	Uptime24hHasData bool
+	Uptime7dHasData  bool
+	Uptime30dHasData bool
+	P50              float64
+	P95              float64
+	P99              float64
+	TotalChecks      int64
+	UpChecks         int64
+	ResponseSamples  int64
+	DownChecks       int64
+	LatestCheck      *storage.CheckResult
+	OpenIncident     *storage.Incident
+	Tags             []storage.MonitorTag
+	SLA              *SLAData
+	Heatmap          []HeatmapDay
+	CloneAllowed     bool
+	Heartbeat        *HeartbeatData
 }
 
 type SLAData struct {
 	Target            float64
+	TotalChecks       int64
 	UptimeMonth       float64
 	BudgetTotalSecs   int64
 	BudgetRemainSecs  int64
+	BudgetRemainPct   float64
+	BudgetAtRisk      bool
 	BudgetRemainHuman string
 	Breached          bool
 }
@@ -64,21 +73,23 @@ func (p MonitorListParams) monitors() []*storage.Monitor {
 	return m
 }
 
-func (p MonitorListParams) monitorIDs() string {
-	ms := p.monitors()
-	if len(ms) == 0 {
-		return "[]"
-	}
-	var b strings.Builder
-	b.WriteByte('[')
-	for i, m := range ms {
-		if i > 0 {
-			b.WriteByte(',')
+func (p MonitorListParams) hasBulkActions() bool {
+	return p.HasCapability("monitors.pause") || p.HasCapability("monitors.resume") || p.HasCapability("monitors.delete") || (p.HasCapability("monitors.update") && p.HasCapability("monitors.assign") && p.Can("groups.read"))
+}
+
+func (p MonitorListParams) bulkPermissions() string {
+	allowed := map[string][]int64{"pause": {}, "resume": {}, "delete": {}, "assign": {}}
+	for _, monitor := range p.monitors() {
+		for action := range allowed {
+			if action == "assign" && (!p.Can("groups.read") || !p.CanMonitor("monitors.update", monitor.ID, monitor.GroupID)) {
+				continue
+			}
+			if p.CanMonitor("monitors."+action, monitor.ID, monitor.GroupID) {
+				allowed[action] = append(allowed[action], monitor.ID)
+			}
 		}
-		fmt.Fprintf(&b, "%d", m.ID)
 	}
-	b.WriteByte(']')
-	return b.String()
+	return ToJSON(allowed)
 }
 
 // query returns the list page's current filters as URL values, so every link
@@ -116,22 +127,36 @@ func (p MonitorListParams) filtered() bool {
 	return p.Type != "" || p.Search != "" || p.TagFilter != nil || p.GroupFilter != nil || p.StatusFilter != ""
 }
 
+func (p MonitorListParams) filterCount() int {
+	count := 0
+	for _, active := range []bool{p.Type != "", p.TagFilter != nil, p.GroupFilter != nil, p.StatusFilter != "", p.SortParam != ""} {
+		if active {
+			count++
+		}
+	}
+	return count
+}
+
 var monitorTypes = []string{"http", "http_multi", "tcp", "icmp", "dns", "smtp", "ssh", "tls", "domain", "redis", "postgresql", "websocket", "grpc", "mqtt", "udp", "docker", "command", "heartbeat", "manual"}
 
-func monitorListXData(ids string) string {
+func monitorListXData(permissions string) string {
 	return `{
     selected: [],
-    allIds: ` + ids + `,
-    get allSelected() { return this.allIds.length > 0 && this.selected.length === this.allIds.length },
-    toggleAll() { this.selected = this.allSelected ? [] : [...this.allIds] },
+    allowed: ` + permissions + `,
+    get allIds() { return [...new Set(Object.values(this.allowed).flat())] },
+    get allSelected() { return this.allIds.length > 0 && this.allIds.every(id => this.selected.includes(id)) },
+    canSelect(id) { return this.allIds.includes(id) },
+    canBulk(action) { return this.selected.length > 0 && this.selected.every(id => (this.allowed[action] || []).includes(id)) },
+    syncBulk(raw) { this.allowed = JSON.parse(raw); this.selected = this.selected.filter(id => this.canSelect(id)); },
+    toggleAll() { this.selected = this.allSelected ? [] : this.allIds },
     toggle(id) {
+        if (!this.canSelect(id)) return;
         const i = this.selected.indexOf(id);
         if (i === -1) this.selected.push(id); else this.selected.splice(i, 1);
     },
     bulkAction: '',
     bulkGroupId: ''}`
 }
-
 func tagTooltip(t storage.MonitorTag) string {
 	if t.Value != "" {
 		return t.Name + ": " + t.Value
@@ -188,6 +213,37 @@ func (p MonitorDetailParams) showPercentiles() bool {
 	return false
 }
 
+func (p MonitorDetailParams) hasResponseTimes() bool {
+	return p.Monitor.HasSampledMetrics()
+}
+
+templ uptimeStat(label string, percent float64, hasData bool) {
+	if hasData {
+		@StatCard(label, UptimeFmt(percent), UptimeTone(percent))
+	} else {
+		@StatCard(label, "—", "muted") {
+			<div class="text-xs text-muted mt-0.5">No check data</div>
+		}
+	}
+}
+
+func durationPercentile(value float64, samples int64) string {
+	if samples == 0 {
+		return "—"
+	}
+	if value == 0 {
+		return "0ms"
+	}
+	return FormatFloat(value)
+}
+
+func (p MonitorDetailParams) canClone() bool {
+	return p.CanMonitor("monitors.read", p.Monitor.ID, p.Monitor.GroupID) &&
+		p.CanMonitor("monitors.clone", p.Monitor.ID, p.Monitor.GroupID) &&
+		p.CanMonitor("monitors.clone", 0, p.Monitor.GroupID) &&
+		(p.Access == nil || p.CloneAllowed)
+}
+
 func manualStatusBtnClass(status string) string {
 	switch status {
 	case "up":
@@ -217,11 +273,11 @@ templ manualStatusButton(basePath string, monitorID int64, status string) {
 		<button type="submit" class={ manualStatusBtnClass(status) }>
 			switch status {
 				case "up":
-					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+					<svg focusable="false" aria-hidden="true" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 				case "degraded":
-					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+					<svg focusable="false" aria-hidden="true" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 				default:
-					<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+					<svg focusable="false" aria-hidden="true" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
 			}
 			{ manualStatusBtnLabel(status) }
 		</button>
@@ -230,55 +286,142 @@ templ manualStatusButton(basePath string, monitorID int64, status string) {
 
 templ MonitorListPage(p MonitorListParams) {
 	@Layout(p.LayoutParams) {
-		@PageHeader(PageHeaderParams{Title: "Monitors", Subtitle: "Every check Asura runs, with its latest status."}) {
-			if p.Can("monitors.write") {
+		{{ bulkPermissions := p.bulkPermissions() }}
+		@PageHeader(PageHeaderParams{Title: "Monitors", Subtitle: "Availability, recent results and configuration for your services."}) {
+			if p.HasCapability("monitors.create") {
 				@ToolbarNewButton(p.BasePath+"/monitors/new", "New monitor")
 			}
 		}
-		<div x-data={ monitorListXData(p.monitorIDs()) }>
-			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="mb-4 flex flex-wrap items-center gap-2">
-				@SearchInput("q", p.Search, "Search monitors")
-				<select name="status" onchange="this.form.submit()" class="form-select-sm" aria-label="Status">
-					<option value="" if p.StatusFilter == "" { selected } >All statuses</option>
-					<option value="up" if p.StatusFilter == "up" { selected } >Up</option>
-					<option value="down" if p.StatusFilter == "down" { selected } >Down</option>
-					<option value="degraded" if p.StatusFilter == "degraded" { selected } >Degraded</option>
-					<option value="paused" if p.StatusFilter == "paused" { selected } >Paused</option>
-				</select>
-				<select name="type" onchange="this.form.submit()" class="form-select-sm" aria-label="Type">
-					<option value="" if p.Type == "" { selected } >All types</option>
-					for _, t := range monitorTypes {
-						<option value={ t } if p.Type == t { selected } >{ TypeLabel(t) }</option>
-					}
-				</select>
-				if len(p.Groups) > 0 {
-					<select name="group" onchange="this.form.submit()" class="form-select-sm" aria-label="Group">
-						<option value="" if p.GroupFilter == nil { selected } >All groups</option>
-						for _, g := range p.Groups {
-							<option value={ fmt.Sprint(g.ID) } if p.GroupFilter != nil && *p.GroupFilter == g.ID { selected } >{ g.Name }</option>
+		<div x-data={ monitorListXData(bulkPermissions) } @htmx:after-swap="const list = $el.querySelector('#monitor-list'); if (list) syncBulk(list.dataset.bulkPermissions)">
+			<form method="GET" action={ templ.SafeURL(p.BasePath + "/monitors") } class="filter-toolbar">
+				@SearchInput("q", p.Search, "Name starts with…")
+				<details class="filter-disclosure" open x-data="{filtersOpen: false}" :open="!mobile || filtersOpen" @toggle="if (mobile) filtersOpen=$el.open">
+					<summary class="btn-secondary md:hidden! list-none">
+						Filters
+						if count := p.filterCount(); count > 0 {
+							<span class="badge">{ fmt.Sprint(count) }</span>
 						}
-					</select>
-				}
-				if len(p.AllTags) > 0 {
-					<select name="tag" onchange="this.form.submit()" class="form-select-sm" aria-label="Tag">
-						<option value="" if p.TagFilter == nil { selected } >All tags</option>
-						for _, tag := range p.AllTags {
-							<option value={ fmt.Sprint(tag.ID) } if p.TagFilter != nil && *p.TagFilter == tag.ID { selected } >{ tag.Name }</option>
+						<svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+					</summary>
+					<div class="filter-options">
+						<select name="status" onchange="this.form.submit()" class="form-select-sm" aria-label="Status">
+							<option
+								value=""
+								if p.StatusFilter == "" {
+									selected
+								}
+							>All statuses</option>
+							<option
+								value="up"
+								if p.StatusFilter == "up" {
+									selected
+								}
+							>Up</option>
+							<option
+								value="down"
+								if p.StatusFilter == "down" {
+									selected
+								}
+							>Down</option>
+							<option
+								value="degraded"
+								if p.StatusFilter == "degraded" {
+									selected
+								}
+							>Degraded</option>
+							<option
+								value="paused"
+								if p.StatusFilter == "paused" {
+									selected
+								}
+							>Paused</option>
+						</select>
+						<select name="type" onchange="this.form.submit()" class="form-select-sm" aria-label="Type">
+							<option
+								value=""
+								if p.Type == "" {
+									selected
+								}
+							>All types</option>
+							for _, t := range monitorTypes {
+								<option
+									value={ t }
+									if p.Type == t {
+										selected
+									}
+								>{ TypeLabel(t) }</option>
+							}
+						</select>
+						if len(p.Groups) > 0 {
+							<select name="group" onchange="this.form.submit()" class="form-select-sm" aria-label="Group">
+								<option
+									value=""
+									if p.GroupFilter == nil {
+										selected
+									}
+								>All groups</option>
+								for _, g := range p.Groups {
+									<option
+										value={ fmt.Sprint(g.ID) }
+										if p.GroupFilter != nil && *p.GroupFilter == g.ID {
+											selected
+										}
+									>{ g.Name }</option>
+								}
+							</select>
 						}
-					</select>
-				}
-				<select name="sort" onchange="this.form.submit()" class="form-select-sm" aria-label="Sort by">
-					<option value="" if p.SortParam == "" { selected } >Sort: name</option>
-					<option value="status" if p.SortParam == "status" { selected } >Sort: status</option>
-					<option value="last_check" if p.SortParam == "last_check" { selected } >Sort: last check</option>
-					<option value="response_time" if p.SortParam == "response_time" { selected } >Sort: response time</option>
-				</select>
+						if len(p.AllTags) > 0 {
+							<select name="tag" onchange="this.form.submit()" class="form-select-sm" aria-label="Tag">
+								<option
+									value=""
+									if p.TagFilter == nil {
+										selected
+									}
+								>All tags</option>
+								for _, tag := range p.AllTags {
+									<option
+										value={ fmt.Sprint(tag.ID) }
+										if p.TagFilter != nil && *p.TagFilter == tag.ID {
+											selected
+										}
+									>{ tag.Name }</option>
+								}
+							</select>
+						}
+						<select name="sort" onchange="this.form.submit()" class="form-select-sm" aria-label="Sort by">
+							<option
+								value=""
+								if p.SortParam == "" {
+									selected
+								}
+							>Sort: name</option>
+							<option
+								value="status"
+								if p.SortParam == "status" {
+									selected
+								}
+							>Sort: status</option>
+							<option
+								value="last_check"
+								if p.SortParam == "last_check" {
+									selected
+								}
+							>Sort: last check</option>
+							<option
+								value="response_time"
+								if p.SortParam == "response_time" {
+									selected
+								}
+							>Sort: response time</option>
+						</select>
+					</div>
+				</details>
 				<noscript><button type="submit" class="btn-secondary btn-sm">Apply</button></noscript>
 				if p.filtered() || p.SortParam != "" {
 					<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="text-sm text-muted hover:text-white px-1">Clear</a>
 				}
 			</form>
-			if p.Can("monitors.write") {
+			if p.hasBulkActions() {
 				<div x-show="selected.length > 0" x-cloak class="mb-3 px-3 py-2 border border-line-light bg-surface-50 rounded-card flex items-center gap-2 flex-wrap">
 					<span class="text-sm text-white font-medium mr-1" x-text="selected.length + ' selected'"></span>
 					<form method="POST" action={ templ.SafeURL(p.BasePath + "/monitors/bulk") } x-ref="bulkForm" class="contents">
@@ -287,41 +430,61 @@ templ MonitorListPage(p MonitorListParams) {
 						</template>
 						<input type="hidden" name="action" :value="bulkAction"/>
 						<input type="hidden" name="group_id" :value="bulkGroupId"/>
-						<button type="button" @click="bulkAction='pause'; $nextTick(() => $refs.bulkForm.submit())" class="btn-secondary btn-sm">Pause</button>
-						<button type="button" @click="bulkAction='resume'; $nextTick(() => $refs.bulkForm.submit())" class="btn-secondary btn-sm">Resume</button>
-						if len(p.Groups) > 0 {
-							<select x-model="bulkGroupId" aria-label="Move to group" @change="if(bulkGroupId !== '') { bulkAction='set_group'; $nextTick(() => $refs.bulkForm.submit()) }" class="form-select-sm h-7">
+						if p.HasCapability("monitors.pause") {
+							<button type="button" :disabled="!canBulk('pause')" @click="bulkAction='pause'; $nextTick(() => $refs.bulkForm.submit())" class="btn-secondary btn-sm">Pause</button>
+						}
+						if p.HasCapability("monitors.resume") {
+							<button type="button" :disabled="!canBulk('resume')" @click="bulkAction='resume'; $nextTick(() => $refs.bulkForm.submit())" class="btn-secondary btn-sm">Resume</button>
+						}
+						if p.HasCapability("monitors.update") && p.HasCapability("monitors.assign") && p.Can("groups.read") && len(p.Groups) > 0 {
+							<select x-model="bulkGroupId" :disabled="!canBulk('assign')" aria-label="Move to group" @change="if(bulkGroupId !== '') { bulkAction='set_group'; $nextTick(() => $refs.bulkForm.submit()) }" class="form-select-sm h-7">
 								<option value="">Move to group…</option>
-								<option value="0">No group</option>
+								if p.CanMonitor("monitors.update", 0, nil) && p.CanMonitor("monitors.assign", 0, nil) {
+									<option value="0">No group</option>
+								}
 								for _, g := range p.Groups {
-									<option value={ fmt.Sprint(g.ID) }>{ g.Name }</option>
+									if p.CanMonitor("monitors.update", 0, &g.ID) && p.CanMonitor("monitors.assign", 0, &g.ID) {
+										<option value={ fmt.Sprint(g.ID) }>{ g.Name }</option>
+									}
 								}
 							</select>
 						}
-						<button type="button" @click="$dispatch('confirm', {url: '', message: 'Delete ' + selected.length + ' monitors and their history? This cannot be undone.', onConfirm: () => { bulkAction='delete'; $nextTick(() => $refs.bulkForm.submit()) }})" class="btn-danger btn-sm">Delete</button>
+						if p.HasCapability("monitors.delete") {
+							<button type="button" :disabled="!canBulk('delete')" @click="$dispatch('confirm', {url: '', message: 'Delete ' + selected.length + ' monitors and their history? This cannot be undone.', onConfirm: () => { bulkAction='delete'; $nextTick(() => $refs.bulkForm.submit()) }})" class="btn-danger btn-sm">Delete</button>
+						}
 						<button type="button" @click="selected = []" class="btn-sm text-muted hover:text-white px-2">Clear selection</button>
 					</form>
+					<span class="w-full text-xs text-muted">Actions require access to every selected monitor.</span>
 				</div>
 			}
-			<div id="monitor-list" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-list" hx-swap="outerHTML" hx-push-url="false"
-				hx-on::before-request="refreshError = false"
-				hx-on::response-error="refreshError = true"
-				hx-on::send-error="refreshError = true"
-				class="panel">
+			<div
+				id="monitor-list"
+				data-bulk-permissions={ bulkPermissions }
+				x-data="{ refreshError: false }"
+				hx-get=""
+				hx-trigger="sse:refresh, every 30s"
+				hx-select="#monitor-list"
+				hx-swap="outerHTML"
+				hx-push-url="false"
+				@htmx:after-request="if ($event.detail.successful) refreshError = false"
+				@htmx:response-error="refreshError = true"
+				@htmx:send-error="refreshError = true"
+				class="panel"
+			>
 				<div x-show="refreshError" x-cloak role="status" class="px-4 py-2 border-b border-line text-xs text-crit">Refresh failed, retrying.</div>
 				if ms := p.monitors(); len(ms) > 0 {
 					<div class="overflow-x-auto">
 						<table class="w-full md:min-w-[640px]">
 							<thead>
 								<tr class="border-b border-line">
-									if p.Can("monitors.write") {
+									if p.hasBulkActions() {
 										<th class="th w-10 pr-0">
-											<input type="checkbox" :checked="allSelected" @change="toggleAll()" aria-label="Select all monitors" class="form-checkbox"/>
+											<input type="checkbox" :checked="allSelected" :disabled="allIds.length === 0" @change="toggleAll()" aria-label="Select all monitors" class="form-checkbox"/>
 										</th>
 									}
 									<th class="th">Name</th>
 									<th class="th w-px hidden md:table-cell">Type</th>
-									<th class="th w-px">Status</th>
+									<th class="th w-px hidden sm:table-cell">Status</th>
 									<th class="th w-px hidden md:table-cell">Last check</th>
 									<th class="th w-px"><span class="sr-only">Actions</span></th>
 								</tr>
@@ -329,25 +492,26 @@ templ MonitorListPage(p MonitorListParams) {
 							<tbody class="divide-y divide-line">
 								for _, m := range ms {
 									<tr :class={ fmt.Sprintf("selected.includes(%d) && 'bg-surface-200'", m.ID) }>
-										if p.Can("monitors.write") {
+										if p.hasBulkActions() {
 											<td class="pl-4 py-3 w-10">
-												<input type="checkbox" :checked={ fmt.Sprintf("selected.includes(%d)", m.ID) } @change={ fmt.Sprintf("toggle(%d)", m.ID) } aria-label={ "Select " + m.Name } class="form-checkbox"/>
+												<input type="checkbox" :disabled={ fmt.Sprintf("!canSelect(%d)", m.ID) } :checked={ fmt.Sprintf("selected.includes(%d)", m.ID) } @change={ fmt.Sprintf("toggle(%d)", m.ID) } aria-label={ "Select " + m.Name } class="form-checkbox"/>
 											</td>
 										}
 										<td class="px-4 py-3 min-w-0 max-w-0 w-full">
 											<div class="flex items-center gap-2 flex-wrap">
-												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="text-sm font-medium text-white hover:underline">{ m.Name }</a>
+												<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d", p.BasePath, m.ID)) } class="text-sm font-medium text-white hover:text-brand [overflow-wrap:anywhere]">{ m.Name }</a>
 												for _, tag := range p.TagMap[m.ID] {
-													<span class="badge" title={ tagTooltip(tag) }>
-														<span class="dot w-1.5 h-1.5" style={ "background-color: " + tag.Color }></span>
+													<span class="badge hidden! sm:inline-flex!" title={ tagTooltip(tag) }>
+														<span class={ "dot w-1.5 h-1.5", TagTone(tag.Color) }></span>
 														{ tag.Name }
 													</span>
 												}
 											</div>
 											<div class="text-xs text-muted mt-0.5 truncate font-mono">{ m.Target }</div>
+											<div class="sm:hidden mt-1">@StatusPill(m.Status)</div>
 										</td>
 										<td class="px-4 py-3 text-sm text-muted-light whitespace-nowrap hidden md:table-cell">{ TypeLabel(m.Type) }</td>
-										<td class="px-4 py-3">
+										<td class="px-4 py-3 hidden sm:table-cell">
 											@StatusPill(m.Status)
 										</td>
 										<td class="px-4 py-3 text-sm text-muted whitespace-nowrap hidden md:table-cell">
@@ -358,7 +522,7 @@ templ MonitorListPage(p MonitorListParams) {
 											}
 										</td>
 										<td class="px-4 py-3 text-right">
-											@MonitorRowActions(p.BasePath, m, p.Can("monitors.write"))
+											@MonitorRowActions(p.LayoutParams, m)
 										</td>
 									</tr>
 								}
@@ -370,13 +534,15 @@ templ MonitorListPage(p MonitorListParams) {
 					}
 				} else if p.filtered() {
 					<div class="px-4 py-12 text-center">
+						@emptyMark()
 						<p class="text-sm text-muted-light">No monitors match these filters.</p>
 						<a href={ templ.SafeURL(p.BasePath + "/monitors") } class="btn-secondary mt-4">Clear filters</a>
 					</div>
 				} else {
 					<div class="px-4 py-12 text-center">
+						@emptyMark()
 						<p class="text-sm text-muted-light">No monitors yet.</p>
-						if p.Can("monitors.write") {
+						if p.HasCapability("monitors.create") {
 							<a href={ templ.SafeURL(p.BasePath + "/monitors/new") } class="btn-secondary mt-4">Create your first monitor</a>
 						}
 					</div>
@@ -389,8 +555,8 @@ templ MonitorListPage(p MonitorListParams) {
 
 func (p MonitorDetailParams) meta() string {
 	parts := []string{TypeLabel(p.Monitor.Type)}
-	if p.Monitor.Target != "" {
-		parts = append(parts, p.Monitor.Target)
+	if target := monitorTargetLabel(p.Monitor); target != "" {
+		parts = append(parts, target)
 	}
 	if p.Monitor.Type != "heartbeat" && p.Monitor.Type != "manual" {
 		parts = append(parts, fmt.Sprintf("every %ds", p.Monitor.Interval))
@@ -400,9 +566,11 @@ func (p MonitorDetailParams) meta() string {
 
 func (p MonitorDetailParams) slaState() (label, badge string) {
 	switch {
+	case p.SLA.TotalChecks == 0:
+		return "No checks", ""
 	case p.SLA.Breached:
 		return "Breached", "badge-red"
-	case p.SLA.BudgetRemainSecs <= p.SLA.BudgetTotalSecs/10:
+	case p.SLA.BudgetAtRisk:
 		return "At risk", "badge-yellow"
 	default:
 		return "Healthy", "badge-emerald"
@@ -412,34 +580,48 @@ func (p MonitorDetailParams) slaState() (label, badge string) {
 templ configRow(label string) {
 	<div class="flex items-center justify-between gap-4 py-2 border-b border-line">
 		<dt class="text-muted">{ label }</dt>
-		<dd class="text-white tabular-nums text-right">{ children... }</dd>
+		<dd class="text-white tabular-nums text-right">
+			{ children... }
+		</dd>
 	</div>
 }
 
 templ MonitorDetailPage(p MonitorDetailParams) {
 	@Layout(p.LayoutParams) {
-		<script src={ Asset(p.BasePath, "monitor-chart.js") }></script>
-		<div id="monitor-detail" x-data="{ refreshError: false }" hx-get="" hx-trigger="sse:refresh, every 30s" hx-select="#monitor-detail" hx-swap="outerHTML" hx-push-url="false"
-			hx-on::before-request="refreshError = false"
-			hx-on::response-error="refreshError = true"
-			hx-on::send-error="refreshError = true">
+		<div
+			id="monitor-detail"
+			x-data="{ refreshError: false }"
+			hx-get=""
+			hx-trigger="sse:refresh, every 30s"
+			hx-select="#monitor-detail"
+			hx-swap="outerHTML"
+			hx-push-url="false"
+			@htmx:after-request="if ($event.detail.successful) refreshError = false"
+			@htmx:response-error="refreshError = true"
+			@htmx:send-error="refreshError = true"
+		>
 			@PageHeader(PageHeaderParams{Title: p.Monitor.Name, BackHref: p.BasePath + "/monitors", BackLabel: "Monitors"}) {
 				@StatusPill(p.Monitor.Status)
-				if p.Can("monitors.write") {
-					<div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+				<div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+					if p.CanMonitor("monitors.read", p.Monitor.ID, p.Monitor.GroupID) && p.CanMonitor("monitors.update", p.Monitor.ID, p.Monitor.GroupID) {
 						<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/edit", p.BasePath, p.Monitor.ID)) } class="btn-secondary">Edit</a>
-						if p.Monitor.Enabled {
-							<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, p.Monitor.ID)) }>
-								<button type="submit" class="btn-secondary">Pause</button>
-							</form>
-						} else {
-							<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, p.Monitor.ID)) }>
-								<button type="submit" class="btn-secondary">Resume</button>
-							</form>
-						}
+					}
+					if p.Monitor.Enabled && p.CanMonitor("monitors.pause", p.Monitor.ID, p.Monitor.GroupID) {
+						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/pause", p.BasePath, p.Monitor.ID)) }>
+							<button type="submit" class="btn-secondary">Pause</button>
+						</form>
+					}
+					if !p.Monitor.Enabled && p.CanMonitor("monitors.resume", p.Monitor.ID, p.Monitor.GroupID) {
+						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/resume", p.BasePath, p.Monitor.ID)) }>
+							<button type="submit" class="btn-secondary">Resume</button>
+						</form>
+					}
+					if p.canClone() {
 						<form method="POST" action={ templ.SafeURL(fmt.Sprintf("%s/monitors/%d/clone", p.BasePath, p.Monitor.ID)) }>
 							<button type="submit" class="btn-secondary">Clone</button>
 						</form>
+					}
+					if p.CanMonitor("monitors.delete", p.Monitor.ID, p.Monitor.GroupID) {
 						<button
 							type="button"
 							data-url={ fmt.Sprintf("%s/monitors/%d/delete", p.BasePath, p.Monitor.ID) }
@@ -447,13 +629,13 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 							@click="$dispatch('confirm',{url:$el.dataset.url,message:$el.dataset.msg})"
 							class="btn-danger"
 						>Delete</button>
-					</div>
-				}
+					}
+				</div>
 			}
 			<p class="subtitle -mt-4 mb-6 font-mono [overflow-wrap:anywhere]">{ p.meta() }</p>
 			<div x-show="refreshError" x-cloak role="status" class="mb-4 text-xs text-crit">Refresh failed, retrying.</div>
-			if p.Monitor.Type == "manual" && p.Can("monitors.write") {
-				<div id="manual-status" hx-preserve="true" class="card card-pad mb-6" x-data="{ msg: '' }">
+			if p.Monitor.Type == "manual" && p.CanMonitor("monitors.status", p.Monitor.ID, p.Monitor.GroupID) {
+				<div id={ fmt.Sprintf("manual-status-%d", p.Monitor.ID) } hx-preserve="true" class="card card-pad mb-6" x-data="{ msg: '' }">
 					<h2 class="text-md font-semibold mb-3">Set status</h2>
 					<div class="flex flex-wrap items-end gap-2">
 						<div class="w-full sm:w-72">
@@ -466,60 +648,113 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 				</div>
 			}
-			if p.OpenIncident != nil {
+			if p.OpenIncident != nil && p.CanMonitor("incidents.read", p.Monitor.ID, p.Monitor.GroupID) {
 				<div class="mb-6 px-4 py-3 border border-crit/40 rounded-card bg-surface-50 text-sm flex flex-wrap items-center gap-x-3 gap-y-1" role="status">
 					<span class="dot bg-crit"></span>
 					<span class="font-medium text-white">Open incident</span>
-					<span class="text-muted-light min-w-0 break-words">{ p.OpenIncident.Cause }</span>
+					<span class="text-muted-light min-w-0 break-words">{ p.incidentCause(p.OpenIncident) }</span>
 					<a href={ templ.SafeURL(fmt.Sprintf("%s/incidents/%d", p.BasePath, p.OpenIncident.ID)) } class="ml-auto text-white underline underline-offset-2">View incident</a>
 				</div>
 			}
-			<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-				@StatCard("Uptime 24h", UptimeFmt(p.Uptime24h), UptimeTone(p.Uptime24h))
-				@StatCard("Uptime 7d", UptimeFmt(p.Uptime7d), UptimeTone(p.Uptime7d))
-				@StatCard("Uptime 30d", UptimeFmt(p.Uptime30d), UptimeTone(p.Uptime30d))
-				@StatCard("Checks 24h", fmt.Sprint(p.TotalChecks), "") {
-					if p.DownChecks > 0 {
-						<div class="text-xs text-crit mt-0.5">{ fmt.Sprint(p.DownChecks) } failed</div>
-					} else if p.TotalChecks > 0 {
-						<div class="text-xs text-muted mt-0.5">none failed</div>
+			if p.Monitor.HasSampledMetrics() {
+				<div class="summary-strip">
+					@uptimeStat("Uptime 24h", p.Uptime24h, p.Uptime24hHasData)
+					@uptimeStat("Uptime 7d", p.Uptime7d, p.Uptime7dHasData)
+					@uptimeStat("Uptime 30d", p.Uptime30d, p.Uptime30dHasData)
+					@StatCard("Checks 24h", fmt.Sprint(p.TotalChecks), "") {
+						if p.DownChecks > 0 {
+							<div class="text-xs text-crit mt-0.5">{ fmt.Sprint(p.DownChecks) } failed</div>
+						} else if p.TotalChecks > 0 {
+							<div class="text-xs text-muted mt-0.5">none failed</div>
+						}
 					}
-				}
-			</div>
-			<div id="response-chart" hx-preserve="true"
-				data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
-				class="card card-pad mb-6"
-				x-data="monitorChart()" x-cloak>
-				<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-					<h2 class="text-md font-semibold">Response time</h2>
-					<div class="flex gap-1" role="group" aria-label="Time range">
-						<template x-for="r in ['1h','6h','24h','7d','30d']" :key="r">
-							<button type="button" @click="range = r; fetchData()"
-								:aria-pressed="range === r"
-								:class="range === r ? 'bg-surface-200 text-white' : 'text-muted-light hover:text-white hover:bg-surface-200'"
-								class="h-7 px-2 text-xs rounded-control" x-text="r"></button>
-						</template>
-					</div>
 				</div>
-				<div x-show="loading" class="h-[200px] flex items-center justify-center text-sm text-muted">Loading…</div>
-				<div x-show="!loading && !points.length" class="h-[200px] flex items-center justify-center text-sm text-muted">No data for this range.</div>
-				<div x-show="!loading && points.length" class="relative">
-					<div x-ref="chart"></div>
-					<div x-ref="tooltip" class="absolute pointer-events-none bg-surface-100 border border-line-light rounded-control px-2 py-1.5 z-10" style="display:none">
-						<div class="tip-date text-xs text-muted"></div>
-						<div class="tip-value text-sm text-white font-mono"></div>
-						<div class="tip-status text-xs text-crit" style="display:none"></div>
+			} else {
+				<section class="card card-pad mb-6" aria-labelledby="reported-state-title">
+					<h2 id="reported-state-title" class="text-md font-semibold mb-3">Reported state</h2>
+					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+						<div><dt class="stat-label">Current status</dt><dd>@StatusPill(p.Monitor.Status)</dd></div>
+						if p.Monitor.Type == "heartbeat" {
+							<div>
+								<dt class="stat-label">Last ping</dt>
+								<dd>
+									if p.Heartbeat != nil && p.Heartbeat.LastPingAt != nil {
+										@RelTime(*p.Heartbeat.LastPingAt)
+									} else {
+										No ping received
+									}
+								</dd>
+							</div>
+							<div><dt class="stat-label">Expected every</dt><dd>{ fmt.Sprintf("%d seconds", p.Monitor.Interval) }</dd></div>
+							if p.Heartbeat != nil {
+								<div><dt class="stat-label">Grace period</dt><dd>{ fmt.Sprintf("%d seconds", p.Heartbeat.GraceSecs) }</dd></div>
+							}
+						} else {
+							<div>
+								<dt class="stat-label">Last state update</dt>
+								<dd>
+									if p.Monitor.LastCheckAt != nil {
+										@RelTime(*p.Monitor.LastCheckAt)
+									} else {
+										No update recorded
+									}
+								</dd>
+							</div>
+						}
+					</dl>
+					<p class="form-hint mt-4">This monitor tracks reported state. Uptime percentages and SLA budgets are not calculated.</p>
+				</section>
+			}
+			if p.hasResponseTimes() {
+				<div
+					id={ fmt.Sprintf("response-chart-%d", p.Monitor.ID) }
+					hx-preserve="true"
+					data-chart-url={ fmt.Sprintf("%s/monitors/%d/chart", p.BasePath, p.Monitor.ID) }
+					class="card card-pad mb-6"
+					x-data="monitorChart()"
+					x-cloak
+				>
+					<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+						<h2 class="text-md font-semibold">Response time</h2>
+						<div class="flex gap-1" role="group" aria-label="Time range">
+							<template x-for="r in ['1h','6h','24h','7d','30d']" :key="r">
+								<button
+									type="button"
+									@click="range = r; fetchData()"
+									:aria-pressed="range === r"
+									:class="range === r ? 'bg-surface-200 text-white' : 'text-muted-light hover:text-white hover:bg-surface-200'"
+									class="h-7 px-2 text-xs rounded-control"
+									x-text="r"
+								></button>
+							</template>
+						</div>
 					</div>
-				</div>
-			</div>
-			if p.showPercentiles() {
-				<div class="grid grid-cols-3 gap-3 mb-6">
-					@StatCard("p50", FormatFloat(p.P50), "")
-					@StatCard("p95", FormatFloat(p.P95), "")
-					@StatCard("p99", FormatFloat(p.P99), "")
+					<div role="status" class="text-xs text-muted mb-2" x-show="loading || error">
+						<span x-text="error || (points.length ? 'Updating chart…' : 'Loading chart…')"></span>
+						<span x-show="error && points.length" x-text="' Showing the last loaded ' + loadedRange + ' range.'"></span>
+						<button type="button" x-show="error" @click="fetchData()" class="ml-2 text-brand underline">Retry</button>
+					</div>
+					<div x-show="!points.length" class="h-[200px] flex items-center justify-center text-sm text-muted">
+						<span x-text="loading ? 'Loading…' : error ? 'Chart unavailable.' : 'No data for this range.'"></span>
+					</div>
+					<div x-show="points.length" class="relative">
+						<div x-ref="chart" role="img" :aria-label="summary"></div>
+						<div x-ref="tooltip" class="absolute pointer-events-none bg-surface-100 border border-line-light rounded-control px-2 py-1.5 z-10" style="display:none">
+							<div class="tip-date text-xs text-muted"></div>
+							<div class="tip-value text-sm text-white font-mono"></div>
+							<div class="tip-status text-xs text-crit" style="display:none"></div>
+						</div>
+					</div>
 				</div>
 			}
-			if p.SLA != nil {
+			if p.showPercentiles() {
+				<div class="percentile-summary grid grid-cols-3 gap-3 mb-6">
+					@StatCard("Median · p50", durationPercentile(p.P50, p.ResponseSamples), "")
+					@StatCard("p95", durationPercentile(p.P95, p.ResponseSamples), "")
+					@StatCard("p99", durationPercentile(p.P99, p.ResponseSamples), "")
+				</div>
+			}
+			if p.Monitor.HasSampledMetrics() && p.SLA != nil && p.CanMonitor("sla.read", p.Monitor.ID, p.Monitor.GroupID) {
 				<div class="card card-pad mb-6">
 					<div class="flex items-center gap-3 mb-3">
 						<h2 class="text-md font-semibold">{ fmt.Sprintf("SLA target %.2f%%", p.SLA.Target) }</h2>
@@ -529,7 +764,11 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 						<div>
 							<div class="stat-label">This month</div>
-							<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
+							if p.SLA.TotalChecks > 0 {
+								<div class={ "text-lg font-semibold tabular-nums", UptimeColor(p.SLA.UptimeMonth) }>{ UptimeFmt(p.SLA.UptimeMonth) }</div>
+							} else {
+								<div class="text-lg font-semibold text-muted" aria-label="No check data">—</div>
+							}
 						</div>
 						<div>
 							<div class="stat-label">Error budget used</div>
@@ -542,25 +781,25 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 				</div>
 			}
-			if len(p.Heatmap) > 0 {
+			if p.Monitor.HasSampledMetrics() && len(p.Heatmap) > 0 {
 				<div class="card card-pad mb-6">
 					<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
 						<h2 class="text-md font-semibold">Uptime, last 365 days</h2>
 						if p.heatmapHasData() {
 							<div class="flex flex-wrap items-center gap-3 text-xs text-muted">
 								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-ok"></span>≥ 99.9%</span>
-								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-warn"></span>≥ 99%</span>
-								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-major"></span>≥ 95%</span>
-								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-crit"></span>&lt; 95%</span>
+								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-warn"></span>99% to &lt;99.9%</span>
+								<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-[2px] bg-crit"></span>&lt; 99%</span>
 							</div>
 						}
 					</div>
 					<div class="overflow-x-auto">
 						@templ.Raw(HeatmapSVG(p.Heatmap))
 					</div>
+					@DailyUptimeData(p.Monitor.Name+": daily uptime", heatmapDailyBars(p.Heatmap))
 				</div>
 			}
-			if p.LatestCheck != nil && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
+			if p.LatestCheck != nil && p.LatestCheck.ObservationKind == storage.ObservationProbe && p.Monitor.Type == "tls" && p.LatestCheck.CertExpiry != nil {
 				<div class="card card-pad mb-6 flex items-center justify-between gap-4">
 					<div>
 						<h2 class="text-md font-semibold">TLS certificate</h2>
@@ -569,7 +808,7 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					<div class="text-sm text-muted font-mono">{ p.LatestCheck.CertExpiry.Format("2006-01-02") }</div>
 				</div>
 			}
-			if p.LatestCheck != nil && p.Monitor.Type == "dns" {
+			if p.LatestCheck != nil && p.LatestCheck.ObservationKind == storage.ObservationProbe && p.Monitor.Type == "dns" && p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
 				if records := ParseDNS(p.LatestCheck.DNSRecords); len(records) > 0 {
 					<div class="card card-pad mb-6">
 						<h2 class="text-md font-semibold mb-2">DNS records</h2>
@@ -581,28 +820,43 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 					</div>
 				}
 			}
-			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-				<section class="lg:col-span-2 panel min-w-0" aria-labelledby="checks-title">
+			<div class={ "grid grid-cols-1 gap-6 mb-6", templ.KV("lg:grid-cols-3", p.hasConfiguration()) }>
+				<section class={ "panel min-w-0", templ.KV("lg:col-span-2", p.hasConfiguration()) } aria-labelledby="checks-title">
 					<div class="px-4 py-3 border-b border-line flex items-center justify-between">
-						<h2 id="checks-title" class="text-md font-semibold">Recent checks</h2>
+						<h2 id="checks-title" class="text-md font-semibold">
+							if p.Monitor.HasSampledMetrics() {
+								Recent checks
+							} else {
+								Recorded state history
+							}
+						</h2>
 						if p.Checks != nil && p.Checks.Total > 0 {
 							<span class="text-xs text-muted tabular-nums">{ fmt.Sprint(p.Checks.Total) } total</span>
 						}
 					</div>
+					if !p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+						<p class="px-4 py-3 text-xs text-muted border-b border-line">Detailed check output requires diagnostic access. Status and measured probe timings remain visible.</p>
+					}
 					if cks := p.checks(); len(cks) > 0 {
+						{{ columns := p.historyColumns() }}
 						<div class="overflow-x-auto">
 							<table class="w-full min-w-[560px]">
 								<thead>
 									<tr class="border-b border-line">
 										<th class="th">Status</th>
-										<th class="th">Response</th>
-										if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
+										<th class="th">Source</th>
+										if columns.Response {
+											<th class="th">Response</th>
+										}
+										if columns.Code {
 											<th class="th">Code</th>
 										}
-										if p.Monitor.Type == "tls" {
+										if columns.Certificate {
 											<th class="th">Cert</th>
 										}
-										<th class="th">Message</th>
+										if p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+											<th class="th">Message</th>
+										}
 										<th class="th">Time</th>
 									</tr>
 								</thead>
@@ -610,28 +864,39 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 									for _, ck := range cks {
 										<tr>
 											<td class="px-4 py-2">@StatusPill(ck.Status)</td>
-											<td class="px-4 py-2 text-sm text-muted-light tabular-nums font-mono">{ FormatMs(ck.ResponseTime) }</td>
-											if p.Monitor.Type == "http" || p.Monitor.Type == "websocket" {
-												if ck.StatusCode != 0 {
+											<td class="px-4 py-2 text-xs text-muted whitespace-nowrap">{ observationLabel(ck.ObservationKind) }</td>
+											if columns.Response {
+												<td class="px-4 py-2 text-sm text-muted-light tabular-nums font-mono">
+													if ck.ObservationKind == storage.ObservationProbe {
+														{ FormatMs(ck.ResponseTime) }
+													} else {
+														—
+													}
+												</td>
+											}
+											if columns.Code {
+												if ck.ObservationKind == storage.ObservationProbe && ck.StatusCode != 0 {
 													<td class={ "px-4 py-2 text-sm tabular-nums font-mono", HttpStatusColor(ck.StatusCode) }>{ fmt.Sprint(ck.StatusCode) }</td>
 												} else {
 													<td class="px-4 py-2 text-sm text-muted">—</td>
 												}
 											}
-											if p.Monitor.Type == "tls" {
-												if ck.CertExpiry != nil {
+											if columns.Certificate {
+												if ck.ObservationKind == storage.ObservationProbe && ck.CertExpiry != nil {
 													<td class={ "px-4 py-2 text-sm", CertColor(ck.CertExpiry) }>{ fmt.Sprint(CertDays(ck.CertExpiry)) }d</td>
 												} else {
 													<td class="px-4 py-2 text-sm text-muted">—</td>
 												}
 											}
-											<td class="px-4 py-2 text-sm text-muted truncate max-w-[260px]" title={ ck.Message }>
-												if ck.Message != "" {
-													{ ck.Message }
-												} else {
-													—
-												}
-											</td>
+											if p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+												<td class="px-4 py-2 text-sm text-muted truncate max-w-[260px]" title={ ck.Message }>
+													if ck.Message != "" {
+														{ ck.Message }
+													} else {
+														—
+													}
+												</td>
+											}
 											<td class="px-4 py-2 text-sm text-muted whitespace-nowrap">@RelTime(ck.CreatedAt)</td>
 										</tr>
 									}
@@ -642,62 +907,74 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 							@Pager(p.Checks.Page, p.Checks.TotalPages, fmt.Sprintf("Page %d of %d", p.Checks.Page, p.Checks.TotalPages), p.checksPageHref(p.Checks.Page-1), p.checksPageHref(p.Checks.Page+1))
 						}
 					} else {
-						<div class="px-4 py-10 text-center text-sm text-muted">No checks yet.</div>
-					}
-				</section>
-				<section class="card card-pad min-w-0" aria-labelledby="config-title">
-					<h2 id="config-title" class="text-md font-semibold mb-2">Configuration</h2>
-					<dl class="text-sm">
-						if p.Monitor.Type != "heartbeat" && p.Monitor.Type != "manual" {
-							@configRow("Interval") {
-								{ fmt.Sprint(p.Monitor.Interval) }s
-							}
-							@configRow("Timeout") {
-								{ fmt.Sprint(p.Monitor.Timeout) }s
-							}
-						}
-						@configRow("Failures before alert") {
-							{ fmt.Sprint(p.Monitor.FailureThreshold) }
-						}
-						@configRow("Successes to recover") {
-							{ fmt.Sprint(p.Monitor.SuccessThreshold) }
-						}
-						if p.Monitor.TrackChanges {
-							@configRow("Track changes") {
-								Yes
-							}
-						}
-						if p.Monitor.UpsideDown {
-							@configRow("Upside-down mode") {
-								Yes
-							}
-						}
-						if p.Monitor.ResendInterval > 0 {
-							@configRow("Resend every") {
-								{ fmt.Sprint(p.Monitor.ResendInterval) }s
-							}
-						}
-					</dl>
-					if len(p.Tags) > 0 {
-						<div class="flex items-center gap-1.5 flex-wrap mt-3">
-							for _, tag := range p.Tags {
-								<span class="badge">
-									<span class="dot w-1.5 h-1.5" style={ "background-color: " + tag.Color }></span>
-									{ tag.Name }
-									if tag.Value != "" {
-										<span class="text-muted">{ tag.Value }</span>
-									}
-								</span>
+						<div class="px-4 py-10 text-center text-sm text-muted">
+							if p.Monitor.HasSampledMetrics() {
+								No checks yet.
+							} else if p.Monitor.Type == "heartbeat" {
+								Heartbeat pings update the current state; individual pings are not stored as checks.
+							} else {
+								No state changes recorded.
 							}
 						</div>
 					}
-					if p.Monitor.Description != "" {
-						<div class="mt-4 pt-3 border-t border-line">
-							<div class="stat-label">Notes</div>
-							<div class="leading-relaxed">@templ.Raw(RenderMarkdown(p.Monitor.Description))</div>
-						</div>
-					}
 				</section>
+				if p.hasConfiguration() {
+					<section class="card card-pad min-w-0" aria-labelledby="config-title">
+						<h2 id="config-title" class="text-md font-semibold mb-2">Configuration</h2>
+						<dl class="text-sm">
+							if p.Monitor.Type != "heartbeat" && p.Monitor.Type != "manual" {
+								@configRow("Interval") {
+									{ fmt.Sprint(p.Monitor.Interval) }s
+								}
+								@configRow("Timeout") {
+									{ fmt.Sprint(p.Monitor.Timeout) }s
+								}
+							}
+							if p.Monitor.HasSampledMetrics() {
+								@configRow("Failures before alert") {
+									{ fmt.Sprint(p.Monitor.FailureThreshold) }
+								}
+								@configRow("Successes to recover") {
+									{ fmt.Sprint(p.Monitor.SuccessThreshold) }
+								}
+							}
+							if p.Monitor.HasSampledMetrics() && p.Monitor.TrackChanges {
+								@configRow("Track changes") {
+									Yes
+								}
+							}
+							if p.Monitor.HasSampledMetrics() && p.Monitor.UpsideDown {
+								@configRow("Upside-down mode") {
+									Yes
+								}
+							}
+							if p.Monitor.ResendInterval > 0 {
+								@configRow("Resend every") {
+									{ fmt.Sprint(p.Monitor.ResendInterval) }s
+								}
+							}
+						</dl>
+						if len(p.Tags) > 0 {
+							<div class="flex items-center gap-1.5 flex-wrap mt-3">
+								for _, tag := range p.Tags {
+									<span class="badge">
+										<span class={ "dot w-1.5 h-1.5", TagTone(tag.Color) }></span>
+										{ tag.Name }
+										if tag.Value != "" {
+											<span class="text-muted">{ tag.Value }</span>
+										}
+									</span>
+								}
+							</div>
+						}
+						if p.Monitor.Description != "" {
+							<div class="mt-4 pt-3 border-t border-line">
+								<div class="stat-label">Notes</div>
+								<div class="leading-relaxed">@templ.Raw(RenderMarkdown(p.Monitor.Description))</div>
+							</div>
+						}
+					</section>
+				}
 			</div>
 			if chs := p.changes(); len(chs) > 0 {
 				<section class="panel" aria-labelledby="changes-title">
@@ -711,7 +988,9 @@ templ MonitorDetailPage(p MonitorDetailParams) {
 						for _, ch := range chs {
 							<li class="px-4 py-2.5 flex items-center gap-3 min-w-0">
 								<span class="text-sm text-muted whitespace-nowrap shrink-0 w-20">@RelTime(ch.CreatedAt)</span>
-								if ch.Diff != "" {
+								if !p.canReadDiagnostics("monitors.read", p.Monitor.ID, p.Monitor.GroupID) {
+									<span class="text-sm text-muted">Change recorded; details require diagnostic access.</span>
+								} else if ch.Diff != "" {
 									<code class="text-xs text-muted-light font-mono truncate" title={ ch.Diff }>{ ch.Diff }</code>
 								} else {
 									<span class="text-sm text-muted">—</span>

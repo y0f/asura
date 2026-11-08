@@ -3,7 +3,7 @@ package views
 import (
 	"fmt"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type TagListParams struct {
@@ -16,7 +16,7 @@ func tagAlpineData(basePath string) string {
     showForm: false,
     editId: 0,
     name: '',
-    color: '#1484ff',
+    color: '#005bbf',
     basePath: '` + JSEscapeString(basePath) + `',
     get formAction() {
         return this.editId ? this.basePath + '/tags/' + this.editId : this.basePath + '/tags';
@@ -24,12 +24,12 @@ func tagAlpineData(basePath string) string {
     resetForm() {
         this.editId = 0;
         this.name = '';
-        this.color = '#1484ff';
+        this.color = '#005bbf';
     },
     editTag(t) {
         this.editId = t.id;
         this.name = t.name;
-        this.color = t.color || '#1484ff';
+        this.color = t.color || '#005bbf';
         this.showForm = true;
     }
 }`
@@ -39,7 +39,7 @@ templ TagListPage(p TagListParams) {
 	@Layout(p.LayoutParams) {
 		<div x-data={ tagAlpineData(p.BasePath) }>
 			@PageHeader(PageHeaderParams{Title: "Tags", Subtitle: "Labels for filtering monitors, optionally with a value such as env=prod."}) {
-				if p.Can("monitors.write") {
+				if p.Can("tags.create") {
 					@ToolbarNewButtonClick("resetForm(); showForm = true", "New tag")
 				}
 			}
@@ -58,18 +58,22 @@ templ TagListPage(p TagListParams) {
 								<tr>
 									<td class="px-4 py-3">
 										<a href={ templ.SafeURL(fmt.Sprintf("%s/monitors?tag=%d", p.BasePath, t.ID)) } class="inline-flex items-center gap-2 text-sm text-white font-medium hover:underline">
-											<span class="dot" style={ "background-color:" + t.Color }></span>
+											<span class={ "dot", TagTone(t.Color) }></span>
 											{ t.Name }
 										</a>
 									</td>
 									<td class="px-4 py-3 text-sm text-muted font-mono">{ t.Color }</td>
 									<td class="px-4 py-3">
-										if p.Can("monitors.write") {
+										if p.Can("tags.update") || p.Can("tags.delete") {
 											<div class="flex items-center justify-end gap-0.5">
-												<button type="button" @click={ fmt.Sprintf("editTag(%s)", ToJSON(t)) } class="row-action" title="Edit" aria-label={ "Edit " + t.Name }>
-													@iconEdit()
-												</button>
-												@DeleteButton(fmt.Sprintf("%s/tags/%d/delete", p.BasePath, t.ID), "Delete this tag? It will be removed from all monitors.")
+												if p.Can("tags.update") {
+													<button type="button" @click={ fmt.Sprintf("editTag(%s)", ToJSON(t)) } class="row-action" title="Edit" aria-label={ "Edit " + t.Name }>
+														@iconEdit()
+													</button>
+												}
+												if p.Can("tags.delete") {
+													@DeleteButton(fmt.Sprintf("%s/tags/%d/delete", p.BasePath, t.ID), "Delete this tag? It will be removed from all monitors.")
+												}
 											</div>
 										}
 									</td>
@@ -78,29 +82,34 @@ templ TagListPage(p TagListParams) {
 						</tbody>
 					</table>
 				</div>
-			} else if p.Can("monitors.write") {
+			} else if p.Can("tags.create") {
 				@EmptyStateModal("No tags yet.", "resetForm(); showForm = true", "Create your first tag")
 			} else {
 				@EmptyState("No tags yet.", "", "")
 			}
-			@FormModal("showForm", "max-w-md", "editId ? 'Edit tag' : 'New tag'") {
-				<form method="POST" :action="formAction" class="space-y-4">
-					<div>
-						<label class="form-label" for="tag-name">Name</label>
-						<input id="tag-name" type="text" name="name" x-model="name" required maxlength="50" placeholder="production" class="form-input"/>
-					</div>
-					<div>
-						<label class="form-label" for="tag-color">Colour</label>
-						<div class="flex items-center gap-2">
-							<input id="tag-color" type="color" name="color" x-model="color" class="h-9 w-12 shrink-0 rounded-control border border-line-light bg-surface-50 cursor-pointer p-1"/>
-							<input type="text" x-model="color" aria-label="Colour hex value" placeholder="#1484ff" maxlength="7" class="form-input font-mono"/>
+			if p.Can("tags.create") || p.Can("tags.update") {
+				@FormModal("showForm", "max-w-md", "editId ? 'Edit tag' : 'New tag'") {
+					<form method="POST" :action="formAction" class="space-y-4">
+						<div>
+							<label class="form-label" for="tag-name">Name</label>
+							<input id="tag-name" type="text" name="name" x-model="name" required maxlength="50" placeholder="production" class="form-input"/>
 						</div>
-					</div>
-					<div class="flex items-center gap-2 pt-1">
-						<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create tag'"></button>
-						<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
-					</div>
-				</form>
+						<div>
+							<label class="form-label" for="tag-color">Colour</label>
+							<select id="tag-color" name="color" x-model="color" class="form-select">
+								<option value="#005bbf">Blue</option>
+								<option value="#808080">Gray</option>
+								<template x-if="!['#005bbf', '#808080'].includes(color)">
+									<option :value="color" x-text="'Stored custom colour (' + color + ')'"></option>
+								</template>
+							</select>
+						</div>
+						<div class="flex items-center gap-2 pt-1">
+							<button type="submit" class="btn-primary" x-text="editId ? 'Save changes' : 'Create tag'"></button>
+							<button type="button" @click="showForm = false" class="btn-secondary">Cancel</button>
+						</div>
+					</form>
+				}
 			}
 		</div>
 	}

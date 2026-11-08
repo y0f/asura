@@ -7,13 +7,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/y0f/asura/internal/api"
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/monitor"
-	"github.com/y0f/asura/internal/notifier"
-	"github.com/y0f/asura/internal/storage"
-	"github.com/y0f/asura/internal/web"
+	"github.com/y0f/asura/v2/internal/api"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/monitor"
+	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v2/internal/web"
 )
 
 var _ http.Handler = (*Server)(nil)
@@ -49,6 +49,8 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 		statusSlugs:  make(map[string]int64),
 	}
 
+	s.events.authorize = s.authorizeEvent
+
 	cspDirective := buildFrameAncestorsDirective(cfg.Server.FrameAncestors)
 
 	// One login limiter for the API and the web UI, so status page password
@@ -72,7 +74,9 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 	if cfg.IsWebUIEnabled() {
 		handler = s.statusPageRouter(handler)
 	}
-	handler = bodyLimit(cfg.Server.MaxBodySize, s.p("/api/v1/agent/results"))(handler)
+	// Transfer handlers apply their own authenticated, bounded JSON/multipart
+	// limits before parsing. A normal small request cap cannot round-trip files.
+	handler = bodyLimit(cfg.Server.MaxBodySize, s.p("/api/v1/agent/results"), s.p("/api/v1/import"), s.p("/settings/import"))(handler)
 	s.rateLimiter = httputil.NewRateLimiter(cfg.Server.RateLimitPerSec, cfg.Server.RateLimitBurst)
 	handler = s.rateLimiter.Middleware(cfg.TrustedNets(), writeError)(handler)
 	handler = cors(cfg.Server.CORSOrigins)(handler)

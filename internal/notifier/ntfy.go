@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type NtfySettings struct {
@@ -67,7 +67,7 @@ func (s *NtfySender) Send(ctx context.Context, channel *storage.NotificationChan
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("ntfy returned status %d", resp.StatusCode)
 	}
 

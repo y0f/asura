@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -11,31 +10,47 @@ import (
 
 func (s *SQLiteStore) InsertContentChange(ctx context.Context, c *ContentChange) error {
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	id, err := insertID(ctx, s.writeDB,
 		`INSERT INTO content_changes (monitor_id, old_hash, new_hash, diff, old_body, new_body, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		c.MonitorID, c.OldHash, c.NewHash, c.Diff, c.OldBody, c.NewBody, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	c.ID = id
 	c.CreatedAt = parseTime(now)
 	return nil
 }
 
-func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p Pagination) (*PaginatedResult, error) {
+func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error) {
+	return s.listContentChanges(ctx, monitorID, p, true, access...)
+}
+
+func (s *SQLiteStore) ListContentChangeSummaries(ctx context.Context, monitorID int64, p Pagination, access ...MonitorAccess) (*PaginatedResult, error) {
+	return s.listContentChanges(ctx, monitorID, p, false, access...)
+}
+
+func (s *SQLiteStore) listContentChanges(ctx context.Context, monitorID int64, p Pagination, diagnostics bool, access ...MonitorAccess) (*PaginatedResult, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var total int64
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM content_changes WHERE monitor_id=?", monitorID).Scan(&total)
 	if err != nil {
 		return nil, err
 	}
 
 	offset := (p.Page - 1) * p.PerPage
-	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT id, monitor_id, old_hash, new_hash, diff, created_at
-		 FROM content_changes WHERE monitor_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+	privateColumns := "old_hash, new_hash, diff"
+	if !diagnostics {
+		privateColumns = "'', '', ''"
+	}
+	rows, err := reader.QueryContext(ctx,
+		`SELECT id, monitor_id, `+privateColumns+`, created_at
+		 FROM content_changes WHERE monitor_id=? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 		monitorID, p.PerPage, offset)
 	if err != nil {
 		return nil, err
@@ -70,21 +85,33 @@ func (s *SQLiteStore) ListContentChanges(ctx context.Context, monitorID int64, p
 
 // --- Analytics ---
 
-func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int) ([]*TimeSeriesPoint, error) {
+func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64, from, to time.Time, maxPoints int, access ...MonitorAccess) ([]*TimeSeriesPoint, error) {
 	span := to.Sub(from)
 	if span > 90*24*time.Hour {
-		return s.GetTimeSeriesFromDaily(ctx, monitorID, from, to)
+		return s.GetTimeSeriesFromDaily(ctx, monitorID, from, to, access...)
 	}
 	if span > 7*24*time.Hour {
-		return s.GetTimeSeriesFromHourly(ctx, monitorID, from, to, maxPoints)
+		return s.GetTimeSeriesFromHourly(ctx, monitorID, from, to, maxPoints, access...)
 	}
 
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	fromStr := formatTime(from)
 	toStr := formatTime(to)
+	sampled, err := sampledMonitor(ctx, reader, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	if !sampled {
+		return []*TimeSeriesPoint{}, nil
+	}
 
 	var count int64
-	err := s.readDB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
+	err = reader.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?`,
 		monitorID, fromStr, toStr).Scan(&count)
 	if err != nil {
 		return nil, fmt.Errorf("count time series: %w", err)
@@ -92,28 +119,28 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 
 	var rows *sql.Rows
 	if count <= int64(maxPoints) {
-		rows, err = s.readDB.QueryContext(ctx,
+		rows, err = reader.QueryContext(ctx,
 			`SELECT created_at, response_time, status
 			 FROM check_results
-			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-			 ORDER BY created_at ASC`,
+			 WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?
+			 ORDER BY created_at ASC, id ASC`,
 			monitorID, fromStr, toStr)
 	} else {
 		bucketSecs := int64(to.Sub(from).Seconds()) / int64(maxPoints)
 		if bucketSecs < 1 {
 			bucketSecs = 1
 		}
-		rows, err = s.readDB.QueryContext(ctx,
+		rows, err = reader.QueryContext(ctx,
 			`SELECT MIN(created_at) as created_at,
-			        CAST(AVG(response_time) AS INTEGER) as response_time,
+			        `+s.readDB.dialect.integer("AVG(response_time)")+` as response_time,
 			        CASE
 			            WHEN SUM(CASE WHEN status='down' THEN 1 ELSE 0 END) > 0 THEN 'down'
 			            WHEN SUM(CASE WHEN status='degraded' THEN 1 ELSE 0 END) > 0 THEN 'degraded'
 			            ELSE 'up'
 			        END as status
 			 FROM check_results
-			 WHERE monitor_id=? AND created_at >= ? AND created_at < ?
-			 GROUP BY (CAST(strftime('%s', created_at) AS INTEGER) / ?)
+			 WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?
+			 GROUP BY (`+s.readDB.dialect.epochSeconds("created_at")+` / ?)
 			 ORDER BY created_at ASC`,
 			monitorID, fromStr, toStr, bucketSecs)
 	}
@@ -146,80 +173,35 @@ func (s *SQLiteStore) GetResponseTimeSeries(ctx context.Context, monitorID int64
 	return points, nil
 }
 
-func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time) (float64, error) {
-	from, to = from.UTC(), to.UTC()
+func (s *SQLiteStore) GetUptimePercent(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (float64, error) {
+	days, err := s.GetDailyUptime(ctx, monitorID, from, to, access...)
+	if err != nil {
+		return 0, err
+	}
 	var total, up int64
-
-	// Whole UTC days covered by the daily rollups are summed from
-	// check_result_daily; only the edges outside the rolled-up days (the partial
-	// first day, today, days not rolled up yet) are counted from raw rows. This
-	// keeps long ranges (the 90-day status page figure) from scanning every check.
-	raw := [][2]time.Time{{from, to}}
-	firstDay := from.Truncate(24 * time.Hour)
-	if firstDay.Before(from) {
-		firstDay = firstDay.Add(24 * time.Hour)
-	}
-	if endDay := to.Truncate(24 * time.Hour); endDay.After(firstDay) {
-		var minDay, maxDay sql.NullString
-		err := s.readDB.QueryRowContext(ctx,
-			`SELECT COALESCE(SUM(total), 0), COALESCE(SUM(up_count), 0), MIN(day), MAX(day)
-			 FROM check_result_daily WHERE monitor_id=? AND day >= ? AND day < ?`,
-			monitorID, firstDay.Format("2006-01-02"), endDay.Format("2006-01-02")).Scan(&total, &up, &minDay, &maxDay)
-		if err != nil {
-			return 0, err
-		}
-		if minDay.Valid && maxDay.Valid {
-			lo, err1 := time.Parse("2006-01-02", minDay.String)
-			hi, err2 := time.Parse("2006-01-02", maxDay.String)
-			if err1 != nil || err2 != nil {
-				return 0, fmt.Errorf("parse rollup day: %w", errors.Join(err1, err2))
-			}
-			raw = [][2]time.Time{{from, lo}, {hi.AddDate(0, 0, 1), to}}
-		}
-	}
-
-	for _, r := range raw {
-		if !r[0].Before(r[1]) {
-			continue
-		}
-		var t, u int64
-		err := s.readDB.QueryRowContext(ctx,
-			`SELECT COUNT(*), COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0)
-			 FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
-			monitorID, formatTime(r[0]), formatTime(r[1])).Scan(&t, &u)
-		if err != nil {
-			return 0, err
-		}
-		total += t
-		up += u
+	for _, day := range days {
+		total += day.TotalChecks
+		up += day.UpChecks
 	}
 	if total == 0 {
-		return 100, nil
+		return 0, ErrNoMetricSamples
 	}
 	return float64(up) / float64(total) * 100, nil
 }
 
-func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time) (p50, p95, p99 float64, err error) {
-	err = s.readDB.QueryRowContext(ctx,
-		`WITH s AS (
-		   SELECT response_time,
-		          ROW_NUMBER() OVER (ORDER BY response_time) AS rn,
-		          COUNT(*) OVER ()                           AS n
-		   FROM check_results
-		   WHERE monitor_id=? AND created_at >= ? AND created_at < ? AND status='up'
-		 )
-		 SELECT
-		   COALESCE(MIN(CASE WHEN rn >= n * 0.50 THEN response_time END), 0),
-		   COALESCE(MIN(CASE WHEN rn >= n * 0.95 THEN response_time END), 0),
-		   COALESCE(MIN(CASE WHEN rn >= n * 0.99 THEN response_time END), 0)
-		 FROM s`,
-		monitorID, formatTime(from), formatTime(to)).Scan(&p50, &p95, &p99)
-	return
+func (s *SQLiteStore) GetResponseTimePercentiles(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (p50, p95, p99 float64, err error) {
+	result, err := s.GetResponseTimeSummary(ctx, monitorID, from, to, access...)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return result.P50, result.P95, result.P99, nil
 }
 
-func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context) (map[int64]int64, error) {
+func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context, access ...MonitorAccess) (map[int64]int64, error) {
+	clause, args := monitorAccessSQL("m", access)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT monitor_id, last_response_time FROM monitor_status`)
+		`SELECT ms.monitor_id, ms.last_response_time FROM monitor_status ms
+		 JOIN monitors m ON m.id = ms.monitor_id WHERE m.type NOT IN ('manual','heartbeat') AND ms.last_check_at IS NOT NULL AND ms.observation_kind='probe'`+clause, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,26 +221,33 @@ func (s *SQLiteStore) GetLatestResponseTimes(ctx context.Context) (map[int64]int
 	return result, nil
 }
 
-func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time) (total, up, down, degraded int64, err error) {
-	err = s.readDB.QueryRowContext(ctx,
+func (s *SQLiteStore) GetCheckCounts(ctx context.Context, monitorID int64, from, to time.Time, access ...MonitorAccess) (total, up, down, degraded int64, err error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	defer release()
+	err = reader.QueryRowContext(ctx,
 		`SELECT COUNT(*),
 		        COALESCE(SUM(CASE WHEN status='up' THEN 1 ELSE 0 END), 0),
 		        COALESCE(SUM(CASE WHEN status='down' THEN 1 ELSE 0 END), 0),
 		        COALESCE(SUM(CASE WHEN status='degraded' THEN 1 ELSE 0 END), 0)
-		 FROM check_results WHERE monitor_id=? AND created_at >= ? AND created_at < ?`,
+		 FROM check_results WHERE monitor_id=? AND observation_kind='probe' AND created_at >= ? AND created_at < ?`,
 		monitorID, formatTime(from), formatTime(to)).Scan(&total, &up, &down, &degraded)
 	return
 }
 
-func (s *SQLiteStore) CountMonitorsByStatus(ctx context.Context) (up, down, degraded, paused int64, err error) {
+func (s *SQLiteStore) CountMonitorsByStatus(ctx context.Context, access ...MonitorAccess) (up, down, degraded, paused, pending int64, err error) {
+	clause, args := monitorAccessSQL("m", access)
 	err = s.readDB.QueryRowContext(ctx,
 		`SELECT
-		   COALESCE(SUM(CASE WHEN m.enabled=1 AND COALESCE(ms.status,'') NOT IN ('down','degraded') THEN 1 ELSE 0 END), 0),
+		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='up' THEN 1 ELSE 0 END), 0),
 		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='down' THEN 1 ELSE 0 END), 0),
 		   COALESCE(SUM(CASE WHEN m.enabled=1 AND ms.status='degraded' THEN 1 ELSE 0 END), 0),
-		   COALESCE(SUM(CASE WHEN m.enabled=0 THEN 1 ELSE 0 END), 0)
+		   COALESCE(SUM(CASE WHEN m.enabled=0 THEN 1 ELSE 0 END), 0),
+		   COALESCE(SUM(CASE WHEN m.enabled=1 AND COALESCE(ms.status,'') NOT IN ('up','down','degraded') THEN 1 ELSE 0 END), 0)
 		 FROM monitors m
-		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id`).
-		Scan(&up, &down, &degraded, &paused)
+		 LEFT JOIN monitor_status ms ON ms.monitor_id = m.id WHERE 1=1`+clause, args...).
+		Scan(&up, &down, &degraded, &paused, &pending)
 	return
 }

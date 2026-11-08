@@ -32,14 +32,15 @@ func formatBytes(b int64) string {
 templ settingsFact(label string) {
 	<div class="py-2">
 		<dt class="text-xs text-muted">{ label }</dt>
-		<dd class="text-sm text-white font-medium mt-0.5">{ children... }
-</dd>
+		<dd class="text-sm text-white font-medium mt-0.5">
+			{ children... }
+		</dd>
 	</div>
 }
 
 templ SettingsPage(p SettingsParams) {
 	@Layout(p.LayoutParams) {
-		@PageHeader(PageHeaderParams{Title: "Settings", Subtitle: "Instance information, configuration backup and database maintenance."})
+		@PageHeader(PageHeaderParams{Title: "Settings", Subtitle: "Instance information, configuration transfer and database maintenance."})
 		<div class="space-y-6 max-w-5xl">
 			<section class="card card-pad" aria-labelledby="sys-title">
 				<h2 id="sys-title" class="text-lg font-semibold mb-2">System</h2>
@@ -53,11 +54,15 @@ templ SettingsPage(p SettingsParams) {
 					@settingsFact("Uptime") {
 						{ p.Uptime }
 					}
-					@settingsFact("Database size") {
-						{ formatBytes(p.DBSizeBytes) }
+					if p.Can("database.read") {
+						@settingsFact("Database size") {
+							{ formatBytes(p.DBSizeBytes) }
+						}
 					}
-					@settingsFact("Monitors") {
-						{ fmt.Sprint(p.MonitorCount) }
+					if p.HasCapability("monitors.read") {
+						@settingsFact("Visible monitors") {
+							{ fmt.Sprint(p.MonitorCount) }
+						}
 					}
 					@settingsFact("Check workers") {
 						{ fmt.Sprint(p.WorkerCount) }
@@ -74,53 +79,57 @@ templ SettingsPage(p SettingsParams) {
 					}
 				</dl>
 			</section>
-			if p.Can("monitors.write") {
-				<div class={ "grid gap-6", templ.KV("md:grid-cols-2", p.SuperAdmin) }>
+			if p.SuperAdmin {
+				<div class="grid gap-6 md:grid-cols-2">
 					<section class="card card-pad" aria-labelledby="export-title">
 						<h2 id="export-title" class="text-lg font-semibold">Export</h2>
-						<p class="subtitle mt-1 mb-4">Download monitors, groups, proxies, notification channels, maintenance windows and status pages as JSON.</p>
+						<p class="subtitle mt-1 mb-4">Transfer monitors and their relationships, groups, tags, proxies, notification channels, escalation policies, on-call rotations, maintenance windows and status pages as JSON.</p>
 						<div class="flex flex-wrap items-center gap-2">
-							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true") } class="btn-secondary">Export without secrets</a>
-							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false") } class="btn-secondary">Export with secrets</a>
+							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=false") } class="btn-secondary">Full export</a>
+							<a href={ templ.SafeURL(p.BasePath + "/settings/export?redact_secrets=true") } class="btn-secondary">Redacted export for sharing</a>
 						</div>
+						<p class="form-hint mt-3">Full exports contain credentials. Redacted exports cannot be imported; review free text and branding before sharing. History, agent credentials, access roles and server configuration require a separate backup.</p>
 					</section>
-					if p.SuperAdmin {
-						<section class="card card-pad" aria-labelledby="import-title">
-							<h2 id="import-title" class="text-lg font-semibold">Import</h2>
-							<p class="subtitle mt-1 mb-4">Restore or merge a previously exported file.</p>
-							<form
-								action={ templ.SafeURL(p.BasePath + "/settings/import") }
-								method="POST"
-								enctype="multipart/form-data"
-								class="space-y-4"
-								x-data="{ fileName: '', mode: 'merge' }"
-								@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace mode deletes the current configuration before importing. Continue?', onConfirm: () => { $el.dataset.confirmed = '1'; $el.requestSubmit() } }) }"
-							>
-								<div>
-									<label class="form-label" for="import-mode">Mode</label>
-									<select id="import-mode" name="mode" x-model="mode" class="form-select">
-										<option value="merge">Merge: keep existing, skip duplicates</option>
-										<option value="replace">Replace: overwrite everything</option>
-									</select>
-								</div>
-								<div>
-									<label class="form-label" for="import-file">File</label>
-									<input
-										id="import-file"
-										type="file"
-										name="file"
-										accept=".json,application/json"
-										required
-										class="block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer"
-									/>
-								</div>
-								<button type="submit" class="btn-primary">Import</button>
-							</form>
-						</section>
-					}
+					<section class="card card-pad" aria-labelledby="import-title">
+						<h2 id="import-title" class="text-lg font-semibold">Import</h2>
+						<p class="subtitle mt-1 mb-4">Import a full configuration export, up to 32 MiB. Back up the database, server configuration and encryption key before replacing configuration.</p>
+						<form
+							action={ templ.SafeURL(p.BasePath + "/settings/import") }
+							method="POST"
+							enctype="multipart/form-data"
+							class="space-y-4"
+							x-data="{ mode: 'merge' }"
+							@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace current portable configuration, deleting related monitoring and notification history, and status-page subscribers? The entire import rolls back if any step fails.', onConfirm: () => { $el.dataset.confirmed = '1'; try { $el.requestSubmit() } finally { delete $el.dataset.confirmed } } }) }"
+						>
+							<div>
+								<label class="form-label" for="import-mode">Mode</label>
+								<select id="import-mode" name="mode" x-model="mode" class="form-select">
+									<option value="merge">Merge: keep existing, skip duplicates</option>
+									<option value="replace">Replace portable configuration</option>
+								</select>
+							</div>
+							<div>
+								<label class="form-label" for="import-file">File</label>
+								<input
+									id="import-file"
+									type="file"
+									name="file"
+									accept=".json,application/json"
+									required
+									class="block w-full text-sm text-muted-light file:mr-3 file:h-8 file:px-3 file:rounded-control file:border file:border-line-light file:bg-surface-50 file:text-white file:text-sm file:font-medium hover:file:bg-surface-200 file:cursor-pointer"
+								/>
+							</div>
+							<div>
+								<label class="form-label" for="import-agent-mapping">Agent mapping <span class="text-muted font-normal">(optional)</span></label>
+								<input id="import-agent-mapping" type="text" name="agent_mapping" placeholder="7:2,8:5" class="form-input font-mono" aria-describedby="import-agent-help"/>
+								<p id="import-agent-help" class="form-hint">Unique existing agent names resolve automatically. To map IDs explicitly, enter source:destination pairs separated by commas. Import does not enroll or enable agents.</p>
+							</div>
+							<button type="submit" class="btn-primary">Import</button>
+						</form>
+					</section>
 				</div>
 			}
-			if p.SuperAdmin {
+			if p.Can("database.maintain") {
 				<section class="card card-pad" aria-labelledby="db-title">
 					<h2 id="db-title" class="text-lg font-semibold">Database</h2>
 					<p class="subtitle mt-1 mb-4">VACUUM reclaims space left by deleted rows and rebuilds the database file. Large databases can take a while.</p>

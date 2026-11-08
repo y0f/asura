@@ -1,11 +1,12 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
-	"github.com/y0f/asura/internal/sla"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/sla"
 )
 
 func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
@@ -15,53 +16,64 @@ func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mon, err := h.store.GetMonitor(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "monitor not found")
+	mon, ok := h.requireMonitor(w, r, id, "sla.read")
+	if !ok {
 		return
 	}
 
+	if !mon.HasSampledMetrics() {
+		writeError(w, http.StatusBadRequest, "sample-based SLA is unavailable for manual and heartbeat monitors")
+		return
+	}
 	if mon.SLATarget <= 0 {
 		writeError(w, http.StatusBadRequest, "monitor has no SLA target configured")
 		return
 	}
 
-	status, err := sla.Compute(r.Context(), h.store, mon.ID, mon.SLATarget)
+	status, err := sla.Compute(r.Context(), h.store, mon.ID, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
+		if errors.Is(err, sla.ErrUnavailable) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if monitorMutationError(w, err) {
+			return
+		}
 		h.logger.Error("compute sla", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to compute SLA")
 		return
 	}
 
+	if status.Target <= 0 {
+		writeError(w, http.StatusBadRequest, "monitor has no SLA target configured")
+		return
+	}
+	name := mon.Name
+	if !httputil.GetAPIKey(r.Context()).AllowsMonitor("monitors.read", mon.ID, mon.GroupID) {
+		name = ""
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"monitor_id":   mon.ID,
-		"monitor_name": mon.Name,
+		"monitor_name": name,
 		"sla":          status,
 	})
 }
 
 func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
-	now := time.Now().UTC()
-	year := now.Year()
-	month := now.Month()
-
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid period format, use YYYY-MM")
-			return
-		}
-		year = t.Year()
-		month = t.Month()
+	year, month, err := sla.ParsePeriod(r.URL.Query().Get("period"), time.Now().UTC())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
+	entries, err := sla.ComputeReport(r.Context(), h.store, year, month, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
 		h.logger.Error("compute sla report", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to compute SLA report")
 		return
 	}
 
+	httputil.RedactSLAMonitorNames(r.Context(), entries)
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
 	}
@@ -82,27 +94,20 @@ func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SLAReportExport(w http.ResponseWriter, r *http.Request) {
-	now := time.Now().UTC()
-	year := now.Year()
-	month := now.Month()
-
-	if p := r.URL.Query().Get("period"); p != "" {
-		t, err := time.Parse("2006-01", p)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid period format, use YYYY-MM")
-			return
-		}
-		year = t.Year()
-		month = t.Month()
+	year, month, err := sla.ParsePeriod(r.URL.Query().Get("period"), time.Now().UTC())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	entries, err := sla.ComputeReport(r.Context(), h.store, year, month)
+	entries, err := sla.ComputeReport(r.Context(), h.store, year, month, httputil.MonitorAccess(r.Context(), "sla.read")...)
 	if err != nil {
 		h.logger.Error("export sla report", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to compute SLA report")
 		return
 	}
 
+	httputil.RedactSLAMonitorNames(r.Context(), entries)
 	if entries == nil {
 		entries = []*sla.ReportEntry{}
 	}

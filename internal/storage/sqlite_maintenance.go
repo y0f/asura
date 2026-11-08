@@ -3,22 +3,33 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
-	"github.com/y0f/asura/internal/cron"
+	"github.com/y0f/asura/v2/internal/cron"
 )
 
-func (s *SQLiteStore) CreateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow) error {
+func (s *SQLiteStore) CreateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error {
 	monitorIDs, _ := json.Marshal(mw.MonitorIDs)
 	now := formatTime(time.Now())
-	res, err := s.writeDB.ExecContext(ctx,
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := checkMaintenanceTargets(ctx, tx, mw.MonitorIDs, access); err != nil {
+		return err
+	}
+	id, err := insertID(ctx, tx,
 		`INSERT INTO maintenance_windows (name, monitor_ids, start_time, end_time, recurring, cron_expr, active, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mw.Name, string(monitorIDs), formatTime(mw.StartTime), formatTime(mw.EndTime), mw.Recurring, mw.CronExpr, boolToInt(mw.Active), now, now)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 	mw.ID = id
 	mw.CreatedAt = parseTime(now)
 	mw.UpdatedAt = parseTime(now)
@@ -35,21 +46,25 @@ func scanMaintenanceWindow(scan func(dest ...any) error) (*MaintenanceWindow, er
 	mw.EndTime = parseTime(endTime)
 	mw.CreatedAt = parseTime(createdAt)
 	mw.UpdatedAt = parseTime(updatedAt)
-	json.Unmarshal([]byte(monitorIDsStr), &mw.MonitorIDs)
+	if err := json.Unmarshal([]byte(monitorIDsStr), &mw.MonitorIDs); err != nil {
+		return nil, fmt.Errorf("decode maintenance monitor IDs: %w", err)
+	}
 	return &mw, nil
 }
 
 const mwColumns = `id, name, monitor_ids, start_time, end_time, recurring, cron_expr, active, created_at, updated_at`
 
-func (s *SQLiteStore) GetMaintenanceWindow(ctx context.Context, id int64) (*MaintenanceWindow, error) {
+func (s *SQLiteStore) GetMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) (*MaintenanceWindow, error) {
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
 	row := s.readDB.QueryRowContext(ctx,
-		`SELECT `+mwColumns+` FROM maintenance_windows WHERE id=?`, id)
+		`SELECT `+mwColumns+` FROM maintenance_windows WHERE id=?`+clause, append([]any{id}, args...)...)
 	return scanMaintenanceWindow(row.Scan)
 }
 
-func (s *SQLiteStore) ListMaintenanceWindows(ctx context.Context) ([]*MaintenanceWindow, error) {
+func (s *SQLiteStore) ListMaintenanceWindows(ctx context.Context, access ...MonitorAccess) ([]*MaintenanceWindow, error) {
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
 	rows, err := s.readDB.QueryContext(ctx,
-		`SELECT `+mwColumns+` FROM maintenance_windows ORDER BY start_time DESC`)
+		`SELECT `+mwColumns+` FROM maintenance_windows WHERE 1=1`+clause+` ORDER BY start_time DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,26 +87,29 @@ func (s *SQLiteStore) ListMaintenanceWindows(ctx context.Context) ([]*Maintenanc
 	return windows, nil
 }
 
-func (s *SQLiteStore) UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow) error {
-	monitorIDs, _ := json.Marshal(mw.MonitorIDs)
-	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE maintenance_windows SET name=?, monitor_ids=?, start_time=?, end_time=?, recurring=?, cron_expr=?, active=?, updated_at=? WHERE id=?`,
-		mw.Name, string(monitorIDs), formatTime(mw.StartTime), formatTime(mw.EndTime), mw.Recurring, mw.CronExpr, boolToInt(mw.Active), now, mw.ID)
+// UpdateMaintenanceWindow is the trusted/internal replacement API. Request
+// handlers use UpdateMaintenanceWindowWithActions to distinguish action grants.
+func (s *SQLiteStore) UpdateMaintenanceWindow(ctx context.Context, mw *MaintenanceWindow, access ...MonitorAccess) error {
+	if len(access) == 0 {
+		access = []MonitorAccess{{All: true}}
+	}
+	_, err := s.UpdateMaintenanceWindowWithActions(ctx, mw.ID, func(*MaintenanceWindow) (*MaintenanceWindow, error) { return mw, nil }, MaintenanceUpdateAccess{Update: access, Toggle: access})
 	return err
 }
 
-func (s *SQLiteStore) DeleteMaintenanceWindow(ctx context.Context, id int64) error {
-	_, err := s.writeDB.ExecContext(ctx, "DELETE FROM maintenance_windows WHERE id=?", id)
-	return err
+func (s *SQLiteStore) DeleteMaintenanceWindow(ctx context.Context, id int64, access ...MonitorAccess) error {
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
+	result, err := s.writeDB.ExecContext(ctx, "DELETE FROM maintenance_windows WHERE id=?"+clause, append([]any{id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
-func (s *SQLiteStore) ToggleMaintenanceWindow(ctx context.Context, id int64, active bool) error {
+func (s *SQLiteStore) ToggleMaintenanceWindow(ctx context.Context, id int64, active bool, access ...MonitorAccess) error {
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE maintenance_windows SET active=?, updated_at=? WHERE id=?`,
-		boolToInt(active), now, id)
-	return err
+	clause, args := s.readDB.dialect.maintenanceAccessSQL(access)
+	result, err := s.writeDB.ExecContext(ctx,
+		`UPDATE maintenance_windows SET active=?, updated_at=? WHERE id=?`+clause,
+		append([]any{boolToInt(active), now, id}, args...)...)
+	return scopedMutationResult(result, err, access)
 }
 
 func (s *SQLiteStore) IsMonitorInMaintenance(ctx context.Context, monitorID int64, at time.Time) (bool, error) {

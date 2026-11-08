@@ -7,13 +7,16 @@ import (
 )
 
 func (s *SQLiteStore) CreateHeartbeat(ctx context.Context, h *Heartbeat) error {
-	res, err := s.writeDB.ExecContext(ctx,
+	return createHeartbeat(ctx, s.writeDB, h)
+}
+
+func createHeartbeat(ctx context.Context, writer monitorWriteExecutor, h *Heartbeat) error {
+	id, err := insertID(ctx, writer,
 		`INSERT INTO heartbeats (monitor_id, token, grace, status) VALUES (?, ?, ?, ?)`,
 		h.MonitorID, sha256Hex(h.Token), h.Grace, h.Status)
 	if err != nil {
 		return err
 	}
-	id, _ := res.LastInsertId()
 	h.ID = id
 	return nil
 }
@@ -31,10 +34,15 @@ func (s *SQLiteStore) GetHeartbeatByToken(ctx context.Context, token string) (*H
 	return &h, nil
 }
 
-func (s *SQLiteStore) GetHeartbeatByMonitorID(ctx context.Context, monitorID int64) (*Heartbeat, error) {
+func (s *SQLiteStore) GetHeartbeatByMonitorID(ctx context.Context, monitorID int64, access ...MonitorAccess) (*Heartbeat, error) {
+	reader, release, err := s.monitorReader(ctx, monitorID, access...)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var h Heartbeat
 	var lastPing sql.NullString
-	err := s.readDB.QueryRowContext(ctx,
+	err = reader.QueryRowContext(ctx,
 		`SELECT id, monitor_id, token, grace, last_ping_at, status FROM heartbeats WHERE monitor_id=?`, monitorID).
 		Scan(&h.ID, &h.MonitorID, &h.Token, &h.Grace, &lastPing, &h.Status)
 	if err != nil {
@@ -44,11 +52,60 @@ func (s *SQLiteStore) GetHeartbeatByMonitorID(ctx context.Context, monitorID int
 	return &h, nil
 }
 
-func (s *SQLiteStore) UpdateHeartbeatPing(ctx context.Context, token string) error {
+// UpdateHeartbeatPing records the ping and its visible status in one transaction.
+// Binding the token to the expected monitor also protects a lookup racing deletion
+// and recreation of a heartbeat.
+func (s *SQLiteStore) UpdateHeartbeatPing(ctx context.Context, monitorID int64, token string) error {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	now := formatTime(time.Now())
-	_, err := s.writeDB.ExecContext(ctx,
-		`UPDATE heartbeats SET last_ping_at=?, status='up' WHERE token=?`, now, sha256Hex(token))
-	return err
+	var id int64
+	err = tx.QueryRowContext(ctx,
+		`UPDATE heartbeats SET last_ping_at=?, status='up' WHERE monitor_id=? AND token=?
+		AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=heartbeats.monitor_id AND m.type='heartbeat')
+		RETURNING monitor_id`,
+		now, monitorID, sha256Hex(token)).Scan(&id)
+	if err != nil {
+		return err
+	}
+	if err := setExplicitMonitorStatus(ctx, tx, id, "up", now, ObservationHeartbeat); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ExpireHeartbeat rechecks the current deadline in the same write transaction as
+// the transition. A ping after the watcher's scan cannot be overwritten, even
+// when two pings have the same stored timestamp.
+func (s *SQLiteStore) ExpireHeartbeat(ctx context.Context, monitorID int64) (bool, error) {
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	now := formatTime(time.Now())
+	res, err := tx.ExecContext(ctx, `UPDATE heartbeats SET status='down'
+		WHERE monitor_id=? AND status!='down' AND last_ping_at IS NOT NULL
+		AND EXISTS (SELECT 1 FROM monitors m WHERE m.id=heartbeats.monitor_id AND m.enabled=1 AND m.type='heartbeat'
+			AND `+tx.dialect.heartbeatExpired("heartbeats.last_ping_at", "m.interval_secs + heartbeats.grace", "?")+`)`,
+		monitorID, now)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil || n == 0 {
+		return false, err
+	}
+	if err := setExplicitMonitorStatus(ctx, tx, monitorID, "down", now, ObservationHeartbeat); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *SQLiteStore) ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, error) {
@@ -56,9 +113,9 @@ func (s *SQLiteStore) ListExpiredHeartbeats(ctx context.Context) ([]*Heartbeat, 
 		`SELECT h.id, h.monitor_id, h.token, h.grace, h.last_ping_at, h.status
 		 FROM heartbeats h
 		 JOIN monitors m ON m.id = h.monitor_id
-		 WHERE m.enabled = 1
+		 WHERE m.enabled = 1 AND m.type = 'heartbeat'
 		   AND h.last_ping_at IS NOT NULL
-		   AND datetime(h.last_ping_at, '+' || (m.interval_secs + h.grace) || ' seconds') < datetime('now')`)
+		   AND `+s.readDB.dialect.heartbeatExpired("h.last_ping_at", "m.interval_secs + h.grace", "?"), formatTime(time.Now()))
 	if err != nil {
 		return nil, err
 	}

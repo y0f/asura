@@ -3,162 +3,29 @@ package storage
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/y0f/asura/v2/internal/model"
 )
 
-// Monitor represents a monitored endpoint.
-type Monitor struct {
-	ID                 int64           `json:"id"`
-	Name               string          `json:"name"`
-	Description        string          `json:"description,omitempty"`
-	Type               string          `json:"type"` // http, tcp, dns, icmp, tls, websocket, command
-	Target             string          `json:"target"`
-	Interval           int             `json:"interval"` // seconds
-	Timeout            int             `json:"timeout"`  // seconds
-	Enabled            bool            `json:"enabled"`
-	Tags               []string        `json:"tags"`
-	Settings           json.RawMessage `json:"settings,omitempty"`
-	Assertions         json.RawMessage `json:"assertions,omitempty"`
-	TrackChanges       bool            `json:"track_changes"`
-	FailureThreshold   int             `json:"failure_threshold"`
-	SuccessThreshold   int             `json:"success_threshold"`
-	UpsideDown         bool            `json:"upside_down"`
-	AgentEnabled       bool            `json:"agent_enabled"`
-	ResendInterval     int             `json:"resend_interval"`
-	SLATarget          float64         `json:"sla_target"`
-	AnomalySensitivity string          `json:"anomaly_sensitivity,omitempty"` // off, low, medium, high
-	GroupID            *int64          `json:"group_id,omitempty"`
-	ProxyID            *int64          `json:"proxy_id,omitempty"`
-	EscalationPolicyID *int64          `json:"escalation_policy_id,omitempty"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
-
-	// Transient fields (not stored in monitors table)
-	NotificationChannelIDs []int64      `json:"notification_channel_ids,omitempty"`
-	MonitorTags            []MonitorTag `json:"monitor_tags,omitempty"`
-	// AgentIDs are the agents this monitor is assigned to; empty means every agent.
-	AgentIDs []int64 `json:"agent_ids,omitempty"`
-	ProxyURL string  `json:"-"` // resolved at check time
-
-	// Computed fields (not stored directly)
-	Status          string     `json:"status,omitempty"`
-	LastCheckAt     *time.Time `json:"last_check_at,omitempty"`
-	ConsecFails     int        `json:"consec_fails,omitempty"`
-	ConsecSuccesses int        `json:"consec_successes,omitempty"`
-}
-
-// HTTPSettings holds configuration specific to HTTP checks.
-type HTTPSettings struct {
-	Method             string            `json:"method,omitempty"`
-	Headers            map[string]string `json:"headers,omitempty"`
-	Body               string            `json:"body,omitempty"`
-	BodyEncoding       string            `json:"body_encoding,omitempty"` // json, xml, form, raw
-	FollowRedirects    *bool             `json:"follow_redirects,omitempty"`
-	MaxRedirects       int               `json:"max_redirects,omitempty"`
-	SkipTLSVerify      bool              `json:"skip_tls_verify,omitempty"`
-	CacheBuster        bool              `json:"cache_buster,omitempty"`
-	AuthMethod         string            `json:"auth_method,omitempty"` // none, basic, bearer, oauth2
-	BasicAuthUser      string            `json:"basic_auth_user,omitempty"`
-	BasicAuthPass      string            `json:"basic_auth_pass,omitempty"`
-	BearerToken        string            `json:"bearer_token,omitempty"`
-	OAuth2TokenURL     string            `json:"oauth2_token_url,omitempty"`
-	OAuth2ClientID     string            `json:"oauth2_client_id,omitempty"`
-	OAuth2ClientSecret string            `json:"oauth2_client_secret,omitempty"`
-	OAuth2Scopes       string            `json:"oauth2_scopes,omitempty"`
-	OAuth2Audience     string            `json:"oauth2_audience,omitempty"`
-	MTLSEnabled        bool              `json:"mtls_enabled,omitempty"`
-	MTLSClientCert     string            `json:"mtls_client_cert,omitempty"`
-	MTLSClientKey      string            `json:"mtls_client_key,omitempty"`
-	MTLSCACert         string            `json:"mtls_ca_cert,omitempty"`
-	ExpectedStatus     int               `json:"expected_status,omitempty"`
-}
-
-// TCPSettings holds TCP check configuration.
-type TCPSettings struct {
-	SendData   string `json:"send_data,omitempty"`
-	ExpectData string `json:"expect_data,omitempty"`
-}
-
-// DNSSettings holds DNS check configuration.
-type DNSSettings struct {
-	RecordType string `json:"record_type"` // A, AAAA, CNAME, MX, TXT, NS, SOA
-	Server     string `json:"server,omitempty"`
-}
-
-// TLSSettings holds TLS check configuration.
-type TLSSettings struct {
-	WarnDaysBefore int `json:"warn_days_before,omitempty"` // cert expiry warning threshold
-}
-
-// WebSocketSettings holds WebSocket check configuration.
-type WebSocketSettings struct {
-	Headers     map[string]string `json:"headers,omitempty"`
-	SendMessage string            `json:"send_message,omitempty"`
-	ExpectReply string            `json:"expect_reply,omitempty"`
-}
-
-// CommandSettings holds command check configuration.
-type CommandSettings struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args,omitempty"`
-}
-
-// DockerSettings holds Docker container check configuration.
-type DockerSettings struct {
-	ContainerName string `json:"container_name"`
-	SocketPath    string `json:"socket_path,omitempty"`
-	CheckHealth   bool   `json:"check_health,omitempty"`
-}
-
-// DomainSettings holds domain expiry (WHOIS) check configuration.
-type DomainSettings struct {
-	WarnDaysBefore int `json:"warn_days_before,omitempty"`
-}
-
-// GRPCSettings holds gRPC health check configuration.
-type GRPCSettings struct {
-	ServiceName   string `json:"service_name,omitempty"`
-	UseTLS        bool   `json:"use_tls,omitempty"`
-	SkipTLSVerify bool   `json:"skip_tls_verify,omitempty"`
-}
-
-// MQTTSettings holds MQTT connection check configuration.
-type MQTTSettings struct {
-	ClientID      string `json:"client_id,omitempty"`
-	Username      string `json:"username,omitempty"`
-	Password      string `json:"password,omitempty"`
-	Topic         string `json:"topic,omitempty"`
-	ExpectMessage string `json:"expect_message,omitempty"`
-	UseTLS        bool   `json:"use_tls,omitempty"`
-}
-
-// SMTPSettings holds SMTP check configuration.
-type SMTPSettings struct {
-	Port         int    `json:"port,omitempty"`
-	STARTTLS     bool   `json:"starttls,omitempty"`
-	ExpectBanner string `json:"expect_banner,omitempty"`
-}
-
-// SSHSettings holds SSH check configuration.
-type SSHSettings struct {
-	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
-}
-
-// RedisSettings holds Redis check configuration.
-type RedisSettings struct {
-	Password string `json:"password,omitempty"`
-}
-
-// PostgreSQLSettings holds PostgreSQL check configuration.
-type PostgreSQLSettings struct {
-	Username string `json:"username,omitempty"`
-	Database string `json:"database,omitempty"`
-}
-
-// UDPSettings holds UDP check configuration.
-type UDPSettings struct {
-	SendData   string `json:"send_data,omitempty"`
-	ExpectData string `json:"expect_data,omitempty"`
-}
+// Monitor and protocol settings are shared with probes without database code.
+type (
+	Monitor            = model.Monitor
+	HTTPSettings       = model.HTTPSettings
+	TCPSettings        = model.TCPSettings
+	DNSSettings        = model.DNSSettings
+	TLSSettings        = model.TLSSettings
+	WebSocketSettings  = model.WebSocketSettings
+	CommandSettings    = model.CommandSettings
+	DockerSettings     = model.DockerSettings
+	DomainSettings     = model.DomainSettings
+	GRPCSettings       = model.GRPCSettings
+	MQTTSettings       = model.MQTTSettings
+	SMTPSettings       = model.SMTPSettings
+	SSHSettings        = model.SSHSettings
+	RedisSettings      = model.RedisSettings
+	PostgreSQLSettings = model.PostgreSQLSettings
+	UDPSettings        = model.UDPSettings
+)
 
 // SparklinePoint holds a single data point for sparkline rendering.
 type SparklinePoint struct {
@@ -166,8 +33,18 @@ type SparklinePoint struct {
 	ResponseTime int64
 }
 
-// CheckResult stores the outcome of a single check execution.
+// Observation provenance is assigned by the server when it persists evidence.
+// Legacy rows remain unknown because a monitor's current type cannot prove it.
+const (
+	ObservationUnknown   = "unknown"
+	ObservationProbe     = "probe"
+	ObservationManual    = "manual"
+	ObservationHeartbeat = "heartbeat"
+)
+
+// CheckResult stores a probe outcome or recorded state transition.
 type CheckResult struct {
+	ObservationKind string     `json:"observation_kind"`
 	ID              int64      `json:"id"`
 	MonitorID       int64      `json:"monitor_id"`
 	Status          string     `json:"status"`        // up, down, degraded
@@ -203,6 +80,7 @@ type OnCallRotation struct {
 	ChannelIDs        []int64    `json:"channel_ids"`
 	Period            string     `json:"period"` // daily, weekly
 	CurrentIndex      int        `json:"current_index"`
+	PeriodStartedAt   time.Time  `json:"period_started_at"`
 	OverrideChannelID *int64     `json:"override_channel_id,omitempty"`
 	OverrideUntil     *time.Time `json:"override_until,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
@@ -211,28 +89,34 @@ type OnCallRotation struct {
 
 // AgentJob is a monitor sent to an agent for checking.
 type AgentJob struct {
-	ID       int64           `json:"id"`
-	Name     string          `json:"name"`
-	Type     string          `json:"type"`
-	Target   string          `json:"target"`
-	Interval int             `json:"interval"`
-	Timeout  int             `json:"timeout"`
-	Settings json.RawMessage `json:"settings,omitempty"`
+	ConfigRevision int64           `json:"config_revision"`
+	ID             int64           `json:"id"`
+	Name           string          `json:"name"`
+	Type           string          `json:"type"`
+	Target         string          `json:"target"`
+	Interval       int             `json:"interval"`
+	Timeout        int             `json:"timeout"`
+	Settings       json.RawMessage `json:"settings,omitempty"`
 }
 
 // Incident tracks a period of downtime or degradation.
 type Incident struct {
-	ID             int64      `json:"id"`
-	MonitorID      int64      `json:"monitor_id"`
-	MonitorName    string     `json:"monitor_name,omitempty"`
-	Status         string     `json:"status"`   // open, acknowledged, resolved
-	Severity       string     `json:"severity"` // critical, major, minor, warning
-	Cause          string     `json:"cause"`
-	StartedAt      time.Time  `json:"started_at"`
-	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
-	AcknowledgedBy string     `json:"acknowledged_by,omitempty"`
-	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
-	ResolvedBy     string     `json:"resolved_by,omitempty"`
+	// AnnouncementPending survives restarts until the initial notification has
+	// been queued. It is internal delivery state, not API-editable incident data.
+	AnnouncementPending bool       `json:"-"`
+	EscalationPending   bool       `json:"-"`
+	ID                  int64      `json:"id"`
+	MonitorID           int64      `json:"monitor_id"`
+	MonitorName         string     `json:"monitor_name,omitempty"`
+	MonitorGroupID      *int64     `json:"-"`
+	Status              string     `json:"status"`   // open, acknowledged, resolved
+	Severity            string     `json:"severity"` // critical, major, minor, warning
+	Cause               string     `json:"cause"`
+	StartedAt           time.Time  `json:"started_at"`
+	AcknowledgedAt      *time.Time `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy      string     `json:"acknowledged_by,omitempty"`
+	ResolvedAt          *time.Time `json:"resolved_at,omitempty"`
+	ResolvedBy          string     `json:"resolved_by,omitempty"`
 }
 
 // IncidentEvent is a timeline entry within an incident.
@@ -284,7 +168,9 @@ type ContentChange struct {
 
 // MonitorStatus holds the runtime state of a monitor.
 type MonitorStatus struct {
+	ObservationKind     string     `json:"observation_kind"`
 	MonitorID           int64      `json:"monitor_id"`
+	ConfigRevision      int64      `json:"-"`
 	Status              string     `json:"status"` // up, down, degraded, pending
 	LastCheckAt         *time.Time `json:"last_check_at,omitempty"`
 	ConsecFails         int        `json:"consec_fails"`
@@ -372,12 +258,7 @@ type Tag struct {
 }
 
 // MonitorTag links a tag to a monitor with an optional per-monitor value.
-type MonitorTag struct {
-	TagID int64  `json:"tag_id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
-	Value string `json:"value"`
-}
+type MonitorTag = model.MonitorTag
 
 // MonitorGroup organizes monitors into logical groups.
 type MonitorGroup struct {
@@ -390,12 +271,22 @@ type MonitorGroup struct {
 
 // MonitorListFilter holds filter parameters for listing monitors.
 type MonitorListFilter struct {
+	Access  []MonitorAccess // every supplied filter is required; nil is internal/unrestricted
 	Type    string
 	Search  string
 	GroupID *int64
 	TagID   *int64
 	Status  string // up, down, degraded, paused
 	Sort    string // name, status, last_check, response_time
+}
+
+type IncidentListFilter struct {
+	MonitorID             int64
+	Status                string
+	Search                string
+	Access                []MonitorAccess
+	MonitorReadAccess     []MonitorAccess
+	DiagnosticsReadAccess []MonitorAccess
 }
 
 // AuditLogFilter holds filter parameters for listing audit log entries.
@@ -409,21 +300,23 @@ type AuditLogFilter struct {
 
 // NotificationHistory records a single notification delivery attempt.
 type NotificationHistory struct {
-	ID          int64     `json:"id"`
-	ChannelID   int64     `json:"channel_id"`
-	ChannelName string    `json:"channel_name"`
-	ChannelType string    `json:"channel_type"`
-	MonitorID   *int64    `json:"monitor_id,omitempty"`
-	MonitorName string    `json:"monitor_name,omitempty"`
-	IncidentID  *int64    `json:"incident_id,omitempty"`
-	EventType   string    `json:"event_type"`
-	Status      string    `json:"status"` // "sent" or "failed"
-	Error       string    `json:"error,omitempty"`
-	SentAt      time.Time `json:"sent_at"`
+	ID             int64     `json:"id"`
+	ChannelID      int64     `json:"channel_id"`
+	ChannelName    string    `json:"channel_name"`
+	ChannelType    string    `json:"channel_type"`
+	MonitorID      *int64    `json:"monitor_id,omitempty"`
+	MonitorName    string    `json:"monitor_name,omitempty"`
+	MonitorGroupID *int64    `json:"-"`
+	IncidentID     *int64    `json:"incident_id,omitempty"`
+	EventType      string    `json:"event_type"`
+	Status         string    `json:"status"` // "sent" or "failed"
+	Error          string    `json:"error,omitempty"`
+	SentAt         time.Time `json:"sent_at"`
 }
 
 // NotifHistoryFilter holds filter parameters for notification history queries.
 type NotifHistoryFilter struct {
+	Access    []MonitorAccess
 	ChannelID int64
 	Status    string // "sent", "failed", or ""
 	EventType string
@@ -431,6 +324,7 @@ type NotifHistoryFilter struct {
 
 // RequestLogFilter holds filter parameters for listing request logs.
 type RequestLogFilter struct {
+	Access     []MonitorAccess
 	Method     string
 	Path       string
 	StatusCode int

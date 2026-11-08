@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/httputil"
+	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v2/internal/logsafe"
 )
 
 func recovery(logger *slog.Logger) func(http.Handler) http.Handler {
@@ -16,7 +17,7 @@ func recovery(logger *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					logger.Error("panic recovered", "error", fmt.Sprintf("%v", err), "path", r.URL.Path)
+					logger.Error("panic recovered", "panic_type", fmt.Sprintf("%T", err), "path", logsafe.Path(r.URL.Path))
 					writeError(w, http.StatusInternalServerError, "internal server error")
 				}
 			}()
@@ -44,7 +45,7 @@ func logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(sw, r)
 			logger.Info("request",
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", logsafe.Path(r.URL.Path),
 				"status", sw.Code,
 				"duration_ms", time.Since(start).Milliseconds(),
 				"request_id", httputil.GetRequestID(r.Context()),

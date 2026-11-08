@@ -2,12 +2,13 @@ package monitor
 
 import (
 	"encoding/json"
+	"maps"
 	"strconv"
 	"time"
 
-	"github.com/y0f/asura/internal/assertion"
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/assertion"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 // A monitor can be checked from several locations: the local worker and any
@@ -66,6 +67,9 @@ func statusSeverity(status string) int {
 // (an agent posting at the end of a long cycle) is not stale by age alone.
 // The caller must hold the monitor's status lock.
 func (p *Pipeline) staleSourceResult(mon *storage.Monitor, source string, checkedAt time.Time) bool {
+	if revision, ok := p.sourceRevision.Load(mon.ID); !ok || revision.(int64) != mon.ConfigRevision {
+		return false
+	}
 	v, ok := p.sourceCheckedAt.Load(mon.ID)
 	if !ok {
 		return false
@@ -74,26 +78,30 @@ func (p *Pipeline) staleSourceResult(mon *storage.Monitor, source string, checke
 	return ok && checkedAt.Before(last)
 }
 
-// noteSourceCheckedAt remembers checkedAt as the newest result applied from
-// source. Unlike the streaks in p.sources, this is never pruned, so ordering
-// holds however long a location goes quiet. The caller must hold the
-// monitor's status lock.
-func (p *Pipeline) noteSourceCheckedAt(monitorID int64, source string, checkedAt time.Time) {
-	v, _ := p.sourceCheckedAt.LoadOrStore(monitorID, map[string]time.Time{})
-	m := v.(map[string]time.Time)
-	if checkedAt.After(m[source]) {
-		m[source] = checkedAt
-	}
+type preparedSourceResult struct {
+	sources   monitorSources
+	checkedAt map[string]time.Time
+	message   string
 }
 
-// recordSourceResult records result from one location, checked at checkedAt,
-// and writes the aggregate Status, ConsecFails and ConsecSuccesses into
-// status. It returns the message that explains the aggregate status. The
-// caller must hold the monitor's status lock.
-func (p *Pipeline) recordSourceResult(mon *storage.Monitor, status *storage.MonitorStatus, source, result, message string, checkedAt, now time.Time) string {
-	p.noteSourceCheckedAt(mon.ID, source, checkedAt)
-	v, _ := p.sources.LoadOrStore(mon.ID, monitorSources{})
-	srcs := v.(monitorSources)
+// prepareSourceResult computes the next aggregate without publishing cache
+// changes. The caller holds the monitor lock and commits this preparation only
+// after its database transaction succeeds. A new revision discards observations
+// and ordering from old configurations, including revoked agent assignments.
+func (p *Pipeline) prepareSourceResult(mon *storage.Monitor, status *storage.MonitorStatus, source, result, message string, checkedAt, now time.Time) preparedSourceResult {
+	prepared := preparedSourceResult{sources: monitorSources{}, checkedAt: map[string]time.Time{}, message: message}
+	if revision, ok := p.sourceRevision.Load(mon.ID); ok && revision.(int64) == mon.ConfigRevision {
+		if v, ok := p.sources.Load(mon.ID); ok {
+			prepared.sources = maps.Clone(v.(monitorSources))
+		}
+		if v, ok := p.sourceCheckedAt.Load(mon.ID); ok {
+			prepared.checkedAt = maps.Clone(v.(map[string]time.Time))
+		}
+	}
+	if checkedAt.After(prepared.checkedAt[source]) {
+		prepared.checkedAt[source] = checkedAt
+	}
+	srcs := prepared.sources
 
 	stale := sourceStaleAfter(mon)
 	for k, s := range srcs {
@@ -110,8 +118,11 @@ func (p *Pipeline) recordSourceResult(mon *storage.Monitor, status *storage.Moni
 			// continue from the persisted streak.
 			st.fails, st.successes = status.ConsecFails, status.ConsecSuccesses
 		}
-		srcs[source] = st
+	} else {
+		copy := *st
+		st = &copy
 	}
+	srcs[source] = st
 	st.status, st.message, st.at = result, message, now
 	if result == "up" {
 		st.successes++
@@ -138,7 +149,7 @@ func (p *Pipeline) recordSourceResult(mon *storage.Monitor, status *storage.Moni
 		status.Status = "up"
 		status.ConsecSuccesses = minSuccesses
 		status.ConsecFails = 0
-		return message
+		return prepared
 	}
 	maxFails := 0
 	for _, s := range srcs {
@@ -149,7 +160,14 @@ func (p *Pipeline) recordSourceResult(mon *storage.Monitor, status *storage.Moni
 	status.Status = worst.status
 	status.ConsecFails = maxFails
 	status.ConsecSuccesses = 0
-	return worst.message
+	prepared.message = worst.message
+	return prepared
+}
+
+func (p *Pipeline) commitSourceResult(mon *storage.Monitor, prepared preparedSourceResult) {
+	p.sources.Store(mon.ID, prepared.sources)
+	p.sourceCheckedAt.Store(mon.ID, prepared.checkedAt)
+	p.sourceRevision.Store(mon.ID, mon.ConfigRevision)
 }
 
 // evaluateAgentResult applies assertions, upside_down and anomaly detection

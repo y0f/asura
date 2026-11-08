@@ -14,8 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/config"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v2/internal/redact"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 type SubscriberNotifier struct {
@@ -23,7 +24,7 @@ type SubscriberNotifier struct {
 	smtp         config.SMTPConfig
 	extURL       string
 	logger       *slog.Logger
-	sem          chan struct{}
+	queue        *deliveryQueue
 	allowPrivate bool
 }
 
@@ -33,7 +34,7 @@ func NewSubscriberNotifier(store storage.Store, smtpCfg config.SMTPConfig, extUR
 		smtp:         smtpCfg,
 		extURL:       strings.TrimRight(extURL, "/"),
 		logger:       logger,
-		sem:          make(chan struct{}, 10),
+		queue:        newDeliveryQueue(),
 		allowPrivate: allowPrivate,
 	}
 }
@@ -62,67 +63,112 @@ type subscriberIncident struct {
 	StartedAt string `json:"started_at"`
 }
 
-func (n *SubscriberNotifier) NotifyForMonitor(ctx context.Context, monitorID int64, eventType string, inc *storage.Incident, mon *storage.Monitor) {
+func (n *SubscriberNotifier) Shutdown(ctx context.Context) error { return n.queue.shutdown(ctx) }
+func (n *SubscriberNotifier) Stats() DeliveryStats               { return n.queue.stats() }
+
+func (n *SubscriberNotifier) NotifyForMonitor(ctx context.Context, monitorID int64, eventType string, inc *storage.Incident, mon *storage.Monitor) error {
+	ctx, finish, err := n.queue.begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer finish()
 	pageIDs, err := n.store.GetStatusPageIDsForMonitor(ctx, monitorID)
 	if err != nil {
-		n.logger.Error("subscriber: get status pages for monitor", "monitor_id", monitorID, "error", err)
-		return
+		return fmt.Errorf("subscriber status pages: %w", err)
 	}
-	if len(pageIDs) == 0 {
-		return
+	// Only the public display fields are needed by subscriber messages.
+	if mon != nil {
+		mon = &storage.Monitor{ID: mon.ID, Name: mon.Name}
 	}
-
+	if inc != nil {
+		inc = &storage.Incident{ID: inc.ID, MonitorID: inc.MonitorID, MonitorName: inc.MonitorName,
+			Status: inc.Status, Cause: redact.IncidentCause(), StartedAt: inc.StartedAt}
+	}
+	var firstErr error
 	for _, pageID := range pageIDs {
 		sp, err := n.store.GetStatusPage(ctx, pageID)
-		if err != nil || sp == nil || !sp.Enabled {
+		if err != nil {
+			return fmt.Errorf("subscriber status page: %w", err)
+		}
+		if sp == nil || !sp.Enabled {
 			continue
 		}
-		go n.notifyPageSubscribers(ctx, sp, eventType, inc, mon)
+		sp = publicPage(sp)
+		subject := subscriberSubject(eventType, mon, inc)
+		var afterID int64
+		for {
+			subs, err := n.store.ListConfirmedSubscribersAfter(ctx, sp.ID, afterID, maxQueuedSends)
+			if err != nil {
+				return fmt.Errorf("list subscriber batch: %w", err)
+			}
+			for _, sub := range subs {
+				sub := copyPointer(sub)
+				err := n.queue.offer(ctx, deliveryJob{
+					run: func(ctx context.Context) error {
+						ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						switch sub.Type {
+						case "email":
+							return n.sendSubscriberEmail(ctx, sub, sp, eventType, subject, inc, mon)
+						case "webhook":
+							return n.sendSubscriberWebhook(ctx, sub, sp, eventType, inc, mon)
+						default:
+							return fmt.Errorf("unknown subscriber type: %s", sub.Type)
+						}
+					},
+					done: func(err error) { n.recordResult(sub, err) },
+				})
+				if err != nil {
+					n.recordResult(sub, err)
+					if firstErr == nil {
+						firstErr = err
+					}
+				}
+				afterID = sub.ID
+			}
+			if len(subs) < maxQueuedSends {
+				break
+			}
+		}
+	}
+	return firstErr
+}
+
+func publicPage(sp *storage.StatusPage) *storage.StatusPage {
+	return &storage.StatusPage{ID: sp.ID, Slug: sp.Slug, Title: sp.Title}
+}
+
+func (n *SubscriberNotifier) recordResult(sub *storage.StatusPageSubscriber, err error) {
+	if err != nil {
+		n.logger.Error("subscriber delivery failed", "page_id", sub.StatusPageID,
+			"subscriber_id", sub.ID, "type", sub.Type, "error", redactErr(err))
 	}
 }
 
-func (n *SubscriberNotifier) notifyPageSubscribers(ctx context.Context, sp *storage.StatusPage, eventType string, inc *storage.Incident, mon *storage.Monitor) {
-	subs, err := n.store.ListConfirmedSubscribers(ctx, sp.ID)
+// QueueConfirmationEmail admits a confirmation into the owned delivery queue.
+// Once admitted, it outlives the request and is joined during shutdown.
+func (n *SubscriberNotifier) QueueConfirmationEmail(ctx context.Context, sub *storage.StatusPageSubscriber, sp *storage.StatusPage) error {
+	ctx, finish, err := n.queue.begin(ctx)
 	if err != nil {
-		n.logger.Error("subscriber: list subscribers", "page_id", sp.ID, "error", err)
-		return
+		return err
 	}
-	if len(subs) == 0 {
-		return
+	defer finish()
+	if n.smtp.Host == "" || n.smtp.From == "" {
+		return fmt.Errorf("subscription SMTP not configured")
 	}
-
-	subject := subscriberSubject(eventType, mon, inc)
-
-	for _, sub := range subs {
-		sub := sub
-		select {
-		case n.sem <- struct{}{}:
-		case <-ctx.Done():
-			return
-		}
-		go func() {
-			defer func() { <-n.sem }()
-
-			sendCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	sub, sp = copyPointer(sub), publicPage(sp)
+	err = n.queue.offer(ctx, deliveryJob{
+		run: func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, time.Minute)
 			defer cancel()
-
-			var err error
-			switch sub.Type {
-			case "email":
-				err = n.sendSubscriberEmail(sendCtx, sub, sp, eventType, subject, inc, mon)
-			case "webhook":
-				err = n.sendSubscriberWebhook(sendCtx, sub, sp, eventType, inc, mon)
-			}
-			if err != nil {
-				n.logger.Warn("subscriber: send failed",
-					"type", sub.Type,
-					"page_id", sp.ID,
-					"subscriber_id", sub.ID,
-					"error", redactErr(err),
-				)
-			}
-		}()
+			return n.SendConfirmationEmail(ctx, sub, sp)
+		},
+		done: func(err error) { n.recordResult(sub, err) },
+	})
+	if err != nil {
+		n.recordResult(sub, err)
 	}
+	return err
 }
 
 func subscriberSubject(eventType string, mon *storage.Monitor, inc *storage.Incident) string {
@@ -280,7 +326,7 @@ func (n *SubscriberNotifier) sendSubscriberWebhook(ctx context.Context, sub *sto
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Asura/1.0")
+	req.Header.Set("User-Agent", "Asura/2.0")
 
 	resp, err := newHTTPClient(n.allowPrivate).Do(req)
 	if err != nil {
@@ -289,26 +335,26 @@ func (n *SubscriberNotifier) sendSubscriberWebhook(ctx context.Context, sub *sto
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
 	return nil
 }
 
 func buildSubscriberEmailBody(pageTitle, eventType, subject string, inc *storage.Incident, mon *storage.Monitor, unsubURL string) string {
-	statusColor := "#6b7280"
+	statusColor := "#b0b0b0"
 	eventLabel := eventType
-	detail := subject
+	detail := html.EscapeString(subject)
 
 	switch eventType {
 	case "incident.created":
-		statusColor = "#f87171"
+		statusColor = "#69b3ff"
 		eventLabel = "Incident Opened"
 		if inc != nil {
 			detail = html.EscapeString(inc.MonitorName) + ": " + html.EscapeString(inc.Cause)
 		}
 	case "incident.resolved":
-		statusColor = "#34d399"
+		statusColor = "#b0b0b0"
 		eventLabel = "Incident Resolved"
 		if inc != nil {
 			detail = html.EscapeString(inc.MonitorName) + " is back to normal"
@@ -316,23 +362,23 @@ func buildSubscriberEmailBody(pageTitle, eventType, subject string, inc *storage
 	}
 
 	return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#111827;font-family:system-ui,-apple-system,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#111827;padding:32px 0">
+<body style="margin:0;padding:0;background:#111111;font-family:system-ui,-apple-system,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#111111;padding:24px 16px;box-sizing:border-box">
 <tr><td align="center">
-<table width="480" cellpadding="0" cellspacing="0" style="background:#1f2937;border:1px solid #374151;border-radius:8px;overflow:hidden">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:480px;table-layout:fixed;background:#1a1a1a;border:1px solid #3d3d3d;border-radius:8px;overflow:hidden">
 <tr><td style="background:` + statusColor + `;height:4px"></td></tr>
-<tr><td style="padding:24px 28px">
-<p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">` + html.EscapeString(eventLabel) + `</p>
-<p style="margin:0;font-size:18px;font-weight:600;color:#f9fafb">` + html.EscapeString(pageTitle) + `</p>
+<tr><td style="padding:24px 20px">
+<p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#b0b0b0">` + html.EscapeString(eventLabel) + `</p>
+<h1 style="margin:0;font-size:18px;font-weight:600;color:#ffffff;line-height:1.4;overflow-wrap:anywhere">` + html.EscapeString(pageTitle) + `</h1>
 </td></tr>
-<tr><td style="padding:0 28px 24px">
-<p style="margin:0;font-size:14px;color:#d1d5db;line-height:1.6">` + detail + `</p>
+<tr><td style="padding:0 20px 24px">
+<p style="margin:0;font-size:14px;color:#dedede;line-height:1.6;overflow-wrap:anywhere">` + detail + `</p>
 </td></tr>
-<tr><td style="padding:16px 28px;border-top:1px solid #374151">
-<p style="margin:0;font-size:11px;color:#6b7280">
-<a href="` + html.EscapeString(unsubURL) + `" style="color:#6b7280;text-decoration:underline">Unsubscribe</a>
+<tr><td style="padding:16px 20px;border-top:1px solid #3d3d3d">
+<p style="margin:0;font-size:12px;color:#b0b0b0;line-height:1.6">
+<a href="` + html.EscapeString(unsubURL) + `" style="display:inline-block;padding:6px 0;color:#b0b0b0;text-decoration:underline">Unsubscribe</a>
 </p>
 </td></tr>
 </table>
@@ -350,30 +396,7 @@ func (n *SubscriberNotifier) SendConfirmationEmail(ctx context.Context, sub *sto
 	confirmURL := fmt.Sprintf("%s/%s/confirm?token=%s", n.extURL, sp.Slug, sub.Token)
 	subject := fmt.Sprintf("Confirm your subscription to %s", sp.Title)
 
-	body := `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#111827;font-family:system-ui,-apple-system,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#111827;padding:32px 0">
-<tr><td align="center">
-<table width="480" cellpadding="0" cellspacing="0" style="background:#1f2937;border:1px solid #374151;border-radius:8px;overflow:hidden">
-<tr><td style="background:#818cf8;height:4px"></td></tr>
-<tr><td style="padding:24px 28px">
-<p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af">Confirm Subscription</p>
-<p style="margin:0;font-size:18px;font-weight:600;color:#f9fafb">` + html.EscapeString(sp.Title) + `</p>
-</td></tr>
-<tr><td style="padding:0 28px 24px">
-<p style="margin:0 0 16px;font-size:14px;color:#d1d5db;line-height:1.6">Click the button below to confirm your subscription to status updates.</p>
-<a href="` + html.EscapeString(confirmURL) + `" style="display:inline-block;padding:10px 24px;background:#818cf8;color:#fff;font-size:14px;font-weight:600;text-decoration:none;border-radius:6px">Confirm Subscription</a>
-</td></tr>
-<tr><td style="padding:16px 28px;border-top:1px solid #374151">
-<p style="margin:0;font-size:11px;color:#6b7280">If you didn't request this, ignore this email.</p>
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`
+	body := buildSubscriptionConfirmationBody(sp.Title, confirmURL)
 
 	port := n.smtp.Port
 	if port == 0 {
@@ -408,4 +431,31 @@ func (n *SubscriberNotifier) SendConfirmationEmail(ctx context.Context, sub *sto
 	default:
 		return n.sendSTARTTLS(ctx, addr, host, []string{sub.Email}, msgBytes)
 	}
+}
+
+func buildSubscriptionConfirmationBody(pageTitle, confirmURL string) string {
+	return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#111111;font-family:system-ui,-apple-system,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#111111;padding:24px 16px;box-sizing:border-box">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:480px;table-layout:fixed;background:#1a1a1a;border:1px solid #3d3d3d;border-radius:8px;overflow:hidden">
+<tr><td style="background:#005bbf;height:4px"></td></tr>
+<tr><td style="padding:24px 20px">
+<p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#b0b0b0">Confirm Subscription</p>
+<h1 style="margin:0;font-size:18px;font-weight:600;color:#ffffff;line-height:1.4;overflow-wrap:anywhere">` + html.EscapeString(pageTitle) + `</h1>
+</td></tr>
+<tr><td style="padding:0 20px 24px">
+<p style="margin:0 0 16px;font-size:14px;color:#dedede;line-height:1.6;overflow-wrap:anywhere">Click the button below to confirm your subscription to status updates.</p>
+<a href="` + html.EscapeString(confirmURL) + `" style="display:inline-block;max-width:100%;box-sizing:border-box;padding:12px 16px;line-height:1.5;background:#005bbf;color:#fff;font-size:14px;font-weight:600;text-decoration:none;border-radius:6px">Confirm Subscription</a>
+</td></tr>
+<tr><td style="padding:16px 20px;border-top:1px solid #3d3d3d">
+<p style="margin:0;font-size:12px;color:#b0b0b0;line-height:1.6">If you didn't request this, ignore this email.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`
 }

@@ -91,6 +91,10 @@ func TestAgentCRUD(t *testing.T) {
 func TestListAgentJobs(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
+	agent := &Agent{Name: "delegate", Enabled: true}
+	if err := store.CreateAgent(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
 
 	m := &Monitor{
 		Name: "HTTP Test", Type: "http", Target: "https://example.com",
@@ -103,12 +107,19 @@ func TestListAgentJobs(t *testing.T) {
 
 	heartbeat := &Monitor{
 		Name: "HB Test", Type: "heartbeat", Target: "heartbeat",
-		Interval: 60, Timeout: 10, Enabled: true,
+		Interval: 60, Timeout: 10, Enabled: true, AgentEnabled: true,
 		FailureThreshold: 3, SuccessThreshold: 1,
 	}
-	store.CreateMonitor(ctx, heartbeat)
+	if err := store.CreateMonitor(ctx, heartbeat); err != nil {
+		t.Fatal(err)
+	}
 
-	jobs, err := store.ListAgentJobs(ctx, 1) // no assignments: every agent gets these jobs
+	for _, monitor := range []*Monitor{m, heartbeat} {
+		if err := store.SetMonitorAgentIDs(ctx, monitor.ID, []int64{agent.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	jobs, err := store.ListAgentJobs(ctx, agent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +135,10 @@ func TestListAgentJobs(t *testing.T) {
 func TestListAgentJobsExcludesAgentDisabled(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
+	agent := &Agent{Name: "delegate", Enabled: true}
+	if err := store.CreateAgent(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
 
 	agentEnabled := &Monitor{
 		Name: "Agent OK", Type: "tcp", Target: "example.com:443",
@@ -143,7 +158,12 @@ func TestListAgentJobsExcludesAgentDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	jobs, err := store.ListAgentJobs(ctx, 1) // no assignments: every agent gets these jobs
+	for _, monitor := range []*Monitor{agentEnabled, agentDisabled} {
+		if err := store.SetMonitorAgentIDs(ctx, monitor.ID, []int64{agent.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	jobs, err := store.ListAgentJobs(ctx, agent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +241,7 @@ func TestDeleteAgentDisablesMonitorsAssignedOnlyToIt(t *testing.T) {
 	}
 	onlyA := newMon("only-a", a)
 	aAndB := newMon("a-and-b", a, b)
-	everyAgent := newMon("every-agent")
+	unassigned := newMon("unassigned")
 
 	disabled, err := store.DeleteAgent(ctx, a)
 	if err != nil {
@@ -238,7 +258,7 @@ func TestDeleteAgentDisablesMonitorsAssignedOnlyToIt(t *testing.T) {
 	if got.AgentEnabled {
 		t.Fatal("monitor assigned only to the deleted agent is still enabled for agents")
 	}
-	for _, id := range []int64{aAndB.ID, everyAgent.ID} {
+	for _, id := range []int64{aAndB.ID, unassigned.ID} {
 		m, err := store.GetMonitor(ctx, id)
 		if err != nil {
 			t.Fatal(err)
@@ -259,10 +279,10 @@ func TestDeleteAgentDisablesMonitorsAssignedOnlyToIt(t *testing.T) {
 		}
 		return ids
 	}
-	if jobs := jobIDs(c); jobs[onlyA.ID] || jobs[aAndB.ID] || !jobs[everyAgent.ID] {
-		t.Fatalf("unassigned agent jobs = %v, want only %d", jobs, everyAgent.ID)
+	if jobs := jobIDs(c); len(jobs) != 0 {
+		t.Fatalf("unassigned agent jobs = %v, want none", jobs)
 	}
-	if jobs := jobIDs(b); !jobs[aAndB.ID] || jobs[onlyA.ID] {
+	if jobs := jobIDs(b); len(jobs) != 1 || !jobs[aAndB.ID] {
 		t.Fatalf("agent B jobs = %v, want %d and not %d", jobs, aAndB.ID, onlyA.ID)
 	}
 }
@@ -290,9 +310,13 @@ func TestAgentJobsWithRequestDataNeedAssignment(t *testing.T) {
 		{"body", "http", `{"method":"POST","body":"{\"token\":\"t\"}"}`, false, false},
 		{"multi-step header", "http_multi", `{"steps":[{"url":"https://example.com","headers":{"Cookie":"s=1"}}]}`, false, false},
 		{"multi-step body", "http_multi", `{"steps":[{"url":"https://example.com","body":"pw=1"}]}`, false, false},
-		{"empty header value", "http", `{"headers":{"X-Trace":""}}`, false, true},
-		{"no request data", "http", `{"method":"GET"}`, false, true},
+		{"empty header value", "http", `{"headers":{"X-Trace":""}}`, false, false},
+		{"no request data", "http", `{"method":"GET"}`, false, false},
 		{"header, assigned", "http", `{"headers":{"X-API-Key":"k3y"}}`, true, true},
+		{"plain, assigned", "http", `{}`, true, true},
+		{"typed secret, assigned", "http", `{"password":"private"}`, true, false},
+		{"malformed, assigned", "http", `[]`, true, false},
+		{"null, assigned", "http", `null`, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -329,7 +353,7 @@ func TestAgentJobsWithRequestDataNeedAssignment(t *testing.T) {
 			if ok, err := store.AgentMayCheckMonitor(ctx, agentID, m.ID); err != nil || ok != tt.offered {
 				t.Fatalf("AgentMayCheckMonitor = %v, %v; want %v (same rule as ListAgentJobs)", ok, err, tt.offered)
 			}
-			if job != nil && tt.assign {
+			if job != nil && tt.name == "header, assigned" {
 				var s map[string]any
 				json.Unmarshal(job.Settings, &s)
 				if h, _ := s["headers"].(map[string]any); h["X-API-Key"] != "k3y" {
@@ -338,4 +362,45 @@ func TestAgentJobsWithRequestDataNeedAssignment(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAgentJobsRequireCurrentExplicitAssignment(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	a := &Agent{Name: "delegate", Enabled: true}
+	if err := store.CreateAgent(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	m := &Monitor{Name: "job", Type: "http", Target: "https://example.test", Enabled: true, AgentEnabled: true, Interval: 60, Timeout: 10}
+	if err := store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	check := func(want bool) {
+		t.Helper()
+		jobs, err := store.ListAgentJobs(ctx, a.ID)
+		if err != nil || (len(jobs) == 1) != want || len(jobs) > 1 {
+			t.Fatalf("jobs=%+v, error=%v; offered=%t", jobs, err, want)
+		}
+		allowed, err := store.AgentMayCheckMonitor(ctx, a.ID, m.ID)
+		if err != nil || allowed != want {
+			t.Fatalf("result authority=%t, error=%v; want %t", allowed, err, want)
+		}
+	}
+	check(false)
+	if err := store.SetMonitorAgentIDs(ctx, m.ID, []int64{a.ID}); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if _, err := store.writeDB.ExecContext(ctx, "UPDATE agents SET enabled=0 WHERE id=?", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+	if _, err := store.writeDB.ExecContext(ctx, "UPDATE agents SET enabled=1 WHERE id=?", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if err := store.SetMonitorAgentIDs(ctx, m.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
 }

@@ -7,12 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/internal/safenet"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v2/internal/safenet"
 )
 
 type SSHChecker struct {
@@ -21,8 +22,8 @@ type SSHChecker struct {
 
 func (c *SSHChecker) Type() string { return "ssh" }
 
-func (c *SSHChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Result, error) {
-	var settings storage.SSHSettings
+func (c *SSHChecker) Check(ctx context.Context, monitor *model.Monitor) (*Result, error) {
+	var settings model.SSHSettings
 	if len(monitor.Settings) > 0 {
 		if err := json.Unmarshal(monitor.Settings, &settings); err != nil {
 			return &Result{Status: "down", Message: fmt.Sprintf("invalid settings: %v", err)}, nil
@@ -43,17 +44,12 @@ func (c *SSHChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 	if err != nil {
 		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("connection failed: %v", err)}, nil
 	}
-	defer conn.Close()
+	defer closeConnOnCancel(ctx, conn)()
 	conn.SetDeadline(time.Now().Add(timeout))
 
-	scanner := bufio.NewScanner(conn)
-	if !scanner.Scan() {
-		return &Result{Status: "down", ResponseTime: elapsed, Message: "no SSH banner received"}, nil
-	}
-	banner := scanner.Text()
-
-	if !strings.HasPrefix(banner, "SSH-") {
-		return &Result{Status: "down", ResponseTime: elapsed, Message: fmt.Sprintf("invalid SSH banner: %s", banner)}, nil
+	banner, err := readSSHIdentification(conn)
+	if err != nil {
+		return &Result{Status: "down", ResponseTime: time.Since(start).Milliseconds(), Message: fmt.Sprintf("invalid SSH banner: %v", err)}, nil
 	}
 
 	// NOTE: This verifies the SSH identification banner, not the host key.
@@ -71,4 +67,62 @@ func (c *SSHChecker) Check(ctx context.Context, monitor *storage.Monitor) (*Resu
 
 	elapsed = time.Since(start).Milliseconds()
 	return &Result{Status: "up", ResponseTime: elapsed, Message: banner}, nil
+}
+
+func readSSHIdentification(r io.Reader) (string, error) {
+	// RFC 4253 permits server lines before the identification. Bound both a
+	// single preamble line and the whole exchange, while retaining the deadline.
+	const maxPreamble = 64 * 1024
+	reader := bufio.NewReaderSize(io.LimitReader(r, maxPreamble+1), 4096)
+	total := 0
+	for {
+		line, err := reader.ReadSlice('\n')
+		if err != nil {
+			return "", err
+		}
+		total += len(line)
+		if total > maxPreamble {
+			return "", fmt.Errorf("SSH preamble too large")
+		}
+		if !strings.HasPrefix(string(line), "SSH-") {
+			continue
+		}
+		// The RFC limits the complete identification line, including CRLF.
+		if len(line) > 255 {
+			return "", fmt.Errorf("SSH identification too large")
+		}
+		banner := strings.TrimSuffix(strings.TrimSuffix(string(line), "\n"), "\r")
+		if !validSSHIdentification(banner) {
+			return "", fmt.Errorf("malformed SSH identification")
+		}
+		return banner, nil
+	}
+}
+
+func validSSHIdentification(banner string) bool {
+	parts := strings.SplitN(banner, "-", 3)
+	if len(parts) != 3 || parts[0] != "SSH" || strings.ContainsAny(banner, "\x00\r\n") {
+		return false
+	}
+	major, minor, ok := strings.Cut(parts[1], ".")
+	if !ok || major == "" || minor == "" {
+		return false
+	}
+	for _, part := range []string{major, minor} {
+		for _, b := range part {
+			if b < '0' || b > '9' {
+				return false
+			}
+		}
+	}
+	software, _, _ := strings.Cut(parts[2], " ")
+	if software == "" {
+		return false
+	}
+	for _, b := range software {
+		if b < '!' || b > '~' || b == '-' {
+			return false
+		}
+	}
+	return true
 }

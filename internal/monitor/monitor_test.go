@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/internal/checker"
-	"github.com/y0f/asura/internal/incident"
-	"github.com/y0f/asura/internal/storage"
+	"github.com/y0f/asura/v2/internal/checker"
+	"github.com/y0f/asura/v2/internal/incident"
+	"github.com/y0f/asura/v2/internal/storage"
 )
 
 func testStore(t *testing.T) *storage.SQLiteStore {
@@ -654,6 +654,7 @@ func TestSchedulerDispatch(t *testing.T) {
 			if job.Monitor.ID != mon.ID {
 				t.Fatalf("expected monitor %d, got %d", mon.ID, job.Monitor.ID)
 			}
+			s.complete(job.Monitor.ID)
 		case <-time.After(time.Second):
 			t.Fatal("expected job to be dispatched")
 		}
@@ -685,6 +686,7 @@ func TestSchedulerDispatch(t *testing.T) {
 			if job.Monitor.Type == "manual" {
 				t.Fatal("manual monitor should not be dispatched")
 			}
+			s.complete(job.Monitor.ID)
 		}
 	})
 
@@ -768,7 +770,7 @@ func TestSchedulerHeapOrdering(t *testing.T) {
 
 	// Drain all jobs from first dispatch
 	for len(jobs) > 0 {
-		<-jobs
+		s.complete((<-jobs).Monitor.ID)
 	}
 
 	// After first dispatch, fast should fire again at now+10s,
@@ -842,7 +844,7 @@ func TestSchedulerUpdateInterval(t *testing.T) {
 		now := time.Now().Add(time.Minute)
 		s.dispatch(now)
 		for len(jobs) > 0 {
-			<-jobs
+			s.complete((<-jobs).Monitor.ID)
 		}
 
 		// Dispatch at now+60s: with 120s interval, should NOT fire
