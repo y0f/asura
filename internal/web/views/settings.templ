@@ -95,7 +95,7 @@ templ SettingsPage(p SettingsParams) {
 							enctype="multipart/form-data"
 							class="space-y-4"
 							x-data="{ mode: 'merge' }"
-							@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace current portable configuration, deleting its monitor history and status-page subscribers? The entire import rolls back if any step fails.', onConfirm: () => { $el.dataset.confirmed = '1'; try { $el.requestSubmit() } finally { delete $el.dataset.confirmed } } }) }"
+							@submit="if (mode === 'replace' && !$el.dataset.confirmed) { $event.preventDefault(); $dispatch('confirm', { message: 'Replace current portable configuration, deleting related monitoring and notification history, and status-page subscribers? The entire import rolls back if any step fails.', onConfirm: () => { $el.dataset.confirmed = '1'; try { $el.requestSubmit() } finally { delete $el.dataset.confirmed } } }) }"
 						>
 							<div>
 								<label class="form-label" for="import-mode">Mode</label>
