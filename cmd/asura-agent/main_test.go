@@ -71,8 +71,8 @@ func newFakeAsura(t *testing.T, jobs any) (*fakeAsura, *httptest.Server) {
 	return f, srv
 }
 
-// Secrets are never sent to agents, so a monitor that needs them must not be
-// offered as a job: the agent would report a false "down" for it.
+// Typed authentication remains server-only even after explicit delegation:
+// offering the monitor without those credentials would report a false outage.
 func TestAuthenticatedMonitorNotOfferedToAgents(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer s3cret" {
@@ -89,6 +89,10 @@ func TestAuthenticatedMonitorNotOfferedToAgents(t *testing.T) {
 	}
 	defer store.Close()
 	ctx := context.Background()
+	delegate := &storage.Agent{Name: "fixture", Token: "fixture-agent-token", Enabled: true}
+	if err := store.CreateAgent(ctx, delegate); err != nil {
+		t.Fatal(err)
+	}
 	authed := &storage.Monitor{
 		Name: "auth", Type: "http", Target: target.URL, Interval: 60, Timeout: 5,
 		Enabled: true, AgentEnabled: true, FailureThreshold: 1, SuccessThreshold: 1,
@@ -103,9 +107,12 @@ func TestAuthenticatedMonitorNotOfferedToAgents(t *testing.T) {
 		if err := store.CreateMonitor(ctx, m); err != nil {
 			t.Fatal(err)
 		}
+		if err := store.SetMonitorAgentIDs(ctx, m.ID, []int64{delegate.ID}); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	jobs, err := store.ListAgentJobs(ctx, 1) // no assignments: every agent gets these jobs
+	jobs, err := store.ListAgentJobs(ctx, delegate.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
