@@ -14,6 +14,7 @@ import (
 type ProxyUpdate func(current *Proxy) (*Proxy, error)
 
 var ErrProxyPasswordStorage = errors.New("passwords starting with the reserved storage prefix require database encryption")
+var ErrProxyRoutingForbidden = errors.New("changing proxy routing requires update and assignment authority for every monitor using it")
 
 func (s *SQLiteStore) encryptProxyPassword(value string) (string, error) {
 	if s.enc == nil && strings.HasPrefix(value, encPrefix) {
@@ -37,7 +38,7 @@ func (s *SQLiteStore) scanProxy(scan func(...any) error) (*Proxy, error) {
 	return &p, nil
 }
 
-func (s *SQLiteStore) UpdateProxyWith(ctx context.Context, id int64, prepare ProxyUpdate) (*Proxy, error) {
+func (s *SQLiteStore) UpdateProxyWith(ctx context.Context, id int64, prepare ProxyUpdate, access ...MonitorAccess) (*Proxy, error) {
 	if prepare == nil {
 		return nil, fmt.Errorf("missing proxy update")
 	}
@@ -61,6 +62,18 @@ func (s *SQLiteStore) UpdateProxyWith(ctx context.Context, id int64, prepare Pro
 	next := *candidate
 	next.ID, next.CreatedAt = id, current.CreatedAt
 	next.UpdatedAt = parseTime(formatTime(time.Now()))
+	if next.Protocol != current.Protocol || next.Host != current.Host || next.Port != current.Port || next.AuthUser != current.AuthUser || next.AuthPass != current.AuthPass {
+		// A proxy can observe its monitors' requests. Owning the proxy resource
+		// alone must not authorize forwarding another scope's credentials.
+		clause, args := monitorAccessSQL("m", access)
+		var forbidden bool
+		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM monitors m WHERE m.proxy_id=? AND NOT COALESCE((1=1"+clause+"), FALSE))", append([]any{id}, args...)...).Scan(&forbidden); err != nil {
+			return nil, err
+		}
+		if forbidden {
+			return nil, ErrProxyRoutingForbidden
+		}
+	}
 	if next.Protocol != current.Protocol {
 		if err := s.checkProxyMonitors(ctx, tx, id, next.Protocol); err != nil {
 			return nil, err

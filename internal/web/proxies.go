@@ -117,8 +117,12 @@ func (h *Handler) ProxyUpdate(w http.ResponseWriter, r *http.Request) {
 		key := httputil.GetAPIKey(r.Context())
 		passwordStored = key.HasPermission("proxies.read") && current.AuthPass != ""
 		return input.Apply(current, key.SuperAdmin)
-	})
+	}, httputil.MonitorAccess(r.Context(), "monitors.update", "monitors.assign")...)
 	if err != nil {
+		if errors.Is(err, storage.ErrProxyRoutingForbidden) {
+			http.Error(w, storage.ErrProxyRoutingForbidden.Error(), http.StatusForbidden)
+			return
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
 			return

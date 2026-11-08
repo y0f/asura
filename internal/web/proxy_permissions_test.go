@@ -34,6 +34,31 @@ func TestProxyRoutingWebDeleteReturnsConflict(t *testing.T) {
 	}
 }
 
+func TestProxyRoutingWebRequiresMonitorAssignmentAuthority(t *testing.T) {
+	h, store := storeHandler(t)
+	ctx := context.Background()
+	p := &storage.Proxy{Name: "egress", Protocol: "http", Host: "proxy.test", Port: 8080}
+	if err := store.CreateProxy(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	m := &storage.Monitor{Name: "private-monitor", Type: "http", Target: "https://private.test", Interval: 60, Timeout: 10, ProxyID: &p.ID}
+	if err := store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	r := adminRequest("POST", "/proxies/"+strconvI(p.ID), url.Values{"name": {"egress"}, "protocol": {"http"}, "host": {"receiver.test"}, "port": {"8080"}})
+	r.SetPathValue("id", strconvI(p.ID))
+	r = r.WithContext(context.WithValue(r.Context(), httputil.CtxKeyAPIKey, &config.APIKeyConfig{Permissions: []string{"proxies.update"}}))
+	w := httptest.NewRecorder()
+	h.ProxyUpdate(w, r)
+	if w.Code != 403 || strings.Contains(w.Body.String(), m.Name) {
+		t.Fatalf("proxy form route scope: %d %s", w.Code, w.Body.String())
+	}
+	got, err := store.GetProxy(ctx, p.ID)
+	if err != nil || got.Host != p.Host {
+		t.Fatalf("forbidden route committed: %v", err)
+	}
+}
+
 func TestProxyFormRetargetAndWriteOnlyRedirect(t *testing.T) {
 	h, store := storeHandler(t)
 	h.cfg.Server.BasePath = "/console"

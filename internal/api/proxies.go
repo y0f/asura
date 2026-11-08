@@ -78,7 +78,7 @@ func (h *Handler) UpdateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.store.UpdateProxyWith(r.Context(), id, func(current *storage.Proxy) (*storage.Proxy, error) {
 		return input.Apply(current, httputil.GetAPIKey(r.Context()).SuperAdmin)
-	})
+	}, httputil.MonitorAccess(r.Context(), "monitors.update", "monitors.assign")...)
 	if err != nil {
 		if proxyMutationError(w, err) {
 			return
@@ -121,6 +121,8 @@ func proxyResponse(r *http.Request, p *storage.Proxy) any {
 
 func proxyMutationError(w http.ResponseWriter, err error) bool {
 	switch {
+	case errors.Is(err, storage.ErrProxyRoutingForbidden):
+		writeError(w, http.StatusForbidden, storage.ErrProxyRoutingForbidden.Error())
 	case errors.Is(err, storage.ErrProxyInUse):
 		writeError(w, http.StatusConflict, storage.ErrProxyInUse.Error())
 	case errors.Is(err, storage.ErrInvalidMonitorProxy):

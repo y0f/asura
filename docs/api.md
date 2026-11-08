@@ -211,6 +211,8 @@ Deleting an assigned proxy returns `409`. Change each monitor's routing explicit
 
 Proxy reads hide `auth_pass`. An omitted or blank password on update retains the saved value; `clear_auth_pass: true` removes it, and a nonempty value replaces it. Other omitted fields are preserved. An ordinary editor changing protocol, host, port or authentication username must replace or remove a retained password. A super administrator can retain it across that destination change. Mutations without `proxies.read` return only the proxy ID.
 
+Changing a proxy's protocol, endpoint or authentication also requires `monitors.update` and `monitors.assign` for **every current monitor using that proxy**. This is checked within the same transaction as the proxy edit, so proxy ownership alone cannot redirect another scope's request credentials. Name and enabled-state edits need only `proxies.update`.
+
 Unless `allow_private_targets` is enabled, a proxied target (and, for HTTP monitors, every redirect target) is refused when it is a private or reserved IP or when its hostname resolves to one. The check uses Asura's own DNS resolver, but the proxy is still given the hostname and resolves it on its own, in its own network (which is why proxies are used: other regions, split DNS, hostname ACLs). The check therefore protects the network Asura runs in, but cannot constrain what the proxy reaches: a name can resolve differently for the proxy, or change between the two lookups. A hostname Asura cannot resolve at all (one that only exists in the proxy's network) is passed to the proxy unchecked. To keep a proxy away from internal services, use the proxy's own access controls (ACLs).
 
 ## Incidents {#incidents}

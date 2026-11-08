@@ -40,6 +40,32 @@ func TestProxyRoutingAPIRejectsUnsupportedAndReferencedMutations(t *testing.T) {
 	}
 }
 
+func TestProxyRoutingAPIRequiresMonitorAssignmentAuthority(t *testing.T) {
+	env := newTestEnv(t, func(c *config.Config) {
+		c.Auth.APIKeys = append(c.Auth.APIKeys,
+			config.APIKeyConfig{Name: "proxy-only", Hash: config.HashAPIKey("proxy-only"), Permissions: []string{"proxies.update"}},
+			config.APIKeyConfig{Name: "router", Hash: config.HashAPIKey("router"), Permissions: []string{"proxies.update", "monitors.update", "monitors.assign"}})
+	}, false, nil)
+	ctx := context.Background()
+	p := &storage.Proxy{Name: "egress", Protocol: "http", Host: "proxy.test", Port: 8080}
+	if err := env.store.CreateProxy(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	m := &storage.Monitor{Name: "private-monitor", Type: "http", Target: "https://private.test", Interval: 60, Timeout: 10, ProxyID: &p.ID}
+	if err := env.store.CreateMonitor(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/proxies/%d", p.ID)
+	w := env.do("PUT", path, `{"host":"receiver.test"}`, map[string]string{"X-API-Key": "proxy-only"})
+	if w.Code != 403 || strings.Contains(w.Body.String(), m.Name) || strings.Contains(w.Body.String(), m.Target) {
+		t.Fatalf("proxy route scope: %d %s", w.Code, w.Body.String())
+	}
+	w = env.do("PUT", path, `{"host":"receiver.test"}`, map[string]string{"X-API-Key": "router"})
+	if w.Code != 200 || w.Body.String() != fmt.Sprintf("{\"id\":%d}\n", p.ID) {
+		t.Fatalf("authorized write-only route: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestProxyPasswordsRoundTripWithIndependentReadAuthority(t *testing.T) {
 	env := newTestEnv(t, func(c *config.Config) {
 		c.Auth.APIKeys = append(c.Auth.APIKeys,
