@@ -66,7 +66,7 @@ The service listens on `127.0.0.1:8090`. Its generated configuration requires HT
 
 ## Build and run locally {#build-and-run-locally}
 
-From a cloned repository, use Go 1.27.3 and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your system. Save the CLI as `tailwindcss` in the repository root (`tailwindcss.exe` on Windows), and make it executable on Unix. Build commands use the templ version in `go.mod`; Node and a separately installed templ CLI are unnecessary. CI also tests Go 1.26.10.
+From a cloned repository, use Go 1.27.4 and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your system. Save the CLI as `tailwindcss` in the repository root (`tailwindcss.exe` on Windows), and make it executable on Unix. Build commands use the templ version in `go.mod`; Node and a separately installed templ CLI are unnecessary. CI also tests Go 1.26.11.
 
 ```
 make build

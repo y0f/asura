@@ -20,8 +20,8 @@ func TestNoticeInputsAndToolchainCannotDriftSilently(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("go.mod", "module fixture\ntoolchain go1.27.3\n")
-	write("licenses/go-modules.json", `{"toolchain":"go1.27.3"}`)
+	write("go.mod", "module fixture\ntoolchain go1.27.4\n")
+	write("licenses/go-modules.json", `{"toolchain":"go1.27.4"}`)
 	write("licenses/go.txt", "Go notice\r\n")
 	write("web/static/third-party-notices.txt", "Frontend notice\n")
 	if err := run(root, false, false); err != nil {
@@ -83,9 +83,9 @@ func TestRuntimeInventoryRequiresReviewedUnion(t *testing.T) {
 }
 
 func TestCompilerMustMatchAuditedRuntimeSource(t *testing.T) {
-	recorded := inventory{Compilers: []string{"go1.26.10", "go1.27.3"}}
-	for _, version := range []string{"go1.26.10", "go1.27.3", "go1.26.0", "go1.28.0", "devel go1.27-abcdef", ""} {
-		want := version == "go1.26.10" || version == "go1.27.3"
+	recorded := inventory{Compilers: []string{"go1.26.11", "go1.27.4"}}
+	for _, version := range []string{"go1.26.11", "go1.27.4", "go1.26.0", "go1.28.0", "devel go1.27-abcdef", ""} {
+		want := version == "go1.26.11" || version == "go1.27.4"
 		if err := checkCompiler(recorded, version); (err == nil) != want {
 			t.Fatalf("compiler %q: %v", version, err)
 		}
