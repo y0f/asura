@@ -9,6 +9,11 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Amsterdam
+    # Wait a week after a release before proposing it: most compromised
+    # or broken releases are withdrawn within days. Security updates are
+    # not delayed.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "deps"
 
@@ -19,6 +24,8 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
     groups:
@@ -31,5 +38,7 @@ updates:
       interval: monthly
       time: "06:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "docker"
