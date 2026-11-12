@@ -135,3 +135,21 @@ jobs:
             go version -m "$binary"
             go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -mode=binary "$binary"
           done
+
+  # The one check branch protection requires. `build` is skipped when a job it
+  # needs fails, and GitHub treats a skipped required check as passing, so this
+  # job always runs and fails unless every other job succeeded. Its name also
+  # stays the same when the Go versions in the matrix change.
+  required:
+    if: always()
+    needs: [generated, docs, test, postgres, quality, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || exit 1
+          done
