@@ -1,9 +1,14 @@
 version: 2
 updates:
+  # One PR per Go module: each runtime dependency needs its own license review
+  # before licenses/go-modules.json changes (see licenses/README.md).
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
     commit-message:
       prefix: "deps"
 
@@ -11,12 +16,20 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions:
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: monthly
+      time: "06:00"
+      timezone: Europe/Amsterdam
     commit-message:
       prefix: "docker"
