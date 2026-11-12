@@ -48,7 +48,7 @@ jobs:
         run: go test -race -count=1 -coverprofile=coverage.out ./...
       - name: Retain coverage for review
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-go-${{ matrix.go-version }}
           path: coverage.out
@@ -94,7 +94,7 @@ jobs:
           go test -tags postgres -race -count=1 -timeout=5m -coverprofile=postgres-coverage.out ./internal/storage -run '^TestPostgres'
       - name: Retain PostgreSQL coverage for review
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-postgres-go-${{ matrix.go-version }}
           path: postgres-coverage.out
