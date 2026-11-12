@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // MonitorMetrics holds computed metrics for a monitor.

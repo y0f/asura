@@ -17,7 +17,6 @@
   <a href="https://y0f.github.io/asura/">Documentation</a> &middot;
   <a href="https://y0f.github.io/asura/getting-started.html">Quick start</a> &middot;
   <a href="https://y0f.github.io/asura/api.html">API</a> &middot;
-  <a href="https://y0f.github.io/asura/upgrading.html">Upgrading</a> &middot;
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
@@ -83,12 +82,6 @@ For Linux services, binaries or source builds, see [installation options](https:
 **Public status page:** grouped service health, availability history and incident updates. Add your own logo, header and CSS through the [branding settings](https://y0f.github.io/asura/status-pages.html#branding).
 
 ![Public status page with grouped services, availability history and incident updates](assets/statuspage.png)
-
-## Upgrading
-
-Read the [upgrade guide](https://y0f.github.io/asura/upgrading.html) and release notes before replacing an existing installation. Back up the database, configuration and encryption key together, and keep probe agents compatible with the server.
-
-Rollback requires the previous binary and its matching database backup. A configuration export is not a database backup.
 
 ## Contributing
 

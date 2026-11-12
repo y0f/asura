@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/httputil"
 )
 
 func TestTagWriteOnlyMutationsRedirectToReadableHome(t *testing.T) {

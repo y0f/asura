@@ -23,7 +23,7 @@ Use `?page=1&per_page=20` for monitors, checks, changes, incidents, notification
 
 ## Permissions {#permissions}
 
-Each endpoint requires its resource and action scope. List and detail endpoints use `resource.read`; creates, updates, and deletes use `resource.create`, `resource.update`, and `resource.delete`. `resource.write` grants all mutations for that resource, without read access. Actions such as `monitors.pause`, `incidents.acknowledge`, and `notifications.test` can be granted separately. See [Configuration](configuration.html) for the full scope registry and v1 migration mappings.
+Each endpoint requires its resource and action scope. List and detail endpoints use `resource.read`; creates, updates, and deletes use `resource.create`, `resource.update`, and `resource.delete`. `resource.write` grants all mutations for that resource, without read access. Actions such as `monitors.pause`, `incidents.acknowledge`, and `notifications.test` can be granted separately. See [Configuration](configuration.html) for the full scope registry.
 
 Exceptions: monitor SLA endpoints use `sla.read`; notification delivery history uses `notification_history.read`; request logs use `request_logs.read`; on-call rotations use `on_call`; status pages use `status_pages`; escalation policies use `escalation_policies`. Cloning requires source read and clone authority, destination clone authority, and permission to assign any copied relationships. Bulk monitor operations require the corresponding action on every selected monitor; group moves require `monitors.update` and `monitors.assign` for the source and destination, plus `groups.read`. `/metrics` uses the global `metrics.read` permission.
 
@@ -73,7 +73,7 @@ Each scrape reads all monitors, tags, incident counts and the last 24 hours of r
 
 Status totals include `pending`; `asura_monitor_up` is 1 only for an `up` status, and 0 for every other status. Response-time series are omitted for manual and heartbeat monitors and when the latest observation is not a verified probe; an observed zero-millisecond duration remains 0.
 
-Tag labels start with `tag_`. ASCII letters and digits retain their case; every other UTF-8 byte, including underscore, becomes `_XX` using uppercase hexadecimal. For example, `team name`, `team_name` and `é` become `tag_team_20name`, `tag_team_5Fname` and `tag__C3_A9`. Distinct names therefore remain distinct valid label names. Empty tag values retain the value `true`. Update queries that relied on v1 lowercasing or space/underscore normalization.
+Tag labels start with `tag_`. ASCII letters and digits retain their case; every other UTF-8 byte, including underscore, becomes `_XX` using uppercase hexadecimal. For example, `team name`, `team_name` and `é` become `tag_team_20name`, `tag_team_5Fname` and `tag__C3_A9`. Distinct names therefore remain distinct valid label names. Empty tag values retain the value `true`.
 
 ## Monitors {#monitors}
 
@@ -97,13 +97,12 @@ Tag labels start with `tag_`. ASCII letters and digits retain their case; every 
 See [Monitors](monitors.html) for the full field reference and protocol settings.
 
 Check-history rows include the server-assigned `observation_kind`: `probe` for scheduled
-server/agent checks, `manual` for explicit state changes, and `unknown` for preserved
-legacy records. Heartbeat pings update current state and do not create check-history
+server/agent checks, `manual` for explicit state changes, and `unknown` for records
+without a recorded source. Heartbeat pings update current state and do not create check-history
 rows. Metrics, charts, SLA and anomaly calculations count only `probe`
 observations; changing the current monitor type does not reclassify history. Clients
 must not display a manual or unknown row's response time as measured latency.
-Agent-supplied fields cannot override the stored observation kind. See the
-[historical metrics upgrade note](upgrading.html#review-historical-metrics).
+Agent-supplied fields cannot override the stored observation kind.
 
 The metrics endpoint accepts RFC3339 `from` and `to` timestamps (`from < to`), defaulting to the last 24 hours. `sampled_metrics` is false for manual and heartbeat monitors; their `uptime_pct`, `response_time` and `checks` are `null`. Scheduled monitors return rollup-aware check counts, `uptime_pct: null` when the window has no samples, and `response_time: null` when no successful raw latency samples remain. `response_samples` distinguishes missing latency from a valid measured `0` ms. Type, permission scope, counts and values come from one database snapshot. Passive chart endpoints return an empty `points` array.
 
@@ -178,7 +177,7 @@ An unsampled member has `uptime_90d: null` and `total_checks: 0`. Empty pages an
 
 Subscription requires `subscriptions.enabled` (`503` when disabled), a page with both `enabled` and `api_enabled` (`404` otherwise), and the same password or cookie as its public API when protected. No API key is needed. Email subscriptions queue confirmation; unavailable mail or failed queue admission returns `503`. For immediate webhook subscription, send `{"type":"webhook","webhook_url":"https://example.com/hook"}` instead.
 
-Subscriber listing requires `subscribers.read` and returns `{"count":N,"data":[...]}` for confirmed contacts, with webhook URLs omitted. The legacy `readonly` role excludes this permission.
+Subscriber listing requires `subscribers.read` and returns `{"count":N,"data":[...]}` for confirmed contacts, with webhook URLs omitted. The `readonly` shorthand excludes this permission.
 
 ## Status Badges {#status-badges}
 
@@ -345,7 +344,7 @@ Records configuration changes (creates, updates, deletes) with the acting key, a
 
 Import and export require super administrator access, including redacted exports. No collection of ordinary resource permissions grants this access.
 
-A full v2 export contains portable monitor configuration and relationships, groups, tags, proxies, notification channels, escalation policies, on-call rotations, maintenance windows and status pages. Relationships use file-local IDs that are remapped on import. Database history, subscribers, authentication and role configuration, agent enrollment tokens and heartbeat credentials are excluded. See [backup and configuration transfer](backup.html) for the complete inventory and disaster-recovery procedure.
+A full export contains portable monitor configuration and relationships, groups, tags, proxies, notification channels, escalation policies, on-call rotations, maintenance windows and status pages. Relationships use file-local IDs that are remapped on import. Database history, subscribers, authentication and role configuration, agent enrollment tokens and heartbeat credentials are excluded. See [backup and configuration transfer](backup.html) for the complete inventory and disaster-recovery procedure.
 
 Query parameters:
 
@@ -436,18 +435,19 @@ Deleting an agent never widens a monitor to every agent: a monitor whose only as
 
 Each object posted to `/api/v1/agent/results` has `monitor_id`, the positive `config_revision` copied unchanged from its job, `status`, `response_time` (ms), `status_code`, `message`, `body_hash`, `cert_fingerprint`, and optionally `dns_records` (a JSON-encoded array of strings, used for `dns_record` assertions; when it is absent those assertions are skipped) and `checked_at` (RFC 3339 time the check ran; defaults to the time the result is received, and a time in the future counts as the receive time). For the same current configuration revision, a result checked before the newest result already applied from the same agent is kept in the history but does not change the monitor's status or incidents. There is no age limit, and results from the server or other agents never make an agent's result stale, so an agent with a long cycle is still applied.
 
-Upgrade the server and agents together to v2. Results without a positive revision are rejected. Monitor edits, delegation changes, agent enable/disable changes and proxy edits invalidate earlier jobs; the server rechecks revision and delegation in the transaction that stores the result. An obsolete job writes no history, status or incident. The response reports `accepted` and `rejected` counts, plus rejected subsets `stale` (obsolete or no longer delegated) and `failed` (server persistence/read failures); remaining rejections have invalid fields. The agent reports incomplete acceptance and fetches current jobs on its next poll.
+Run matching server and agent releases. Results without a positive revision are rejected. Monitor edits, delegation changes, agent enable/disable changes and proxy edits invalidate earlier jobs; the server rechecks revision and delegation in the transaction that stores the result. An obsolete job writes no history, status or incident. The response reports `accepted` and `rejected` counts, plus rejected subsets `stale` (obsolete or no longer delegated) and `failed` (server persistence/read failures); remaining rejections have invalid fields. The agent reports incomplete acceptance and fetches current jobs on its next poll.
 
 ### Running an Agent {#running-an-agent}
 
 ```
-asura-agent --server https://your-server.com --token <agent-token> --interval 30s
+ASURA_AGENT_TOKEN=<agent-token> asura-agent --server https://your-server.com --interval 30s
 ```
 
 | Flag | Default | Description |
 | --- | --- | --- |
 | `-server` |  | Asura server URL (required) |
-| `-token` |  | Agent token (required) |
+| `-token-file` |  | File containing the agent token. Without it, the agent reads `ASURA_AGENT_TOKEN` |
+| `-insecure-http` | `false` | Allow a plain-HTTP server URL on a non-loopback host, which sends the token unencrypted |
 | `-interval` | `30s` | Positive duration between polls for jobs |
 | `-concurrency` | `10` | Positive maximum number of checks run at the same time |
 | `-allow-private` | `false` | Allow checks against private, loopback and other reserved addresses, for agents inside a LAN |
@@ -455,7 +455,7 @@ asura-agent --server https://your-server.com --token <agent-token> --interval 30
 
 Flags can be written with one or two dashes (`-server` or `--server`).
 
-The agent binary polls the server for jobs, runs checks locally, and posts results back. It needs an outbound connection to the configured server; use HTTPS for remote connections. Choose the binary matching the host operating system and architecture.
+The agent binary polls the server for jobs, runs checks locally, and posts results back. It needs an outbound connection to the configured server. The server URL must use HTTPS; plain HTTP is accepted only for a loopback server or with `--insecure-http`. The token is never accepted as a command-line argument, because other local users can read process arguments; store it in a file readable only by the agent's user, or pass it through the service manager's environment. Choose the binary matching the host operating system and architecture.
 
 Set `--server` to the final server URL, including any configured base path. The agent
 rejects redirects for job polling and result submission so its token stays at that

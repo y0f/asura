@@ -26,8 +26,8 @@ Server, runtime and authentication settings live in `config.yaml`. Monitor, noti
 | `listen` | `127.0.0.1:8090` | Address to bind. Keep this localhost-only and put a reverse proxy in front |
 | `base_path` | `""` | URL prefix for all routes (e.g. `/asura`) |
 | `external_url` | `http://{listen}{base_path}` | Public URL used in notification links; set the HTTPS URL explicitly behind a proxy |
-| `trusted_proxies` | `[]` | IPs/CIDRs whose `X-Real-IP`/`X-Forwarded-For` headers are trusted |
-| `rate_limit_per_sec` | `30` | Per-IP request rate limit |
+| `trusted_proxies` | `[]` | IPs/CIDRs of reverse proxies whose forwarding headers are trusted. The client address is the first untrusted entry from the right of `X-Forwarded-For`, which the proxy must append to; `X-Real-IP` is used only without `X-Forwarded-For`. Vendor headers such as `CF-Connecting-IP` are ignored; behind Cloudflare, add its address ranges here. HSTS is sent when TLS ends at Asura or a trusted proxy reports `X-Forwarded-Proto: https` |
+| `rate_limit_per_sec` | `30` | Per-client request rate limit; IPv6 clients are grouped by /64 |
 | `rate_limit_burst` | `60` | Burst allowance for that limiter |
 | `max_body_size` | `1048576` | Ordinary request-body limit in bytes; authenticated configuration transfer has its own 32 MiB limit |
 | `web_ui_enabled` | `true` | Serve the web dashboard. Set `false` for API-only operation; REST endpoints retain their authorization requirements |
@@ -67,18 +67,23 @@ API-key hashes, role definitions and bindings are configured in YAML. Keys use S
 Output:
 
 ```
-  API Key : ak_a8f3e7b2c1d9...
-  Hash    : fa223e3e1c4b96...
+  API Key        : ak_a8f3e7b2c1d9...
+  Hash           : fa223e3e1c4b96...
+  Encryption Key : 4c1f0e9a7b3d52...
 
   Put the hash in config.yaml under auth.api_keys[].hash
+  Put the encryption key in config.yaml under database.encryption_key
+  Back up the encryption key separately from the database.
   Save the API key -- it cannot be recovered.
 ```
 
-Generated keys have an `ak_` prefix. Treat the whole key as a credential. If you already have a key and need its hash:
+Generated keys have an `ak_` prefix. Treat the whole key as a credential. API keys are stored as an unsalted SHA-256 hash, which is only safe for long random keys, so prefer generated keys. To hash an existing key of at least 32 random characters:
 
 ```
 ./asura --hash-key "your-secret-key"
 ```
+
+`--hash-key` rejects shorter or repetitive keys.
 
 ### Config {#config}
 
@@ -97,10 +102,10 @@ auth:
 | `viewer` | Monitor-associated read access, scoped through a role binding |
 | `operator` | Viewer reads plus operational monitor, incident and maintenance actions |
 | `administrator` | Every ordinary action; global binding only, without `super_admin` |
-| Legacy `role: admin` | Compatibility mapping to explicit super-administrator access |
-| Legacy `role: readonly` | A frozen global read set that excludes subscriber contacts and does not grow with new resources |
+| `role: admin` | Shorthand for explicit super-administrator access |
+| `role: readonly` | A fixed global read set that excludes subscriber contacts and does not grow with new resources |
 
-Use `auth.roles` for custom reusable roles and `api_keys[].role_bindings` for explicit global, group or monitor scopes. See [Access control](access-control.html) for complete YAML examples, built-in actions and legacy compatibility. Ordinary roles cannot grant `super_admin`.
+Use `auth.roles` for custom reusable roles and `api_keys[].role_bindings` for explicit global, group or monitor scopes. See [Access control](access-control.html) for complete YAML examples, built-in actions and role shorthands. Ordinary roles cannot grant `super_admin`.
 
 ### Custom Permissions {#custom-permissions}
 
@@ -144,21 +149,11 @@ Permissions use `resource.action`, for example `monitors.pause`. Each resource w
 
 Operations may require several independent actions. Cloning checks source read/clone, destination clone, and permission to copy relationships. Moving a monitor checks source/destination update and assignment plus `groups.read`. Editing a resource through a form requires its read and update actions. Bulk changes authorize every selected object. Configuration import and export require `super_admin: true`, even when every ordinary permission is granted. Subscriber contacts require `subscribers.read`; global metrics require the separate operational-export grant `metrics.read`.
 
-`diagnostics.read` supports monitor/group scope and must be granted explicitly for raw check output, incident causes/timeline text and assertion/extraction definitions. It is absent from the built-in viewer/operator roles and the frozen legacy readonly role; administrator includes it. It never grants ordinary monitor or incident reads by itself. See [Diagnostic access](access-control.html#diagnostic-access).
+`diagnostics.read` supports monitor/group scope and must be granted explicitly for raw check output, incident causes/timeline text and assertion/extraction definitions. It is absent from the built-in viewer/operator roles and the `readonly` shorthand; administrator includes it. It never grants ordinary monitor or incident reads by itself. See [Diagnostic access](access-control.html#diagnostic-access).
 
-### Upgrading permissions from v1 {#upgrading-permissions-from-v1}
+### Resource scopes {#resource-scopes}
 
-V2 separates resources that previously shared a scope. Existing explicit permissions are not expanded automatically. Retain the scopes you need and add the following scopes only for the corresponding features:
-
-| Previous scope | Additional v2 scopes for previously shared features |
-| --- | --- |
-| `monitors.read` | `groups.read`, `tags.read`, `proxies.read`, `agents.read`, `status_pages.read`, `sla.read`. Subscriber listing now requires the separate sensitive grant `subscribers.read`. |
-| `monitors.write` | `groups.write`, `tags.write`, `proxies.write`, `agents.write`, `status_pages.write`, `subscribers.delete`, `database.maintain`. Import and export require super administrator access. |
-| `notifications.read` | `notification_history.read`, `on_call.read` |
-| `notifications.write` | `on_call.write` |
-| `metrics.read` | `request_logs.read`, `audit.read`, `settings.read`, `database.read` |
-
-Existing `incidents`, `maintenance`, and `escalation_policies` read/write grants remain within their own resources. Replace a write umbrella with individual actions when a key should only perform part of the workflow. A key needs access to at least one application page to start a web session; API-only permissions such as `metrics.read` still work through the API. Session requests recheck the key's current permissions.
+Each resource has its own scopes: `monitors.*` does not cover groups, tags, proxies, agents, status pages, subscribers or SLA reports, and `notifications.*` does not cover notification history or on-call rotations. Grant each resource you need explicitly. Replace a write umbrella with individual actions when a key should only perform part of the workflow. A key needs access to at least one application page to start a web session; API-only permissions such as `metrics.read` still work through the API. Session requests recheck the key's current permissions.
 
 ### Using a Key {#using-a-key}
 
@@ -183,6 +178,8 @@ curl -H "X-API-Key: ak_a8f3e7b2c1d9..." https://example.com/asura/api/v1/monitor
 | `heartbeat_check_interval` | `30s` | Scan interval for expired heartbeat deadlines |
 | `allow_private_targets` | `false` | Permit private/reserved target addresses for server checks |
 | `command_allowlist` | `[]` | Allowed command executable paths; empty blocks all command checks |
+| `private_smtp_hosts` | `[]` | SMTP host names notification channels may use even when they resolve to private or reserved addresses |
+| `docker_sockets` | `[/var/run/docker.sock]` | Clean absolute socket paths Docker checks may use; empty allows only the default socket |
 
 These keys are under `monitor`. Each monitor can override its interval, timeout and incident thresholds. There is no separate command timeout: the worker applies the monitor's timeout to the command's context. Older `command_timeout` and `max_concurrent_dns` YAML keys had no runtime effect and remain ignored.
 
@@ -203,10 +200,12 @@ Monitor settings, notification-channel settings and proxy passwords can be encry
 
 ```
 database:
-  encryption_key: "your-secret-key-here"
+  encryption_key: "64-hex-character-key-from-asura---setup"
 ```
 
-When configured, those fields are encrypted on write and decrypted for authorized internal use. Existing plaintext remains readable and is encrypted on its next update. New encryption derives a key with PBKDF2-HMAC-SHA256 and a persisted salt; legacy SHA-256-derived ciphertext remains readable and is rewritten on update. Keep the matching encryption key with your database backup. Ordinary API and form reads still redact saved credentials.
+`asura --setup` generates a random key, and the Linux installer and Docker example configure one. The server logs a warning at startup when encryption is off or the key is shorter than 32 characters.
+
+When configured, those fields are encrypted on write and decrypted for authorized internal use. Existing plaintext remains readable and is encrypted on its next update. Encryption derives a key with PBKDF2-HMAC-SHA256 and a persisted salt. Keep the matching encryption key with your database backup. Ordinary API and form reads still redact saved credentials.
 
 ## Data Rollup {#data-rollup}
 
@@ -224,7 +223,7 @@ Hourly rollups are retained for 90 days and daily rollups for one calendar year.
 | `database.request_log_retention_days` | `7` | Retain request history |
 | `database.retention_period` | `1h` | Interval between rollup and retention passes; one also runs at startup |
 
-Metrics use verified probe observations. Existing history classified as `unknown` during the v2 upgrade remains available as history but does not enter those calculations; see [historical metrics](upgrading.html#review-historical-metrics).
+Metrics use verified probe observations. History with an `unknown` source remains available as history but does not enter those calculations.
 
 ## Keyboard Shortcuts {#keyboard-shortcuts}
 

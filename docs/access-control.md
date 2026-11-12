@@ -1,7 +1,7 @@
 ---
 title: "Access control"
 nav_title: "Access control"
-description: "Manage Asura API keys, reusable roles and fine-grained permissions. Scope access to monitors and groups, preserve credentials and migrate legacy grants."
+description: "Manage Asura API keys, reusable roles and fine-grained permissions. Scope access to monitors and groups, preserve credentials and use role shorthands."
 permalink: "/access-control.html"
 ---
 
@@ -60,7 +60,7 @@ auth:
 
 Generate a key and its hash with `asura --setup`; keep the key private and configure only its hash. Replace the example IDs with existing monitors and groups. Restart after authentication changes. Sessions resolve against the current configuration, so removing a principal or rotating its key revokes its previous sessions.
 
-A role has a unique `name`, optional `description`, and nonempty `permissions` list. Custom names start with a lowercase letter and contain at most 64 lowercase letters, digits, underscores or hyphens. Built-in and legacy role names are reserved. Unknown roles, unknown actions, duplicate definitions, invalid IDs and empty scopes fail configuration validation.
+A role has a unique `name`, optional `description`, and nonempty `permissions` list. Custom names start with a lowercase letter and contain at most 64 lowercase letters, digits, underscores or hyphens. Built-in and shorthand role names are reserved. Unknown roles, unknown actions, duplicate definitions, invalid IDs and empty scopes fail configuration validation.
 
 ## Built-in roles {#built-in-roles}
 
@@ -92,7 +92,7 @@ Related resource access is independent. A monitor permission does not grant chan
 
 ## Diagnostic access {#diagnostic-access}
 
-`diagnostics.read` is a separate monitor/group-scoped permission for potentially sensitive check output and execution expressions. It is excluded from `viewer`, `operator` and the frozen legacy `readonly` grants. `administrator` includes it. Grant it explicitly only to principals who need to inspect response content or diagnostic errors.
+`diagnostics.read` is a separate monitor/group-scoped permission for potentially sensitive check output and execution expressions. It is excluded from `viewer`, `operator` and the `readonly` shorthand. `administrator` includes it. Grant it explicitly only to principals who need to inspect response content or diagnostic errors.
 
 Raw check history, content-change details and assertion/extraction definitions require both `monitors.read` and `diagnostics.read` for the same monitor. Raw incident causes and timeline messages require both `incidents.read` and `diagnostics.read` for that incident's current monitor. The two actions are intersected; a read grant for one group and diagnostic grant for another do not combine. Diagnostic access alone grants no monitor or incident access. Incident cause searches use the same diagnostic scope before counting or paginating results.
 
@@ -110,19 +110,19 @@ Maintenance mutations require the relevant action over every old and new target.
 
 Status-page publication is independent from page administration. Assigning or reordering members, or expanding public exposure, requires monitor-read authority over all affected members. Publishing incidents additionally requires incident-read authority on those members. Metadata-only edits can preserve inaccessible memberships; analytics changes require `super_admin`. See [Status pages](status-pages.html).
 
-## Global compatibility grants and migration {#global-compatibility-grants-and-migration}
+## Direct grants and role shorthands {#direct-grants-and-role-shorthands}
 
-Existing `api_keys[].permissions` entries remain explicit global grants. They can coexist with role bindings, and their global reach is unchanged. To restrict an existing principal, move the relevant permissions into a role binding and remove the corresponding direct grants.
+`api_keys[].permissions` entries are explicit global grants. They can coexist with role bindings. To restrict a principal, move the relevant permissions into a role binding and remove the corresponding direct grants.
 
-| Legacy configuration | V2 interpretation |
+| Configuration | Meaning |
 | --- | --- |
-| `role: admin` | Converted to explicit `super_admin: true` during configuration validation. |
-| `role: readonly` | Preserves the legacy global read set listed below. It is broader than the new viewer role. |
+| `role: admin` | Shorthand for explicit `super_admin: true`. |
+| `role: readonly` | A fixed global read set, listed below. It is broader than the viewer role. |
 | `permissions: [...]` | Global action grants. A resource's write umbrella covers only that resource's mutations. |
 
-The frozen legacy readonly set is: `monitors.read`, `incidents.read`, `notifications.read`, `notification_history.read`, `escalation_policies.read`, `maintenance.read`, `groups.read`, `tags.read`, `proxies.read`, `agents.read`, `status_pages.read`, `on_call.read`, `request_logs.read`, `audit.read`, `settings.read`, `database.read`, `metrics.read` and `sla.read`. It excludes subscriber contacts. Future resources do not silently expand this set.
+The `readonly` set is: `monitors.read`, `incidents.read`, `notifications.read`, `notification_history.read`, `escalation_policies.read`, `maintenance.read`, `groups.read`, `tags.read`, `proxies.read`, `agents.read`, `status_pages.read`, `on_call.read`, `request_logs.read`, `audit.read`, `settings.read`, `database.read`, `metrics.read` and `sla.read`. It excludes subscriber contacts. Future resources do not silently expand this set.
 
-Combining the legacy `role` field with `permissions`, `role_bindings` or `super_admin` is rejected. Replace the legacy field with explicit grants instead of relying on precedence. See [Upgrading](upgrading.html) for the broader v2 permission migration and configuration backup steps.
+Combining the `role` field with `permissions`, `role_bindings` or `super_admin` is rejected. Use explicit grants instead of relying on precedence.
 
 ## Privileged configuration and credentials {#privileged-configuration-and-credentials}
 

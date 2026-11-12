@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"sync"
 
-	staticfs "github.com/y0f/asura/v2/web"
+	staticfs "github.com/y0f/asura/v3/web"
 )
 
 var (

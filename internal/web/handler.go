@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/monitor"
-	"github.com/y0f/asura/v2/internal/notifier"
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/web/views"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/monitor"
+	"github.com/y0f/asura/v3/internal/notifier"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/web/views"
 )
 
 type Handler struct {
@@ -29,6 +29,7 @@ type Handler struct {
 	cspFrameDirective  string
 	OnStatusPageChange func()
 	loginRL            *httputil.RateLimiter
+	totpKeyRL          *httputil.RateLimiter
 	totpMu             sync.Mutex
 	totpChallenges     map[string]*totpChallenge
 	revealMu           sync.Mutex
@@ -38,7 +39,17 @@ type Handler struct {
 
 func (h *Handler) Stop() {
 	close(h.done)
+	if h.totpKeyRL != nil {
+		h.totpKeyRL.Stop()
+	}
 }
+
+// TOTP failures are also limited per API key, so guesses for one key cannot be
+// spread across many client addresses: 10 failures, then one per 90 seconds.
+const (
+	totpKeyFailuresPerSec = 1.0 / 90
+	totpKeyFailureBurst   = 10
+)
 
 // New returns the web UI handler. loginRL throttles login and password form
 // attempts per client IP; it is shared with the API, and the caller owns and
@@ -57,6 +68,7 @@ func New(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeline,
 		startTime:         time.Now(),
 		cspFrameDirective: cspDirective,
 		loginRL:           loginRL,
+		totpKeyRL:         httputil.NewRateLimiter(totpKeyFailuresPerSec, totpKeyFailureBurst),
 		totpChallenges:    make(map[string]*totpChallenge),
 		done:              make(chan struct{}),
 	}

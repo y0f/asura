@@ -1,6 +1,6 @@
 // Compatibility for the previous hash-based documentation URLs.
 (() => {
-  const pages = ['home', 'getting-started', 'upgrading', 'configuration', 'access-control',
+  const pages = ['home', 'getting-started', 'configuration', 'access-control',
     'monitors', 'notifications', 'escalation-policies', 'sla', 'status-pages', 'api',
     'backup', 'deployment', 'architecture'];
   const restore = () => {

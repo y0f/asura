@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/model"
 )
 
 type workChecker struct {

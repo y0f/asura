@@ -48,7 +48,7 @@ Asura supports 19 monitor types: 17 active checks, heartbeat monitors for incomi
 
 Creation defaults for interval, timeout and consecutive-check thresholds come from the server's `monitor` configuration; the table lists its standard values. Existing monitor updates require a complete configuration, while omitted relationships preserve their current assignments; see the [update example](sla.html#setting-an-sla-target).
 
-Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps proxy-routed checks, typed authentication and mTLS settings local. Upgrade the server and agents together; v2 jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
+Agent assignment is a trust decision: eligible jobs include their target, custom request headers and bodies, which may contain credentials. Assign only agents you control. The server keeps proxy-routed checks, typed authentication and mTLS settings local. Run matching server and agent releases; jobs and results use a configuration revision to reject obsolete or revoked work. See the [agent API](api.html#agents).
 
 ## Protocol Settings {#protocol-settings}
 
@@ -154,12 +154,14 @@ mTLS is independent of the auth method and can be combined with any authenticati
 {"command": "/usr/local/bin/check_health", "args": ["--host", "db.local"]}
 ```
 
+Command and Docker checks run on the server host with the service's privileges, so only a key with `super_admin: true` can create, edit, clone or convert them; other keys can still read, pause and delete them within their scope. The executable must exactly match an entry in `monitor.command_allowlist`, which is empty (all commands blocked) by default. Arguments are passed directly without a shell. Allowlist only programs whose arguments cannot run other programs or write files.
+
 ### Docker {#docker}
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `container_name` | string | Container name or ID (overrides target if set) |
-| `socket_path` | string | Docker socket path (default: `/var/run/docker.sock`) |
+| `socket_path` | string | Docker socket path (default: `/var/run/docker.sock`); must be listed in `monitor.docker_sockets` |
 | `check_health` | bool | Use container health status instead of just running state |
 
 ```
@@ -171,6 +173,10 @@ Status mapping:
 - **up**: container running (or healthy when `check_health` is enabled)
 - **degraded**: container running, health status is `starting`
 - **down**: container stopped/exited, not found, or unhealthy
+
+A Docker check can only use a socket listed in `monitor.docker_sockets`, which defaults to `/var/run/docker.sock` alone, so a monitor cannot reach any other local socket.
+
+Access to the Docker socket is equivalent to root access on the host. Prefer a read-only socket proxy that only allows container inspection, and list its socket in `monitor.docker_sockets`.
 
 **Setup. systemd (native install):**
 
@@ -430,9 +436,8 @@ History records its source independently of the monitor's current type. Schedule
 server and agent results are probes; manual state changes remain manual observations.
 Heartbeat pings update state without adding scheduled-check samples. Changing a
 monitor's type preserves history and never turns manual state into uptime or latency
-samples. Pre-schema-41 records have an unknown source and are excluded from verified
-sample metrics. Genuine probe history remains available after later type changes,
-including a measured response time of `0` ms. See the
-[upgrade note](upgrading.html#review-historical-metrics) before migrating an existing database.
+samples. Records without a recorded source are excluded from verified sample metrics.
+Genuine probe history remains available after later type changes, including a measured
+response time of `0` ms.
 
-Legacy SLA targets on passive monitors remain stored and inactive. An unrelated edit preserves that value; clear it explicitly to remove it. When changing a scheduled monitor to a passive type, clear any active SLA target to `0` first. Custom targets, including `100`, are preserved by the form.
+An SLA target stored on a passive monitor remains stored and inactive. An unrelated edit preserves that value; clear it explicitly to remove it. When changing a scheduled monitor to a passive type, clear any active SLA target to `0` first. Custom targets, including `100`, are preserved by the form.

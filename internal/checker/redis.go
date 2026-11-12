@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/model"
-	"github.com/y0f/asura/v2/internal/safenet"
+	"github.com/y0f/asura/v3/internal/model"
+	"github.com/y0f/asura/v3/internal/safenet"
 )
 
 type RedisChecker struct {

@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // ListSubscribers requires the explicit subscribers.read scope, because

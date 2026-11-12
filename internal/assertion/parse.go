@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/y0f/asura/v2/internal/jsonutil"
+	"github.com/y0f/asura/v3/internal/jsonutil"
 )
 
 // Parse validates the complete configuration before evaluation. Invalid rules

@@ -7,7 +7,7 @@ permalink: "/deployment.html"
 
 # Deployment {#deployment}
 
-Keep the service on a private interface and put an HTTPS reverse proxy in front. The Linux installer binds to `127.0.0.1:8090`. The Docker sample listens on `0.0.0.0:8090` inside its container and publishes only to host loopback. See [getting started](getting-started.html) for installation and [upgrading](upgrading.html) before replacing an existing version.
+Keep the service on a private interface and put an HTTPS reverse proxy in front. The Linux installer binds to `127.0.0.1:8090`. The Docker sample listens on `0.0.0.0:8090` inside its container and publishes only to host loopback. See [getting started](getting-started.html) for installation.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -34,7 +34,7 @@ Provision a dedicated empty database owned by Asura's login role. The role needs
 
 Run one Asura server per database. Its persistent writer connection holds an advisory ownership lock, while separate read-only connections serve queries and consistent snapshots. A second server fails startup. Loss of the writer session or ownership stops the process instead of reconnecting silently; a configured service supervisor may then restart it. Investigate repeated ownership failures. Do not use a transaction-pooling proxy: ownership requires a persistent database session. The server uses up to `max_read_conns + 2` database connections, including its writer and ownership observer.
 
-Changing `database.driver` does not convert a SQLite file. Transfer portable configuration into the new backend with [v2 export/import](backup.html#json-configuration-export), then re-enroll imported heartbeats and review explicit agent mappings. Historical data, sessions and subscriptions are not transferred. Keep the original database, configuration and encryption key for rollback.
+Changing `database.driver` does not convert a SQLite file. Transfer portable configuration into the new backend with [export/import](backup.html#json-configuration-export), then re-enroll imported heartbeats and review explicit agent mappings. Historical data, sessions and subscriptions are not transferred. Keep the original database, configuration and encryption key for rollback.
 
 ## Configure the public address {#configure-the-public-address}
 

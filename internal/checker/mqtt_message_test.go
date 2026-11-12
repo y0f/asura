@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v3/internal/model"
 )
 
 func mqttFixturePublish(topic, payload string) []byte {

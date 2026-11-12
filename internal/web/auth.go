@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/totp"
-	"github.com/y0f/asura/v2/internal/web/views"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/totp"
+	"github.com/y0f/asura/v3/internal/web/views"
 )
 
 const sessionCookie = "asura_session"
@@ -219,7 +219,17 @@ func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	matchedCounter, ok := totp.ValidateWithCounter(secret, code, time.Now())
+	var matchedCounter uint64
+	ok, limited := h.totpKeyRL.LimitFailures("key:"+apiKey.Name, func() bool {
+		var valid bool
+		matchedCounter, valid = totp.ValidateWithCounter(secret, code, time.Now())
+		return valid
+	})
+	if limited {
+		h.auditLogin("login_totp_rate_limited", apiKey.Name, ip)
+		h.renderComponent(w, r, views.LoginPage(views.LoginParams{BasePath: h.cfg.Server.BasePath, Error: "Too many login attempts. Try again later."}))
+		return
+	}
 	if !ok {
 		h.auditLogin("login_totp_failed", apiKey.Name, ip)
 		newToken, err := h.createTOTPChallenge(apiKey.Name, apiKey.Hash, ip)

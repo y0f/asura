@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/y0f/asura/v2/internal/pageauth"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/pageauth"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 type statusPagePasswordUpgrader interface {

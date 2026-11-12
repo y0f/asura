@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/validate"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/validate"
 )
 
 var ErrEscalationChannelPermission = errors.New("notification read access is required to assign escalation channels")

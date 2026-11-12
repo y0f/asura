@@ -9,7 +9,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // The fake clock exercises the real retry interval without wall-clock delays.

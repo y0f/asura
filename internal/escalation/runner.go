@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/incident"
-	"github.com/y0f/asura/v2/internal/notifier"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/incident"
+	"github.com/y0f/asura/v3/internal/notifier"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // minRepeatInterval is the shortest pause before a repeating policy restarts

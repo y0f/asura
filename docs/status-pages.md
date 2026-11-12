@@ -54,16 +54,16 @@ Expand **Branding and access** to customise the public page. Public image loadin
 | --- | --- |
 | `logo_url` | Image above the status banner. Use HTTPS without embedded credentials, or a path starting with `/`. Protocol-relative URLs and wildcard hosts are rejected. |
 | `favicon_url` | Favicon with the same URL rules. Defaults to the Asura favicon. |
-| `custom_header_html` | Supported structural HTML, text, links and images before the banner, up to 5,000 UTF-8 bytes. Scripts, forms, event handlers and unsupported attributes are removed, including when legacy content is rendered. |
-| `custom_css` | Presentation CSS capped at 10,000 UTF-8 bytes. New saves keep allowlisted properties and remove external resources, comments, escapes and at-rules. Legacy CSS also has an HTML raw-text boundary guard when rendered. |
+| `custom_header_html` | Supported structural HTML, text, links and images before the banner, up to 5,000 UTF-8 bytes. Scripts, forms, event handlers and unsupported attributes are removed, including when stored content is rendered. |
+| `custom_css` | Presentation CSS capped at 10,000 UTF-8 bytes. New saves keep allowlisted properties and remove external resources, comments, escapes and at-rules. Stored CSS also has an HTML raw-text boundary guard when rendered. |
 | `analytics_script` | Only a super administrator may change this field. Supported external HTTPS script tags can be stored, but external script execution remains blocked by the current content policy. Inline script bodies are removed. Other editors preserve omitted or unchanged stored values. |
 
 ## Password Protection {#password-protection}
 
-Set a password under **Branding and access**. Visitors are redirected to `/{slug}/auth` and receive a 7-day `HttpOnly` cookie on success. The server enforces its expiry and binds it to the page and current password hash; resetting the password invalidates existing cookies. Branding and page contents are not rendered before successful authentication. Older status-page cookies are rejected after upgrading to v2, so visitors must sign in again.
+Set a password under **Branding and access**. Visitors are redirected to `/{slug}/auth` and receive a 7-day `HttpOnly` cookie on success. The server enforces its expiry and binds it to the page and current password hash; resetting the password invalidates existing cookies. Branding and page contents are not rendered before successful authentication.
 
 - Newly set or reset passwords use PBKDF2-HMAC-SHA256 with 600,000 iterations and a random 16-byte salt; plaintext is never stored. New passwords are limited to 1,024 UTF-8 bytes without truncation.
-- Existing lowercase SHA-256 password hashes remain valid, including legacy longer passwords. Explicitly reset a legacy password to upgrade it; login does not rewrite stored protection. Full configuration transfer preserves supported opaque hashes.
+- An unsalted SHA-256 password hash, such as one in an imported configuration, is replaced by a PBKDF2 hash of the same password on the next successful sign-in. Full configuration transfer preserves supported opaque hashes.
 - Password digests use constant-time comparison.
 - Auth attempts are rate-limited per client IP using the same limiter as admin login; wrong passwords sent to the JSON endpoint in the `X-Status-Page-Password` header count against it too
 - Leave the field blank when editing to keep the existing password unchanged
@@ -163,6 +163,14 @@ On `PUT`, omitted metadata, `password` and `monitors` preserve their current val
 Visitors can subscribe to status page updates via email or webhook. Email subscribers go through double opt-in confirmation. Webhook subscribers are confirmed immediately.
 
 Subscribers are notified when incidents are created or resolved for monitors on the status page. The subscribe widget appears when subscriptions are enabled in the server config. Setting `subscriptions.enabled: false` rejects all new web and API registrations with HTTP 503; existing subscriptions remain stored and unsubscribe links remain available. When enabled, webhook subscriptions need no SMTP configuration; email subscriptions require a working confirmation-email transport.
+
+Subscribing needs no account, so it is limited:
+
+- Web and API registrations share the per-client login attempt budget (`auth.login.rate_limit_per_sec` and `rate_limit_burst`); IPv6 clients are grouped by /64.
+- Registering an address or webhook that is already subscribed or awaiting confirmation on the page returns the normal success response without storing or sending anything, so responses do not reveal existing subscribers.
+- A page accepts at most 10,000 subscribers; further registrations return HTTP 503.
+- Email subscriptions not confirmed within 24 hours are removed by the retention pass, after which the address can subscribe again.
+- Webhook URLs must use HTTPS and, unless `allow_private_targets` is set, resolve to public addresses.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |

@@ -20,13 +20,18 @@ func TestExtractIP(t *testing.T) {
 		want        string
 	}{
 		{"direct untrusted", "1.2.3.4:1234", "", "", "", nil, "1.2.3.4"},
-		{"trusted with X-Real-IP", "127.0.0.1:1234", "", "10.0.0.1", "", []net.IPNet{*trusted}, "10.0.0.1"},
+		{"trusted with X-Real-IP only", "127.0.0.1:1234", "", "10.0.0.1", "", []net.IPNet{*trusted}, "10.0.0.1"},
 		{"trusted with XFF", "127.0.0.1:1234", "", "", "10.0.0.1, 127.0.0.1", []net.IPNet{*trusted}, "10.0.0.1"},
 		{"untrusted ignores X-Real-IP", "1.2.3.4:1234", "", "10.0.0.1", "", []net.IPNet{*trusted}, "1.2.3.4"},
-		{"X-Real-IP takes priority over XFF", "127.0.0.1:1234", "", "10.0.0.1", "192.168.1.1", []net.IPNet{*trusted}, "10.0.0.1"},
+		{"proxy-appended XFF wins over passed-through X-Real-IP", "127.0.0.1:1234", "", "6.6.6.6", "192.168.1.1", []net.IPNet{*trusted}, "192.168.1.1"},
 		{"no port in remote addr", "1.2.3.4", "", "", "", nil, "1.2.3.4"},
-		{"CF-Connecting-IP takes priority", "127.0.0.1:1234", "5.6.7.8", "10.0.0.1", "192.168.1.1", []net.IPNet{*trusted}, "5.6.7.8"},
+		{"client CF-Connecting-IP is ignored", "127.0.0.1:1234", "5.6.7.8", "", "192.168.1.1", []net.IPNet{*trusted}, "192.168.1.1"},
+		{"client CF-Connecting-IP alone is ignored", "127.0.0.1:1234", "5.6.7.8", "", "", []net.IPNet{*trusted}, "127.0.0.1"},
 		{"untrusted ignores CF-Connecting-IP", "1.2.3.4:1234", "5.6.7.8", "", "", []net.IPNet{*trusted}, "1.2.3.4"},
+		{"spoofed left XFF entries are ignored", "127.0.0.1:1234", "", "", "9.9.9.9, 8.8.4.4, 203.0.113.7", []net.IPNet{*trusted}, "203.0.113.7"},
+		{"garbage XFF cannot mint a new key", "127.0.0.1:1234", "", "", "random-123, 127.0.0.2", []net.IPNet{*trusted}, "127.0.0.2"},
+		{"all-trusted chain keeps a valid address", "127.0.0.1:1234", "", "", "127.0.0.3, 127.0.0.2", []net.IPNet{*trusted}, "127.0.0.3"},
+		{"XFF garbage only", "127.0.0.1:1234", "", "", "not-an-ip", []net.IPNet{*trusted}, "127.0.0.1"},
 	}
 
 	for _, tt := range tests {

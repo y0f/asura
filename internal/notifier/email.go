@@ -9,9 +9,11 @@ import (
 	"net"
 	"net/smtp"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/safenet"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 const (
@@ -23,11 +25,12 @@ const (
 
 // dialSMTP opens a TCP connection to a mail server with a bounded dial timeout
 // and sets a deadline on the connection covering the whole SMTP conversation,
-// because net/smtp does not honour ctx after the dial. Mail relays are
-// operator-configured and commonly run on localhost or the LAN, so private
-// addresses are not blocked here.
+// because net/smtp does not honour ctx after the dial. A dial control placed
+// in ctx (see withSMTPDialControl) restricts the destination; the
+// subscription relay from the configuration file is dialled without one.
 func dialSMTP(ctx context.Context, addr string) (net.Conn, error) {
-	d := &net.Dialer{Timeout: smtpDialTimeout}
+	control, _ := ctx.Value(smtpDialControlKey{}).(func(string, string, syscall.RawConn) error)
+	d := &net.Dialer{Timeout: smtpDialTimeout, Control: control}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
@@ -89,7 +92,31 @@ type EmailSettings struct {
 // upgrades opportunistically, as smtp.SendMail does.
 const TLSModeSTARTTLSRequired = "starttls_required"
 
-type EmailSender struct{}
+// EmailSender delivers notification-channel email. Channel hosts come from
+// API users, so private and reserved addresses are refused unless AllowPrivate
+// is set or the host is one of the operator's PrivateHosts.
+type EmailSender struct {
+	AllowPrivate bool
+	PrivateHosts []string
+}
+
+type smtpDialControlKey struct{}
+
+func withSMTPDialControl(ctx context.Context, control func(string, string, syscall.RawConn) error) context.Context {
+	return context.WithValue(ctx, smtpDialControlKey{}, control)
+}
+
+func (s *EmailSender) hostTrusted(host string) bool {
+	if s.AllowPrivate {
+		return true
+	}
+	for _, trusted := range s.PrivateHosts {
+		if strings.EqualFold(strings.TrimSuffix(trusted, "."), strings.TrimSuffix(host, ".")) {
+			return true
+		}
+	}
+	return false
+}
 
 func (s *EmailSender) Type() string { return "email" }
 
@@ -113,6 +140,10 @@ func (s *EmailSender) Send(ctx context.Context, channel *storage.NotificationCha
 		default:
 			port = 587
 		}
+	}
+
+	if !s.hostTrusted(settings.Host) {
+		ctx = withSMTPDialControl(ctx, safenet.DialControl)
 	}
 
 	subject := sanitizeHeader(FormatMessage(payload))
@@ -236,7 +267,7 @@ func buildEmailMessage(s EmailSettings, subject string, payload *Payload) []byte
 func buildHTMLBody(subject string, payload *Payload) string {
 	statusColor := "#6b7280"
 	eventLabel := payload.EventType
-	detail := subject
+	detail := html.EscapeString(subject)
 
 	if payload.Incident != nil {
 		switch payload.EventType {

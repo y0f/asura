@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/cron"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/cron"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // Standard (Vixie/POSIX) cron: when both day-of-month and day-of-week are

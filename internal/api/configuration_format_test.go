@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/validate"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/validate"
 )
 
 func transferMonitor() *storage.Monitor {
@@ -116,7 +116,7 @@ func TestConfigurationLegacyAdapterPreservesSupportedNameReferences(t *testing.T
 		t.Fatal(err)
 	}
 	legacy.MaintenanceWindows = []*storage.MaintenanceWindow{{Name: "old", MonitorIDs: []int64{1}}}
-	if _, err := legacyConfigurationSnapshot(legacy); err == nil || !strings.Contains(err.Error(), "v1 omitted monitor identities") {
+	if _, err := legacyConfigurationSnapshot(legacy); err == nil || !strings.Contains(err.Error(), "version 1 files omit monitor identities") {
 		t.Fatalf("unmappable maintenance was silently applied: %v", err)
 	}
 	legacy.MaintenanceWindows = nil

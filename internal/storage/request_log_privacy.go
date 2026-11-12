@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/y0f/asura/v2/internal/logsafe"
+	"github.com/y0f/asura/v3/internal/logsafe"
 )
 
 const requestLogPrivacyKey = "request_log_privacy_v1"

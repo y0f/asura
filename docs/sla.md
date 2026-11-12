@@ -62,7 +62,7 @@ Uptime is calculated from verified probe observations: up probes divided by all 
 
 Budget usage estimates downtime by multiplying the non-up sample fraction by elapsed time in the selected month. For the current month, elapsed time stops at now; completed months use their full duration. This is a sample-based estimate, not a reconstruction of every outage's exact duration. Paused or unobserved periods do not create synthetic healthy samples.
 
-Manual state changes and heartbeat state updates are not periodic probes and do not enter these calculations. Pre-schema-41 observations retain their history with an `unknown` source, but cannot establish verified uptime, latency or SLA values. Calculations restart with new probe observations after that migration; see [historical metrics when upgrading](upgrading.html#review-historical-metrics).
+Manual state changes and heartbeat state updates are not periodic probes and do not enter these calculations. Observations with an `unknown` source keep their history but cannot establish verified uptime, latency or SLA values.
 
 Budget comparisons use the configured decimal target and exact sample counts. Whole-second display rounding does not decide whether a budget is breached or at risk. A 100% target with no measured downtime remains healthy despite its zero allowance.
 

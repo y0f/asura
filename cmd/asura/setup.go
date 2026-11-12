@@ -9,9 +9,9 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/totp"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/totp"
 )
 
 func generateAPIKey() (key, hash string, err error) {

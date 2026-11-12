@@ -112,6 +112,7 @@ type MonitorConfig struct {
 	SuccessThreshold       int           `yaml:"success_threshold"`
 	CommandAllowlist       []string      `yaml:"command_allowlist"`
 	DockerSockets          []string      `yaml:"docker_sockets"`
+	PrivateSMTPHosts       []string      `yaml:"private_smtp_hosts"`
 	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"`
 	AllowPrivateTargets    bool          `yaml:"allow_private_targets"`
 	AdaptiveIntervals      bool          `yaml:"adaptive_intervals"`

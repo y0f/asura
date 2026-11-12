@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
+	"github.com/y0f/asura/v3/internal/httputil"
 )
 
 func (h *Handler) MonitorMetrics(w http.ResponseWriter, r *http.Request) {

@@ -7,7 +7,7 @@ permalink: "/getting-started.html"
 
 # Getting started {#getting-started}
 
-Asura runs as a Go server with an embedded web interface and SQLite storage. Choose Docker Compose, the Linux service installer, or a local source build. For an existing installation, start with [upgrading to v2](upgrading.html).
+Asura runs as a Go server with an embedded web interface and SQLite storage. Choose Docker Compose, the Linux service installer, or a local source build.
 
 <details class="contents">
 <summary>On this page</summary>
@@ -112,7 +112,7 @@ See [CONTRIBUTING.md](https://github.com/y0f/asura/blob/main/CONTRIBUTING.md) fo
 
 ## Release binaries and probe agents {#release-binaries-and-probe-agents}
 
-The v2 release workflow produces server and probe-agent binaries for Linux amd64 and arm64. Download the required binaries, `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `checksums.txt` from the same release. Keep both license files with the binaries, then verify the downloaded files:
+Each release provides server and probe-agent binaries for Linux amd64 and arm64. Download the required binaries, `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `checksums.txt` from the same release. Keep both license files with the binaries, then verify the downloaded files:
 
 ```
 sha256sum --check --ignore-missing checksums.txt
@@ -130,7 +130,7 @@ Probe agents use a separate agent token created in Asura. After enabling agent c
 
 ```
 chmod +x asura-agent-linux-amd64
-./asura-agent-linux-amd64 --server https://monitor.example.com --token YOUR_AGENT_TOKEN
+ASURA_AGENT_TOKEN=YOUR_AGENT_TOKEN ./asura-agent-linux-amd64 --server https://monitor.example.com
 ```
 
-Include the configured base path in the final server URL; agent control requests do not follow redirects. Private-network targets are denied by default; `--allow-private` enables them for a trusted probe. `--interval` defaults to `30s`, and `--concurrency` to `10`; both must be positive. Use `--version` to inspect the installed agent. See [the API reference](api.html) for agent administration.
+The agent reads its token from `ASURA_AGENT_TOKEN` or from a file given with `--token-file`, never from the command line, where other local users could read it. Include the configured base path in the final server URL; agent control requests do not follow redirects. Private-network targets are denied by default; `--allow-private` enables them for a trusted probe. `--interval` defaults to `30s`, and `--concurrency` to `10`; both must be positive. Use `--version` to inspect the installed agent. See [the API reference](api.html) for agent administration.

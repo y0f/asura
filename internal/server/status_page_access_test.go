@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func createTestStatusPage(t *testing.T, srv *Server, password string) *storage.StatusPage {

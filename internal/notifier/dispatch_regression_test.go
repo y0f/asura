@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // The SSRF guard must also block [::], which reaches localhost on Linux.
@@ -265,7 +265,7 @@ func TestEmailLegacyTLSModeSendsToPlainLocalRelay(t *testing.T) {
 			host, port, got := fakeSMTPNoStartTLS(t)
 			settings, _ := json.Marshal(EmailSettings{Host: host, Port: port, From: "a@example.com", To: []string{"b@example.com"}, TLSMode: mode})
 			ch := &storage.NotificationChannel{ID: 1, Name: "mail", Type: "email", Settings: settings}
-			if err := (&EmailSender{}).Send(context.Background(), ch, &Payload{EventType: "test"}); err != nil {
+			if err := (&EmailSender{AllowPrivate: true}).Send(context.Background(), ch, &Payload{EventType: "test"}); err != nil {
 				t.Fatalf("tls_mode %q against a plain loopback relay: %v", mode, err)
 			}
 			select {

@@ -14,7 +14,6 @@ Asura runs availability checks, records incidents and sends alerts from infrastr
 | Task | Guide |
 | --- | --- |
 | Install Asura and create your first monitor | [Getting started](getting-started.html) |
-| Upgrade an existing installation | [Upgrading to v2](upgrading.html) |
 | Define roles and restrict access | [Access control](access-control.html) |
 | Choose checks and define success conditions | [Monitors](monitors.html) |
 | Send alerts to your team | [Notifications](notifications.html) |

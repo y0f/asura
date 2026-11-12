@@ -2,8 +2,6 @@
   url: "/"
 - title: "Getting started"
   url: "/getting-started.html"
-- title: "Upgrading to v2"
-  url: "/upgrading.html"
 - title: "Configuration"
   url: "/configuration.html"
 - title: "Access control"

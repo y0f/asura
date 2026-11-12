@@ -1,4 +1,4 @@
-module github.com/y0f/asura/v2
+module github.com/y0f/asura/v3
 
 go 1.26.11
 

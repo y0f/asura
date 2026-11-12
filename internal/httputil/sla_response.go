@@ -3,7 +3,7 @@ package httputil
 import (
 	"context"
 
-	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v3/internal/sla"
 )
 
 // RedactSLAMonitorNames removes independently protected names from a newly

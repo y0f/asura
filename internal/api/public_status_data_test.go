@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func TestPublicStatusNoSamplesAreNullNotPerfectUptimeAPI(t *testing.T) {

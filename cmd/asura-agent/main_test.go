@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 var testLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -330,8 +330,8 @@ func TestAgentPostsDNSRecordsAndCheckedAt(t *testing.T) {
 func TestAgentRejectsJobsWithoutRevision(t *testing.T) {
 	for _, revision := range []int64{0, -1} {
 		_, srv := newFakeAsura(t, []job{{ID: 1, ConfigRevision: revision, Type: "http", Target: "https://example.test"}})
-		if _, err := fetchJobs(context.Background(), srv.Client(), srv.URL, "token"); err == nil || !strings.Contains(err.Error(), "upgrade") {
-			t.Fatalf("invalid revision %d did not require coordinated upgrade: %v", revision, err)
+		if _, err := fetchJobs(context.Background(), srv.Client(), srv.URL, "token"); err == nil || !strings.Contains(err.Error(), "matching server and agent releases") {
+			t.Fatalf("invalid revision %d did not require matching releases: %v", revision, err)
 		}
 	}
 }

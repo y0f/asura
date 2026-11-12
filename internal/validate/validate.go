@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/cron"
+	"github.com/y0f/asura/v3/internal/cron"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/y0f/asura/v2/internal/incident"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/incident"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 var ValidMonitorTypes = map[string]bool{

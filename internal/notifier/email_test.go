@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func TestSanitizeHeader(t *testing.T) {
@@ -282,9 +284,8 @@ func TestEmailSenderSendPlain(t *testing.T) {
 		EventType: "test",
 	}
 
-	// SMTP relays are operator-configured and commonly on loopback/LAN, so
-	// the default sender must reach 127.0.0.1 without allow_private_targets.
-	sender := &EmailSender{}
+	// A loopback relay needs allow_private_targets or a private_smtp_hosts entry.
+	sender := &EmailSender{AllowPrivate: true}
 	if err := sender.Send(context.Background(), ch, payload); err != nil {
 		t.Fatalf("Send() error: %v", err)
 	}
@@ -305,7 +306,7 @@ func TestEmailSenderInvalidSettings(t *testing.T) {
 	ch := &storage.NotificationChannel{
 		Settings: []byte("not json"),
 	}
-	sender := &EmailSender{}
+	sender := &EmailSender{AllowPrivate: true}
 	err := sender.Send(nil, ch, &Payload{EventType: "test"})
 	if err == nil {
 		t.Fatal("expected error for invalid settings JSON")
@@ -324,11 +325,61 @@ func TestEmailSenderMissingRequired(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			b, _ := json.Marshal(tc.settings)
 			ch := &storage.NotificationChannel{Settings: b}
-			sender := &EmailSender{}
+			sender := &EmailSender{AllowPrivate: true}
 			err := sender.Send(nil, ch, &Payload{EventType: "test"})
 			if err == nil {
 				t.Fatal("expected error for missing required field")
 			}
 		})
+	}
+}
+
+// Channel SMTP hosts come from API users: a private relay is reachable only
+// when the operator allows it, so a channel cannot probe internal services.
+func TestEmailSenderBlocksPrivateHostsUnlessTrusted(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	accepted := make(chan struct{}, 1)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			accepted <- struct{}{}
+			conn.Close()
+		}
+	}()
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	portNum, _ := strconv.Atoi(port)
+	settings, _ := json.Marshal(EmailSettings{Host: "127.0.0.1", Port: portNum, From: "a@example.com", To: []string{"b@example.com"}, TLSMode: "none"})
+	ch := &storage.NotificationChannel{ID: 1, Type: "email", Settings: settings}
+
+	err = (&EmailSender{}).Send(context.Background(), ch, &Payload{EventType: "test"})
+	if err == nil || !strings.Contains(err.Error(), "private/reserved") {
+		t.Fatalf("private SMTP host was not blocked: %v", err)
+	}
+	select {
+	case <-accepted:
+		t.Fatal("a blocked SMTP host still received a connection")
+	default:
+	}
+	// The operator's trusted relay is reached (the fake server hangs up, so
+	// delivery itself fails after connecting).
+	(&EmailSender{PrivateHosts: []string{"127.0.0.1"}}).Send(context.Background(), ch, &Payload{EventType: "test"})
+	select {
+	case <-accepted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a trusted private SMTP host was not contacted")
+	}
+}
+
+func TestEmailHTMLBodyEscapesSubjectFallback(t *testing.T) {
+	body := buildHTMLBody(`<img src=x onerror=alert(1)>`, &Payload{EventType: "custom"})
+	if strings.Contains(body, "<img") || !strings.Contains(body, "&lt;img") {
+		t.Fatalf("subject fallback was not escaped: %s", body)
 	}
 }

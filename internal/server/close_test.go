@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/notifier"
+	"github.com/y0f/asura/v3/internal/notifier"
 )
 
 // Close stops the goroutines NewServer starts (rate limiter cleanups,

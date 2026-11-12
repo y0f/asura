@@ -3,7 +3,7 @@ package views
 import (
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v3/internal/sla"
 )
 
 func TestSLAStatesUseSamplesAndExactRiskDecision(t *testing.T) {

@@ -3,8 +3,8 @@ package httputil
 import (
 	"context"
 
-	"github.com/y0f/asura/v2/internal/redact"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/redact"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // IncidentReadResponse preserves incident data without exposing independently

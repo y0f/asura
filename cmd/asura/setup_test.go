@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/config"
+	"github.com/y0f/asura/v3/internal/config"
 )
 
 // With database.encryption_key set, --setup-totp must store the TOTP secret

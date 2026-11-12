@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )

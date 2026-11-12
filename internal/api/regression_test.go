@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/incident"
-	"github.com/y0f/asura/v2/internal/monitor"
-	"github.com/y0f/asura/v2/internal/notifier"
-	"github.com/y0f/asura/v2/internal/server"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/incident"
+	"github.com/y0f/asura/v3/internal/monitor"
+	"github.com/y0f/asura/v3/internal/notifier"
+	"github.com/y0f/asura/v3/internal/server"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 const testAdminKey = "regression-admin-key"

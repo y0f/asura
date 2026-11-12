@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/logsafe"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/logsafe"
 )
 
 func recovery(logger *slog.Logger) func(http.Handler) http.Handler {

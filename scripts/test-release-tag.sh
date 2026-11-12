@@ -12,20 +12,20 @@ accept() {
     checks=$((checks + 1))
 }
 
-accept v2.0.0 2.0.0 2.0 false
-accept v2.3.10 2.3.10 2.3 false
-accept v2.0.0-rc.1 2.0.0-rc.1 2.0 true
-accept v2.0.0-0 2.0.0-0 2.0 true
-accept v2.0.0-01a 2.0.0-01a 2.0 true
-accept v2.0.0-x-y-z.-- 2.0.0-x-y-z.-- 2.0 true
-accept v2.0.0+build.001 2.0.0_build.001 2.0 false
-accept v2.0.0-beta.1+build.001 2.0.0-beta.1_build.001 2.0 true
+accept v3.0.0 3.0.0 3.0 false
+accept v3.3.10 3.3.10 3.3 false
+accept v3.0.0-rc.1 3.0.0-rc.1 3.0 true
+accept v3.0.0-0 3.0.0-0 3.0 true
+accept v3.0.0-01a 3.0.0-01a 3.0 true
+accept v3.0.0-x-y-z.-- 3.0.0-x-y-z.-- 3.0 true
+accept v3.0.0+build.001 3.0.0_build.001 3.0 false
+accept v3.0.0-beta.1+build.001 3.0.0-beta.1_build.001 3.0 true
 metadata=$(printf '%0122d' 0)
-accept "v2.0.0+$metadata" "2.0.0_$metadata" 2.0 false
+accept "v3.0.0+$metadata" "3.0.0_$metadata" 3.0 false
 
-for tag in '' vnext 2.0.0 v0.0.0 v1.9.9 v3.0.0 v20.0.0 v2 v2.0 v02.0.0 v2.00.0 v2.0.00 v2.0.0-01 v2.0.0-a.01 \
-    v2.0.0- v2.0.0-a..b v2.0.0-a. v2.0.0+ v2.0.0+b..c v2.0.0+b. \
-    v2.0.0-a_b v2.0.0++b 'v2.0.0$(false)' $'v2.0.0\n' "v2.0.0+$(printf '%0123d' 0)"; do
+for tag in '' vnext 3.0.0 v0.0.0 v2.9.9 v4.0.0 v30.0.0 v3 v3.0 v03.0.0 v3.00.0 v3.0.00 v3.0.0-01 v3.0.0-a.01 \
+    v3.0.0- v3.0.0-a..b v3.0.0-a. v3.0.0+ v3.0.0+b..c v3.0.0+b. \
+    v3.0.0-a_b v3.0.0++b 'v3.0.0$(false)' $'v3.0.0\n' "v3.0.0+$(printf '%0123d' 0)"; do
     if bash "$script" "$tag" >/dev/null 2>&1; then
         echo "Invalid release tag accepted: $tag" >&2; exit 1
     fi

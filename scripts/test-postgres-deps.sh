@@ -9,7 +9,7 @@ if printf '%s\n' "$dependencies" | grep -E '^github\.com/jackc/'; then
 fi
 
 dependencies=$(go list -tags postgres -deps ./cmd/asura-agent)
-if printf '%s\n' "$dependencies" | grep -E '^(database/sql($|/)|github\.com/y0f/asura/v2/internal/storage($|/)|modernc\.org/|github\.com/jackc/)'; then
+if printf '%s\n' "$dependencies" | grep -E '^(database/sql($|/)|github\.com/y0f/asura/v3/internal/storage($|/)|modernc\.org/|github\.com/jackc/)'; then
     echo "Probe agent must stay independent of both database backends" >&2
     exit 1
 fi

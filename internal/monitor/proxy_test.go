@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func TestSchedulerProxyIPv6AndUnavailableFailClosed(t *testing.T) {

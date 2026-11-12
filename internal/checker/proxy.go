@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/net/proxy"
 
-	"github.com/y0f/asura/v2/internal/model"
-	"github.com/y0f/asura/v2/internal/safenet"
+	"github.com/y0f/asura/v3/internal/model"
+	"github.com/y0f/asura/v3/internal/safenet"
 )
 
 func validateMonitorProxy(m *model.Monitor) error {
@@ -118,7 +118,7 @@ func validateProxyTarget(ctx context.Context, addr string, allowPrivate bool) er
 	if err != nil {
 		// Names only the proxy can resolve (split DNS) are not addresses in
 		// Asura's network, which is all this check protects: let the proxy
-		// resolve them, as v1.3.0 did.
+		// resolve them.
 		return nil
 	}
 	for _, ip := range ips {

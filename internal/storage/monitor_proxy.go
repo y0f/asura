@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v3/internal/model"
 )
 
 var ErrInvalidMonitorProxy = errors.New("the proxy protocol is incompatible with the monitor configuration; DNS proxies require an explicit DNS server")

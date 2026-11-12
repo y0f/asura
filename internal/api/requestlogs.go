@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func (h *Handler) ListRequestLogs(w http.ResponseWriter, r *http.Request) {

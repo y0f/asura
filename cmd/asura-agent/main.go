@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/model"
 )
 
 var version = "dev"
@@ -399,7 +399,7 @@ func decodeJobs(body io.Reader, limit int64) ([]job, error) {
 	seen := make(map[int64]struct{}, len(response.Jobs))
 	for _, j := range response.Jobs {
 		if j.ID <= 0 || j.ConfigRevision <= 0 {
-			return nil, fmt.Errorf("job has no valid configuration revision; upgrade the server and agent together to v2")
+			return nil, fmt.Errorf("job has no valid configuration revision; run matching server and agent releases")
 		}
 		if _, exists := seen[j.ID]; exists {
 			return nil, fmt.Errorf("duplicate job for monitor %d", j.ID)

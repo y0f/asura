@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/sla"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/sla"
 )
 
 func (h *Handler) MonitorSLA(w http.ResponseWriter, r *http.Request) {

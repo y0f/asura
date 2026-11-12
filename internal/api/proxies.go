@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func (h *Handler) ListProxies(w http.ResponseWriter, r *http.Request) {

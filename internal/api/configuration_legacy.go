@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // v1 used names for most relationships and omitted monitor IDs entirely. Give
@@ -14,7 +14,7 @@ func legacyConfigurationSnapshot(file *ExportData) (*storage.ConfigurationSnapsh
 	groups, proxies, channels, monitors, tags, agents := map[string]int64{}, map[string]int64{}, map[string]int64{}, map[string]int64{}, map[string]int64{}, map[string]int64{}
 	addName := func(index map[string]int64, name, kind string) (int64, error) {
 		if _, exists := index[name]; exists {
-			return 0, fmt.Errorf("v1 contains ambiguous %s names; export v2 from the source instead", kind)
+			return 0, fmt.Errorf("v1 contains ambiguous %s names; export the configuration again from the source instead", kind)
 		}
 		id := int64(len(index) + 1)
 		index[name] = id
@@ -121,7 +121,7 @@ func legacyConfigurationSnapshot(file *ExportData) (*storage.ConfigurationSnapsh
 			return nil, fmt.Errorf("v1 maintenance window must not be null")
 		}
 		if len(mw.MonitorIDs) != 0 {
-			return nil, fmt.Errorf("v1 maintenance monitor IDs cannot be mapped safely because v1 omitted monitor identities; export v2 from the source or restore the full database backup")
+			return nil, fmt.Errorf("v1 maintenance monitor IDs cannot be mapped safely because version 1 files omit monitor identities; export the configuration again from the source or restore the full database backup")
 		}
 		c.Maintenance = append(c.Maintenance, &storage.MaintenanceWindow{ID: int64(i + 1), Name: mw.Name, StartTime: mw.StartTime, EndTime: mw.EndTime, Recurring: mw.Recurring, CronExpr: mw.CronExpr, Active: mw.Active})
 	}

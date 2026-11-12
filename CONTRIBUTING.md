@@ -104,7 +104,7 @@ Dependency or toolchain changes require reviewing the applicable upstream licens
 
 CI scans source on both supported Go patches and all four release binaries with pinned govulncheck. Release tags publish only after reusable CI passes. Publication generates GitHub build attestations for the release files and image digest; container builds also request BuildKit provenance. Action revisions, Go patches, base-image digests and the Tailwind checksum are pinned, but hosted runners and package repositories can change: these controls do not establish reproducible builds or a SLSA level. Local `make release` neither publishes nor signs artifacts.
 
-Release tags must be valid `v`-prefixed semantic versions matching the Go module's major version, such as `v2.0.0` or `v2.0.0-rc.1` for `github.com/y0f/asura/v2`. Prereleases are marked as such on GitHub and publish only their full container version tag; stable releases also update `major.minor` and `latest`. Build metadata is retained in image tags with `+` replaced by `_`, and container tags must fit the 128-character limit. Missing listed release artifacts fail publication.
+Release tags must be valid `v`-prefixed semantic versions matching the Go module's major version, such as `v3.0.0` or `v3.0.0-rc.1` for `github.com/y0f/asura/v3`. Prereleases are marked as such on GitHub and publish only their full container version tag; stable releases also update `major.minor` and `latest`. Build metadata is retained in image tags with `+` replaced by `_`, and container tags must fit the 128-character limit. Missing listed release artifacts fail publication.
 
 ## Ownership and parallel work
 

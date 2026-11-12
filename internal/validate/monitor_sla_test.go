@@ -3,7 +3,7 @@ package validate
 import (
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/model"
+	"github.com/y0f/asura/v3/internal/model"
 )
 
 func TestPassiveSLATargetChangesPreserveOnlyExistingInactiveValues(t *testing.T) {

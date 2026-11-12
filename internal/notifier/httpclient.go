@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/safenet"
+	"github.com/y0f/asura/v3/internal/safenet"
 )
 
 // Two shared clients (private targets blocked / allowed) so senders reuse

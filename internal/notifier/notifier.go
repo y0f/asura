@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/redact"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/redact"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // Sender implementations must honor context cancellation. RegisterSender is
@@ -48,7 +48,7 @@ func NewDispatcher(store storage.Store, logger *slog.Logger, allowPrivateTargets
 	d := &Dispatcher{store: store, senders: make(map[string]Sender), logger: logger,
 		queue: newDeliveryQueue(), attemptTimeout: defaultAttemptTimeout, baseBackoff: defaultBaseBackoff}
 	d.RegisterSender(&WebhookSender{AllowPrivate: allowPrivateTargets})
-	d.RegisterSender(&EmailSender{})
+	d.RegisterSender(&EmailSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&TelegramSender{})
 	d.RegisterSender(&DiscordSender{AllowPrivate: allowPrivateTargets})
 	d.RegisterSender(&SlackSender{AllowPrivate: allowPrivateTargets})

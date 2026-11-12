@@ -3,8 +3,8 @@ package views
 import (
 	"encoding/json"
 
-	"github.com/y0f/asura/v2/internal/redact"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/redact"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // Stored credentials are never written back into HTML. Edit forms render

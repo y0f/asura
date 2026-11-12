@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/escalation"
-	"github.com/y0f/asura/v2/internal/incident"
-	"github.com/y0f/asura/v2/internal/monitor"
-	"github.com/y0f/asura/v2/internal/notifier"
-	"github.com/y0f/asura/v2/internal/server"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/escalation"
+	"github.com/y0f/asura/v3/internal/incident"
+	"github.com/y0f/asura/v3/internal/monitor"
+	"github.com/y0f/asura/v3/internal/notifier"
+	"github.com/y0f/asura/v3/internal/server"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 var version = "dev"
@@ -125,6 +125,7 @@ func main() {
 	incMgr := incident.NewManager(store, logger)
 	pipeline := monitor.NewPipeline(store, registry, incMgr, cfg.Monitor.Workers, cfg.Monitor.AdaptiveIntervals, logger)
 	dispatcher := notifier.NewDispatcher(store, logger, cfg.Monitor.AllowPrivateTargets)
+	dispatcher.RegisterSender(&notifier.EmailSender{AllowPrivate: cfg.Monitor.AllowPrivateTargets, PrivateHosts: cfg.Monitor.PrivateSMTPHosts})
 
 	var subNotifier *notifier.SubscriberNotifier
 	if cfg.Subscriptions.Enabled {

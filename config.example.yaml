@@ -72,15 +72,16 @@ database:
   # How often to run the retention cleanup
   retention_period: 1h
 
-  # Encryption key for secrets at rest (notification tokens, proxy passwords).
-  # If set, secrets are AES-256-GCM encrypted in the database.
+  # Encryption key for secrets at rest (notification tokens, proxy passwords,
+  # TOTP secrets). Secrets are AES-256-GCM encrypted in the database.
+  # Generate one with: asura --setup. Back it up separately from the database.
   # Existing unencrypted data is read transparently and encrypted on next write.
-  # encryption_key: "your-secret-key-here"
+  encryption_key: "${ASURA_ENCRYPTION_KEY}"
 
 auth:
   # API keys for authentication.
   # Generate a key+hash pair: asura --setup
-  # Or hash an existing key:  asura --hash-key "your-key"
+  # Or hash an existing random key (32+ characters): asura --hash-key "your-key"
   api_keys:
     - name: "admin"
       hash: "${ASURA_ADMIN_KEY_HASH}"
@@ -142,6 +143,17 @@ monitor:
   # command_allowlist:
   #   - /usr/local/bin/check_health
   #   - /opt/scripts/verify
+
+  # Command and Docker monitors run on this host; only super admins can create
+  # or edit them. Docker monitors may use only these sockets (default below).
+  # Docker socket access is root-equivalent; prefer a read-only socket proxy.
+  # docker_sockets:
+  #   - /var/run/docker.sock
+
+  # Email notification channels may reach private relays only when listed here
+  # (or when allow_private_targets is true).
+  # private_smtp_hosts:
+  #   - localhost
 
 # Status page subscriptions (email + webhook)
 # Allows public status page visitors to subscribe to incident updates.

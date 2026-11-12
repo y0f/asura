@@ -58,7 +58,7 @@ For a production restore, stop Asura first and preserve the current database and
 
 ## JSON configuration export {#json-configuration-export}
 
-Settings offers full and redacted v2 exports. Both require `super_admin: true`; ordinary resource permissions do not grant configuration transfer access. IDs in an export belong to that file. Import resolves their relationships to the destination's IDs.
+Settings offers full and redacted exports. Both require `super_admin: true`; ordinary resource permissions do not grant configuration transfer access. IDs in an export belong to that file. Import resolves their relationships to the destination's IDs.
 
 | Resource | Portable configuration |
 | --- | --- |
@@ -108,6 +108,3 @@ Each newly imported heartbeat monitor receives a fresh credential. The web impor
 
 Agent references resolve to already enrolled destination agents with unique matching names, or to an explicit source-to-destination `agent_mapping` supplied with the import; see [configuration transfer](api.html#export-import) for the request format. Import never creates or enables agents or transfers agent tokens. Review every mapping: assignment delegates eligible monitor data to that agent.
 
-### Older export files {#older-export-files}
-
-V1 files can resolve the name-based relationships they contain. V1 maintenance selections with numeric monitor IDs are rejected because those files did not include the monitor IDs needed to translate the selections safely. Review and recreate those selections explicitly, or export v2 configuration from an upgraded copy of the original database.

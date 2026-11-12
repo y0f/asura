@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/sla"
-	"github.com/y0f/asura/v2/internal/web/views"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/sla"
+	"github.com/y0f/asura/v3/internal/web/views"
 )
 
 func (h *Handler) SLAReport(w http.ResponseWriter, r *http.Request) {

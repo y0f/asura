@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/assertion"
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/redact"
-	"github.com/y0f/asura/v2/internal/sla"
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/validate"
-	"github.com/y0f/asura/v2/internal/web/views"
+	"github.com/y0f/asura/v3/internal/assertion"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/redact"
+	"github.com/y0f/asura/v3/internal/sla"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/validate"
+	"github.com/y0f/asura/v3/internal/web/views"
 )
 
 type headerPair struct {

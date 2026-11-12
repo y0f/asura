@@ -76,10 +76,9 @@ WAL permits concurrent readers and a writer, subject to SQLite locking and check
 
 The server records observation provenance when persisting a check or passive state
 update. Hourly and daily rollup keys include that provenance, so a manual state change
-cannot contribute to probe uptime or latency even after a monitor changes type. Legacy
-observations retain an `unknown` source and their original data; only verified probes
-feed sample metrics and anomaly baselines. See [upgrading](upgrading.html#review-historical-metrics)
-for the effect on existing dashboards and reports.
+cannot contribute to probe uptime or latency even after a monitor changes type.
+Observations without a recorded source keep an `unknown` source and their original
+data; only verified probes feed sample metrics and anomaly baselines.
 
 The optional `postgres` build adds pgx and an independently authored PostgreSQL schema. Shared queries use explicit dialect fragments and positional binding; runtime code does not translate SQLite DDL. PostgreSQL keeps one writer, read-only repeatable-read snapshots and a separate ownership observer. Its session lock prevents multiple active Asura servers using the same database. The default binary does not link pgx, and probe agents link neither database backend. See [PostgreSQL deployment](deployment.html#optional-postgresql-build) for setup and operational boundaries.
 

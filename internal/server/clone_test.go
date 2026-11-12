@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func cloneRequest(t *testing.T, srv *Server, key string, id int64) *httptest.ResponseRecorder {

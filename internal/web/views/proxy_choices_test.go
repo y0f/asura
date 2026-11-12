@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func TestProxyChoicesRetainInvalidSelectionForCorrection(t *testing.T) {

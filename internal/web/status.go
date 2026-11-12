@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/httputil"
-	"github.com/y0f/asura/v2/internal/pageauth"
-	"github.com/y0f/asura/v2/internal/storage"
-	"github.com/y0f/asura/v2/internal/web/views"
+	"github.com/y0f/asura/v3/internal/httputil"
+	"github.com/y0f/asura/v3/internal/pageauth"
+	"github.com/y0f/asura/v3/internal/storage"
+	"github.com/y0f/asura/v3/internal/web/views"
 )
 
 func (h *Handler) checkStatusPageAuth(r *http.Request, pageID int64, passwordHash string) bool {

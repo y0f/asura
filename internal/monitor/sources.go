@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/assertion"
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/assertion"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 // A monitor can be checked from several locations: the local worker and any

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 type rssChannel struct {

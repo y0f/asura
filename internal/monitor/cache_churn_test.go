@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/y0f/asura/v2/internal/checker"
-	"github.com/y0f/asura/v2/internal/incident"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/checker"
+	"github.com/y0f/asura/v3/internal/incident"
+	"github.com/y0f/asura/v3/internal/storage"
 )
 
 func assertMonitorCaches(t *testing.T, p *Pipeline, id int64, present bool) {

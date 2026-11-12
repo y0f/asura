@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/y0f/asura/v2/internal/config"
-	"github.com/y0f/asura/v2/internal/storage"
+	"github.com/y0f/asura/v3/internal/config"
+	"github.com/y0f/asura/v3/internal/storage"
 	"golang.org/x/time/rate"
 )
 
@@ -99,6 +99,13 @@ func ParseID(r *http.Request) (int64, error) {
 	return id, nil
 }
 
+// ExtractIP returns the client address for rate limiting, logs and audit.
+// Forwarding headers are honoured only from a trusted proxy. The proxy
+// appends the address it received the request from to X-Forwarded-For, so
+// the list is walked from the right past trusted proxies; entries further left
+// are client-supplied and never used. X-Real-IP is used only when no
+// X-Forwarded-For is present. Vendor headers such as CF-Connecting-IP are
+// ignored because ordinary proxies pass them through from the client.
 func ExtractIP(r *http.Request, trustedNets []net.IPNet) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -110,33 +117,27 @@ func ExtractIP(r *http.Request, trustedNets []net.IPNet) string {
 		return host
 	}
 
-	if cfIP := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cfIP != "" {
-		if net.ParseIP(cfIP) != nil {
-			return cfIP
-		}
-	}
-
-	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
-		if net.ParseIP(realIP) != nil {
-			return realIP
-		}
-	}
-
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
+	if values := r.Header.Values("X-Forwarded-For"); len(values) > 0 {
+		client := host
+		parts := strings.Split(strings.Join(values, ","), ",")
 		for i := len(parts) - 1; i >= 0; i-- {
-			ip := strings.TrimSpace(parts[i])
-			parsed := net.ParseIP(ip)
+			parsed := net.ParseIP(strings.TrimSpace(parts[i]))
 			if parsed == nil {
-				continue
+				// A trusted proxy only appends valid addresses; anything else
+				// came from the client. Keep the last address a proxy vouched for.
+				return client
 			}
+			client = parsed.String()
 			if !IsTrusted(parsed, trustedNets) {
-				return ip
+				return client
 			}
 		}
-		return strings.TrimSpace(parts[0])
+		return client
 	}
 
+	if realIP := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); realIP != nil {
+		return realIP.String()
+	}
 	return host
 }
 
