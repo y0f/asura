@@ -22,9 +22,15 @@ func TestMonitorPrivateFieldsCreateReadUpdateAndClone(t *testing.T) {
 		{"command", "command", `{"command":"/usr/bin/check","args":["private-argument"]}`},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
+			// Host-local monitors are written only by a super admin; the
+			// scoped editor still reads them and must never see private fields.
+			writer := editor
+			if tc.kind == "command" {
+				writer = admin
+			}
 			request := map[string]any{"name": tc.kind, "type": tc.kind, "target": tc.target, "interval": 60, "timeout": 10, "settings": json.RawMessage(tc.settings)}
 			body, _ := json.Marshal(request)
-			w := env.do("POST", "/api/v1/monitors", string(body), editor)
+			w := env.do("POST", "/api/v1/monitors", string(body), writer)
 			var created storage.Monitor
 			if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil || w.Code != 201 || strings.Contains(w.Body.String(), "private-") {
 				t.Fatalf("create response leaked or failed: %d %s", w.Code, w.Body)
@@ -40,7 +46,7 @@ func TestMonitorPrivateFieldsCreateReadUpdateAndClone(t *testing.T) {
 			}
 			edit["name"] = "renamed " + tc.kind
 			body, _ = json.Marshal(edit)
-			w = env.do("PUT", path, string(body), editor)
+			w = env.do("PUT", path, string(body), writer)
 			if w.Code != 200 || strings.Contains(w.Body.String(), "private-") {
 				t.Fatalf("redacted read/edit failed or leaked: %d %s", w.Code, w.Body)
 			}
@@ -48,7 +54,7 @@ func TestMonitorPrivateFieldsCreateReadUpdateAndClone(t *testing.T) {
 			if err != nil || stored.Target != tc.target || !strings.Contains(string(stored.Settings), "private-") {
 				t.Fatalf("redacted edit lost private configuration: %v", err)
 			}
-			w = env.do("POST", path+"/clone", "", editor)
+			w = env.do("POST", path+"/clone", "", writer)
 			if w.Code != 201 || strings.Contains(w.Body.String(), "private-") {
 				t.Fatalf("clone failed or disclosed copied secrets: %d %s", w.Code, w.Body)
 			}

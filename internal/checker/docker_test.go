@@ -38,7 +38,7 @@ func TestDockerCheckerRunning(t *testing.T) {
 	}))
 
 	settings, _ := json.Marshal(storage.DockerSettings{SocketPath: sock})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "test-container",
 		Timeout:  5,
@@ -65,7 +65,7 @@ func TestDockerCheckerStopped(t *testing.T) {
 	}))
 
 	settings, _ := json.Marshal(storage.DockerSettings{SocketPath: sock})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "stopped-container",
 		Timeout:  5,
@@ -88,7 +88,7 @@ func TestDockerCheckerNotFound(t *testing.T) {
 	}))
 
 	settings, _ := json.Marshal(storage.DockerSettings{SocketPath: sock})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "missing",
 		Timeout:  5,
@@ -118,7 +118,7 @@ func TestDockerCheckerHealthy(t *testing.T) {
 		SocketPath:  sock,
 		CheckHealth: true,
 	})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "healthy-app",
 		Timeout:  5,
@@ -145,7 +145,7 @@ func TestDockerCheckerUnhealthy(t *testing.T) {
 		SocketPath:  sock,
 		CheckHealth: true,
 	})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "unhealthy-app",
 		Timeout:  5,
@@ -172,7 +172,7 @@ func TestDockerCheckerHealthStarting(t *testing.T) {
 		SocketPath:  sock,
 		CheckHealth: true,
 	})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "starting-app",
 		Timeout:  5,
@@ -201,7 +201,7 @@ func TestDockerCheckerContainerNameFromSettings(t *testing.T) {
 		SocketPath:    sock,
 		ContainerName: "from-settings",
 	})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "from-target",
 		Timeout:  5,
@@ -221,7 +221,7 @@ func TestDockerCheckerContainerNameFromSettings(t *testing.T) {
 }
 
 func TestDockerCheckerConnectionFailed(t *testing.T) {
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{"/nonexistent/docker.sock"}}
 	settings, _ := json.Marshal(storage.DockerSettings{
 		SocketPath: "/nonexistent/docker.sock",
 	})
@@ -248,7 +248,7 @@ func TestDockerCheckerMalformedJSON(t *testing.T) {
 	}))
 
 	settings, _ := json.Marshal(storage.DockerSettings{SocketPath: sock})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "bad-response",
 		Timeout:  5,
@@ -275,7 +275,7 @@ func TestDockerCheckerNoHealthIgnored(t *testing.T) {
 		SocketPath:  sock,
 		CheckHealth: true,
 	})
-	c := &DockerChecker{}
+	c := &DockerChecker{Sockets: []string{sock}}
 	mon := &storage.Monitor{
 		Target:   "no-healthcheck",
 		Timeout:  5,
@@ -288,5 +288,32 @@ func TestDockerCheckerNoHealthIgnored(t *testing.T) {
 	}
 	if result.Status != "up" {
 		t.Errorf("status = %q, want up (no healthcheck configured = running is fine)", result.Status)
+	}
+}
+
+// A monitor must not reach a local socket the operator did not allow, even
+// one that answers like the Docker API.
+func TestDockerCheckerRejectsSocketOutsideAllowlist(t *testing.T) {
+	requests := 0
+	sock := dockerTestSocket(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Write([]byte(`{"State":{"Status":"running","Running":true}}`))
+	}))
+	settings, _ := json.Marshal(storage.DockerSettings{SocketPath: sock})
+	mon := &storage.Monitor{Target: "test-container", Timeout: 5, Settings: settings}
+	for name, c := range map[string]*DockerChecker{
+		"default allowlist": {},
+		"other socket":      {Sockets: []string{"/var/run/docker.sock"}},
+	} {
+		result, err := c.Check(context.Background(), mon)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Status != "down" || result.Message != "docker socket not allowed: add it to monitor.docker_sockets" {
+			t.Errorf("%s: got %q %q, want the socket rejected", name, result.Status, result.Message)
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("a disallowed socket received %d requests", requests)
 	}
 }

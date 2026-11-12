@@ -137,6 +137,12 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 	if !h.requireStatusPageAuth(w, r, sp) {
 		return
 	}
+	// Subscribing is unauthenticated and can send email, so it shares the
+	// login attempt budget like the web form does.
+	if !h.loginRL.Allow(httputil.ExtractIP(r, h.cfg.TrustedNets())) {
+		writeError(w, http.StatusTooManyRequests, "too many requests")
+		return
+	}
 
 	var req httputil.SubscriptionInput
 	if err := h.readJSON(r, &req); err != nil {
@@ -160,9 +166,17 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 	sp, err = h.store.CreatePublicStatusPageSubscriber(r.Context(), sub, storage.PublicStatusPageAccess{
 		ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageAPISubscription,
 	})
+	if errors.Is(err, storage.ErrSubscriberExists) {
+		writeJSON(w, http.StatusCreated, map[string]string{"status": subscribeStatus(req.Type)})
+		return
+	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "status page not found")
+			return
+		}
+		if errors.Is(err, storage.ErrSubscriberLimit) {
+			writeError(w, http.StatusServiceUnavailable, "this status page is not accepting new subscribers")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to create subscription")
@@ -187,7 +201,14 @@ func (h *Handler) SubscribeAPI(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusServiceUnavailable, "confirmation email unavailable; try again later")
 			return
 		}
-		msg = "confirmation email queued"
+		msg = subscribeStatus(req.Type)
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"status": msg})
+}
+
+func subscribeStatus(subscriptionType string) string {
+	if subscriptionType == "email" {
+		return "confirmation email queued"
+	}
+	return "subscribed"
 }

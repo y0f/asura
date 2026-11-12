@@ -59,10 +59,11 @@ docker compose build
 docker compose run --rm --no-deps asura --setup
 ```
 
-Save the generated **API Key** and put its **Hash** in a local `.env` file:
+Save the generated **API Key**. Put its **Hash** and **Encryption Key** in a local `.env` file, and back up the encryption key separately:
 
 ```dotenv
 ASURA_ADMIN_KEY_HASH=your_generated_hash
+ASURA_ENCRYPTION_KEY=your_generated_encryption_key
 ```
 
 ```bash

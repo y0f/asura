@@ -195,7 +195,11 @@ else
     SETUP_OUTPUT=$("${INSTALL_DIR}/asura" -setup)
     ADMIN_KEY=$(echo "$SETUP_OUTPUT" | grep 'API Key' | awk '{print $NF}')
     ADMIN_HASH=$(echo "$SETUP_OUTPUT" | grep 'Hash' | awk '{print $NF}')
+    ENCRYPTION_KEY=$(echo "$SETUP_OUTPUT" | grep 'Encryption Key' | awk '{print $NF}')
+    [[ "$ADMIN_HASH" =~ ^[0-9a-f]{64}$ && "$ENCRYPTION_KEY" =~ ^[0-9a-f]{64}$ ]] || error "Could not generate credentials"
 
+    # The config holds the encryption key: never let it exist with wider permissions.
+    install -m 640 -o root -g "$SERVICE_USER" /dev/null "${CONFIG_DIR}/config.yaml"
     cat > "${CONFIG_DIR}/config.yaml" <<'YAML'
 server:
   listen: "127.0.0.1:8090"
@@ -221,6 +225,9 @@ database:
   max_read_conns: 4
   retention_days: 90
   retention_period: 1h
+  # Encrypts stored credentials and TOTP secrets. Back it up separately from
+  # the database: without it, encrypted values cannot be read.
+  encryption_key: "PLACEHOLDER_ENCRYPTION_KEY"
 
 auth:
   api_keys:
@@ -245,9 +252,7 @@ YAML
 
     sed -i "s|PLACEHOLDER_DATA_DIR|${DATA_DIR}|g" "${CONFIG_DIR}/config.yaml"
     sed -i "s|PLACEHOLDER_HASH|${ADMIN_HASH}|g" "${CONFIG_DIR}/config.yaml"
-
-    chmod 640 "${CONFIG_DIR}/config.yaml"
-    chown root:"$SERVICE_USER" "${CONFIG_DIR}/config.yaml"
+    sed -i "s|PLACEHOLDER_ENCRYPTION_KEY|${ENCRYPTION_KEY}|g" "${CONFIG_DIR}/config.yaml"
     info "Config written to ${CONFIG_DIR}/config.yaml"
 fi
 
@@ -278,5 +283,6 @@ echo "  IMPORTANT: Asura binds to 127.0.0.1 by default (not exposed)."
 echo "  Set up a reverse proxy (nginx/caddy) to expose it securely."
 echo "  See README.md for reverse proxy configuration examples."
 echo ""
+echo "  Back up ${CONFIG_DIR}/config.yaml: it holds the database encryption key."
 echo "  Save your admin API key — it cannot be recovered."
 echo ""

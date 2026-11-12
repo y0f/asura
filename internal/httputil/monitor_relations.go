@@ -11,12 +11,27 @@ import (
 
 var ErrMonitorRelationForbidden = errors.New("monitor relationship change is not permitted")
 
+// ErrHostLocalMonitorForbidden wraps ErrMonitorRelationForbidden so existing
+// handlers answer it with 403 Forbidden.
+var ErrHostLocalMonitorForbidden = fmt.Errorf("%w: command and docker monitors require super admin access", ErrMonitorRelationForbidden)
+
+// IsHostLocalMonitorType reports whether a monitor type runs on the server host
+// itself (a local executable or the container runtime socket).
+func IsHostLocalMonitorType(monitorType string) bool {
+	return monitorType == "command" || monitorType == "docker"
+}
+
 // PrepareMonitorRelations is pure so it can run inside the monitor update
 // transaction. Omitted fields keep current assignments before credentials are
 // merged; explicit changes require assignment and related-resource authority.
 // Initial group placement is governed by the separate create destination grant.
 func PrepareMonitorRelations(key *config.APIKeyConfig, m, current *storage.Monitor, fields storage.MonitorRelationChanges) (storage.MonitorRelationChanges, error) {
 	creating := current == nil
+	// Command and Docker checks run on the server host with its privileges.
+	// Only a super admin may create, clone or edit one, or convert to or from one.
+	if (IsHostLocalMonitorType(m.Type) || (!creating && IsHostLocalMonitorType(current.Type))) && (key == nil || !key.SuperAdmin) {
+		return storage.MonitorRelationChanges{}, ErrHostLocalMonitorForbidden
+	}
 	if !creating && m.Type != current.Type && (m.Type == "heartbeat" || current.Type == "heartbeat") {
 		return storage.MonitorRelationChanges{}, fmt.Errorf("heartbeat monitor type cannot be changed; create a new monitor and delete the old one")
 	}

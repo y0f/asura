@@ -196,17 +196,47 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
+// maxRateLimitVisitors bounds limiter memory. Once full, new clients share a
+// single overflow bucket instead of growing the map, so address rotation can
+// neither exhaust memory nor obtain a fresh budget per address.
+const maxRateLimitVisitors = 100000
+
+const overflowVisitorKey = "overflow" // never a valid address or prefix
+
+// RateLimitKey groups a client address into the unit one client controls:
+// an IPv4 address or an IPv6 /64, the smallest prefix normally assigned to a
+// single host or subscriber. Unparseable values are used as given.
+func RateLimitKey(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ip
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.String()
+	}
+	return parsed.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}
+
 func (rl *RateLimiter) GetLimiter(ip string) *rate.Limiter {
+	key := RateLimitKey(ip)
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	v, exists := rl.visitors[ip]
+	now := time.Now()
+	v, exists := rl.visitors[key]
 	if !exists {
+		if len(rl.visitors) >= maxRateLimitVisitors {
+			key = overflowVisitorKey
+			if v, exists = rl.visitors[key]; exists {
+				v.lastSeen = now
+				return v.limiter
+			}
+		}
 		limiter := rate.NewLimiter(rl.rate, rl.burst)
-		rl.visitors[ip] = &visitorEntry{limiter: limiter, lastSeen: time.Now()}
+		rl.visitors[key] = &visitorEntry{limiter: limiter, lastSeen: now}
 		return limiter
 	}
-	v.lastSeen = time.Now()
+	v.lastSeen = now
 	return v.limiter
 }
 

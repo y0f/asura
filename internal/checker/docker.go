@@ -15,7 +15,24 @@ import (
 
 const defaultDockerSocket = "/var/run/docker.sock"
 
-type DockerChecker struct{}
+// DockerChecker inspects containers through a container runtime socket.
+// Sockets lists the socket paths monitors may use; empty allows only the
+// default Docker socket. A monitor cannot reach any other local socket.
+type DockerChecker struct {
+	Sockets []string
+}
+
+func (c *DockerChecker) socketAllowed(path string) bool {
+	if len(c.Sockets) == 0 {
+		return path == defaultDockerSocket
+	}
+	for _, allowed := range c.Sockets {
+		if path == allowed {
+			return true
+		}
+	}
+	return false
+}
 
 func (c *DockerChecker) Type() string { return "docker" }
 
@@ -30,6 +47,12 @@ func (c *DockerChecker) Check(ctx context.Context, monitor *model.Monitor) (*Res
 	socketPath := settings.SocketPath
 	if socketPath == "" {
 		socketPath = defaultDockerSocket
+	}
+	if !c.socketAllowed(socketPath) {
+		return &Result{
+			Status:  "down",
+			Message: "docker socket not allowed: add it to monitor.docker_sockets",
+		}, nil
 	}
 
 	containerName := settings.ContainerName

@@ -312,6 +312,14 @@ func (s *SQLiteStore) PurgeOldData(ctx context.Context, before time.Time) (int64
 	n, _ = res.RowsAffected()
 	totalDeleted += n
 
+	res, err = s.writeDB.ExecContext(ctx, "DELETE FROM status_page_subscribers WHERE confirmed=0 AND created_at < ?",
+		formatTime(now.Add(-UnconfirmedSubscriberLifetime)))
+	if err != nil {
+		return totalDeleted, err
+	}
+	n, _ = res.RowsAffected()
+	totalDeleted += n
+
 	expired, err := s.DeleteExpiredSessions(ctx)
 	if err != nil {
 		return totalDeleted, err

@@ -1,4 +1,6 @@
 version: 2
+# New releases wait a week before Dependabot proposes them, so a compromised
+# or yanked release is usually caught upstream before it reaches this repo.
 updates:
   # One PR per Go module: each runtime dependency needs its own license review
   # before licenses/go-modules.json changes (see licenses/README.md).
@@ -11,6 +13,8 @@ updates:
       timezone: Europe/Amsterdam
     commit-message:
       prefix: "deps"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: /
@@ -21,6 +25,8 @@ updates:
       timezone: Europe/Amsterdam
     commit-message:
       prefix: "ci"
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns: ["*"]
@@ -33,3 +39,5 @@ updates:
       timezone: Europe/Amsterdam
     commit-message:
       prefix: "docker"
+    cooldown:
+      default-days: 7

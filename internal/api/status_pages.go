@@ -247,6 +247,9 @@ func (h *Handler) requireStatusPageAuth(w http.ResponseWriter, r *http.Request, 
 		valid, limited = h.loginRL.LimitFailures(httputil.ExtractIP(r, h.cfg.TrustedNets()), func() bool {
 			return statusPageAuthValid(r, sp.ID, sp.PasswordHash)
 		})
+		if valid {
+			sp.PasswordHash = httputil.UpgradeStatusPagePassword(r.Context(), h.store, h.logger, sp.ID, sp.PasswordHash, r.Header.Get(statusPagePasswordHeader))
+		}
 	} else {
 		valid = statusPageAuthValid(r, sp.ID, sp.PasswordHash)
 	}

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -52,7 +54,9 @@ type result struct {
 
 func main() {
 	serverURL := flag.String("server", "", "Asura server URL (e.g. https://monitor.example.com)")
-	token := flag.String("token", "", "Agent token")
+	tokenFile := flag.String("token-file", "", "File containing the agent token (default: the "+tokenEnv+" environment variable)")
+	tokenFlag := flag.String("token", "", "Not supported: command-line arguments are visible to other local users; use --token-file or "+tokenEnv)
+	insecureHTTP := flag.Bool("insecure-http", false, "Allow a plain-HTTP server URL on a non-loopback host (sends the token unencrypted)")
 	interval := flag.Duration("interval", 30*time.Second, "Poll interval")
 	concurrency := flag.Int("concurrency", 10, "Maximum number of checks run at the same time")
 	allowPrivate := flag.Bool("allow-private", false, "Allow checks against private, loopback and other reserved addresses")
@@ -64,8 +68,18 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *serverURL == "" || *token == "" {
-		fmt.Fprintln(os.Stderr, "Usage: asura-agent --server URL --token TOKEN")
+	if *tokenFlag != "" {
+		fmt.Fprintln(os.Stderr, "--token is not supported because command-line arguments are visible to other local users; set "+tokenEnv+" or use --token-file")
+		os.Exit(1)
+	}
+	token, err := resolveToken(*tokenFile, os.Getenv(tokenEnv))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	server, err := validateServerURL(*serverURL, *insecureHTTP)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	if *interval <= 0 || *concurrency <= 0 {
@@ -74,7 +88,7 @@ func main() {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	a := newAgent(&http.Client{Timeout: 30 * time.Second}, strings.TrimRight(*serverURL, "/"), *token,
+	a := newAgent(&http.Client{Timeout: 30 * time.Second}, server, token,
 		checker.DefaultRegistry(nil, *allowPrivate), logger)
 	a.concurrency = *concurrency
 
@@ -99,6 +113,64 @@ func main() {
 			a.runCycle(ctx)
 		}
 	}
+}
+
+const tokenEnv = "ASURA_AGENT_TOKEN"
+
+// resolveToken reads the agent token from file when given, else from the
+// environment value. Surrounding whitespace (such as a trailing newline) is
+// ignored; an empty token is an error.
+func resolveToken(file, env string) (string, error) {
+	token := env
+	if file != "" {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("read token file: %w", err)
+		}
+		token = string(data)
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", fmt.Errorf("agent token is required: set %s or use --token-file", tokenEnv)
+	}
+	if strings.ContainsAny(token, "\r\n\x00") {
+		return "", errors.New("agent token must be a single line")
+	}
+	return token, nil
+}
+
+// validateServerURL accepts an absolute HTTPS URL, or plain HTTP to a loopback
+// host. Other plain-HTTP URLs would send the token unencrypted and need
+// insecureHTTP. The URL may not carry credentials, a query or a fragment.
+func validateServerURL(raw string, insecureHTTP bool) (string, error) {
+	if raw == "" {
+		return "", errors.New("--server is required, e.g. --server https://monitor.example.com")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Opaque != "" {
+		return "", fmt.Errorf("--server must be an absolute URL such as https://monitor.example.com")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return "", errors.New("--server must not contain credentials, a query or a fragment")
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "https":
+	case "http":
+		if !insecureHTTP && !isLoopbackHost(u.Hostname()) {
+			return "", errors.New("--server uses plain HTTP, which would send the agent token unencrypted; use https:// or pass --insecure-http")
+		}
+	default:
+		return "", errors.New("--server must use https://")
+	}
+	return strings.TrimRight(u.String(), "/"), nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // agent polls the server for jobs and runs each one when its monitor interval

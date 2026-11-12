@@ -176,7 +176,7 @@ func TestAgentWorkRejectsInvalidPollingOptions(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestHelperAgentMain$")
-			cmd.Env = append(os.Environ(), "ASURA_TEST_AGENT_MAIN=1", "ASURA_TEST_AGENT_ARGS=-server http://127.0.0.1:1 -token fixture "+args)
+			cmd.Env = append(os.Environ(), "ASURA_TEST_AGENT_MAIN=1", "ASURA_AGENT_TOKEN=fixture", "ASURA_TEST_AGENT_ARGS=-server http://127.0.0.1:1 "+args)
 			out, err := cmd.CombinedOutput()
 			if err == nil || ctx.Err() != nil || !strings.Contains(string(out), "interval and concurrency must be positive") || strings.Contains(string(out), "panic:") {
 				t.Fatalf("invalid options were not rejected cleanly: %v %s", err, out)

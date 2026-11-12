@@ -232,6 +232,7 @@ func postLogin(t *testing.T, h *Handler, rawKey string) (*httptest.ResponseRecor
 	form := url.Values{"api_key": {rawKey}}
 	r := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("Origin", "http://example.com")
 	w := httptest.NewRecorder()
 	h.LoginPost(w, r)
 	for _, c := range w.Result().Cookies() {

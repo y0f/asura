@@ -320,3 +320,15 @@ func statusPageMonitorsQuery(ctx context.Context, reader monitorReadQuery, diale
 	}
 	return monitors, members, nil
 }
+
+func (s *SQLiteStore) UpgradeStatusPagePasswordHash(ctx context.Context, id int64, oldHash, newHash string) (bool, error) {
+	if oldHash == "" || newHash == "" {
+		return false, nil
+	}
+	res, err := s.writeDB.ExecContext(ctx, "UPDATE status_pages SET password_hash=? WHERE id=? AND password_hash=?", newHash, id, oldHash)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}

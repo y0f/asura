@@ -80,7 +80,7 @@ func NewServer(cfg *config.Config, store storage.Store, pipeline *monitor.Pipeli
 	s.rateLimiter = httputil.NewRateLimiter(cfg.Server.RateLimitPerSec, cfg.Server.RateLimitBurst)
 	handler = s.rateLimiter.Middleware(cfg.TrustedNets(), writeError)(handler)
 	handler = cors(cfg.Server.CORSOrigins)(handler)
-	handler = secureHeaders(cfg.Server.FrameAncestors)(handler)
+	handler = secureHeaders(cfg.Server.FrameAncestors, cfg.TrustedNets())(handler)
 	handler = requestLogMiddleware(s.reqLogWriter, cfg.Server.BasePath, cfg.TrustedNets())(handler)
 	handler = logging(logger)(handler)
 	handler = requestID()(handler)

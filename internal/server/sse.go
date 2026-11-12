@@ -41,12 +41,14 @@ type sseFrame struct {
 // Frames are marshalled once, then authorized again when each client drains
 // its queue. A revocation also applies to already-buffered events.
 type sseClient struct {
-	ch chan sseFrame
+	ch    chan sseFrame
+	owner string
 }
 
 type EventBroker struct {
 	mu                sync.RWMutex
 	clients           map[*sseClient]struct{}
+	owners            map[string]int
 	closed            bool
 	logger            *slog.Logger
 	authorize         func(*http.Request, *SSEEvent) (bool, error)
@@ -54,9 +56,11 @@ type EventBroker struct {
 }
 
 const (
-	maxSSEClients    = 100
-	clientBufferSize = 16
-	sseHeartbeat     = 30 * time.Second
+	maxSSEClients = 100
+	// maxSSEClientsPerOwner keeps one credential from holding every stream.
+	maxSSEClientsPerOwner = 10
+	clientBufferSize      = 16
+	sseHeartbeat          = 30 * time.Second
 	// sseWriteWindow bounds each write on a stream. It is renewed after every
 	// write and outlasts the heartbeat interval, so a healthy stream is never
 	// cut by the server-wide WriteTimeout while a stuck client still is.
@@ -66,20 +70,43 @@ const (
 func NewEventBroker(logger *slog.Logger) *EventBroker {
 	return &EventBroker{
 		clients:           make(map[*sseClient]struct{}),
+		owners:            make(map[string]int),
 		logger:            logger,
 		heartbeatInterval: sseHeartbeat,
 	}
 }
 
 func (b *EventBroker) Subscribe() *sseClient {
+	return b.SubscribeOwner("")
+}
+
+// SubscribeOwner registers a stream for owner (an API key name). It returns
+// nil when the broker is closed, full, or owner already has
+// maxSSEClientsPerOwner streams. An empty owner is not limited per owner.
+func (b *EventBroker) SubscribeOwner(owner string) *sseClient {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed || len(b.clients) >= maxSSEClients {
 		return nil
 	}
-	c := &sseClient{ch: make(chan sseFrame, clientBufferSize)}
+	if owner != "" && b.owners[owner] >= maxSSEClientsPerOwner {
+		return nil
+	}
+	c := &sseClient{ch: make(chan sseFrame, clientBufferSize), owner: owner}
 	b.clients[c] = struct{}{}
+	if owner != "" {
+		b.owners[owner]++
+	}
 	return c
+}
+
+func (b *EventBroker) releaseOwner(c *sseClient) {
+	if c.owner == "" {
+		return
+	}
+	if b.owners[c.owner]--; b.owners[c.owner] <= 0 {
+		delete(b.owners, c.owner)
+	}
 }
 
 func (b *EventBroker) Unsubscribe(c *sseClient) {
@@ -89,6 +116,7 @@ func (b *EventBroker) Unsubscribe(c *sseClient) {
 		return
 	}
 	delete(b.clients, c)
+	b.releaseOwner(c)
 	close(c.ch)
 }
 
@@ -101,6 +129,7 @@ func (b *EventBroker) Close() {
 	b.closed = true
 	for c := range b.clients {
 		delete(b.clients, c)
+		b.releaseOwner(c)
 		close(c.ch)
 	}
 }
@@ -168,7 +197,8 @@ func (b *EventBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := b.Subscribe()
+	identity, _ := r.Context().Value(streamIdentityKey{}).(streamIdentity)
+	client := b.SubscribeOwner(identity.name)
 	if client == nil {
 		http.Error(w, "too many connections", http.StatusServiceUnavailable)
 		return

@@ -55,6 +55,7 @@ func TestWebNavigationPermissions(t *testing.T) {
 				form := url.Values{"api_key": {"navigation-key"}}
 				req := httptest.NewRequest(http.MethodPost, basePath+"/login", strings.NewReader(form.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.Header.Set("Origin", "http://example.com")
 				login := httptest.NewRecorder()
 				srv.ServeHTTP(login, req)
 				if tc.landing == "" {

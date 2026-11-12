@@ -180,6 +180,9 @@ type Store interface {
 	GetStatusPageBySlug(ctx context.Context, slug string) (*StatusPage, error)
 	ListStatusPages(ctx context.Context) ([]*StatusPage, error)
 	UpdateStatusPage(ctx context.Context, sp *StatusPage) error
+	// UpgradeStatusPagePasswordHash replaces oldHash with newHash only while
+	// oldHash is still current, and reports whether it did.
+	UpgradeStatusPagePasswordHash(ctx context.Context, id int64, oldHash, newHash string) (bool, error)
 	DeleteStatusPage(ctx context.Context, id int64) error
 	SetStatusPageMonitors(ctx context.Context, pageID int64, monitors []StatusPageMonitor) error
 	ListStatusPageMonitors(ctx context.Context, pageID int64, access ...MonitorAccess) ([]StatusPageMonitor, error)

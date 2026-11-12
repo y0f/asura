@@ -123,6 +123,7 @@ func TestRoutePermissionBoundaries(t *testing.T) {
 				if !headless {
 					req := httptest.NewRequest("POST", basePath+"/login", strings.NewReader(url.Values{"api_key": {regressionAdminKey}}.Encode()))
 					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					req.Header.Set("Origin", "http://example.com")
 					w := httptest.NewRecorder()
 					srv.ServeHTTP(w, req)
 					if w.Code != http.StatusSeeOther || len(w.Result().Cookies()) != 1 {

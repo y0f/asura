@@ -194,7 +194,7 @@ func TestHelperAgentMain(t *testing.T) {
 func startAgentProcess(t *testing.T, args string) *exec.Cmd {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperAgentMain$")
-	cmd.Env = append(os.Environ(), "ASURA_TEST_AGENT_MAIN=1", "ASURA_TEST_AGENT_ARGS="+args)
+	cmd.Env = append(os.Environ(), "ASURA_TEST_AGENT_MAIN=1", "ASURA_TEST_AGENT_ARGS="+args, "ASURA_AGENT_TOKEN=tok")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestAgentAllowPrivateFlag(t *testing.T) {
 	} {
 		t.Run("flag="+tc.flag, func(t *testing.T) {
 			f, srv := newFakeAsura(t, []job{{ConfigRevision: 7, ID: 7, Name: "lan", Type: "http", Target: target.URL, Interval: 30, Timeout: 5}})
-			startAgentProcess(t, "-server "+srv.URL+" -token tok -interval 1h "+tc.flag)
+			startAgentProcess(t, "-server "+srv.URL+" -interval 1h "+tc.flag)
 			select {
 			case <-f.posted:
 			case <-time.After(20 * time.Second):
@@ -239,7 +239,7 @@ func TestAgentSignalCancelsCycle(t *testing.T) {
 	f.mu.Lock()
 	f.jobWait = 20 * time.Second // the cycle is in flight (fetching jobs) for 20s
 	f.mu.Unlock()
-	cmd := startAgentProcess(t, "-server "+srv.URL+" -token tok -interval 1h")
+	cmd := startAgentProcess(t, "-server "+srv.URL+" -interval 1h")
 	time.Sleep(1 * time.Second)
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)

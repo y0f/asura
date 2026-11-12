@@ -39,6 +39,19 @@ func TestStatusPageCookieAuthorityAcrossPublicRoutes(t *testing.T) {
 				t.Fatalf("login failed: %d %s", w.Code, w.Body.String())
 			}
 			cookie := w.Result().Cookies()[0]
+			// The helper stores a legacy unsalted hash; a verified login
+			// replaces it with a salted PBKDF2 hash of the same password.
+			legacyHash := page.PasswordHash
+			if page, err := srv.store.GetStatusPage(context.Background(), page.ID); err != nil {
+				t.Fatal(err)
+			} else if page.PasswordHash == legacyHash || pageauth.NeedsRehash(page.PasswordHash) || !pageauth.Verify(page.PasswordHash, "page-secret") {
+				t.Fatalf("legacy page password hash was not upgraded on login: %q", page.PasswordHash)
+			}
+			reloaded, err := srv.store.GetStatusPage(context.Background(), page.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			page = reloaded
 			if cookie.Path != base+"/" || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode || cookie.MaxAge != int(pageauth.CookieLifetime/time.Second) {
 				t.Fatalf("cookie scope or browser protections changed: %+v", cookie)
 			}

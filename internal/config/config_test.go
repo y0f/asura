@@ -507,3 +507,33 @@ database:
 		}
 	})
 }
+
+func TestCheckAPIKeyStrength(t *testing.T) {
+	for key, ok := range map[string]bool{
+		"short":                                  false,
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": false,
+		"abababababababababababababababababab":   false,
+		"ak_0f3a9c1d7e2b4f6a8c0e1d3b5f7a9c2e4b6d8f0a1c3e5b7d9f1a3c5e7b9d1f3": true,
+		"correct horse battery staple, plus more words":                      true,
+	} {
+		if err := CheckAPIKeyStrength(key); (err == nil) != ok {
+			t.Errorf("CheckAPIKeyStrength(%q) = %v, want ok=%v", key, err, ok)
+		}
+	}
+}
+
+func TestDockerSocketsMustBeCleanAbsolutePaths(t *testing.T) {
+	for sockets, ok := range map[string]bool{
+		"/var/run/docker.sock":        true,
+		"relative/docker.sock":        false,
+		"/var/run/../run/docker.sock": false,
+		"/var/run/docker.sock/":       false,
+	} {
+		cfg := Defaults()
+		cfg.Auth.APIKeys = []APIKeyConfig{{Name: "admin", Hash: HashAPIKey("k"), SuperAdmin: true}}
+		cfg.Monitor.DockerSockets = []string{sockets}
+		if err := cfg.Validate(); (err == nil) != ok {
+			t.Errorf("docker_sockets %q: Validate() = %v, want ok=%v", sockets, err, ok)
+		}
+	}
+}

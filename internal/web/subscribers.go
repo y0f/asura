@@ -47,7 +47,20 @@ func (h *Handler) StatusPageSubscribe(w http.ResponseWriter, r *http.Request, pa
 		return
 	}
 	sub := &storage.StatusPageSubscriber{StatusPageID: sp.ID, Type: input.Type, Email: input.Email, WebhookURL: input.WebhookURL, Confirmed: input.Type == "webhook"}
+	slugBefore := sp.Slug
 	sp, err = h.store.CreatePublicStatusPageSubscriber(ctx, sub, storage.PublicStatusPageAccess{ExpectedPasswordHash: sp.PasswordHash, Audience: storage.PublicStatusPageWebSubscription})
+	if errors.Is(err, storage.ErrSubscriberExists) {
+		if input.Type == "email" {
+			h.redirectToStatusPage(w, r, sp.Slug, "Check your email to confirm your subscription.")
+		} else {
+			h.redirectToStatusPage(w, r, sp.Slug, "Subscribed successfully.")
+		}
+		return
+	}
+	if errors.Is(err, storage.ErrSubscriberLimit) {
+		h.redirectToStatusPage(w, r, slugBefore, "This status page is not accepting new subscribers.")
+		return
+	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)

@@ -47,17 +47,29 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+		encryptionKey, err := generateEncryptionKey()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Println()
-		fmt.Printf("  API Key : %s\n", key)
-		fmt.Printf("  Hash    : %s\n", hash)
+		fmt.Printf("  API Key        : %s\n", key)
+		fmt.Printf("  Hash           : %s\n", hash)
+		fmt.Printf("  Encryption Key : %s\n", encryptionKey)
 		fmt.Println()
 		fmt.Println("  Put the hash in config.yaml under auth.api_keys[].hash")
+		fmt.Println("  Put the encryption key in config.yaml under database.encryption_key")
+		fmt.Println("  Back up the encryption key separately from the database.")
 		fmt.Println("  Save the API key — it cannot be recovered.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
 	if *hashKey != "" {
+		if err := config.CheckAPIKeyStrength(*hashKey); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v; generate a key with --setup\n", err)
+			os.Exit(1)
+		}
 		fmt.Println(config.HashAPIKey(*hashKey))
 		os.Exit(0)
 	}
@@ -97,13 +109,19 @@ func main() {
 	defer store.Close()
 	logger.Info("database opened", "driver", cfg.Database.Driver)
 
-	if cfg.Database.EncryptionKey != "" {
+	switch {
+	case cfg.Database.EncryptionKey == "":
+		logger.Warn("encryption at rest is disabled: stored credentials and TOTP secrets are kept in plaintext; set database.encryption_key (asura --setup generates one)")
+	case len(cfg.Database.EncryptionKey) < minEncryptionKeyLength:
+		logger.Warn("database.encryption_key is short; use a random key of at least 32 characters (asura --setup generates one)")
+	default:
 		logger.Info("encryption at rest enabled")
 	}
 
 	purgeStaleSessionsOnStartup(ctx, store, cfg, logger)
 
 	registry := checker.DefaultRegistry(cfg.Monitor.CommandAllowlist, cfg.Monitor.AllowPrivateTargets)
+	registry.Register(&checker.DockerChecker{Sockets: cfg.Monitor.DockerSockets})
 	incMgr := incident.NewManager(store, logger)
 	pipeline := monitor.NewPipeline(store, registry, incMgr, cfg.Monitor.Workers, cfg.Monitor.AdaptiveIntervals, logger)
 	dispatcher := notifier.NewDispatcher(store, logger, cfg.Monitor.AllowPrivateTargets)

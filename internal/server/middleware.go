@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -70,7 +71,24 @@ func buildFrameAncestorsDirective(ancestors []string) string {
 	return "frame-ancestors " + strings.Join(parts, " ")
 }
 
-func secureHeaders(frameAncestors []string) func(http.Handler) http.Handler {
+// requestIsHTTPS reports whether the client connection is HTTPS: TLS ends at
+// this server, or a trusted reverse proxy reports that it terminated HTTPS.
+func requestIsHTTPS(r *http.Request, trustedNets []net.IPNet) bool {
+	if r.TLS != nil {
+		return true
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !httputil.IsTrusted(ip, trustedNets) {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+}
+
+func secureHeaders(frameAncestors []string, trustedNets []net.IPNet) func(http.Handler) http.Handler {
 	var xFrameOptions string
 	switch {
 	case len(frameAncestors) == 0:
@@ -91,7 +109,7 @@ func secureHeaders(frameAncestors []string) func(http.Handler) http.Handler {
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; "+cspFrame)
 			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			w.Header().Set("Cache-Control", "no-store")
-			if r.TLS != nil {
+			if requestIsHTTPS(r, trustedNets) {
 				w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 			}
 			next.ServeHTTP(w, r)

@@ -24,6 +24,18 @@ func generateAPIKey() (key, hash string, err error) {
 	return key, hash, nil
 }
 
+// minEncryptionKeyLength is the length below which a configured encryption key
+// is reported as weak. Generated keys are 64 hexadecimal characters.
+const minEncryptionKeyLength = 32
+
+func generateEncryptionKey() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate random bytes: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
 func handleTOTPCommands(configPath, setupName, verifyName, removeName string, args []string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {

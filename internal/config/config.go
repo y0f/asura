@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -110,6 +111,7 @@ type MonitorConfig struct {
 	FailureThreshold       int           `yaml:"failure_threshold"`
 	SuccessThreshold       int           `yaml:"success_threshold"`
 	CommandAllowlist       []string      `yaml:"command_allowlist"`
+	DockerSockets          []string      `yaml:"docker_sockets"`
 	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"`
 	AllowPrivateTargets    bool          `yaml:"allow_private_targets"`
 	AdaptiveIntervals      bool          `yaml:"adaptive_intervals"`
@@ -304,6 +306,11 @@ func (c *Config) validateMonitorConfig() error {
 	if c.Monitor.SuccessThreshold <= 0 {
 		return fmt.Errorf("monitor.success_threshold must be positive")
 	}
+	for i, socket := range c.Monitor.DockerSockets {
+		if !filepath.IsAbs(socket) || filepath.Clean(socket) != socket {
+			return fmt.Errorf("monitor.docker_sockets[%d] must be a clean absolute path", i)
+		}
+	}
 	return nil
 }
 
@@ -318,6 +325,27 @@ func validateLogLevel(level string) error {
 	default:
 		return fmt.Errorf("logging.level must be one of: debug, info, warn, error")
 	}
+}
+
+// MinAPIKeyLength is the shortest key --hash-key accepts. API keys are hashed
+// with unsalted SHA-256 for constant-time lookup, which is only safe for
+// high-entropy random keys such as the ones --setup generates.
+const MinAPIKeyLength = 32
+
+// CheckAPIKeyStrength rejects keys too short or too repetitive to resist an
+// offline guess against a leaked hash.
+func CheckAPIKeyStrength(key string) error {
+	if len(key) < MinAPIKeyLength {
+		return fmt.Errorf("API key must be at least %d characters", MinAPIKeyLength)
+	}
+	distinct := make(map[rune]struct{})
+	for _, r := range key {
+		distinct[r] = struct{}{}
+	}
+	if len(distinct) < 10 {
+		return fmt.Errorf("API key is not random enough")
+	}
+	return nil
 }
 
 func HashAPIKey(key string) string {

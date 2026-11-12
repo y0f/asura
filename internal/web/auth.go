@@ -57,6 +57,11 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
+	// A cross-site form must not sign the browser in to an attacker's key.
+	if !h.checkOrigin(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	ip := httputil.ExtractIP(r, h.cfg.TrustedNets())
 
 	if !h.loginRL.Allow(ip) {
@@ -174,6 +179,10 @@ func (h *Handler) TOTPLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TOTPLoginPost(w http.ResponseWriter, r *http.Request) {
+	if !h.checkOrigin(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	ip := httputil.ExtractIP(r, h.cfg.TrustedNets())
 
 	if !h.loginRL.Allow(ip) {

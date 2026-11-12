@@ -59,11 +59,11 @@ func TestPublicSubscriptionNeverUsesStalePageAuthorization(t *testing.T) {
 			r.Header.Set("Content-Type", contentType)
 			r.SetPathValue("id", fmt.Sprint(page.ID))
 			w := httptest.NewRecorder()
+			limiter := httputil.NewRateLimiter(100, 100)
+			t.Cleanup(limiter.Stop)
 			if endpoint == "api" {
-				api.New(cfg, wrapped, nil, nil, logger, nil).SubscribeAPI(w, r)
+				api.New(cfg, wrapped, nil, nil, logger, limiter).SubscribeAPI(w, r)
 			} else {
-				limiter := httputil.NewRateLimiter(100, 100)
-				t.Cleanup(limiter.Stop)
 				h := web.New(cfg, wrapped, nil, nil, nil, logger, "test", "frame-ancestors 'none'", limiter)
 				t.Cleanup(h.Stop)
 				h.StatusPageSubscribe(w, r, page.ID)

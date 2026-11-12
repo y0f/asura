@@ -44,7 +44,8 @@ func Hash(password string) (string, error) {
 
 // Verify accepts the current format and strict legacy lowercase SHA-256 hex.
 // Legacy passwords are not truncated or subjected to the new-input size cap;
-// HTTP callers retain their request body limits. Login never rewrites a hash.
+// HTTP callers retain their request body limits. Callers upgrade a verified
+// legacy hash (see NeedsRehash).
 func Verify(encoded, password string) bool {
 	if legacy, ok := legacyDigest(encoded); ok {
 		digest := sha256.Sum256([]byte(password))
@@ -59,6 +60,13 @@ func Verify(encoded, password string) bool {
 	}
 	got, err := pbkdf2.Key(sha256.New, password, salt, iterations, keySize)
 	return err == nil && subtle.ConstantTimeCompare(got, want) == 1
+}
+
+// NeedsRehash reports whether a verified hash uses the unsalted legacy SHA-256
+// format and should be replaced by Hash of the same password.
+func NeedsRehash(encoded string) bool {
+	_, legacy := legacyDigest(encoded)
+	return legacy
 }
 
 // ValidHash checks supported canonical encodings without deriving a key. The

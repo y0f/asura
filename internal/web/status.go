@@ -175,10 +175,12 @@ func (h *Handler) StatusPageAuthPost(w http.ResponseWriter, r *http.Request, pag
 		return
 	}
 
-	if !pageauth.Verify(sp.PasswordHash, r.FormValue("password")) {
+	password := r.FormValue("password")
+	if !pageauth.Verify(sp.PasswordHash, password) {
 		http.Redirect(w, r, h.cfg.Server.BasePath+"/"+slug+"/auth?error=1", http.StatusSeeOther)
 		return
 	}
+	sp.PasswordHash = httputil.UpgradeStatusPagePassword(ctx, h.store, h.logger, sp.ID, sp.PasswordHash, password)
 
 	value, err := pageauth.IssueCookie(pageID, sp.PasswordHash, time.Now())
 	if err != nil {
