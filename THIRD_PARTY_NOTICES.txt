@@ -40,7 +40,7 @@ Audited modules:
   modernc.org/libc v1.79.0
   modernc.org/mathutil v1.7.1
   modernc.org/memory v1.12.1
-  modernc.org/sqlite v1.61.0
+  modernc.org/sqlite v1.61.1
 
 ========================================================================
 Go 1.26.11 and 1.27.4 / LICENSE
@@ -1494,8 +1494,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-modernc.org/sqlite v1.61.0 / LICENSE
-Source: modernc.org/sqlite@v1.61.0/LICENSE
+modernc.org/sqlite v1.61.1 / LICENSE
+Source: modernc.org/sqlite@v1.61.1/LICENSE
 ========================================================================
 
 Copyright (c) 2017 The Sqlite Authors. All rights reserved.
@@ -1526,8 +1526,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-modernc.org/sqlite v1.61.0 / LICENSE-SQLITE
-Source: modernc.org/sqlite@v1.61.0/LICENSE-SQLITE
+modernc.org/sqlite v1.61.1 / LICENSE-SQLITE
+Source: modernc.org/sqlite@v1.61.1/LICENSE-SQLITE
 ========================================================================
 
 SQLite Is Public Domain
@@ -2381,7 +2381,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 ========================================================================
 modernc sqlite / generated GCC declarations
-Source: modernc.org/sqlite@v1.61.0/lib/sqlite_g_0000000000060000.go
+Source: modernc.org/sqlite@v1.61.1/lib/sqlite_g_0000000000060000.go
 ========================================================================
 
 Copyright (C) 1989-2022 Free Software Foundation, Inc.
