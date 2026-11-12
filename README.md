@@ -93,6 +93,6 @@ Rollback requires the previous binary and its matching database backup. A config
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development, tests and review requirements, [architecture](https://y0f.github.io/asura/architecture.html) for the internals, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Built with Go, templ, HTMX, Alpine.js and Tailwind CSS; Node is not required.
 
-Use Go 1.27.3 for development. CI tests both Go 1.27.3 and the supported minimum, Go 1.26.10.
+Use Go 1.27.4 for development. CI tests both Go 1.27.4 and the supported minimum, Go 1.26.11.
 
 Licensed under [MIT](LICENSE). Copyright 2025-2026 [hu.ci](https://hu.ci).

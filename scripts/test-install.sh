@@ -42,7 +42,7 @@ selection_case() (
     name=$1 version=$2 expected=$3
     case_dir="$TEST_DIR/$name"
     mkdir -p "$case_dir/project" "$case_dir/other"
-    printf 'module fixture\n\ngo 1.26.10\n\ntoolchain go1.27.3\n' > "$case_dir/project/go.mod"
+    printf 'module fixture\n\ngo 1.26.11\n\ntoolchain go1.27.4\n' > "$case_dir/project/go.mod"
     SCRIPT_DIR="$case_dir/project"
     export INSTALL_TEST_LOG="$case_dir/go.log"
     export INSTALL_TEST_BUILT_WITH="$case_dir/built-with"
@@ -63,7 +63,7 @@ selection_case() (
     go() { exit 93; }
     install_go() {
         printf 'install\n' > "$case_dir/installed"
-        write_go "$case_dir/downloaded" go1.27.3
+        write_go "$case_dir/downloaded" go1.27.4
         GO_BIN="$case_dir/downloaded/go"
     }
 
@@ -88,13 +88,13 @@ selection_case() (
     echo "PASS $name"
 )
 
-selection_case minimum go1.26.10 keep
+selection_case minimum go1.26.11 keep
 selection_case minimum-patch go1.26.11 keep
-selection_case preferred go1.27.3 keep
+selection_case preferred go1.27.4 keep
 selection_case preferred-patch go1.27.4 keep
 selection_case newer go1.28.0 keep
-selection_case shadow go1.27.3 keep
-selection_case relative go1.27.3 keep
+selection_case shadow go1.27.4 keep
+selection_case relative go1.27.4 keep
 selection_case missing missing install
 selection_case old-minimum go1.26.0 install
 selection_case old-patch go1.26.9 install
@@ -127,7 +127,7 @@ installation_case() (
         [[ "$1" == -C && "$3" == -xzf ]] || return 96
         [[ "$2" == "$GO_INSTALL_ROOT".stage.* ]] || return 97
         [[ "$failure" != extraction ]] || return 2
-        local version=go1.27.3
+        local version=go1.27.4
         [[ "$failure" != version ]] || version=go1.27.2
         write_go "$2/go/bin" "$version"
         if [[ "$failure" == executable ]]; then
@@ -164,7 +164,7 @@ installation_case() (
 
     if [[ "$failure" == success || "$failure" == fresh ]]; then
         [[ "$code" == 0 ]]
-        [[ "$(local_go_version "$GO_INSTALL_ROOT/bin/go")" == 1.27.3 ]]
+        [[ "$(local_go_version "$GO_INSTALL_ROOT/bin/go")" == 1.27.4 ]]
         [[ ! -e "$GO_INSTALL_ROOT/old-marker" ]]
     elif [[ "$failure" == rollback ]]; then
         [[ "$code" != 0 ]]
@@ -194,7 +194,7 @@ set +e
     set -e
     SCRIPT_DIR="$TEST_DIR/recheck"
     mkdir -p "$SCRIPT_DIR"
-    printf 'go 1.26.10\n' > "$SCRIPT_DIR/go.mod"
+    printf 'go 1.26.11\n' > "$SCRIPT_DIR/go.mod"
     export PATH="$TEST_TOOLS"
     export INSTALL_TEST_LOG="$TEST_DIR/recheck.log"
     install_go() {

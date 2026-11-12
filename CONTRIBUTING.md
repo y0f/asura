@@ -4,7 +4,7 @@ Start with a focused change, test its behavior, and report the checks actually r
 
 ## Local setup
 
-Use Go 1.27.3 (the minimum supported patch is 1.26.10) and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your operating system. Save the CLI as `tailwindcss` (`tailwindcss.exe` on Windows) in the repository root; on Unix, run `chmod +x tailwindcss`. No Node installation is needed. The build commands run the exact templ version recorded in `go.mod`.
+Use Go 1.27.4 (the minimum supported patch is 1.26.11) and the [Tailwind 4.2.1 standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.2.1) for your operating system. Save the CLI as `tailwindcss` (`tailwindcss.exe` on Windows) in the repository root; on Unix, run `chmod +x tailwindcss`. No Node installation is needed. The build commands run the exact templ version recorded in `go.mod`.
 
 Run `go run ./cmd/asura --setup`, save the generated API Key, and create the minimal local `config.yaml` from [getting started](docs/getting-started.md#build-and-run-locally) using its Hash. The configuration file is gitignored. Disable secure cookies only for local HTTP development.
 
