@@ -1,6 +1,6 @@
 Asura Go runtime: third-party notices
 
-This inventory covers the Go 1.26.10 and 1.27.3 runtimes and dependency source for
+This inventory covers the Go 1.26.11 and 1.27.4 runtimes and dependency source for
 the server (SQLite default and optional PostgreSQL) and probe agent, built with
 CGO disabled for Linux amd64/arm64 and Windows amd64. Not every component below
 is linked into every binary. Tests, development tools and the container's base
@@ -37,8 +37,8 @@ Audited modules:
   modernc.org/sqlite v1.61.1
 
 ========================================================================
-Go 1.26.10 and 1.27.3 / LICENSE
-Source: https://github.com/golang/go/blob/go1.27.3/LICENSE (identical in go1.26.10)
+Go 1.26.11 and 1.27.4 / LICENSE
+Source: https://github.com/golang/go/blob/go1.27.4/LICENSE (identical in go1.26.11)
 ========================================================================
 
 Copyright 2009 The Go Authors.
@@ -70,8 +70,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
-Go 1.26.10 and 1.27.3 / PATENTS
-Source: https://github.com/golang/go/blob/go1.27.3/PATENTS (identical in go1.26.10)
+Go 1.26.11 and 1.27.4 / PATENTS
+Source: https://github.com/golang/go/blob/go1.27.4/PATENTS (identical in go1.26.11)
 ========================================================================
 
 Additional IP Rights Grant (Patents)
@@ -99,7 +99,7 @@ shall terminate as of the date such litigation is filed.
 
 ========================================================================
 Go vendored golang.org/x/crypto / LICENSE
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/crypto/LICENSE (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/crypto/LICENSE (identical in go1.26.11)
 ========================================================================
 
 Copyright 2009 The Go Authors.
@@ -132,7 +132,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
 Go vendored golang.org/x/crypto / PATENTS
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/crypto/PATENTS (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/crypto/PATENTS (identical in go1.26.11)
 ========================================================================
 
 Additional IP Rights Grant (Patents)
@@ -160,7 +160,7 @@ shall terminate as of the date such litigation is filed.
 
 ========================================================================
 Go vendored golang.org/x/net / LICENSE
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/net/LICENSE (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/net/LICENSE (identical in go1.26.11)
 ========================================================================
 
 Copyright 2009 The Go Authors.
@@ -193,7 +193,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
 Go vendored golang.org/x/net / PATENTS
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/net/PATENTS (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/net/PATENTS (identical in go1.26.11)
 ========================================================================
 
 Additional IP Rights Grant (Patents)
@@ -221,7 +221,7 @@ shall terminate as of the date such litigation is filed.
 
 ========================================================================
 Go vendored golang.org/x/sys / LICENSE
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/sys/LICENSE (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/sys/LICENSE (identical in go1.26.11)
 ========================================================================
 
 Copyright 2009 The Go Authors.
@@ -254,7 +254,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
 Go vendored golang.org/x/sys / PATENTS
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/sys/PATENTS (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/sys/PATENTS (identical in go1.26.11)
 ========================================================================
 
 Additional IP Rights Grant (Patents)
@@ -282,7 +282,7 @@ shall terminate as of the date such litigation is filed.
 
 ========================================================================
 Go vendored golang.org/x/text / LICENSE
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/text/LICENSE (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/text/LICENSE (identical in go1.26.11)
 ========================================================================
 
 Copyright 2009 The Go Authors.
@@ -315,7 +315,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ========================================================================
 Go vendored golang.org/x/text / PATENTS
-Source: https://github.com/golang/go/blob/go1.27.3/src/vendor/golang.org/x/text/PATENTS (identical in go1.26.10)
+Source: https://github.com/golang/go/blob/go1.27.4/src/vendor/golang.org/x/text/PATENTS (identical in go1.26.11)
 ========================================================================
 
 Additional IP Rights Grant (Patents)
@@ -1552,7 +1552,7 @@ uncontaminated with licensed code from other projects.
 
 ========================================================================
 Go runtime memmove
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/runtime/memmove_amd64.s (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/runtime/memmove_amd64.s (same notice in Go 1.26.11)
 ========================================================================
 
 Derived from Inferno's libkern/memmove-386.s (adapted for amd64)
@@ -1582,7 +1582,7 @@ THE SOFTWARE.
 
 ========================================================================
 Go AES reference implementation
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/crypto/internal/fips140/aes/aes_generic.go (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/crypto/internal/fips140/aes/aes_generic.go (same notice in Go 1.26.11)
 ========================================================================
 
 This Go implementation is derived in part from the reference
@@ -1619,7 +1619,7 @@ for implementation details.
 
 ========================================================================
 Go edwards25519 fiat-crypto
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/crypto/internal/fips140/edwards25519/scalar.go (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/crypto/internal/fips140/edwards25519/scalar.go (same notice in Go 1.26.11)
 ========================================================================
 
 The field implementation in scalar_fiat.go is generated by the fiat-crypto
@@ -1651,7 +1651,7 @@ fiat-crypto code comes under the following license.
 
 ========================================================================
 Go nistec fiat-crypto
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/crypto/internal/fips140/nistec/p256_ordinv.go
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/crypto/internal/fips140/nistec/p256_ordinv.go
 ========================================================================
 
 The code below was generated by Fiat Cryptography v0.1.6-63-g92ee794c2, and
@@ -1690,7 +1690,7 @@ https://mit-plv.github.io/fiat-crypto/
 
 ========================================================================
 Go math / Sun 1993
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/math/acosh.go (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/math/acosh.go (same notice in Go 1.26.11)
 ========================================================================
 
 The original C code, the long comment, and the constants
@@ -1723,7 +1723,7 @@ Special cases:
 
 ========================================================================
 Go math / Sun 2004
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/math/exp.go (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/math/exp.go (same notice in Go 1.26.11)
 ========================================================================
 
 The original C code, the long comment, and the constants
@@ -1804,7 +1804,7 @@ to produce the hexadecimal values shown.
 
 ========================================================================
 Go math / Cephes
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/math/atan.go (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/math/atan.go (same notice in Go 1.26.11)
 ========================================================================
 
 The original C code, the long comment, and the constants below were
@@ -1852,7 +1852,7 @@ integral.
 
 ========================================================================
 Go math / SLEEF
-Source: golang.org/toolchain@v0.0.1-go1.27.3.windows-amd64/src/math/exp_amd64.s (same notice in Go 1.26.10)
+Source: golang.org/toolchain@v0.0.1-go1.27.4.windows-amd64/src/math/exp_amd64.s (same notice in Go 1.26.11)
 ========================================================================
 
 The method is based on a paper by Naoki Shibata: "Efficient evaluation

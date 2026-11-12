@@ -1,8 +1,8 @@
 {
-  "toolchain": "go1.27.3",
+  "toolchain": "go1.27.4",
   "compilers": [
-    "go1.26.10",
-    "go1.27.3"
+    "go1.26.11",
+    "go1.27.4"
   ],
   "targets": [
     "linux/amd64",

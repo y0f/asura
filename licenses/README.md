@@ -4,7 +4,7 @@
 the selected Go runtime and module source. `go-modules.json` records the exact
 runtime module union for Linux amd64/arm64 and Windows amd64, for both server
 builds and the probe agent with CGO disabled. Both supported compilers, Go
-1.26.10 and 1.27.3, were audited. This is a source inventory, not a
+1.26.11 and 1.27.4, were audited. This is a source inventory, not a
 claim that every listed package survives linker dead-code elimination in every
 binary. Test/tool dependencies and the container's operating-system packages
 are outside this inventory.
