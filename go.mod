@@ -7,7 +7,7 @@ toolchain go1.27.4
 require (
 	github.com/a-h/templ v0.3.1100
 	github.com/coder/websocket v1.8.15
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	golang.org/x/net v0.62.0
 	golang.org/x/text v0.43.0
 	golang.org/x/time v0.16.0
